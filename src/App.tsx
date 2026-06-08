@@ -4867,6 +4867,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         const tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CLIENT_ID,
           scope:
+            "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
           callback: (resp: any) => {
             if (resp.error !== undefined) {
               reject(
