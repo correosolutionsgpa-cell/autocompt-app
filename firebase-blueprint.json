@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "Company": {
+      "title": "Company",
+      "description": "A business entity for which expenses are tracked.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Legal name of the company." },
+        "logo_url": { "type": "string", "description": "URL to the company logo.", "format": "uri" },
+        "billing_notes": { "type": "string", "description": "Custom billing or tax notes." },
+        "official_language": { "type": "string", "description": "Preferred language (fr/en).", "default": "fr" },
+        "ownerId": { "type": "string", "description": "Firebase Auth UID of the owner." }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "A financial transaction extracted from a document.",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string", "description": "Reference to the Company document ID." },
+        "date": { "type": "string", "description": "Date of transaction (YYYY-MM-DD).", "format": "date" },
+        "vendor": { "type": "string", "description": "Name of the merchant/vendor." },
+        "subtotal": { "type": "number", "description": "Amount before taxes." },
+        "tps": { "type": "number", "description": "TPS amount (5%)." },
+        "tvq": { "type": "number", "description": "TVQ amount (9.975%)." },
+        "total": { "type": "number", "description": "Grand total amount." },
+        "category": { "type": "string", "description": "Classification category." },
+        "payment_method": { "type": "string", "description": "Card type + last 4." },
+        "file_url": { "type": "string", "description": "Storage URL for the original document.", "format": "uri" },
+        "ownerId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "createdAt": { "type": "string", "description": "Timestamp when the expense was logged.", "format": "date-time" }
+      },
+      "required": ["companyId", "total", "ownerId", "date"]
+    }
+  },
+  "firestore": {
+    "/companies/{companyId}": {
+      "schema": "Company",
+      "description": "Collection of business companies owned by users."
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Collection of all extracted expenses."
+    }
+  }
+}

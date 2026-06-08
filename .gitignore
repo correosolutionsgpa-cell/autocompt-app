@@ -1,0 +1,19 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Custom exclusions
+autocompt.zip
+Plan_Seguridad_Anti_Hackeo_AutoCompt.pdf
+Informe_Tecnico_AutoCompt_Antigravity.pdf
+pdf_raw_text.txt
+grep_out.txt
+tmp*
+replace_state.cjs
+replace_table*
+

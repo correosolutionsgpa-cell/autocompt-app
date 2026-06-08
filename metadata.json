@@ -1,0 +1,6 @@
+{
+  "name": "ComptaHub",
+  "description": "Plateforme comptable de haute précision avec reconnaissance optique de caractères (OCR) et extraction automatique des taxes pour les entreprises québécoises.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

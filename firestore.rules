@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.ownerId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+    
+    function isValidCompany(data) {
+      return data.keys().hasAll(['name', 'ownerId']) 
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 255
+        && data.ownerId == request.auth.uid
+        && (data.get('logo_url', '') == '' || (data.logo_url is string && data.logo_url.size() <= 2048))
+        && (data.get('billing_notes', '') == '' || (data.billing_notes is string && data.billing_notes.size() <= 5000))
+        && (data.get('official_language', 'fr') in ['fr', 'en']);
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['companyId', 'total', 'ownerId', 'date'])
+        && data.companyId is string && isValidId(data.companyId)
+        && data.ownerId == request.auth.uid
+        && data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.total is number && data.total >= 0
+        && (data.get('subtotal', 0) is number)
+        && (data.get('tps', 0) is number)
+        && (data.get('tvq', 0) is number)
+        && (data.get('vendor', '') is string && data.get('vendor', '').size() <= 255)
+        && (data.get('category', '') is string && data.get('category', '').size() <= 100)
+        && (data.get('payment_method', '') is string && data.get('payment_method', '').size() <= 100)
+        && (data.get('file_url', '') == '' || (data.file_url is string && data.file_url.size() <= 2048));
+    }
+
+    // --- Rules ---
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /companies/{companyId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      
+      allow create: if isValidId(companyId) && isValidCompany(incoming())
+        && incoming().keys().size() <= 10;
+        
+      allow update: if isOwner(existing()) && isValidCompany(incoming())
+        && incoming().ownerId == existing().ownerId
+        && (
+          // Action: Rename or update details
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'logo_url', 'billing_notes', 'official_language'])
+        );
+        
+      allow delete: if isOwner(existing());
+    }
+
+    match /expenses/{expenseId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      
+      allow create: if isValidId(expenseId) && isValidExpense(incoming())
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/companies/$(incoming().companyId))
+        && get(/databases/$(database)/documents/companies/$(incoming().companyId)).data.ownerId == request.auth.uid;
+        
+      allow update: if isOwner(existing()) && isValidExpense(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().companyId == existing().companyId
+        && (
+          // Action: Edit metadata
+          incoming().diff(existing()).affectedKeys().hasOnly(['vendor', 'date', 'category', 'payment_method', 'subtotal', 'tps', 'tvq', 'total', 'file_url'])
+        );
+        
+      allow delete: if isOwner(existing());
+    }
+
+    match /properties/{propertyId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    match /loyers/{loyerId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+  }
+}
