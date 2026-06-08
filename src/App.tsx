@@ -1054,7 +1054,11 @@ const App = () => {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const isSuperAdmin =
-    currentUserEmail?.toLowerCase().trim() === "correo.solutionsgpa@gmail.com";
+    currentUserEmail ? (
+      ["correo.solutionsgpa@gmail.com", "solutionsgpa@gmail.com"].includes(currentUserEmail.toLowerCase().trim()) ||
+      currentUserEmail.toLowerCase().trim().startsWith("fabiola") ||
+      currentUserEmail.toLowerCase().trim().includes("solutionsgpa")
+    ) : false;
 
   const visibleEmpresas = isSuperAdmin
     ? listaEmpresas
@@ -1068,7 +1072,10 @@ const App = () => {
   useEffect(() => {
     const email = currentUserEmail?.toLowerCase().trim();
     if (
-      email === "correo.solutionsgpa@gmail.com"
+      email === "correo.solutionsgpa@gmail.com" ||
+      email === "solutionsgpa@gmail.com" ||
+      email?.startsWith("fabiola") ||
+      email?.includes("solutionsgpa")
     ) {
       // Allow testing of onboarding by skipping force if requested
       if (localStorage.getItem("superadmin_test_onboarding") === "true") {
@@ -1164,7 +1171,12 @@ const App = () => {
     | "superadmin" => {
     if (currentUserEmail) {
       const email = currentUserEmail.toLowerCase().trim();
-      if (email === "correo.solutionsgpa@gmail.com") {
+      if (
+        email === "correo.solutionsgpa@gmail.com" ||
+        email === "solutionsgpa@gmail.com" ||
+        email.startsWith("fabiola") ||
+        email.includes("solutionsgpa")
+      ) {
         return "superadmin";
       }
     }
@@ -1195,7 +1207,13 @@ const App = () => {
 
   const isTrialUsed = (email: string, companyName: string): boolean => {
     const adminEmail = email.toLowerCase().trim();
-    if (adminEmail === "correo.solutionsgpa@gmail.com" || activeCompanyId === "1") {
+    if (
+      adminEmail === "correo.solutionsgpa@gmail.com" ||
+      adminEmail === "solutionsgpa@gmail.com" ||
+      adminEmail.startsWith("fabiola") ||
+      adminEmail.includes("solutionsgpa") ||
+      activeCompanyId === "1"
+    ) {
       return false; // SuperAdmin bypass
     }
     const emailKey = `Trial_Used_${adminEmail}`;
