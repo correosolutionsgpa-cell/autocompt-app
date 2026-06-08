@@ -1019,6 +1019,14 @@ const App = () => {
     localStorage.setItem("autocompt_user_level", userLevel);
   }, [userLevel]);
   const [activeCompanyId, setActiveCompanyId] = useState("1");
+
+  useEffect(() => {
+    if (activeCompanyId === "1" || activeCompanyId === "2") {
+      setDashboardMode("Syndic");
+    } else if (activeCompanyId === "3") {
+      setDashboardMode("Plex");
+    }
+  }, [activeCompanyId]);
   const [darkMode, setDarkMode] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     const saved = localStorage.getItem("autocompt_sound");
