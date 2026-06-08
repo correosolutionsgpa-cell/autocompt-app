@@ -87,6 +87,7 @@ import {
   RotateCcw,
   RefreshCw,
   Lightbulb,
+  Wrench,
 } from "lucide-react";
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
@@ -99,6 +100,7 @@ import SyndicatDocuLegal from "./components/SyndicatDocuLegal";
 import SyndicTransparencyDashboard from "./components/SyndicTransparencyDashboard";
 import SyndicAiReporter from "./components/SyndicAiReporter";
 import CoproprietairePortal from "./components/CoproprietairePortal";
+import SyndicLoi16View from "./components/SyndicLoi16View";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
@@ -1517,12 +1519,14 @@ const App = () => {
       { id: "cotisations", label: "Gestion des Cotisations", icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
       { id: "contrats", label: "Contrats & Résolutions (DocuLegal)", icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
       { id: "transparence", label: "Tableau de Transparence", icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
+      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
       { id: "settings", label: "Paramètres", icon: <Settings size={18} />, bgClass: "bg-slate-100 dark:bg-slate-800", textClass: "text-slate-600 dark:text-slate-400" },
     ];
 
     const coproprietaireNavItems = [
       { id: "dashboard", label: "Espace Copropriétaire", icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
+      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       { id: "settings", label: "Paramètres", icon: <Settings size={18} />, bgClass: "bg-slate-100 dark:bg-slate-800", textClass: "text-slate-600 dark:text-slate-400" },
     ];
 
@@ -22271,6 +22275,32 @@ Ceci est un message automatisé généré par AutoCompt.`;
                </div>
             </div>
           </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (vista === "loi16") {
+    return (
+      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        <WorkspaceSidebar />
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+          <div className="flex items-center space-x-3">
+             <button onClick={() => setVista("dashboard")} className={`md:hidden p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}>
+               <Menu size={24} />
+             </button>
+             <div>
+               <h1 className="font-black uppercase italic tracking-tighter text-lg">Conformité Loi 16</h1>
+               <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest mt-0.5">Carnet d'entretien & Fonds de Prévoyance</p>
+             </div>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
+          <button onClick={() => setVista('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-violet-600 transition-colors font-bold uppercase tracking-widest text-[10px] mb-6 px-2 border-none bg-transparent cursor-pointer">
+            <ArrowLeft size={14} /> Retour au tableau de bord
+          </button>
+          <SyndicLoi16View darkMode={darkMode} userRole={userRole} activeCompanyId={activeCompanyId} />
         </main>
       </div>
     );
