@@ -11,7 +11,7 @@ import {
   query, 
   where 
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 
 export const defaultWorkspaces = [
   {
@@ -464,8 +464,10 @@ export const dataService = {
 
     // Seed companies
     for (const comp of defaultWorkspaces) {
-      await setDoc(doc(db, "companies", comp.id), {
+      const docId = `${userId}_company_${comp.id}`;
+      await setDoc(doc(db, "companies", docId), {
         ...comp,
+        id: docId,
         ownerId: userId,
         createdAt: new Date().toISOString()
       });
@@ -474,8 +476,9 @@ export const dataService = {
     // Seed expenses (depenses)
     for (const dep of defaultDepenses) {
       const expenseId = `exp_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+      const docCompanyId = `${userId}_company_${dep.companyId}`;
       await setDoc(doc(db, "expenses", expenseId), {
-        companyId: dep.companyId,
+        companyId: docCompanyId,
         fecha: dep.fecha,
         fournisseur: dep.fournisseur,
         cat: dep.cat,
@@ -492,8 +495,10 @@ export const dataService = {
 
     // Seed properties
     for (const prop of defaultPropertiesSeed) {
-      await setDoc(doc(db, "properties", prop.id), {
+      const docId = `${userId}_prop_${prop.id}`;
+      await setDoc(doc(db, "properties", docId), {
         ...prop,
+        id: docId,
         ownerId: userId,
         createdAt: new Date().toISOString()
       });
@@ -501,8 +506,10 @@ export const dataService = {
 
     // Seed loyers
     for (const loyer of defaultLoyersSeed) {
-      await setDoc(doc(db, "loyers", loyer.id), {
+      const docId = `${userId}_loyer_${loyer.id}`;
+      await setDoc(doc(db, "loyers", docId), {
         ...loyer,
+        id: docId,
         ownerId: userId,
         createdAt: new Date().toISOString()
       });
@@ -515,7 +522,10 @@ export const dataService = {
       const querySnapshot = await getDocs(q);
       const results: any[] = [];
       querySnapshot.forEach((doc) => {
-        results.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const idParts = doc.id.split("_company_");
+        const originalId = idParts.length > 1 ? idParts[1] : doc.id;
+        results.push({ ...data, id: originalId });
       });
       return results;
     } catch (e) {
@@ -530,7 +540,10 @@ export const dataService = {
       const querySnapshot = await getDocs(q);
       const results: any[] = [];
       querySnapshot.forEach((doc) => {
-        results.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const idParts = data.companyId?.split("_company_");
+        const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
+        results.push({ ...data, id: doc.id, companyId: originalCompanyId });
       });
       return results;
     } catch (e) {
@@ -545,7 +558,10 @@ export const dataService = {
       const querySnapshot = await getDocs(q);
       const results: any[] = [];
       querySnapshot.forEach((doc) => {
-        results.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const idParts = doc.id.split("_prop_");
+        const originalId = idParts.length > 1 ? idParts[1] : doc.id;
+        results.push({ ...data, id: originalId });
       });
       return results;
     } catch (e) {
@@ -560,7 +576,10 @@ export const dataService = {
       const querySnapshot = await getDocs(q);
       const results: any[] = [];
       querySnapshot.forEach((doc) => {
-        results.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const idParts = doc.id.split("_loyer_");
+        const originalId = idParts.length > 1 ? idParts[1] : doc.id;
+        results.push({ ...data, id: originalId });
       });
       return results;
     } catch (e) {
@@ -570,8 +589,11 @@ export const dataService = {
   },
 
   async saveExpense(userId: string, expenseData: any): Promise<any> {
+    const originalCompanyId = expenseData.companyId;
+    const docCompanyId = `${userId}_company_${originalCompanyId}`;
     const data = {
       ...expenseData,
+      companyId: docCompanyId,
       ownerId: userId,
       createdAt: expenseData.createdAt || new Date().toISOString()
     };
@@ -579,12 +601,11 @@ export const dataService = {
       const id = String(expenseData.id);
       delete data.id;
       await setDoc(doc(db, "expenses", id), data);
-      return { id, ...data };
+      return { id, ...data, companyId: originalCompanyId };
     } else {
-      const tempId = expenseData.id;
       delete data.id;
       const docRef = await addDoc(collection(db, "expenses"), data);
-      return { id: docRef.id, ...data };
+      return { id: docRef.id, ...data, companyId: originalCompanyId };
     }
   },
 
@@ -594,70 +615,56 @@ export const dataService = {
   },
 
   async saveProperty(userId: string, propertyData: any): Promise<any> {
+    const originalId = propertyData.id || `prop_${Date.now()}`;
+    const docId = `${userId}_prop_${originalId}`;
     const data = {
       ...propertyData,
+      id: docId,
       ownerId: userId,
       createdAt: propertyData.createdAt || new Date().toISOString()
     };
-    if (propertyData.id && String(propertyData.id).length > 6 && isNaN(Number(propertyData.id))) {
-      const id = String(propertyData.id);
-      delete data.id;
-      await setDoc(doc(db, "properties", id), data);
-      return { id, ...data };
-    } else {
-      const tempId = propertyData.id;
-      delete data.id;
-      const docRef = await addDoc(collection(db, "properties"), data);
-      return { id: docRef.id, ...data };
-    }
+    await setDoc(doc(db, "properties", docId), data);
+    return { id: originalId, ...data };
   },
 
   async deleteProperty(propertyId: string): Promise<boolean> {
-    await deleteDoc(doc(db, "properties", String(propertyId)));
+    const userId = auth.currentUser?.uid;
+    const docId = userId ? `${userId}_prop_${propertyId}` : propertyId;
+    await deleteDoc(doc(db, "properties", docId));
     return true;
   },
 
   async saveLoyer(userId: string, loyerData: any): Promise<any> {
+    const originalId = loyerData.id || `loyer_${Date.now()}`;
+    const docId = `${userId}_loyer_${originalId}`;
     const data = {
       ...loyerData,
+      id: docId,
       ownerId: userId,
       createdAt: loyerData.createdAt || new Date().toISOString()
     };
-    if (loyerData.id && String(loyerData.id).length > 6 && isNaN(Number(loyerData.id))) {
-      const id = String(loyerData.id);
-      delete data.id;
-      await setDoc(doc(db, "loyers", id), data);
-      return { id, ...data };
-    } else {
-      const tempId = loyerData.id;
-      delete data.id;
-      const docRef = await addDoc(collection(db, "loyers"), data);
-      return { id: docRef.id, ...data };
-    }
+    await setDoc(doc(db, "loyers", docId), data);
+    return { id: originalId, ...data };
   },
 
   async deleteLoyer(loyerId: string): Promise<boolean> {
-    await deleteDoc(doc(db, "loyers", String(loyerId)));
+    const userId = auth.currentUser?.uid;
+    const docId = userId ? `${userId}_loyer_${loyerId}` : loyerId;
+    await deleteDoc(doc(db, "loyers", docId));
     return true;
   },
 
   async saveWorkspace(userId: string, workspaceData: any): Promise<any> {
+    const originalId = workspaceData.id || `company_${Date.now()}`;
+    const docId = `${userId}_company_${originalId}`;
     const data = {
       ...workspaceData,
+      id: docId,
       ownerId: userId,
       createdAt: workspaceData.createdAt || new Date().toISOString()
     };
-    if (workspaceData.id && String(workspaceData.id).length > 6 && isNaN(Number(workspaceData.id))) {
-      const id = String(workspaceData.id);
-      delete data.id;
-      await setDoc(doc(db, "companies", id), data);
-      return { id, ...data };
-    } else {
-      const tempId = workspaceData.id;
-      delete data.id;
-      const docRef = await addDoc(collection(db, "companies"), data);
-      return { id: docRef.id, ...data };
-    }
+    await setDoc(doc(db, "companies", docId), data);
+    return { id: originalId, ...data };
   },
 
   // --- Fallback Simulated Latency Operations ---
