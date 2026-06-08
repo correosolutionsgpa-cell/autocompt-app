@@ -8589,7 +8589,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
           }
         }
       } catch (err: any) {
-        alert("Erreur de connexion: " + err.message);
+        if (err.code === "auth/operation-not-allowed" || err.message?.includes("operation-not-allowed")) {
+          alert(
+            "Erreur d'authentification : La méthode de connexion par courriel/mot de passe est désactivée dans votre console Firebase.\n\n" +
+            "Pour résoudre ce problème :\n" +
+            "1. Allez sur https://console.firebase.google.com\n" +
+            "2. Sélectionnez votre projet\n" +
+            "3. Dans le menu de gauche, allez dans 'Authentication', puis l'onglet 'Sign-in method'\n" +
+            "4. Activez le fournisseur 'Adresse e-mail/Mot de passe' (Email/Password)."
+          );
+        } else {
+          alert("Erreur de connexion: " + err.message);
+        }
         setIsLoadingData(false);
       }
     };
