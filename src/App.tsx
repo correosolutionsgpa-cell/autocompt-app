@@ -1091,7 +1091,13 @@ const App = () => {
       const internalViews = [
         "dashboard", "profile", "admin", "reportes", "equipe", "heures-paie",
         "kilometraje", "facturas", "dossiers", "documents", "drive", 
-        "homeoffice", "taxes", "rapports", "banque", "sous-traitance", "doculegal"
+        "homeoffice", "taxes", "rapports", "banque", "sous-traitance", "doculegal",
+        // Syndic views
+        "cotisations", "contrats", "transparence", "loi16", "muro", "settings",
+        // Other app views
+        "plex", "incident", "taxes_assurances", "accepter-invitation",
+        "preview-email", "setup", "login", "welcome", "benefits",
+        "level_selection", "rental_model", "pricing", "portal"
       ];
       if (!internalViews.includes(vista) && vista !== "splash") {
         setActiveUser("SuperAdmin");
