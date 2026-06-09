@@ -9905,6 +9905,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {dashboardMode === "Syndic" ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-left col-span-2">
               <button
+                onClick={() => setVista("cotisations")}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-amber-500/60 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-amber-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+              >
+                <div className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}>
+                  <Wallet size={22} />
+                </div>
+                <span className="text-[10px] font-black uppercase italic tracking-tighter">
+                  Gestion des Cotisations
+                </span>
+                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
+                  Suivi des charges de copropriété et encaissement des payments.
+                </p>
+              </button>
+              <button
                 onClick={() => setVista("contrats")}
                 className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-emerald-500/60 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-emerald-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
@@ -9944,20 +9958,6 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </span>
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
                   Carnet d'entretien technique et projections financières réglementaires.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("cotisations")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-amber-500/60 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-amber-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}>
-                  <Wallet size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Gestion des Cotisations
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Suivi des charges de copropriété et encaissement des paiements.
                 </p>
               </button>
               <button
