@@ -31,9 +31,10 @@ interface LegalDocument {
 
 interface SyndicatDocuLegalProps {
   darkMode: boolean;
+  companyName?: string;
 }
 
-export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) {
+export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc." }: SyndicatDocuLegalProps) {
   const [activeTab, setActiveTab] = useState<'externe' | 'interne'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
@@ -459,12 +460,12 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
       // Top band texts
       docPdf.setTextColor(255, 255, 255);
       docPdf.setFont('Helvetica', 'bold');
-      docPdf.setFontSize(14);
-      docPdf.text('AUTOCOMPT - GESTION IMMOBILIÈRE', 20, 12);
+      docPdf.setFontSize(12);
+      docPdf.text(companyName.toUpperCase(), 20, 12);
       
       docPdf.setFont('Helvetica', 'normal');
-      docPdf.setFontSize(8);
-      docPdf.text('CERTIFICATION ET ARCHIVAGE NUMÉRIQUE LÉGAL', 20, 18);
+      docPdf.setFontSize(7.5);
+      docPdf.text('DOCUMENT GÉNÉRÉ ET CERTIFIÉ VIA DOCULEGAL (AUTOCOMPT)', 20, 18);
 
       // Document reference and date on the right
       docPdf.setFont('Helvetica', 'bold');
@@ -647,13 +648,13 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
       docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       docPdf.setFont('Helvetica', 'bold');
       docPdf.setFontSize(8);
-      docPdf.text("SCEAU DE CERTIFICATION NUMÉRIQUE - AUTOCOMPT SECURE", 25, sealY + 7);
+      docPdf.text("CERTIFICATION DE SIGNATURE ÉLECTRONIQUE - DOCULEGAL SECURE", 25, sealY + 7);
 
       docPdf.setTextColor(100, 116, 139);
       docPdf.setFont('Helvetica', 'normal');
       docPdf.setFontSize(7.5);
-      docPdf.text("Ce document PDF officiel a été scellé et enregistré de manière permanente dans la base de données", 25, sealY + 13);
-      docPdf.text("d'AutoCompt. Il constitue une preuve légale d'approbation et d'engagement de copropriété.", 25, sealY + 17);
+      docPdf.text("Ce document PDF officiel a été validé et scellé électroniquement par DocuLegal, une solution AutoCompt.", 25, sealY + 13);
+      docPdf.text("Il constitue une preuve légale d'approbation et d'engagement de copropriété enregistrée dans nos registres sécurisés.", 25, sealY + 17);
 
       const hashStr = `SHA-256: ${Math.random().toString(16).substr(2, 8).toUpperCase()}${Math.random().toString(16).substr(2, 8).toUpperCase()}E99A${doc.id.toUpperCase()}E9F4C${isSigned ? '1B' : '00'}`;
       docPdf.setFont('Courier', 'bold');
@@ -815,12 +816,12 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                           Ajouté le {doc.date}
                         </span>
                         {doc.status === 'signe' ? (
-                          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 text-teal-650 dark:text-emerald-450">
+                          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 text-teal-700 dark:text-emerald-450">
                             <CheckCircle2 size={12} className="shrink-0" />
                             <span className="text-[10px] font-black uppercase tracking-widest">Signé & Archivé</span>
                           </div>
                         ) : (
-                          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 text-amber-650 dark:text-amber-400">
+                          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 text-amber-700 dark:text-amber-400">
                             <Clock size={12} className="shrink-0" />
                             <span className="text-[10px] font-black uppercase tracking-widest">En attente</span>
                           </div>
@@ -851,10 +852,10 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
 
                           {doc.status === 'signe' && (
                             <div className="mb-6 p-4 rounded-2xl bg-teal-500/5 dark:bg-emerald-500/5 border border-teal-100/20 dark:border-emerald-500/10 text-left">
-                              <p className="text-[9px] font-black uppercase tracking-widest text-teal-650 dark:text-emerald-400 mb-1">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-emerald-400 mb-1">
                                 Signature Électronique Validée
                               </p>
-                              <p className="text-[11px] font-bold text-slate-650 dark:text-zinc-300">
+                              <p className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">
                                 Signé par <strong className="text-teal-700 dark:text-emerald-300">{doc.signedBy}</strong> le {doc.signedDate}.
                               </p>
                             </div>
@@ -863,7 +864,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                           <div className="flex flex-col sm:flex-row items-center gap-3">
                             <button 
                               onClick={() => handleDownloadPdf(doc)}
-                              className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border-none cursor-pointer ${darkMode ? "bg-teal-500 border border-teal-400 text-teal-950 hover:bg-teal-400" : "bg-teal-550 text-white hover:bg-teal-650 shadow-md shadow-teal-500/20"}`}
+                              className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border-none cursor-pointer ${darkMode ? "bg-teal-500 border border-teal-400 text-teal-950 hover:bg-teal-400" : "bg-teal-600 text-white hover:bg-teal-700 shadow-md shadow-teal-500/20"}`}
                             >
                               <Download size={16} />
                               <span>Télécharger PDF</span>
@@ -884,7 +885,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                             ) : (
                               <button
                                 onClick={() => handleDeleteDocument(doc.id)}
-                                className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border border-rose-250 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/25 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/40 cursor-pointer`}
+                                className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/25 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/40 cursor-pointer`}
                               >
                                 <Trash2 size={16} />
                                 <span>Archiver / Supprimer</span>
@@ -993,7 +994,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                     value={typedSignature}
                     onChange={(e) => setTypedSignature(e.target.value)}
                     placeholder="Saisissez votre nom complet pour signer"
-                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
                   />
                   {typedSignature.trim() && (
                     <div className={`p-6 rounded-3xl border text-center flex flex-col items-center justify-center min-h-[90px] ${darkMode ? "bg-zinc-900/30 border-zinc-800/80 text-teal-400" : "bg-emerald-50/20 border-emerald-100 text-emerald-700"}`}>
@@ -1066,7 +1067,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder={activeTab === 'externe' ? "Ex: Assurance Batiment A - L'Unique 2026" : "Ex: Resolution - Remplacement porte entree"}
-                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
                   />
                 </div>
 
@@ -1079,7 +1080,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                     value={newProvider}
                     onChange={(e) => setNewProvider(e.target.value)}
                     placeholder={activeTab === 'externe' ? "Ex: L'Unique Assurances" : "Ex: Conseil d'Administration"}
-                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
                   />
                 </div>
 
@@ -1090,7 +1091,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                     onChange={(e) => setNewSummary(e.target.value)}
                     placeholder="Saisissez un court résumé des conditions, montants, et objectifs de ce document..."
                     rows={4}
-                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold resize-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold resize-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
                   />
                 </div>
 

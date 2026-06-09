@@ -9912,10 +9912,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <FileSignature size={22} />
                 </div>
                 <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Contrats & RÇ¸solutions (DocuLegal)
+                  Contrats & Résolutions (DocuLegal)
                 </span>
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Suivez, gÇ¸rez et signez numÇ¸riquement vos contrats et rÇ¸solutions.
+                  Suivez, gérez et signez numériquement vos contrats et résolutions.
                 </p>
               </button>
               <button
@@ -22402,9 +22402,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <span>/</span>
                   <span>Tableau de Bord</span>
                   <span>/</span>
-                  <span className="text-teal-500 font-bold">Contrats & RÇ¸solutions (DocuLegal)</span>
+                  <span className="text-teal-500 font-bold">Contrats & Résolutions (DocuLegal)</span>
                 </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & RÇ¸solutions (DocuLegal)</h1>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions (DocuLegal)</h1>
              </div>
           </div>
 
@@ -22431,7 +22431,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         </header>
 
         <main className="flex-1 max-w-5xl w-full p-4 sm:p-6 space-y-6 mx-auto">
-          <SyndicatDocuLegal darkMode={darkMode} />
+          <SyndicatDocuLegal darkMode={darkMode} companyName={currentCompany?.nombre || "Solutions GPA Inc."} />
         </main>
       </div>
     );
