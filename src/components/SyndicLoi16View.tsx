@@ -25,7 +25,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import jsPDF from 'jspdf';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { collection, addDoc, onSnapshot, query, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 interface BuildingComponent {
@@ -59,6 +59,12 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   const [compNextYear, setCompNextYear] = useState(new Date().getFullYear() + 5);
   const [compCost, setCompCost] = useState('');
 
+  // Filter and Interactive Dropdowns State
+  const [openMenu, setOpenMenu] = useState<'composant' | 'statut' | 'inspection' | null>(null);
+  const [filterName, setFilterName] = useState('');
+  const [filterCondition, setFilterCondition] = useState<'All' | 'Excellent' | 'Correct' | 'Critique'>('All');
+  const [filterYear, setFilterYear] = useState<number | 'All'>('All');
+
   const isReadOnly = userRole === 'coproprietaire';
 
   // Seed default items if empty
@@ -73,10 +79,17 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   useEffect(() => {
     if (!activeCompanyId) return;
 
-    // Load components in real-time from Firestore filtered by companyId
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      console.warn("No authenticated user found for Loi 16 view.");
+      return;
+    }
+
+    // Load components in real-time from Firestore filtered by companyId and ownerId
     const q = query(
       collection(db, 'maintenance_components'),
-      where('companyId', '==', activeCompanyId)
+      where('companyId', '==', activeCompanyId),
+      where('ownerId', '==', userId)
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -88,11 +101,16 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
       // If empty, auto-seed default items
       if (fetched.length === 0 && !isReadOnly) {
         for (const def of defaultComponents) {
-          await addDoc(collection(db, 'maintenance_components'), {
-            ...def,
-            companyId: activeCompanyId,
-            createdAt: new Date().toISOString()
-          });
+          try {
+            await addDoc(collection(db, 'maintenance_components'), {
+              ...def,
+              companyId: activeCompanyId,
+              ownerId: userId,
+              createdAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error('Error seeding default component:', err);
+          }
         }
       } else {
         // Sort components by next replacement year
@@ -103,16 +121,24 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
           setSelectedId((prev) => prev || fetched[0].id);
         }
       }
+    }, (error) => {
+      console.error("Firestore onSnapshot error in SyndicLoi16View:", error);
     });
 
     return () => unsubscribe();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isReadOnly]);
 
   const handleAddComponent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!compName || !compCost) return;
 
     try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) {
+        alert("Vous devez être connecté pour effectuer cette action.");
+        return;
+      }
+
       await addDoc(collection(db, 'maintenance_components'), {
         name: compName,
         condition: compCondition,
@@ -120,6 +146,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
         nextReplacementYear: Number(compNextYear),
         estimatedCost: Number(compCost),
         companyId: activeCompanyId,
+        ownerId: userId,
         createdAt: new Date().toISOString()
       });
 
@@ -132,6 +159,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding component: ', err);
+      alert("Erreur lors de l'enregistrement : " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -286,64 +314,265 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                 return sortOrder === 'asc' ? comparison : -comparison;
               });
 
+              // Apply Filters
+              const filteredComponents = sortedComponents.filter(c => {
+                if (filterName && !c.name.toLowerCase().includes(filterName.toLowerCase())) {
+                  return false;
+                }
+                if (filterCondition !== 'All' && c.condition !== filterCondition) {
+                  return false;
+                }
+                if (filterYear !== 'All' && c.nextReplacementYear !== filterYear) {
+                  return false;
+                }
+                return true;
+              });
+
               return (
                 <>
-                  {/* Table Header labels with Premium colors */}
-                  <div className="grid grid-cols-12 px-[18px] py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none select-none">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        if (sortBy === 'name') {
-                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortBy('name');
-                          setSortOrder('asc');
-                        }
-                      }}
-                      className="col-span-4 text-left text-violet-600 dark:text-violet-400 hover:text-violet-500 dark:hover:text-violet-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
-                    >
-                      <span>Composant</span>
-                      {sortBy === 'name' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
-                    </button>
+                  {/* Invisible overlay to close menus on click outside */}
+                  {openMenu !== null && (
+                    <div 
+                      className="fixed inset-0 z-40 bg-transparent cursor-default" 
+                      onClick={() => setOpenMenu(null)}
+                    />
+                  )}
+
+                  {/* Active Filters Summary */}
+                  {(filterName || filterCondition !== 'All' || filterYear !== 'All') && (
+                    <div className="flex flex-wrap items-center gap-2 mb-4 p-2.5 rounded-2xl bg-violet-500/5 border border-violet-500/10 text-[9px] font-bold text-left">
+                      <span className="text-slate-400 dark:text-zinc-500 uppercase tracking-widest mr-1">Filtres :</span>
+                      {filterName && (
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                          Nom: "{filterName}"
+                          <button type="button" onClick={() => setFilterName('')} className="hover:text-rose-500 font-bold border-none bg-transparent cursor-pointer p-0 ml-1">×</button>
+                        </span>
+                      )}
+                      {filterCondition !== 'All' && (
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                          Statut: {filterCondition === 'Excellent' ? 'Conforme' : filterCondition === 'Correct' ? 'À inspecter' : 'Critique'}
+                          <button type="button" onClick={() => setFilterCondition('All')} className="hover:text-rose-500 font-bold border-none bg-transparent cursor-pointer p-0 ml-1">×</button>
+                        </span>
+                      )}
+                      {filterYear !== 'All' && (
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                          Année: {filterYear}
+                          <button type="button" onClick={() => setFilterYear('All')} className="hover:text-rose-500 font-bold border-none bg-transparent cursor-pointer p-0 ml-1">×</button>
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterName('');
+                          setFilterCondition('All');
+                          setFilterYear('All');
+                        }}
+                        className="ml-auto text-rose-500 hover:text-rose-600 bg-transparent border-none cursor-pointer uppercase tracking-wider font-black"
+                      >
+                        Réinitialiser tout
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Table Header labels with Premium Interactive Dropdowns */}
+                  <div className="grid grid-cols-12 px-[18px] py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none select-none relative z-45">
                     
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        if (sortBy === 'condition') {
-                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortBy('condition');
-                          setSortOrder('asc');
-                        }
-                      }}
-                      className="col-span-3 text-center justify-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
-                    >
-                      <span>Statut</span>
-                      {sortBy === 'condition' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
-                    </button>
+                    {/* Composant Column Header */}
+                    <div className="col-span-4 relative text-left">
+                      <button 
+                        type="button"
+                        onClick={() => setOpenMenu(openMenu === 'composant' ? null : 'composant')}
+                        className="text-left text-violet-600 dark:text-violet-400 hover:text-violet-500 dark:hover:text-violet-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1.5 outline-none"
+                      >
+                        <span>Composant</span>
+                        <span className="text-[7px]">{openMenu === 'composant' ? '▲' : '▼'}</span>
+                      </button>
+                      
+                      {openMenu === 'composant' && (
+                        <div className="absolute top-6 left-0 z-50 w-56 mt-2 p-3 rounded-2xl bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border border-slate-200 dark:border-zinc-800 shadow-xl text-slate-800 dark:text-zinc-200 text-left normal-case tracking-normal">
+                          {/* Sort Options */}
+                          <div className="space-y-1 mb-2.5 pb-2.5 border-b border-slate-150 dark:border-zinc-850">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1 mb-1">Trier</span>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('name'); setSortOrder('asc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'name' && sortOrder === 'asc' ? 'text-violet-600 dark:text-violet-400 bg-violet-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Trier A-Z
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('name'); setSortOrder('desc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'name' && sortOrder === 'desc' ? 'text-violet-600 dark:text-violet-400 bg-violet-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Trier Z-A
+                            </button>
+                          </div>
+                          {/* Search Filter */}
+                          <div className="space-y-1">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1">Rechercher</span>
+                            <input
+                              type="text"
+                              value={filterName}
+                              onChange={(e) => setFilterName(e.target.value)}
+                              placeholder="Filtrer par nom..."
+                              className="w-full px-2.5 py-1.5 rounded-xl text-[9px] font-bold border outline-none bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800"
+                            />
+                            {filterName && (
+                              <button
+                                type="button"
+                                onClick={() => setFilterName('')}
+                                className="w-full text-center py-1 mt-1 text-[7.5px] font-black uppercase text-rose-500 hover:text-rose-600 bg-transparent border-none cursor-pointer"
+                              >
+                                Effacer la recherche
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        if (sortBy === 'year') {
-                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortBy('year');
-                          setSortOrder('asc');
-                        }
-                      }}
-                      className="col-span-4 text-center justify-center text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
-                    >
-                      <span>Prochaine Inspection</span>
-                      {sortBy === 'year' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
-                    </button>
+                    {/* Statut Column Header */}
+                    <div className="col-span-3 relative flex justify-center text-center">
+                      <button 
+                        type="button"
+                        onClick={() => setOpenMenu(openMenu === 'statut' ? null : 'statut')}
+                        className="text-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1.5 outline-none"
+                      >
+                        <span>Statut</span>
+                        <span className="text-[7px]">{openMenu === 'statut' ? '▲' : '▼'}</span>
+                      </button>
+                      
+                      {openMenu === 'statut' && (
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 w-48 mt-2 p-3 rounded-2xl bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border border-slate-200 dark:border-zinc-800 shadow-xl text-slate-800 dark:text-zinc-200 text-left normal-case tracking-normal">
+                          {/* Sort Options */}
+                          <div className="space-y-1 mb-2.5 pb-2.5 border-b border-slate-150 dark:border-zinc-850">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1 mb-1">Trier</span>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('condition'); setSortOrder('asc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'condition' && sortOrder === 'asc' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Sévérité (Critique d'abord)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('condition'); setSortOrder('desc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'condition' && sortOrder === 'desc' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Sévérité (Excellent d'abord)
+                            </button>
+                          </div>
+                          {/* Filter Options */}
+                          <div className="space-y-0.5">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1 mb-1">Filtrer</span>
+                            <button
+                              type="button"
+                              onClick={() => { setFilterCondition('All'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${filterCondition === 'All' ? 'bg-slate-100 dark:bg-zinc-900 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Tous les statuts
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setFilterCondition('Excellent'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-emerald-50 dark:hover:bg-emerald-950/20 border-none cursor-pointer ${filterCondition === 'Excellent' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Conforme (Excellent)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setFilterCondition('Correct'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-amber-50 dark:hover:bg-amber-950/20 border-none cursor-pointer ${filterCondition === 'Correct' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              À inspecter (Correct)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setFilterCondition('Critique'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-rose-50 dark:hover:bg-rose-950/20 border-none cursor-pointer ${filterCondition === 'Critique' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Critique
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Prochaine Inspection Column Header */}
+                    <div className="col-span-4 relative flex justify-center text-center">
+                      <button 
+                        type="button"
+                        onClick={() => setOpenMenu(openMenu === 'inspection' ? null : 'inspection')}
+                        className="text-center text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1.5 outline-none"
+                      >
+                        <span>Prochaine Inspection</span>
+                        <span className="text-[7px]">{openMenu === 'inspection' ? '▲' : '▼'}</span>
+                      </button>
+                      
+                      {openMenu === 'inspection' && (
+                        <div className="absolute top-6 right-0 z-50 w-52 mt-2 p-3 rounded-2xl bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border border-slate-200 dark:border-zinc-800 shadow-xl text-slate-800 dark:text-zinc-200 text-left normal-case tracking-normal">
+                          {/* Sort Options */}
+                          <div className="space-y-1 mb-2.5 pb-2.5 border-b border-slate-150 dark:border-zinc-850">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1 mb-1">Trier</span>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('year'); setSortOrder('asc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'year' && sortOrder === 'asc' ? 'text-amber-600 dark:text-amber-400 bg-amber-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Année (Plus proche d'abord)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSortBy('year'); setSortOrder('desc'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${sortBy === 'year' && sortOrder === 'desc' ? 'text-amber-600 dark:text-amber-400 bg-amber-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Année (Plus éloigné d'abord)
+                            </button>
+                          </div>
+                          {/* Filter by Year */}
+                          <div className="space-y-1">
+                            <span className="text-[7.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block px-1 mb-1">Filtrer par année</span>
+                            <button
+                              type="button"
+                              onClick={() => { setFilterYear('All'); setOpenMenu(null); }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${filterYear === 'All' ? 'bg-slate-100 dark:bg-zinc-900 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                            >
+                              Toutes les années
+                            </button>
+                            <div className="max-h-24 overflow-y-auto space-y-0.5 mt-1 pr-1">
+                              {Array.from(new Set(components.map(c => c.nextReplacementYear))).sort().map(year => (
+                                <button
+                                  key={year}
+                                  type="button"
+                                  onClick={() => { setFilterYear(year); setOpenMenu(null); }}
+                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[8.5px] font-black uppercase hover:bg-slate-100 dark:hover:bg-zinc-900 border-none cursor-pointer ${filterYear === year ? 'text-amber-600 dark:text-amber-400 bg-amber-500/5' : 'text-slate-500 dark:text-zinc-400 bg-transparent'}`}
+                                >
+                                  Année {year}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     
                     <div className="col-span-1 text-right text-indigo-600 dark:text-indigo-400">Action</div>
                   </div>
 
                   {/* Stack of separate rounded cards */}
-                  <div className="space-y-3 mt-2">
-                    {sortedComponents.map((c) => {
+                  <div className="space-y-3 mt-2 relative z-30">
+                    {filteredComponents.length === 0 ? (
+                      <div className="text-center py-12 rounded-[24px] border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-900/10 p-6">
+                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-widest">
+                          Aucun composant trouvé
+                        </span>
+                        <p className="text-[8.5px] text-slate-400 dark:text-zinc-500 mt-1 font-semibold normal-case">
+                          Modifiez vos critères de recherche ou réinitialisez les filtres.
+                        </p>
+                      </div>
+                    ) : (
+                      filteredComponents.map((c) => {
                       const isSelected = selectedId === c.id;
                       const isAnySelected = selectedId !== null;
                       const dimClass = isAnySelected && !isSelected 
