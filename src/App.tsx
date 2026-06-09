@@ -656,6 +656,13 @@ const PolitiqueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 };
 
 const App = () => {
+  // --- ADMIN PROFILE STATE ---
+  const [adminName, setAdminName] = useState(() => localStorage.getItem("autocompt_admin_name") || "Fabiola Beatriz");
+  const [adminRole, setAdminRole] = useState(() => localStorage.getItem("autocompt_admin_role") || "Administratrice");
+  const [adminPhoto, setAdminPhoto] = useState(() => localStorage.getItem("autocompt_admin_photo") || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop");
+  const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem("autocompt_admin_phone") || "+1 (514) 555-0199");
+  const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem("autocompt_admin_email") || "fabiola@autocompt.ca");
+
   // --- PERFIL Y CONFIGURACIÓN ---
   const [setupComplet, setSetupComplet] = useState(false);
   const [homeOfficeFiles, setHomeOfficeFiles] = useState<Record<string, string>>({});
@@ -1650,7 +1657,7 @@ const App = () => {
           {showOnlyCreation ? (
             <>
               <div className="flex-grow p-6 flex flex-col justify-center items-center space-y-4">
-                <div className="p-3.5 bg-emerald-500/10 dark:bg-emerald-555/20 text-[#059669] dark:text-emerald-400 rounded-2xl animate-bounce">
+                <div className="p-3.5 bg-emerald-500/10 dark:bg-emerald-500/20 text-[#059669] dark:text-emerald-400 rounded-2xl animate-bounce">
                   <PlusCircle size={22} />
                 </div>
                 <p className="text-[10px] font-black text-center text-slate-400 dark:text-zinc-500 uppercase tracking-wider max-w-[180px] leading-relaxed">
@@ -9030,16 +9037,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
             {dashboardMode === "Syndic" && (
               <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-emerald-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-emerald-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
               </div>
             )}
@@ -9841,7 +9848,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-left col-span-2">
               <button
                 onClick={() => setVista("contrats")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-emerald-500/60 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-emerald-555 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-emerald-500/60 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-emerald-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}>
                   <FileSignature size={22} />
@@ -9855,7 +9862,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("transparence")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-blue-500/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-blue-555 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-blue-500/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-blue-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-blue-900/20 text-indigo-400" : "bg-blue-100 text-indigo-500"} p-3 rounded-2xl`}>
                   <FileSpreadsheet size={22} />
@@ -9869,7 +9876,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("loi16")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-violet-500/60 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-violet-555 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-violet-500/60 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-violet-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-violet-900/20 text-violet-400" : "bg-violet-100 text-violet-600"} p-3 rounded-2xl`}>
                   <Wrench size={22} />
@@ -9883,7 +9890,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("muro")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-rose-500/60 hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-rose-555 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-rose-500/60 hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-rose-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-rose-900/20 text-rose-400" : "bg-rose-100 text-rose-600"} p-3 rounded-2xl`}>
                   <MessageSquare size={22} />
@@ -9897,7 +9904,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("settings")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-zinc-700/60 hover:shadow-[0_0_20px_rgba(113,113,122,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-zinc-555 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
+                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-zinc-700/60 hover:shadow-[0_0_20px_rgba(113,113,122,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-zinc-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-zinc-900 text-zinc-400" : "bg-slate-100 text-slate-600"} p-3 rounded-2xl`}>
                   <Settings size={22} />
@@ -22007,31 +22014,134 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "settings") {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        {/* Background gradient blooms for premium look */}
+        {darkMode && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-slate-650/10 blur-[100px]" />
+            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
+          </div>
+        )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors md:hidden mr-1"
-            >
-              <Menu size={22} />
-            </button>
-            <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl">
-              <Settings size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-black italic tracking-tighter uppercase">Paramètres</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configuration et personnalisation</p>
-            </div>
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
+             </button>
+             <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                  <span>AutoCompt</span>
+                  <span>/</span>
+                  <span>Tableau de Bord</span>
+                  <span className="text-slate-550 font-bold">/ Paramètres</span>
+                </div>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Paramètres</h1>
+             </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+                <Bell size={14} />
+             </button>
+             
+             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-slate-500/30 transition-all cursor-pointer">
+                <img 
+                  src={adminPhoto} 
+                  alt={adminName} 
+                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center gap-1 leading-none">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                    <ChevronDown size={8} className="text-slate-400" />
+                  </div>
+                  <p className="text-[7px] font-bold uppercase text-slate-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+                </div>
+             </div>
           </div>
         </header>
         
         <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-          <button onClick={() => setVista('dashboard')} className="flex items-center gap-2 text-stone-500 hover:text-emerald-600 transition-colors font-medium text-sm mb-6">
-            <ArrowLeft size={16} /> Retour au tableau de bord
-          </button>
+          {/* Section: Profile Config */}
           <div className={`p-8 rounded-[32px] border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-white shadow-xl shadow-slate-200/40 border-slate-200"}`}>
             <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center space-x-2 border-b pb-4 border-slate-100 dark:border-zinc-800">
+              <User size={18} className="text-emerald-500" />
+              <span>Profil de l'Administrateur</span>
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Nom Complet</label>
+                <input 
+                  type="text" 
+                  value={adminName} 
+                  onChange={(e) => {
+                    setAdminName(e.target.value);
+                    localStorage.setItem("autocompt_admin_name", e.target.value);
+                  }}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                />
+              </div>
+
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Rôle / Titre</label>
+                <input 
+                  type="text" 
+                  value={adminRole} 
+                  onChange={(e) => {
+                    setAdminRole(e.target.value);
+                    localStorage.setItem("autocompt_admin_role", e.target.value);
+                  }}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                />
+              </div>
+
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Numéro de Téléphone</label>
+                <input 
+                  type="text" 
+                  value={adminPhone} 
+                  onChange={(e) => {
+                    setAdminPhone(e.target.value);
+                    localStorage.setItem("autocompt_admin_phone", e.target.value);
+                  }}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                />
+              </div>
+
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Courriel de Contact</label>
+                <input 
+                  type="email" 
+                  value={adminEmail} 
+                  onChange={(e) => {
+                    setAdminEmail(e.target.value);
+                    localStorage.setItem("autocompt_admin_email", e.target.value);
+                  }}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                />
+              </div>
+              
+              <div className="space-y-1 text-left md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">URL de la Photo de Profil</label>
+                <div className="flex gap-4 items-center">
+                  <img src={adminPhoto} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-violet-500/20 shadow-md shrink-0" />
+                  <input 
+                    type="text" 
+                    value={adminPhoto} 
+                    onChange={(e) => {
+                      setAdminPhoto(e.target.value);
+                      localStorage.setItem("autocompt_admin_photo", e.target.value);
+                    }}
+                    className={`flex-1 p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={`p-8 rounded-[32px] border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-white shadow-xl shadow-slate-200/40 border-slate-200"}`}>
+            <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center space-x-2 border-b pb-4 border-slate-100 dark:border-zinc-800">
+              <Palette size={18} className="text-indigo-500" />
               <span>Expérience Utilisateur (UX)</span>
             </h2>
             
@@ -22076,7 +22186,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
             </div>
             
-            <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-950/50 rounded-2xl border border-slate-100 dark:border-zinc-800">
+            <div className="mt-4 flex items-center justify-between p-4 bg-slate-50/50 dark:bg-zinc-950/50 rounded-2xl border border-slate-100 dark:border-zinc-800">
               <div className="flex items-center space-x-4">
                 <div className={`p-3 rounded-xl ${darkMode ? "bg-amber-500/10 text-amber-500" : "bg-slate-500/10 text-slate-500"}`}>
                   {darkMode ? <Moon size={20} /> : <Sun size={20} />}
@@ -22247,16 +22357,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
              
              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-teal-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
              </div>
           </div>
@@ -22304,23 +22414,23 @@ Ceci est un message automatisé généré par AutoCompt.`;
              
              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-blue-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-blue-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-blue-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
              </div>
           </div>
         </header>
 
         <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
-          <SyndicatDashboard onNavigate={setVista} />
+          <SyndicTransparencyDashboard depenses={depenses} activeCompanyId={activeCompanyId} />
         </main>
       </div>
     );
@@ -22361,16 +22471,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
              
              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-amber-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-amber-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-amber-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
              </div>
           </div>
@@ -22418,16 +22528,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
              
              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-rose-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-rose-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-rose-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
              </div>
           </div>
@@ -22512,25 +22622,22 @@ Ceci est un message automatisé généré par AutoCompt.`;
              {/* Administrator Profile Widget */}
              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-violet-500/30 transition-all cursor-pointer">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-                  alt="Fabiola Beatriz" 
+                  src={adminPhoto} 
+                  alt={adminName} 
                   className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
                   <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
                     <ChevronDown size={8} className="text-slate-400" />
                   </div>
-                  <p className="text-[7px] font-bold uppercase text-violet-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                  <p className="text-[7px] font-bold uppercase text-violet-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
                 </div>
              </div>
           </div>
         </header>
 
         <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
-          <button onClick={() => setVista('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-violet-650 transition-colors font-bold uppercase tracking-widest text-[9px] mb-4 px-2 border-none bg-transparent cursor-pointer text-left">
-            <ArrowLeft size={14} /> Retour au tableau de bord
-          </button>
           <SyndicLoi16View darkMode={darkMode} userRole={userRole} activeCompanyId={activeCompanyId} />
         </main>
       </div>
