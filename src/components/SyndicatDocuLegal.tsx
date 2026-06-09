@@ -452,10 +452,26 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
 
       // Colors
       const primaryColor = activeTab === 'externe' ? [16, 185, 129] : [20, 184, 166]; // Emerald vs Teal
+
+      // Helper function to draw a 4-pointed sparkle star (AutoCompt Logo)
+      const drawSparkle = (pdfDoc: any, cx: number, cy: number, size: number, colorArr: number[]) => {
+        pdfDoc.setFillColor(colorArr[0], colorArr[1], colorArr[2]);
+        const half = size / 2;
+        const inner = size / 6;
+        // Vertical diamond
+        pdfDoc.triangle(cx, cy - half, cx - inner, cy, cx + inner, cy, 'F');
+        pdfDoc.triangle(cx, cy + half, cx - inner, cy, cx + inner, cy, 'F');
+        // Horizontal diamond
+        pdfDoc.triangle(cx - half, cy, cx, cy - inner, cx, cy + inner, 'F');
+        pdfDoc.triangle(cx + half, cy, cx, cy - inner, cx, cy + inner, 'F');
+      };
       
       // Top elegant colored band
       docPdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       docPdf.rect(0, 0, pageWidth, 25, 'F');
+
+      // Draw AutoCompt logo symbol
+      drawSparkle(docPdf, 15, 12.5, 4.5, [255, 255, 255]);
 
       // Top band texts
       docPdf.setTextColor(255, 255, 255);
@@ -645,10 +661,12 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       docPdf.setLineDashPattern([], 0);
 
       // Security seal content
+      drawSparkle(docPdf, 26, sealY + 6.5, 3.5, primaryColor);
+      
       docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       docPdf.setFont('Helvetica', 'bold');
       docPdf.setFontSize(8);
-      docPdf.text("CERTIFICATION DE SIGNATURE ÉLECTRONIQUE - DOCULEGAL SECURE", 25, sealY + 7);
+      docPdf.text("CERTIFICATION DE SIGNATURE ÉLECTRONIQUE - DOCULEGAL SECURE", 30, sealY + 7);
 
       docPdf.setTextColor(100, 116, 139);
       docPdf.setFont('Helvetica', 'normal');
