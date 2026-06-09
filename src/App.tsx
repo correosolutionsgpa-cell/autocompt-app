@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -9854,10 +9854,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <FileSignature size={22} />
                 </div>
                 <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Gestion des Contrats
+                  Contrats & RÇ¸solutions (DocuLegal)
                 </span>
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Suivez et gérez tous vos contrats fournisseurs de services.
+                  Suivez, gÇ¸rez et signez numÇ¸riquement vos contrats et rÇ¸solutions.
                 </p>
               </button>
               <button
@@ -22344,9 +22344,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <span>/</span>
                   <span>Tableau de Bord</span>
                   <span>/</span>
-                  <span className="text-teal-500 font-bold">Contrats & Résolutions</span>
+                  <span className="text-teal-500 font-bold">Contrats & RÇ¸solutions (DocuLegal)</span>
                 </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions</h1>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & RÇ¸solutions (DocuLegal)</h1>
              </div>
           </div>
 
@@ -22648,3 +22648,4 @@ Ceci est un message automatisé généré par AutoCompt.`;
 };
 
 export default App;
+
