@@ -272,9 +272,9 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
 
             {/* Table Header labels with Premium colors */}
             <div className="grid grid-cols-12 px-6 py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none">
-              <div className="col-span-5 text-violet-600 dark:text-violet-400">Composant</div>
+              <div className="col-span-4 text-violet-600 dark:text-violet-400">Composant</div>
               <div className="col-span-3 text-center text-emerald-600 dark:text-emerald-400">Statut</div>
-              <div className="col-span-3 text-center text-amber-600 dark:text-amber-400">Prochaine Inspection</div>
+              <div className="col-span-4 text-center text-amber-600 dark:text-amber-400">Prochaine Inspection</div>
               <div className="col-span-1 text-right text-indigo-600 dark:text-indigo-400">Action</div>
             </div>
 
@@ -331,7 +331,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     )}
                   >
                     {/* Component Name */}
-                    <div className="col-span-5 text-left pr-2">
+                    <div className="col-span-4 text-left pr-2">
                       <span className="text-[10.5px] font-black uppercase tracking-tight leading-tight">{c.name}</span>
                     </div>
 
@@ -347,7 +347,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     </div>
 
                     {/* Inspection Info */}
-                    <div className="col-span-3 text-center flex flex-col items-center justify-center">
+                    <div className="col-span-4 text-center flex flex-col items-center justify-center">
                       <span className="text-[10.5px] font-black text-slate-800 dark:text-zinc-100">
                         {c.condition === 'Critique' ? 'Imminent' : c.lastInspection}
                       </span>
