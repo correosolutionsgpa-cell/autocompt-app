@@ -170,8 +170,8 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     }, 4000);
   };
 
-  // Canvas Drawing Handlers
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  // Canvas Drawing Handlers (Mouse)
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -189,21 +189,15 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     ctx.lineJoin = 'round';
 
     const rect = canvas.getBoundingClientRect();
-    let x, y;
-    if ('touches' in e) {
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
-    } else {
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
-    }
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     ctx.beginPath();
     ctx.moveTo(x, y);
     setIsDrawing(true);
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -211,16 +205,8 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    let x, y;
-    if ('touches' in e) {
-      // Prevent scrolling on touch devices while drawing
-      if (e.cancelable) e.preventDefault();
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
-    } else {
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
-    }
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -260,6 +246,79 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
       }
     }
   }, [isSignatureModalOpen, signatureType, darkMode]);
+
+  // Native touch event listeners to prevent scrolling while drawing on mobile
+  useEffect(() => {
+    if (!isSignatureModalOpen || signatureType !== 'draw') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let localIsDrawing = false;
+    let localHasDrawn = hasDrawn;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      if (!localHasDrawn) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setHasDrawn(true);
+        localHasDrawn = true;
+      }
+
+      ctx.strokeStyle = darkMode ? '#10b981' : '#059669'; // Emerald
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      
+      setIsDrawing(true);
+      localIsDrawing = true;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      if (!localIsDrawing) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      setIsDrawing(false);
+      localIsDrawing = false;
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isSignatureModalOpen, signatureType, darkMode, hasDrawn]);
 
   // Handle Apply Signature
   const handleApplySignature = () => {
@@ -617,10 +676,8 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                       onMouseMove={draw}
                       onMouseUp={stopDrawing}
                       onMouseLeave={stopDrawing}
-                      onTouchStart={startDrawing}
-                      onTouchMove={draw}
-                      onTouchEnd={stopDrawing}
-                      className={`w-full h-40 rounded-3xl border-2 border-dashed cursor-crosshair bg-slate-50 dark:bg-zinc-900/60 ${darkMode ? 'border-zinc-800' : 'border-slate-200'}`}
+                      style={{ touchAction: 'none' }}
+                      className={`w-full h-40 rounded-3xl border-2 border-dashed cursor-crosshair bg-slate-50 dark:bg-zinc-900/60 touch-none ${darkMode ? 'border-zinc-800' : 'border-slate-200'}`}
                     />
                     {hasDrawn && (
                       <button 
