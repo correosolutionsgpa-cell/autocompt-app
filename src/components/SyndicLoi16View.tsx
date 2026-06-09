@@ -49,6 +49,8 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   const [showAddModal, setShowAddModal] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'name' | 'condition' | 'year'>('year');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Form State
   const [compName, setCompName] = useState('');
@@ -270,113 +272,177 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               )}
             </div>
 
-            {/* Table Header labels with Premium colors */}
-            <div className="grid grid-cols-12 px-6 py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none">
-              <div className="col-span-4 text-violet-600 dark:text-violet-400">Composant</div>
-              <div className="col-span-3 text-center text-emerald-600 dark:text-emerald-400">Statut</div>
-              <div className="col-span-4 text-center text-amber-600 dark:text-amber-400">Prochaine Inspection</div>
-              <div className="col-span-1 text-right text-indigo-600 dark:text-indigo-400">Action</div>
-            </div>
+            {(() => {
+              const sortedComponents = [...components].sort((a, b) => {
+                let comparison = 0;
+                if (sortBy === 'name') {
+                  comparison = a.name.localeCompare(b.name);
+                } else if (sortBy === 'condition') {
+                  const weights = { Excellent: 3, Correct: 2, Critique: 1 };
+                  comparison = weights[a.condition] - weights[b.condition];
+                } else if (sortBy === 'year') {
+                  comparison = a.nextReplacementYear - b.nextReplacementYear;
+                }
+                return sortOrder === 'asc' ? comparison : -comparison;
+              });
 
-            {/* Stack of separate rounded cards */}
-            <div className="space-y-3 mt-2">
-              {components.map((c) => {
-                const isSelected = selectedId === c.id;
-                const isAnySelected = selectedId !== null;
-                const dimClass = isAnySelected && !isSelected 
-                  ? 'opacity-40 blur-[0.2px] scale-[0.99] transition-all duration-300' 
-                  : 'transition-all duration-300';
+              return (
+                <>
+                  {/* Table Header labels with Premium colors */}
+                  <div className="grid grid-cols-12 px-[18px] py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none select-none">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (sortBy === 'name') {
+                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortBy('name');
+                          setSortOrder('asc');
+                        }
+                      }}
+                      className="col-span-4 text-left text-violet-600 dark:text-violet-400 hover:text-violet-500 dark:hover:text-violet-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
+                    >
+                      <span>Composant</span>
+                      {sortBy === 'name' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
+                    </button>
+                    
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (sortBy === 'condition') {
+                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortBy('condition');
+                          setSortOrder('asc');
+                        }
+                      }}
+                      className="col-span-3 text-center justify-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
+                    >
+                      <span>Statut</span>
+                      {sortBy === 'condition' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
+                    </button>
+                    
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (sortBy === 'year') {
+                          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortBy('year');
+                          setSortOrder('asc');
+                        }
+                      }}
+                      className="col-span-4 text-center justify-center text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 font-black uppercase tracking-wider bg-transparent border-none p-0 cursor-pointer flex items-center gap-1 outline-none"
+                    >
+                      <span>Prochaine Inspection</span>
+                      {sortBy === 'year' && (sortOrder === 'asc' ? ' ▲' : ' ▼')}
+                    </button>
+                    
+                    <div className="col-span-1 text-right text-indigo-600 dark:text-indigo-400">Action</div>
+                  </div>
 
-                const conditionStyles = {
-                  Excellent: {
-                    badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]',
-                    text: 'text-emerald-600 dark:text-emerald-400',
-                    icon: <CheckCircle2 size={10} className="inline mr-1 shrink-0" />,
-                    label: 'Conforme',
-                    selectedClass: darkMode 
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 backdrop-blur-md shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
-                      : 'bg-emerald-50/40 border-emerald-500/30 text-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
-                  },
-                  Correct: {
-                    badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]',
-                    text: 'text-amber-600 dark:text-amber-400',
-                    icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
-                    label: 'À Inspecter',
-                    selectedClass: darkMode 
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 backdrop-blur-md shadow-[0_0_20px_rgba(245,158,11,0.1)]' 
-                      : 'bg-amber-50/40 border-amber-500/30 text-amber-700 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
-                  },
-                  Critique: {
-                    badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]',
-                    text: 'text-rose-600 dark:text-rose-400',
-                    icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
-                    label: 'Critique',
-                    selectedClass: darkMode 
-                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-400 backdrop-blur-md shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
-                      : 'bg-rose-50/40 border-rose-500/30 text-rose-700 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
-                  }
-                }[c.condition];
+                  {/* Stack of separate rounded cards */}
+                  <div className="space-y-3 mt-2">
+                    {sortedComponents.map((c) => {
+                      const isSelected = selectedId === c.id;
+                      const isAnySelected = selectedId !== null;
+                      const dimClass = isAnySelected && !isSelected 
+                        ? 'opacity-40 blur-[0.2px] scale-[0.99] transition-all duration-300' 
+                        : 'transition-all duration-300';
 
-                return (
-                  <motion.div
-                    key={c.id}
-                    onClick={() => setSelectedId(c.id)}
-                    whileHover={{ y: -1, scale: 1.008 }}
-                    className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer transition-all duration-300 " + dimClass + " " + (
-                      isSelected
-                        ? conditionStyles.selectedClass
-                        : darkMode
-                          ? 'bg-zinc-900/40 border-zinc-855 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
-                          : 'bg-white border-slate-200 hover:border-slate-350 hover:bg-slate-50/30 text-slate-700'
-                    )}
-                  >
-                    {/* Component Name */}
-                    <div className="col-span-4 text-left pr-2">
-                      <span className="text-[10.5px] font-black uppercase tracking-tight leading-tight">{c.name}</span>
-                    </div>
+                      const conditionStyles = {
+                        Excellent: {
+                          badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]',
+                          text: 'text-emerald-600 dark:text-emerald-400',
+                          icon: <CheckCircle2 size={10} className="inline mr-1 shrink-0" />,
+                          label: 'Conforme',
+                          selectedClass: darkMode 
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 backdrop-blur-md shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
+                            : 'bg-emerald-50/40 border-emerald-500/30 text-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
+                        },
+                        Correct: {
+                          badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]',
+                          text: 'text-amber-600 dark:text-amber-400',
+                          icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
+                          label: 'À Inspecter',
+                          selectedClass: darkMode 
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 backdrop-blur-md shadow-[0_0_20px_rgba(245,158,11,0.1)]' 
+                            : 'bg-amber-50/40 border-amber-500/30 text-amber-700 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
+                        },
+                        Critique: {
+                          badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]',
+                          text: 'text-rose-600 dark:text-rose-400',
+                          icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
+                          label: 'Critique',
+                          selectedClass: darkMode 
+                            ? 'bg-rose-500/15 border-rose-500/40 text-rose-400 backdrop-blur-md shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
+                            : 'bg-rose-50/40 border-rose-500/30 text-rose-700 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
+                        }
+                      }[c.condition];
 
-                    {/* Status Badge */}
-                    <div className="col-span-3 flex flex-col items-center justify-center">
-                      <span className={"px-3 py-1 rounded-full text-[7.5px] font-black uppercase border leading-none " + conditionStyles.badge}>
-                        {c.condition === 'Excellent' ? 'CONFORME' : c.condition === 'Correct' ? 'À INSPECTER' : 'CRITIQUE'}
-                      </span>
-                      <div className={"flex items-center gap-0.5 mt-1.5 text-[7px] font-black uppercase tracking-wider " + conditionStyles.text}>
-                        {conditionStyles.icon}
-                        <span>{conditionStyles.label}</span>
-                      </div>
-                    </div>
-
-                    {/* Inspection Info */}
-                    <div className="col-span-4 text-center flex flex-col items-center justify-center">
-                      <span className="text-[10.5px] font-black text-slate-800 dark:text-zinc-100">
-                        {c.condition === 'Critique' ? 'Imminent' : c.lastInspection}
-                      </span>
-                      {c.condition !== 'Critique' && (
-                        <span className="text-[7.5px] font-black uppercase text-violet-500 tracking-wider mt-1">
-                          Remplacement: {c.nextReplacementYear}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="col-span-1 flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      {!isReadOnly && (
-                        <button
-                          onClick={() => handleDeleteComponent(c.id)}
-                          className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
-                            darkMode
-                              ? 'bg-zinc-800/80 text-zinc-400 hover:text-rose-450 hover:bg-zinc-700'
-                              : 'bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-slate-200'
+                      return (
+                        <motion.div
+                          key={c.id}
+                          onClick={() => setSelectedId(c.id)}
+                          whileHover={{ y: -1, scale: 1.008 }}
+                          className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer transition-all duration-300 " + dimClass + " " + (
+                            isSelected
+                              ? conditionStyles.selectedClass
+                              : darkMode
+                                ? 'bg-zinc-900/40 border-zinc-855 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
+                                : 'bg-white border-slate-200 hover:border-slate-350 hover:bg-slate-50/30 text-slate-700'
                           )}
                         >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
+                          {/* Component Name */}
+                          <div className="col-span-4 text-left pr-2">
+                            <span className="text-[10.5px] font-black uppercase tracking-tight leading-tight">{c.name}</span>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="col-span-3 flex flex-col items-center justify-center">
+                            <span className={"px-3 py-1 rounded-full text-[7.5px] font-black uppercase border leading-none " + conditionStyles.badge}>
+                              {c.condition === 'Excellent' ? 'CONFORME' : c.condition === 'Correct' ? 'À INSPECTER' : 'CRITIQUE'}
+                            </span>
+                            <div className={"flex items-center gap-0.5 mt-1.5 text-[7px] font-black uppercase tracking-wider " + conditionStyles.text}>
+                              {conditionStyles.icon}
+                              <span>{conditionStyles.label}</span>
+                            </div>
+                          </div>
+
+                          {/* Inspection Info */}
+                          <div className="col-span-4 text-center flex flex-col items-center justify-center">
+                            <span className="text-[10.5px] font-black text-slate-800 dark:text-zinc-100">
+                              {c.condition === 'Critique' ? 'Imminent' : c.lastInspection}
+                            </span>
+                            {c.condition !== 'Critique' && (
+                              <span className="text-[7.5px] font-black uppercase text-violet-500 tracking-wider mt-1">
+                                Remplacement: {c.nextReplacementYear}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="col-span-1 flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {!isReadOnly && (
+                              <button
+                                onClick={() => handleDeleteComponent(c.id)}
+                                className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
+                                  darkMode
+                                    ? 'bg-zinc-800/80 text-zinc-400 hover:text-rose-450 hover:bg-zinc-700'
+                                    : 'bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-slate-200'
+                                )}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Compliance Info Banner */}
             <div className={"p-4 mt-6 rounded-3xl border flex items-start space-x-2.5 text-[9.5px] leading-relaxed transition-all " + (darkMode ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-slate-50/50 border-slate-100')}>
