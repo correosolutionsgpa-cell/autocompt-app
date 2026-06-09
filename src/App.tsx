@@ -9814,10 +9814,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           {dashboardMode === "Syndic" ? (
-            <div className="grid grid-cols-2 gap-4 text-left col-span-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-left col-span-2">
               <button
                 onClick={() => setVista("contrats")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
+                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-emerald-500 hover:shadow-xl transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}>
                   <FileSignature size={22} />
@@ -9831,7 +9831,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("transparence")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
+                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-blue-500 hover:shadow-xl transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-blue-900/20 text-indigo-400" : "bg-blue-100 text-indigo-500"} p-3 rounded-2xl`}>
                   <FileSpreadsheet size={22} />
@@ -9844,14 +9844,28 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </p>
               </button>
               <button
-                onClick={() => setVista("muro")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
+                onClick={() => setVista("loi16")}
+                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-violet-500 hover:shadow-xl transition-all active:scale-95 cursor-pointer`}
               >
-                <div className={`${darkMode ? "bg-teal-900/20 text-teal-400" : "bg-teal-100 text-teal-600"} p-3 rounded-2xl`}>
+                <div className={`${darkMode ? "bg-violet-900/20 text-violet-400" : "bg-violet-100 text-violet-600"} p-3 rounded-2xl`}>
+                  <Wrench size={22} />
+                </div>
+                <span className="text-[10px] font-black uppercase italic tracking-tighter">
+                  Loi 16 & Carnet Entretien
+                </span>
+                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
+                  Carnet d'entretien technique et projections financières réglementaires.
+                </p>
+              </button>
+              <button
+                onClick={() => setVista("muro")}
+                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-rose-500 hover:shadow-xl transition-all active:scale-95 cursor-pointer`}
+              >
+                <div className={`${darkMode ? "bg-rose-900/20 text-rose-400" : "bg-rose-100 text-rose-600"} p-3 rounded-2xl`}>
                   <MessageSquare size={22} />
                 </div>
                 <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Muro de Communication
+                  Mur de Communication
                 </span>
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
                   Discussions et avis officiels partagés pour les copropriétaires.
@@ -9859,7 +9873,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </button>
               <button
                 onClick={() => setVista("settings")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
+                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-slate-500 hover:shadow-xl transition-all active:scale-95 cursor-pointer`}
               >
                 <div className={`${darkMode ? "bg-zinc-900 text-zinc-400" : "bg-slate-100 text-slate-600"} p-3 rounded-2xl`}>
                   <Settings size={22} />
@@ -9868,7 +9882,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   Paramètres SYNDICAT
                 </span>
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Configurez les informations du Syndicat, informations clés et accès.
+                  Configurez les informações du Syndicat, de facturation et accès.
                 </p>
               </button>
             </div>
