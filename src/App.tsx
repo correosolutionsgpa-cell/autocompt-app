@@ -1094,6 +1094,7 @@ const App = () => {
         "homeoffice", "taxes", "rapports", "banque", "sous-traitance", "doculegal",
         // Syndic views
         "cotisations", "contrats", "transparence", "loi16", "muro", "settings",
+        "rapport-ia",
         // Other app views
         "plex", "incident", "taxes_assurances", "accepter-invitation",
         "preview-email", "setup", "login", "welcome", "benefits",
@@ -1559,6 +1560,7 @@ const App = () => {
       { id: "contrats", label: "Contrats & Résolutions (DocuLegal)", icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
       { id: "transparence", label: "Tableau de Transparence", icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
       { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
+      { id: "rapport-ia", label: "Rapport IA (SyndicAI)", icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
       { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
       { id: "settings", label: "Paramètres", icon: <Settings size={18} />, bgClass: "bg-slate-100 dark:bg-slate-800", textClass: "text-slate-600 dark:text-slate-400" },
     ];
@@ -9993,6 +9995,26 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
                   Configurez les informações du Syndicat, de facturation et accès.
                 </p>
+              </button>
+              {/* Featured wide card — Rapport IA */}
+              <button
+                onClick={() => setVista("rapport-ia")}
+                className={`col-span-2 md:col-span-3 ${darkMode ? "bg-gradient-to-r from-purple-950/60 via-zinc-950/60 to-indigo-950/60 border-purple-900/50 text-white backdrop-blur-md hover:border-purple-500/60 hover:shadow-[0_0_30px_rgba(147,51,234,0.2)]" : "bg-gradient-to-r from-purple-50 via-white to-indigo-50 border-purple-200/80 text-slate-900 shadow-sm hover:border-purple-400 hover:shadow-lg"} p-5 rounded-[32px] border flex items-center gap-5 text-left transition-all active:scale-[0.99] cursor-pointer`}
+              >
+                <div className={`${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-600"} p-4 rounded-2xl shrink-0`}>
+                  <Sparkles size={28} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[11px] font-black uppercase italic tracking-tighter block">
+                    Rapport IA — SyndicAI
+                  </span>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight leading-snug mt-1">
+                    Génération intelligente de rapports financiers, convocations, mises en demeure et inspections Loi 16 — propulsé par l'IA.
+                  </p>
+                </div>
+                <div className={`shrink-0 px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest ${darkMode ? "bg-purple-600 text-white" : "bg-purple-600 text-white"}`}>
+                  Ouvrir →
+                </div>
               </button>
             </div>
           ) : (
@@ -22717,6 +22739,62 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
         <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
           <SyndicLoi16View darkMode={darkMode} userRole={userRole} activeCompanyId={activeCompanyId} />
+        </main>
+      </div>
+    );
+  }
+
+  if (vista === "rapport-ia") {
+    return (
+      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        {darkMode && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-purple-600/10 blur-[100px]" />
+            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-600/10 blur-[100px]" />
+          </div>
+        )}
+        <WorkspaceSidebar />
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+          <div className="flex items-center space-x-3">
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-purple-500 font-bold">Rapport IA (SyndicAI)</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Rapport IA — SyndicAI</h1>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-200 dark:border-zinc-800 shadow-sm hover:border-purple-500/30 transition-all cursor-pointer">
+              <img src={adminPhoto} alt={adminName} className="w-7 h-7 rounded-full border border-purple-500/20 object-cover shadow-sm" />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-100">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
+                </div>
+                <p className="text-[7px] font-bold uppercase text-purple-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="flex-1 max-w-5xl w-full p-4 sm:p-6 space-y-6 mx-auto">
+          <SyndicAiReporter
+            depenses={depenses}
+            activeCompanyId={activeCompanyId}
+            darkMode={darkMode}
+            companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+            adminName={adminName}
+            adminRole={adminRole}
+          />
         </main>
       </div>
     );
