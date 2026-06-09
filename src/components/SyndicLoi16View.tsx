@@ -96,6 +96,10 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
         // Sort components by next replacement year
         fetched.sort((a, b) => a.nextReplacementYear - b.nextReplacementYear);
         setComponents(fetched);
+        if (fetched.length > 0) {
+          // Select the first one by default so the premium select design is immediately visible
+          setSelectedId((prev) => prev || fetched[0].id);
+        }
       }
     });
 
@@ -307,14 +311,16 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                 return (
                   <motion.div
                     key={c.id}
-                    onClick={() => setSelectedId(isSelected ? null : c.id)}
-                    whileHover={{ y: -2 }}
-                    className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer " + dimClass + " " + (
+                    onClick={() => setSelectedId(c.id)}
+                    whileHover={{ y: -1, scale: 1.008 }}
+                    className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer transition-all duration-300 " + dimClass + " " + (
                       isSelected
-                        ? 'bg-violet-500/10 border-violet-500/50 shadow-[0_0_25px_rgba(139,92,246,0.15)] dark:bg-violet-500/15'
+                        ? darkMode
+                          ? 'bg-zinc-800/80 border-violet-500/60 shadow-[0_0_20px_rgba(139,92,246,0.25)] text-white backdrop-blur-md'
+                          : 'bg-violet-50/70 border-violet-300/80 text-slate-950 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
                         : darkMode
-                          ? 'bg-zinc-900/40 border-zinc-850 hover:border-zinc-800'
-                          : 'bg-white border-slate-200 hover:border-slate-350'
+                          ? 'bg-zinc-900/40 border-zinc-850 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
+                          : 'bg-white border-slate-200 hover:border-slate-350 hover:bg-slate-50/30 text-slate-700'
                     )}
                   >
                     {/* Component Name */}
