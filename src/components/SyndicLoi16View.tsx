@@ -263,19 +263,19 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               {!isReadOnly && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="p-3 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 shadow-md shadow-violet-500/20"
+                  className="p-3 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-555 text-white rounded-2xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 shadow-md shadow-violet-500/20"
                 >
                   <Plus size={16} />
                 </button>
               )}
             </div>
 
-            {/* Table Header labels */}
-            <div className="grid grid-cols-12 px-6 py-2.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 leading-none">
-              <div className="col-span-5">Composant</div>
-              <div className="col-span-3 text-center">Statut</div>
-              <div className="col-span-3 text-center">Prochaine Inspection</div>
-              <div className="col-span-1 text-right">Action</div>
+            {/* Table Header labels with Premium colors */}
+            <div className="grid grid-cols-12 px-6 py-2.5 text-[8.5px] font-black uppercase tracking-wider leading-none">
+              <div className="col-span-5 text-violet-600 dark:text-violet-400">Composant</div>
+              <div className="col-span-3 text-center text-emerald-600 dark:text-emerald-400">Statut</div>
+              <div className="col-span-3 text-center text-amber-600 dark:text-amber-400">Prochaine Inspection</div>
+              <div className="col-span-1 text-right text-indigo-600 dark:text-indigo-400">Action</div>
             </div>
 
             {/* Stack of separate rounded cards */}
@@ -292,19 +292,22 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]',
                     text: 'text-emerald-600 dark:text-emerald-400',
                     icon: <CheckCircle2 size={10} className="inline mr-1 shrink-0" />,
-                    label: 'Conforme'
+                    label: 'Conforme',
+                    borderClass: 'border-emerald-400/80 bg-emerald-50/20 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
                   },
                   Correct: {
                     badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]',
                     text: 'text-amber-600 dark:text-amber-400',
                     icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
-                    label: 'À Inspecter'
+                    label: 'À Inspecter',
+                    borderClass: 'border-amber-400/80 bg-amber-50/20 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
                   },
                   Critique: {
                     badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]',
                     text: 'text-rose-600 dark:text-rose-400',
                     icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
-                    label: 'Critique'
+                    label: 'Critique',
+                    borderClass: 'border-rose-400/80 bg-rose-50/20 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
                   }
                 }[c.condition];
 
@@ -316,10 +319,10 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer transition-all duration-300 " + dimClass + " " + (
                       isSelected
                         ? darkMode
-                          ? 'bg-zinc-800/80 border-violet-500/60 shadow-[0_0_20px_rgba(139,92,246,0.25)] text-white backdrop-blur-md'
-                          : 'bg-violet-50/70 border-violet-300/80 text-slate-950 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
+                          ? 'bg-white/10 border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.08)] text-white backdrop-blur-lg'
+                          : conditionStyles.borderClass
                         : darkMode
-                          ? 'bg-zinc-900/40 border-zinc-850 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
+                          ? 'bg-zinc-900/40 border-zinc-855 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
                           : 'bg-white border-slate-200 hover:border-slate-350 hover:bg-slate-50/30 text-slate-700'
                     )}
                   >
