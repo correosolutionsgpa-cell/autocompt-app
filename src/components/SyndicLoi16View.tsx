@@ -15,8 +15,8 @@ import {
   UserCheck
 } from 'lucide-react';
 import { 
-  LineChart, 
-  Line, 
+  AreaChart,
+  Area,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -48,6 +48,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   const [components, setComponents] = useState<BuildingComponent[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Form State
   const [compName, setCompName] = useState('');
@@ -132,6 +133,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
     if (confirm('Voulez-vous supprimer ce composant du carnet d\'entretien?')) {
       try {
         await deleteDoc(doc(db, 'maintenance_components', id));
+        if (selectedId === id) setSelectedId(null);
       } catch (err) {
         console.error('Error deleting component: ', err);
       }
@@ -143,8 +145,8 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   const projectionYears = Array.from({ length: 10 }, (_, i) => currentYear + i);
   const inflationRate = 0.035; // 3.5%
 
-  let accumulatedReserve = 62350.00; // Starting reserve
-  const annualContribution = 12500.00; // Plan contribution
+  let accumulatedReserve = 320000.00; // Starting reserve matching mockup scale
+  const annualContribution = 35000.00; // Plan contribution
 
   const financialData = projectionYears.map((year) => {
     // Sum planned expenses in this year
@@ -197,7 +199,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
       docPdf.setFont('Helvetica', 'normal');
       docPdf.text(`Généré le : ${new Date().toLocaleDateString('fr-CA')}`, 15, 63);
       docPdf.text(`Statut global de conformité : CONFORME (Étude valide - Exercice Fiscal ${currentYear})`, 15, 69);
-      docPdf.text(`Solde actuel du fonds de prévoyance : 62 350.00 $`, 15, 75);
+      docPdf.text(`Solde actuel du fonds de prévoyance : 320 000.00 $`, 15, 75);
 
       // Section 2: Carnet d'entretien
       docPdf.setFontSize(14);
@@ -237,45 +239,12 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   return (
     <div className={`w-full max-w-6xl mx-auto p-2 sm:p-4 space-y-6 font-sans text-left transition-colors duration-300 ${darkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
       
-      {/* Page Header with User Profile integration */}
-      <div className={`p-6 rounded-[32px] border backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 ${darkMode ? 'bg-zinc-950/60 border-zinc-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.3)]' : 'bg-white/80 border-slate-200/80 shadow-[0_20px_40px_rgba(15,23,42,0.05)]'}`}>
-        <div className="flex items-center gap-3 text-left">
-          <span className="p-3 bg-violet-500/10 text-violet-500 dark:text-violet-400 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/5">
-            <Wrench size={24} className="animate-spin-slow" />
-          </span>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight italic">
-              Conformité Loi 16
-            </h1>
-            <p className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mt-1">
-              Carnet d'entretien & Fonds de Prévoyance
-            </p>
-          </div>
-        </div>
-
-        {/* Administrator Profile Widget */}
-        <div className="flex items-center gap-3 bg-slate-50/50 dark:bg-zinc-900/40 p-2.5 pr-4 rounded-3xl border border-slate-100 dark:border-zinc-850">
-          <img 
-            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
-            alt="Fabiola Beatriz" 
-            className="w-10 h-10 rounded-2xl border border-violet-500/30 object-cover shadow-md"
-          />
-          <div className="text-left">
-            <p className="text-[10px] font-black uppercase tracking-tight leading-none text-slate-950 dark:text-zinc-150">Fabiola Beatriz</p>
-            <p className="text-[7.5px] font-black uppercase text-violet-500 tracking-wider mt-1 flex items-center gap-1">
-              <UserCheck size={9} />
-              Administratrice
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Main Grid: Left side Table, Right side Chart & PDF Download */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* LEFT COLUMN: Carnet d'entretien Table (Spans 2 columns) */}
         <div className="lg:col-span-2 space-y-6">
-          <div className={`p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 ${darkMode ? 'bg-zinc-950/45 border-zinc-800/80 shadow-2xl shadow-black/20' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10'} text-left`}>
+          <div className={`p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 ${darkMode ? 'bg-zinc-950/45 border-zinc-900/60 shadow-2xl shadow-black/20' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10'} text-left`}>
             
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -290,69 +259,114 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               {!isReadOnly && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="p-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 shadow-md shadow-violet-500/20"
+                  className="p-3 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 shadow-md shadow-violet-500/20"
                 >
                   <Plus size={16} />
                 </button>
               )}
             </div>
 
-            {/* Table Container */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-zinc-850">
-              <table className="w-full text-left border-collapse min-w-[550px]">
-                <thead>
-                  <tr className={`border-b ${darkMode ? 'border-zinc-800 bg-zinc-950/60' : 'border-slate-100 bg-slate-50/60'}`}>
-                    <th className="p-4.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500">Composant</th>
-                    <th className="p-4.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 text-center">État</th>
-                    <th className="p-4.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 text-center">Inspection</th>
-                    <th className="p-4.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 text-center">Remplacement</th>
-                    <th className="p-4.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 text-right">Coût Est.</th>
-                    {!isReadOnly && <th className="p-4.5"></th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100/60 dark:divide-zinc-850/60">
-                  {components.map((c) => {
-                    const conditionColors = {
-                      Excellent: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]',
-                      Correct: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]',
-                      Critique: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]'
-                    }[c.condition];
+            {/* Table Header labels */}
+            <div className="grid grid-cols-12 px-6 py-2.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 leading-none">
+              <div className="col-span-5">Composant</div>
+              <div className="col-span-3 text-center">Statut</div>
+              <div className="col-span-3 text-center">Prochaine Inspection</div>
+              <div className="col-span-1 text-right">Action</div>
+            </div>
 
-                    return (
-                      <motion.tr 
-                        key={c.id} 
-                        whileHover={{ scale: 1.005, backgroundColor: darkMode ? 'rgba(39,39,42,0.4)' : 'rgba(241,245,249,0.4)' }}
-                        transition={{ duration: 0.15 }}
-                        className={`transition-all duration-150 backdrop-blur-md`}
-                      >
-                        <td className="p-4.5 text-[10.5px] font-black">{c.name}</td>
-                        <td className="p-4.5 text-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[7px] font-black uppercase border ${conditionColors}`}>
-                            {c.condition}
-                          </span>
-                        </td>
-                        <td className="p-4.5 text-center text-[9.5px] font-bold text-slate-500 dark:text-zinc-400">{c.lastInspection}</td>
-                        <td className="p-4.5 text-center text-[10.5px] font-black text-violet-600 dark:text-violet-400">{c.nextReplacementYear}</td>
-                        <td className="p-4.5 text-[10.5px] font-black text-right">{c.estimatedCost.toLocaleString('fr-CA')} $</td>
-                        {!isReadOnly && (
-                          <td className="p-4.5 text-center">
-                            <button
-                              onClick={() => handleDeleteComponent(c.id)}
-                              className="p-2 bg-transparent text-slate-400 hover:text-rose-500 rounded-lg border-none cursor-pointer transition-colors"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
-                        )}
-                      </motion.tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Stack of separate rounded cards */}
+            <div className="space-y-3 mt-2">
+              {components.map((c) => {
+                const isSelected = selectedId === c.id;
+                const isAnySelected = selectedId !== null;
+                const dimClass = isAnySelected && !isSelected 
+                  ? 'opacity-40 blur-[0.2px] scale-[0.99] transition-all duration-300' 
+                  : 'transition-all duration-300';
+
+                const conditionStyles = {
+                  Excellent: {
+                    badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]',
+                    text: 'text-emerald-600 dark:text-emerald-400',
+                    icon: <CheckCircle2 size={10} className="inline mr-1 shrink-0" />,
+                    label: 'Conforme'
+                  },
+                  Correct: {
+                    badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]',
+                    text: 'text-amber-600 dark:text-amber-400',
+                    icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
+                    label: 'À Inspecter'
+                  },
+                  Critique: {
+                    badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]',
+                    text: 'text-rose-600 dark:text-rose-400',
+                    icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
+                    label: 'Critique'
+                  }
+                }[c.condition];
+
+                return (
+                  <motion.div
+                    key={c.id}
+                    onClick={() => setSelectedId(isSelected ? null : c.id)}
+                    whileHover={{ y: -2 }}
+                    className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer " + dimClass + " " + (
+                      isSelected
+                        ? 'bg-violet-500/10 border-violet-500/50 shadow-[0_0_25px_rgba(139,92,246,0.15)] dark:bg-violet-500/15'
+                        : darkMode
+                          ? 'bg-zinc-900/40 border-zinc-850 hover:border-zinc-800'
+                          : 'bg-white border-slate-200 hover:border-slate-350'
+                    )}
+                  >
+                    {/* Component Name */}
+                    <div className="col-span-5 text-left pr-2">
+                      <span className="text-[10.5px] font-black uppercase tracking-tight leading-tight">{c.name}</span>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div className="col-span-3 flex flex-col items-center justify-center">
+                      <span className={"px-3 py-1 rounded-full text-[7.5px] font-black uppercase border leading-none " + conditionStyles.badge}>
+                        {c.condition === 'Excellent' ? 'CONFORME' : c.condition === 'Correct' ? 'À INSPECTER' : 'CRITIQUE'}
+                      </span>
+                      <div className={"flex items-center gap-0.5 mt-1.5 text-[7px] font-black uppercase tracking-wider " + conditionStyles.text}>
+                        {conditionStyles.icon}
+                        <span>{conditionStyles.label}</span>
+                      </div>
+                    </div>
+
+                    {/* Inspection Info */}
+                    <div className="col-span-3 text-center flex flex-col items-center justify-center">
+                      <span className="text-[10.5px] font-black text-slate-800 dark:text-zinc-100">
+                        {c.condition === 'Critique' ? 'Imminent' : c.lastInspection}
+                      </span>
+                      {c.condition !== 'Critique' && (
+                        <span className="text-[7.5px] font-black uppercase text-violet-500 tracking-wider mt-1">
+                          Remplacement: {c.nextReplacementYear}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-1 flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {!isReadOnly && (
+                        <button
+                          onClick={() => handleDeleteComponent(c.id)}
+                          className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
+                            darkMode
+                              ? 'bg-zinc-800/80 text-zinc-400 hover:text-rose-450 hover:bg-zinc-700'
+                              : 'bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-slate-200'
+                          )}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
 
             {/* Compliance Info Banner */}
-            <div className={`p-4 mt-6 rounded-3xl border flex items-start space-x-2.5 text-[9.5px] leading-relaxed transition-all ${darkMode ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-slate-50/50 border-slate-100'}`}>
+            <div className={"p-4 mt-6 rounded-3xl border flex items-start space-x-2.5 text-[9.5px] leading-relaxed transition-all " + (darkMode ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-slate-50/50 border-slate-100')}>
               <Info size={16} className="text-violet-500 shrink-0 mt-0.5" />
               <p className="font-bold text-slate-500 dark:text-zinc-400">
                 La loi 16 exige d'obtenir un carnet d'entretien à jour détaillant l'historique et les réparations à venir. Cela protège les acheteurs et garantit la valeur immobilière des lots.
@@ -366,7 +380,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
         <div className="space-y-6">
           
           {/* Projections Card */}
-          <div className={`p-6 rounded-[32px] border backdrop-blur-xl transition-all duration-300 ${darkMode ? 'bg-zinc-950/45 border-zinc-800/80 shadow-2xl' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10'} text-left`}>
+          <div className={"p-6 rounded-[32px] border backdrop-blur-xl transition-all duration-300 " + (darkMode ? 'bg-zinc-950/45 border-zinc-900/60 shadow-2xl' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10') + " text-left"}>
             <h3 className="text-xs font-black uppercase italic tracking-tight">
               Projections du Fonds (10 ans)
             </h3>
@@ -374,27 +388,44 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               Simulation d'accumulation vs Travaux
             </p>
 
-            <div className="h-[180px] w-full pr-2">
+            <div className="h-[185px] w-full pr-2 relative">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={financialData} margin={{ left: -25, right: 0, top: 10, bottom: 0 }}>
+                <AreaChart data={financialData} margin={{ left: -20, right: 10, top: 15, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorReserves" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.35}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#27272a' : '#f1f5f9'} />
                   <XAxis dataKey="name" tick={{ fill: '#71717a', fontSize: 8, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#71717a', fontSize: 8, fontWeight: 'bold' }} axisLine={false} tickLine={false} unit=" $" />
-                  <Tooltip contentStyle={{ backgroundColor: '#09090b', borderRadius: '12px', border: 'none', fontSize: '9px', color: '#fff' }} />
-                  <Line type="monotone" dataKey="Réserves" stroke="#8b5cf6" strokeWidth={3.5} dot={false} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="Dépenses" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-                </LineChart>
+                  <YAxis tick={{ fill: '#71717a', fontSize: 8, fontWeight: 'bold' }} axisLine={false} tickLine={false} tickFormatter={(val) => (val / 1000).toFixed(0) + 'k' } />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#09090b', borderRadius: '12px', border: 'none', fontSize: '9px', color: '#fff' }}
+                    formatter={(value) => [Number(value).toLocaleString('fr-CA') + ' $', 'Réserves']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="Réserves" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={3.5} 
+                    fillOpacity={1} 
+                    fill="url(#colorReserves)"
+                    dot={{ r: 3.5, stroke: '#8b5cf6', strokeWidth: 1.5, fill: darkMode ? '#09090b' : '#fff' }}
+                    activeDot={{ r: 5 }} 
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-850 flex justify-between text-[9px] font-black uppercase">
               <span className="text-slate-400 dark:text-zinc-500">Solde Actuel :</span>
-              <span className="text-slate-900 dark:text-zinc-150">62 350,00 $</span>
+              <span className="text-slate-900 dark:text-zinc-150">320 000,00 $</span>
             </div>
           </div>
 
           {/* PDF Generate Card */}
-          <div className={`p-6 rounded-[32px] border backdrop-blur-xl flex flex-col justify-between transition-all duration-300 ${darkMode ? 'bg-zinc-950/45 border-zinc-800/80 shadow-2xl' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10'} text-left`}>
+          <div className={"p-6 rounded-[32px] border backdrop-blur-xl flex flex-col justify-between transition-all duration-300 " + (darkMode ? 'bg-zinc-950/45 border-zinc-900/60 shadow-2xl' : 'bg-white/70 border-slate-200/70 shadow-lg shadow-slate-150/10') + " text-left"}>
             <div>
               <h3 className="text-xs font-black uppercase italic tracking-tight">
                 Certificat de Transfert
@@ -426,7 +457,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`w-full max-w-md p-6 rounded-[32px] border ${darkMode ? 'bg-zinc-900 border-zinc-850 text-white' : 'bg-white border-slate-200 text-slate-900'} shadow-2xl text-left`}
+              className={"w-full max-w-md p-6 rounded-[32px] border " + (darkMode ? 'bg-zinc-900 border-zinc-850 text-white' : 'bg-white border-slate-200 text-slate-900') + " shadow-2xl text-left"}
             >
               <h3 className="text-base font-black uppercase italic tracking-tight mb-4">
                 Ajouter un composant
@@ -499,13 +530,13 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-3.5 rounded-2xl text-[9.5px] font-black uppercase border border-slate-250 dark:border-zinc-800 bg-transparent text-slate-400 cursor-pointer"
+                    className="flex-grow py-3.5 rounded-2xl text-[9.5px] font-black uppercase border border-slate-250 dark:border-zinc-800 bg-transparent text-slate-400 cursor-pointer"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3.5 rounded-2xl text-[9.5px] font-black uppercase text-white bg-violet-600 border-none cursor-pointer"
+                    className="flex-grow py-3.5 rounded-2xl text-[9.5px] font-black uppercase text-white bg-violet-600 border-none cursor-pointer"
                   >
                     Ajouter
                   </button>
