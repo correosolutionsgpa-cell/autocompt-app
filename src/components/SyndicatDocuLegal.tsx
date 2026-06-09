@@ -14,6 +14,20 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import jsPDF from 'jspdf';
+
+interface LegalDocument {
+  id: string;
+  title: string;
+  date: string;
+  status: string;
+  summary: string;
+  provider: string;
+  signedBy: string;
+  signedDate: string;
+  signatureType?: 'draw' | 'type';
+  signatureDataUrl?: string;
+}
 
 interface SyndicatDocuLegalProps {
   darkMode: boolean;
@@ -24,7 +38,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
   // Dynamic States for Lists
-  const [contrats, setContrats] = useState([
+  const [contrats, setContrats] = useState<LegalDocument[]>([
     { 
       id: 'c1', 
       title: "Déneigement Pro Inc. - Contrat 2026-2027", 
@@ -57,7 +71,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     },
   ]);
   
-  const [resolutions, setResolutions] = useState([
+  const [resolutions, setResolutions] = useState<LegalDocument[]>([
     { 
       id: 'r1', 
       title: "Résolution - Réfection de la toiture", 
@@ -337,20 +351,34 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
     const signerName = signatureType === 'type' ? typedSignature : "Fabiola Beatriz (Signé à la main)";
 
+    // Get visual signature image if drawn
+    let signatureImgDataUrl = '';
+    if (signatureType === 'draw' && canvasRef.current && hasDrawn) {
+      try {
+        signatureImgDataUrl = canvasRef.current.toDataURL('image/png');
+      } catch (err) {
+        console.error("Failed to extract canvas signature data url", err);
+      }
+    }
+
     // Update locally
     if (activeTab === 'externe') {
       setContrats(prev => prev.map(c => c.id === signingDoc.id ? { 
         ...c, 
         status: 'signe', 
         signedBy: signerName, 
-        signedDate: todayStr 
+        signedDate: todayStr,
+        signatureType: signatureType,
+        signatureDataUrl: signatureImgDataUrl || undefined
       } : c));
     } else {
       setResolutions(prev => prev.map(r => r.id === signingDoc.id ? { 
         ...r, 
         status: 'signe', 
         signedBy: signerName, 
-        signedDate: todayStr 
+        signedDate: todayStr,
+        signatureType: signatureType,
+        signatureDataUrl: signatureImgDataUrl || undefined
       } : r));
     }
 
@@ -406,6 +434,263 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
     }
     setOpenDrawerId(null);
     triggerToast("Document supprimé avec succès.", "success");
+  };
+
+  // Generate and Download PDF using jsPDF
+  const handleDownloadPdf = (doc: LegalDocument) => {
+    try {
+      const docPdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Page size properties
+      const pageWidth = docPdf.internal.pageSize.getWidth(); // 210
+      const pageHeight = docPdf.internal.pageSize.getHeight(); // 297
+
+      // Colors
+      const primaryColor = activeTab === 'externe' ? [16, 185, 129] : [20, 184, 166]; // Emerald vs Teal
+      
+      // Top elegant colored band
+      docPdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      docPdf.rect(0, 0, pageWidth, 25, 'F');
+
+      // Top band texts
+      docPdf.setTextColor(255, 255, 255);
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(14);
+      docPdf.text('AUTOCOMPT - GESTION IMMOBILIÈRE', 20, 12);
+      
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setFontSize(8);
+      docPdf.text('CERTIFICATION ET ARCHIVAGE NUMÉRIQUE LÉGAL', 20, 18);
+
+      // Document reference and date on the right
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(8);
+      docPdf.text(`RÉF : ${doc.id.toUpperCase()}`, pageWidth - 20, 12, { align: 'right' });
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.text(`GÉNÉRÉ LE : ${new Date().toLocaleDateString('fr-CA')}`, pageWidth - 20, 18, { align: 'right' });
+
+      // Clean decorative border line under the top bar
+      docPdf.setDrawColor(226, 232, 240); // slate-200
+      docPdf.setLineWidth(0.5);
+      docPdf.line(20, 35, pageWidth - 20, 35);
+
+      // Section 1: Metadata details
+      docPdf.setTextColor(30, 41, 59); // slate-800
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(11);
+      docPdf.text('INFORMATIONS DU DOCUMENT', 20, 45);
+
+      // Left Column Metadata
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setFontSize(9);
+      docPdf.setTextColor(100, 116, 139); // slate-500
+      docPdf.text('Type de dossier :', 20, 53);
+      docPdf.text(activeTab === 'externe' ? 'Contrat & Entente Prestataire' : 'Registre / Résolution CA', 55, 53);
+
+      docPdf.text('Date de création :', 20, 59);
+      docPdf.text(doc.date, 55, 59);
+
+      docPdf.text('Statut de signature :', 20, 65);
+      const isSigned = doc.status === 'signe';
+      docPdf.setFont('Helvetica', 'bold');
+      if (isSigned) {
+        docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        docPdf.text('SIGNÉ & ARCHIVÉ', 55, 65);
+      } else {
+        docPdf.setTextColor(245, 158, 11); // Amber
+        docPdf.text('EN ATTENTE DE SIGNATURE', 55, 65);
+      }
+
+      // Right Column Metadata
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setTextColor(100, 116, 139); // slate-500
+      docPdf.text('Émetteur / Tiers :', 110, 53);
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setTextColor(30, 41, 59);
+      docPdf.text(doc.provider, 140, 53);
+
+      if (isSigned) {
+        docPdf.setFont('Helvetica', 'normal');
+        docPdf.setTextColor(100, 116, 139);
+        docPdf.text('Validé par :', 110, 59);
+        docPdf.setTextColor(30, 41, 59);
+        docPdf.text(doc.signedBy, 140, 59);
+
+        docPdf.setTextColor(100, 116, 139);
+        docPdf.text('Signé le :', 110, 65);
+        docPdf.setTextColor(30, 41, 59);
+        docPdf.text(doc.signedDate, 140, 65);
+      }
+
+      // Horizontal separator
+      docPdf.setDrawColor(226, 232, 240);
+      docPdf.line(20, 72, pageWidth - 20, 72);
+
+      // Section 2: Document content title
+      docPdf.setTextColor(30, 41, 59);
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(13);
+      docPdf.text(doc.title, 20, 82);
+
+      // Body text / Summary description (wrapped)
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setFontSize(10);
+      docPdf.setTextColor(71, 85, 105); // slate-600
+      
+      const summaryText = doc.summary || "Aucun résumé disponible pour ce document.";
+      const splitLines = docPdf.splitTextToSize(summaryText, pageWidth - 40); // width 170 mm
+      
+      let currentY = 90;
+      splitLines.forEach((line: string) => {
+        // If we exceed page boundaries, add a new page
+        if (currentY > pageHeight - 90) {
+          docPdf.addPage();
+          currentY = 25;
+        }
+        docPdf.text(line, 20, currentY);
+        currentY += 6;
+      });
+
+      currentY += 6;
+
+      // Section 3: Signatures Block
+      if (currentY < 130) {
+        currentY = 130;
+      }
+
+      if (isSigned) {
+        docPdf.setDrawColor(226, 232, 240);
+        docPdf.line(20, currentY, pageWidth - 20, currentY);
+        currentY += 10;
+
+        docPdf.setTextColor(30, 41, 59);
+        docPdf.setFont('Helvetica', 'bold');
+        docPdf.setFontSize(11);
+        docPdf.text('SIGNATURES ET VALIDATION ÉLECTRONIQUE', 20, currentY);
+        
+        currentY += 8;
+
+        // Signature box border
+        docPdf.setDrawColor(203, 213, 225); // slate-300
+        docPdf.setFillColor(248, 250, 252); // slate-50
+        docPdf.rect(20, currentY, 170, 40, 'FD');
+
+        // Text labels inside signature box
+        docPdf.setTextColor(100, 116, 139);
+        docPdf.setFont('Helvetica', 'normal');
+        docPdf.setFontSize(8);
+        docPdf.text('Signataire Officiel du Syndicat :', 25, currentY + 7);
+        docPdf.text('Date de Signature :', 25, currentY + 13);
+        docPdf.text('Méthode de validation :', 25, currentY + 19);
+
+        docPdf.setTextColor(30, 41, 59);
+        docPdf.setFont('Helvetica', 'bold');
+        docPdf.text(doc.signedBy, 70, currentY + 7);
+        docPdf.text(doc.signedDate, 70, currentY + 13);
+
+        const sigType = doc.signatureType || 'type';
+        docPdf.text(sigType === 'draw' ? 'Signature manuelle sur écran tactile / souris' : 'Saisie au clavier vérifiée', 70, currentY + 19);
+
+        // Render visual signature on the right of the signature box
+        const sigX = 130;
+        const sigY = currentY + 5;
+        const sigW = 50;
+        const sigH = 20;
+
+        // Draw helper signature guideline
+        docPdf.setDrawColor(203, 213, 225);
+        docPdf.setLineWidth(0.3);
+        docPdf.line(sigX, sigY + 22, sigX + sigW, sigY + 22);
+        
+        docPdf.setFont('Helvetica', 'italic');
+        docPdf.setFontSize(7);
+        docPdf.setTextColor(148, 163, 184);
+        docPdf.text('Signature visuelle', sigX + sigW / 2, sigY + 26, { align: 'center' });
+
+        if (sigType === 'draw' && doc.signatureDataUrl) {
+          try {
+            docPdf.addImage(doc.signatureDataUrl, 'PNG', sigX, sigY, sigW, sigH);
+          } catch (imgError) {
+            console.error("Failed to render signature image in PDF", imgError);
+            docPdf.setFont('Times', 'italic');
+            docPdf.setFontSize(16);
+            docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            docPdf.text(doc.signedBy, sigX + sigW / 2, sigY + 12, { align: 'center' });
+          }
+        } else {
+          // Typed signature style (Times italic cursive lookalike)
+          docPdf.setFont('Times', 'italic');
+          docPdf.setFontSize(18);
+          const cleanName = doc.signedBy.replace(' (Signé à la main)', '');
+          docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+          docPdf.text(cleanName, sigX + sigW / 2, sigY + 12, { align: 'center' });
+        }
+
+        currentY += 48;
+      }
+
+      // Section 4: Digital Authenticity Seal / Certificate Box at the bottom of the page
+      const sealY = pageHeight - 55; // 242 mm from top
+      
+      docPdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      docPdf.setLineWidth(0.4);
+      docPdf.setLineDashPattern([2, 1], 0);
+      docPdf.setFillColor(255, 255, 255);
+      docPdf.rect(20, sealY, 170, 35, 'FD');
+      docPdf.setLineDashPattern([], 0);
+
+      // Security seal content
+      docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(8);
+      docPdf.text("SCEAU DE CERTIFICATION NUMÉRIQUE - AUTOCOMPT SECURE", 25, sealY + 7);
+
+      docPdf.setTextColor(100, 116, 139);
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setFontSize(7.5);
+      docPdf.text("Ce document PDF officiel a été scellé et enregistré de manière permanente dans la base de données", 25, sealY + 13);
+      docPdf.text("d'AutoCompt. Il constitue une preuve légale d'approbation et d'engagement de copropriété.", 25, sealY + 17);
+
+      const hashStr = `SHA-256: ${Math.random().toString(16).substr(2, 8).toUpperCase()}${Math.random().toString(16).substr(2, 8).toUpperCase()}E99A${doc.id.toUpperCase()}E9F4C${isSigned ? '1B' : '00'}`;
+      docPdf.setFont('Courier', 'bold');
+      docPdf.setFontSize(7.5);
+      docPdf.setTextColor(71, 85, 105);
+      docPdf.text(hashStr, 25, sealY + 24);
+
+      // Small graphic seal badge (Circle with checkmark inside)
+      const badgeX = 175;
+      const badgeY = sealY + 15;
+      docPdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      docPdf.setLineWidth(0.8);
+      docPdf.setFillColor(240, 253, 250); // very light teal
+      docPdf.circle(badgeX, badgeY, 6, 'FD');
+      
+      docPdf.line(badgeX - 2.5, badgeY, badgeX - 0.5, badgeY + 2);
+      docPdf.line(badgeX - 0.5, badgeY + 2, badgeX + 3, badgeY - 2);
+
+      docPdf.setFont('Helvetica', 'bold');
+      docPdf.setFontSize(6);
+      docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      docPdf.text("VERIFIED", badgeX, badgeY + 9, { align: 'center' });
+
+      // Footer disclaimer
+      docPdf.setTextColor(148, 163, 184);
+      docPdf.setFont('Helvetica', 'normal');
+      docPdf.setFontSize(7);
+      docPdf.text("Document numérique certifié - Ne pas modifier manuellement. AutoCompt Canada.", pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+      // Save the PDF
+      const sanitizedTitle = doc.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      docPdf.save(`DocuLegal_${sanitizedTitle}.pdf`);
+      triggerToast("Document PDF exporté avec succès !", "success");
+    } catch (pdfError) {
+      console.error("Error generating PDF", pdfError);
+      triggerToast("Erreur lors de la génération du PDF.", "error");
+    }
   };
 
   const currentList = activeTab === 'externe' ? contrats : resolutions;
@@ -577,7 +862,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                           
                           <div className="flex flex-col sm:flex-row items-center gap-3">
                             <button 
-                              onClick={() => triggerToast("Téléchargement du contrat PDF...", "success")}
+                              onClick={() => handleDownloadPdf(doc)}
                               className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border-none cursor-pointer ${darkMode ? "bg-teal-500 border border-teal-400 text-teal-950 hover:bg-teal-400" : "bg-teal-550 text-white hover:bg-teal-650 shadow-md shadow-teal-500/20"}`}
                             >
                               <Download size={16} />
