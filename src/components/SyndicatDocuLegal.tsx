@@ -493,13 +493,13 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
 
               const iconStyles = {
                 emerald: {
-                  bg: darkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                  bg: darkMode ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100/90 text-emerald-700 border border-emerald-300/60'
                 },
                 amber: {
-                  bg: darkMode ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                  bg: darkMode ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-amber-100/90 text-amber-700 border border-amber-300/60'
                 },
                 teal: {
-                  bg: darkMode ? 'bg-teal-500/10 text-teal-400 border border-teal-500/25' : 'bg-teal-50 text-teal-650 border border-teal-100'
+                  bg: darkMode ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-teal-100/90 text-teal-700 border border-teal-300/60'
                 }
               }[themeColor];
 
