@@ -667,7 +667,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                           </div>
                         </motion.div>
                       );
-                    })}
+                    }))}
                   </div>
                 </>
               );
