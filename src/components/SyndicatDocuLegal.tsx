@@ -491,6 +491,18 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                 }
               }[themeColor];
 
+              const iconStyles = {
+                emerald: {
+                  bg: darkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                },
+                amber: {
+                  bg: darkMode ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                },
+                teal: {
+                  bg: darkMode ? 'bg-teal-500/10 text-teal-400 border border-teal-500/25' : 'bg-teal-50 text-teal-650 border border-teal-100'
+                }
+              }[themeColor];
+
               const cardClasses = isOpen 
                 ? `${glassStyles.bg} ${glassStyles.border} ${glassStyles.shadow} backdrop-blur-md`
                 : darkMode 
@@ -505,7 +517,7 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
                   >
                     <div className="flex-1 pr-4">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-2">
-                         <div className={`p-2.5 rounded-[16px] inline-flex items-center justify-center shrink-0 ${darkMode ? "bg-zinc-900 text-zinc-400" : "bg-slate-100/80 text-slate-500"}`}>
+                         <div className={`p-2.5 rounded-[16px] inline-flex items-center justify-center shrink-0 transition-colors duration-300 ${iconStyles.bg}`}>
                            <FileText size={20} />
                          </div>
                          <p className={`font-black text-base sm:text-lg tracking-tight ${darkMode ? "text-white" : "text-slate-900"}`}>
