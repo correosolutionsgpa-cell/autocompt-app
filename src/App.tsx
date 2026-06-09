@@ -22217,33 +22217,52 @@ Ceci est un message automatisé généré par AutoCompt.`;
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
-            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-violet-650/10 blur-[100px]" />
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-teal-650/10 blur-[100px]" />
             <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
           </div>
         )}
 
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`md:hidden p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}>
-               <Menu size={24} />
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
              </button>
-             <div className="flex items-center gap-3">
-               <div className={`p-2.5 rounded-[16px] ${darkMode ? "bg-teal-900/30 text-teal-400" : "bg-teal-100 text-teal-600"}`}>
-                 <FileSignature size={20} />
-               </div>
-               <div>
-                 <h1 className="font-black uppercase italic tracking-tighter text-lg">Contrats & Résolutions</h1>
-                 <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">Syndicat de copropriété</p>
-               </div>
+             <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                  <span>AutoCompt</span>
+                  <span>/</span>
+                  <span>Tableau de Bord</span>
+                  <span>/</span>
+                  <span className="text-teal-500 font-bold">Contrats & Résolutions</span>
+                </div>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions</h1>
+             </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+                <Bell size={14} />
+             </button>
+             
+             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-teal-500/30 transition-all cursor-pointer">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
+                  alt="Fabiola Beatriz" 
+                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center gap-1 leading-none">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <ChevronDown size={8} className="text-slate-400" />
+                  </div>
+                  <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                </div>
              </div>
           </div>
         </header>
 
         <main className="flex-1 max-w-5xl w-full p-4 sm:p-6 space-y-6 mx-auto">
-          <button onClick={() => setVista('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-teal-600 transition-colors font-bold uppercase tracking-widest text-[10px] mb-2 px-2">
-            <ArrowLeft size={14} /> Retour au tableau de bord
-          </button>
           <SyndicatDocuLegal darkMode={darkMode} />
         </main>
       </div>
@@ -22253,20 +22272,54 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "transparence") {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        {/* Background gradient blooms for premium look */}
+        {darkMode && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-650/10 blur-[100px]" />
+            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
+          </div>
+        )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`md:hidden p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}>
-               <Menu size={24} />
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
              </button>
-             <div>
-               <h1 className="font-black uppercase italic tracking-tighter text-lg">Tableau de Transparence</h1>
-               <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">Syndicat de copropriété</p>
+             <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                  <span>AutoCompt</span>
+                  <span>/</span>
+                  <span>Tableau de Bord</span>
+                  <span>/</span>
+                  <span className="text-blue-500 font-bold">Tableau de Transparence</span>
+                </div>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Tableau de Transparence</h1>
+             </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+                <Bell size={14} />
+             </button>
+             
+             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-blue-500/30 transition-all cursor-pointer">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
+                  alt="Fabiola Beatriz" 
+                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center gap-1 leading-none">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <ChevronDown size={8} className="text-slate-400" />
+                  </div>
+                  <p className="text-[7px] font-bold uppercase text-blue-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                </div>
              </div>
           </div>
         </header>
 
-        <main className="flex-1 w-full bg-slate-50 dark:bg-black">
+        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
           <SyndicatDashboard onNavigate={setVista} />
         </main>
       </div>
@@ -22276,8 +22329,54 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "cotisations") {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        {/* Background gradient blooms for premium look */}
+        {darkMode && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-amber-650/10 blur-[100px]" />
+            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
+          </div>
+        )}
         <WorkspaceSidebar />
-        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-6">
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+          <div className="flex items-center space-x-3">
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
+             </button>
+             <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                  <span>AutoCompt</span>
+                  <span>/</span>
+                  <span>Tableau de Bord</span>
+                  <span>/</span>
+                  <span className="text-amber-500 font-bold">Gestion des Cotisations</span>
+                </div>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Gestion des Cotisations</h1>
+             </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+                <Bell size={14} />
+             </button>
+             
+             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-amber-500/30 transition-all cursor-pointer">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
+                  alt="Fabiola Beatriz" 
+                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center gap-1 leading-none">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <ChevronDown size={8} className="text-slate-400" />
+                  </div>
+                  <p className="text-[7px] font-bold uppercase text-amber-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                </div>
+             </div>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
           <SyndicatCotisations setVista={setVista} darkMode={darkMode} />
         </main>
       </div>
@@ -22287,23 +22386,54 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "muro") {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+        {/* Background gradient blooms for premium look */}
+        {darkMode && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-rose-650/10 blur-[100px]" />
+            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
+          </div>
+        )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`md:hidden p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}>
-               <Menu size={24} />
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
              </button>
-             <div>
-               <h1 className="font-black uppercase italic tracking-tighter text-lg">Muro de Communication</h1>
-               <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">Syndicat de copropriété</p>
+             <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                  <span>AutoCompt</span>
+                  <span>/</span>
+                  <span>Tableau de Bord</span>
+                  <span>/</span>
+                  <span className="text-rose-500 font-bold">Mur de Communication</span>
+                </div>
+                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Mur de Communication</h1>
+             </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+                <Bell size={14} />
+             </button>
+             
+             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-rose-500/30 transition-all cursor-pointer">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop" 
+                  alt="Fabiola Beatriz" 
+                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center gap-1 leading-none">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">Fabiola Beatriz</p>
+                    <ChevronDown size={8} className="text-slate-400" />
+                  </div>
+                  <p className="text-[7px] font-bold uppercase text-rose-500 tracking-wider mt-0.5 leading-none">Administratrice</p>
+                </div>
              </div>
           </div>
         </header>
 
-        <main className="flex-1 max-w-3xl w-full p-6 mx-auto space-y-6">
-          <button onClick={() => setVista('dashboard')} className="flex items-center gap-2 text-stone-500 hover:text-emerald-600 transition-colors font-medium text-sm mb-6">
-            <ArrowLeft size={16} /> Retour au tableau de bord
-          </button>
+        <main className="flex-1 max-w-3xl w-full p-4 sm:p-6 mx-auto space-y-6">
           <div className={`rounded-[32px] p-6 shadow-sm border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"}`}>
              <div className="flex gap-4">
                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shrink-0">A</div>
@@ -22358,8 +22488,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <WorkspaceSidebar />
         <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`md:hidden p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}>
-               <Menu size={24} />
+             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+               <ArrowLeft size={20} />
              </button>
              <div className="text-left">
                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
