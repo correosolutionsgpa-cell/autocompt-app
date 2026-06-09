@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -1881,92 +1881,150 @@ const App = () => {
                   Outils de Gestion
                 </p>
                 <nav className="space-y-1">
-                  {userRole === "coproprietaire" ? (
-                    coproprietaireNavItems.map((item) => {
-                      const isActive = vista === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setVista(item.id);
-                            setIsSidebarOpen(false);
-                            if (typeof playNotificationSound === 'function') playNotificationSound();
-                          }}
-                          className={`w-full flex items-center space-x-3.5 px-3 py-2.5 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white" : "text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-900/60"}`}
-                        >
-                          <div className={`p-2 rounded-xl transition-transform duration-200 group-hover:scale-110 ${item.bgClass} ${item.textClass} ${isActive ? 'shadow-sm' : ''}`}>
-                            {item.icon}
-                          </div>
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })
-                  ) : dashboardMode === "Syndic" ? (
-                    syndicNavItems.map((item) => {
-                      const isActive = vista === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setVista(item.id);
-                            setIsSidebarOpen(false);
-                            if (typeof playNotificationSound === 'function') playNotificationSound();
-                          }}
-                          className={`w-full flex items-center space-x-3.5 px-3 py-2.5 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white" : "text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-900/60"}`}
-                        >
-                          <div className={`p-2 rounded-xl transition-transform duration-200 group-hover:scale-110 ${item.bgClass} ${item.textClass} ${isActive ? 'shadow-sm' : ''}`}>
-                            {item.icon}
-                          </div>
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    navItems.map((item) => {
-                      const isActive = vista === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            if (item.id === "doculegal") {
-                              const currentTier = getEffectiveTier();
-                              if (
-                                currentTier === "gratuit" ||
-                                currentTier === "basique"
-                              ) {
-                                setVista("dashboard");
-                                setDispatcherSuccessToast({
-                                  text: "Restriction Forfait",
-                                  channel: "DocuLégal 🔒",
-                                  customMessage:
-                                    "« Module réservé aux membres PRO et INTÉGRAL. »",
-                                });
-                                playNotificationSound();
-                                return;
-                              }
-                            }
-                            setVista(item.id);
-                            setIsSidebarOpen(false);
-                            playNotificationSound();
-                          }}
-                          className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? "bg-[#059669] text-white shadow-md shadow-emerald-900/10" : darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"}`}
-                        >
-                          <span
-                            className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? "text-white" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"}`}
-                          >
-                            {item.icon}
-                          </span>
-                          <span>
-                            {item.label}{" "}
-                            {item.id === "doculegal" &&
-                              (getEffectiveTier() === "gratuit" ||
-                                getEffectiveTier() === "basique") &&
-                              "🔒"}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
+                  {(() => {
+                    const getActiveNavClass = (itemId: string) => {
+                      const themeMap: Record<string, string> = {
+                        dashboard: "emerald",
+                        cotisations: "amber",
+                        contrats: "teal",
+                        transparence: "blue",
+                        loi16: "violet",
+                        muro: "rose",
+                        plex: "indigo",
+                        dossiers: "amber",
+                        taxes_assurances: "rose",
+                        banque: "amber",
+                        reportes: "emerald",
+                        facturas: "blue",
+                        homeoffice: "violet",
+                        kilometraje: "slate",
+                        taxes: "rose",
+                        doculegal: "teal",
+                        equipe: "blue",
+                        "heures-paie": "indigo",
+                        settings: "slate"
+                      };
+                      const color = themeMap[itemId] || "emerald";
+                      const config = {
+                        emerald: darkMode 
+                          ? "bg-[#10b981]/15 border border-[#10b981]/40 text-[#34d399] shadow-[0_0_15px_rgba(16,185,129,0.05)] backdrop-blur-md" 
+                          : "bg-[#10b981]/10 border border-[#10b981]/35 text-[#065f46] shadow-[0_0_15px_rgba(16,185,129,0.05)] backdrop-blur-md",
+                        amber: darkMode 
+                          ? "bg-[#f59e0b]/15 border border-[#f59e0b]/40 text-[#fbbf24] shadow-[0_0_15px_rgba(245,158,11,0.05)] backdrop-blur-md" 
+                          : "bg-[#f59e0b]/10 border border-[#f59e0b]/35 text-[#78350f] shadow-[0_0_15px_rgba(245,158,11,0.05)] backdrop-blur-md",
+                        teal: darkMode 
+                          ? "bg-[#14b8a6]/15 border border-[#14b8a6]/40 text-[#2dd4bf] shadow-[0_0_15px_rgba(20,184,166,0.05)] backdrop-blur-md" 
+                          : "bg-[#14b8a6]/10 border border-[#14b8a6]/35 text-[#0f766e] shadow-[0_0_15px_rgba(20,184,166,0.05)] backdrop-blur-md",
+                        blue: darkMode 
+                          ? "bg-[#3b82f6]/15 border border-[#3b82f6]/40 text-[#60a5fa] shadow-[0_0_15px_rgba(59,130,246,0.05)] backdrop-blur-md" 
+                          : "bg-[#3b82f6]/10 border border-[#3b82f6]/35 text-[#1d4ed8] shadow-[0_0_15px_rgba(59,130,246,0.05)] backdrop-blur-md",
+                        violet: darkMode 
+                          ? "bg-[#8b5cf6]/15 border border-[#8b5cf6]/40 text-[#a78bfa] shadow-[0_0_15px_rgba(139,92,246,0.05)] backdrop-blur-md" 
+                          : "bg-[#8b5cf6]/10 border border-[#8b5cf6]/35 text-[#6d28d9] shadow-[0_0_15px_rgba(139,92,246,0.05)] backdrop-blur-md",
+                        rose: darkMode 
+                          ? "bg-[#f43f5e]/15 border border-[#f43f5e]/40 text-[#fda4af] shadow-[0_0_15px_rgba(244,63,94,0.05)] backdrop-blur-md" 
+                          : "bg-[#f43f5e]/10 border border-[#f43f5e]/35 text-[#9f1239] shadow-[0_0_15px_rgba(244,63,94,0.05)] backdrop-blur-md",
+                        indigo: darkMode 
+                          ? "bg-[#6366f1]/15 border border-[#6366f1]/40 text-[#818cf8] shadow-[0_0_15px_rgba(99,102,241,0.05)] backdrop-blur-md" 
+                          : "bg-[#6366f1]/10 border border-[#6366f1]/35 text-[#3730a3] shadow-[0_0_15px_rgba(99,102,241,0.05)] backdrop-blur-md",
+                        slate: darkMode 
+                          ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa] shadow-[0_0_15px_rgba(113,113,122,0.05)] backdrop-blur-md" 
+                          : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155] shadow-[0_0_15px_rgba(100,116,139,0.05)] backdrop-blur-md"
+                      }[color] || "";
+                      return config;
+                    };
+
+                    return (
+                      <>
+                        {userRole === "coproprietaire" ? (
+                          coproprietaireNavItems.map((item) => {
+                            const isActive = vista === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => {
+                                  setVista(item.id);
+                                  setIsSidebarOpen(false);
+                                  if (typeof playNotificationSound === 'function') playNotificationSound();
+                                }}
+                                className={`w-full flex items-center space-x-3.5 px-3 py-2.5 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? getActiveNavClass(item.id) : "text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-900/60"}`}
+                              >
+                                <div className={`p-2 rounded-xl transition-transform duration-200 group-hover:scale-110 ${isActive ? 'bg-transparent text-current shadow-sm' : `${item.bgClass} ${item.textClass}`}`}>
+                                  {item.icon}
+                                </div>
+                                <span>{item.label}</span>
+                              </button>
+                            );
+                          })
+                        ) : dashboardMode === "Syndic" ? (
+                          syndicNavItems.map((item) => {
+                            const isActive = vista === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => {
+                                  setVista(item.id);
+                                  setIsSidebarOpen(false);
+                                  if (typeof playNotificationSound === 'function') playNotificationSound();
+                                }}
+                                className={`w-full flex items-center space-x-3.5 px-3 py-2.5 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? getActiveNavClass(item.id) : "text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-900/60"}`}
+                              >
+                                <div className={`p-2 rounded-xl transition-transform duration-200 group-hover:scale-110 ${isActive ? 'bg-transparent text-current shadow-sm' : `${item.bgClass} ${item.textClass}`}`}>
+                                  {item.icon}
+                                </div>
+                                <span>{item.label}</span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          navItems.map((item) => {
+                            const isActive = vista === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => {
+                                  if (item.id === "doculegal") {
+                                    const currentTier = getEffectiveTier();
+                                    if (
+                                      currentTier === "gratuit" ||
+                                      currentTier === "basique"
+                                    ) {
+                                      setVista("dashboard");
+                                      setDispatcherSuccessToast({
+                                        text: "Restriction Forfait",
+                                        channel: "DocuLégal 🔒",
+                                        customMessage:
+                                          "« Module réservé aux membres PRO et INTÉGRAL. »",
+                                      });
+                                      playNotificationSound();
+                                      return;
+                                    }
+                                  }
+                                  setVista(item.id);
+                                  setIsSidebarOpen(false);
+                                  playNotificationSound();
+                                }}
+                                className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? getActiveNavClass(item.id) : darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"}`}
+                              >
+                                <span
+                                  className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"}`}
+                                >
+                                  {item.icon}
+                                </span>
+                                <span>
+                                  {item.label}{" "}
+                                  {item.id === "doculegal" &&
+                                    (getEffectiveTier() === "gratuit" ||
+                                      getEffectiveTier() === "basique") &&
+                                    "🔒"}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </>
+                    );
+                  })()}
                 </nav>
               </div>
 

@@ -383,13 +383,13 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
           <div className={`inline-flex p-1.5 rounded-full ${darkMode ? "bg-zinc-950 border border-zinc-800" : "bg-slate-100/80 border border-slate-200/50"}`}>
             <button 
               onClick={() => { setActiveTab('externe'); setOpenDrawerId(null); }}
-              className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'externe' ? (darkMode ? "bg-zinc-800 text-white shadow-md shadow-black/20" : "bg-white text-emerald-650 shadow-md shadow-emerald-900/5") : (darkMode ? "text-zinc-500 hover:text-zinc-300" : "text-slate-500 hover:text-slate-700")}`}
+              className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'externe' ? (darkMode ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 shadow-md backdrop-blur-md" : "bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 shadow-md backdrop-blur-md") : (darkMode ? "text-zinc-500 hover:text-zinc-300 border border-transparent" : "text-slate-500 hover:text-slate-700 border border-transparent")}`}
             >
               Contrats & Ententes
             </button>
             <button 
               onClick={() => { setActiveTab('interne'); setOpenDrawerId(null); }}
-              className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'interne' ? (darkMode ? "bg-zinc-800 text-white shadow-md shadow-black/20" : "bg-white text-teal-650 shadow-md shadow-teal-900/5") : (darkMode ? "text-zinc-500 hover:text-zinc-300" : "text-slate-500 hover:text-slate-700")}`}
+              className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'interne' ? (darkMode ? "bg-teal-500/15 border border-teal-500/40 text-teal-400 shadow-md backdrop-blur-md" : "bg-teal-500/10 border border-teal-500/25 text-teal-700 shadow-md backdrop-blur-md") : (darkMode ? "text-zinc-500 hover:text-zinc-300 border border-transparent" : "text-slate-500 hover:text-slate-700 border border-transparent")}`}
             >
               Registre de la Copropriété
             </button>
@@ -408,8 +408,38 @@ export default function SyndicatDocuLegal({ darkMode }: SyndicatDocuLegalProps) 
             {currentList.map((doc) => {
               const isOpen = openDrawerId === doc.id;
               
+              // Determine colored translucent glassmorphic theme when selected/open
+              const isSigne = doc.status === 'signe';
+              const themeColor = activeTab === 'externe' 
+                ? (isSigne ? 'emerald' : 'amber') 
+                : (isSigne ? 'teal' : 'amber');
+
+              const glassStyles = {
+                emerald: {
+                  bg: darkMode ? 'bg-emerald-500/10 dark:bg-emerald-950/20' : 'bg-emerald-50/40',
+                  border: darkMode ? 'border-emerald-500/30' : 'border-emerald-500/30',
+                  shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.08)]'
+                },
+                amber: {
+                  bg: darkMode ? 'bg-amber-500/10 dark:bg-amber-950/20' : 'bg-amber-50/40',
+                  border: darkMode ? 'border-amber-500/30' : 'border-amber-500/30',
+                  shadow: 'shadow-[0_0_20px_rgba(245,158,11,0.08)]'
+                },
+                teal: {
+                  bg: darkMode ? 'bg-teal-500/10 dark:bg-teal-950/20' : 'bg-teal-50/40',
+                  border: darkMode ? 'border-teal-500/30' : 'border-teal-500/30',
+                  shadow: 'shadow-[0_0_20px_rgba(20,184,166,0.08)]'
+                }
+              }[themeColor];
+
+              const cardClasses = isOpen 
+                ? `${glassStyles.bg} ${glassStyles.border} ${glassStyles.shadow} backdrop-blur-md`
+                : darkMode 
+                  ? 'bg-zinc-950/80 border-zinc-900/80 hover:bg-zinc-900/40 hover:border-zinc-800 text-zinc-300' 
+                  : 'bg-white border-slate-200/80 hover:bg-slate-50/50 hover:border-slate-300 text-slate-700';
+
               return (
-                <div key={doc.id} className={`rounded-[32px] overflow-hidden transition-all duration-300 border ${darkMode ? "bg-zinc-950/80 border-zinc-900/80" : "bg-white border-slate-200/80"} ${isOpen ? 'shadow-xl' : 'shadow-sm hover:shadow-md'}`}>
+                <div key={doc.id} className={`rounded-[32px] overflow-hidden transition-all duration-300 border ${cardClasses} ${isOpen ? 'shadow-xl' : 'shadow-sm hover:shadow-md'}`}>
                   <button
                     onClick={() => setOpenDrawerId(isOpen ? null : doc.id)}
                     className={`w-full flex flex-col sm:flex-row sm:items-center justify-between p-6 sm:p-7 text-left transition-colors border-none bg-transparent cursor-pointer ${darkMode ? "hover:bg-zinc-900/40" : "hover:bg-slate-50/50"}`}

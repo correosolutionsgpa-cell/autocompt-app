@@ -293,21 +293,27 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     text: 'text-emerald-600 dark:text-emerald-400',
                     icon: <CheckCircle2 size={10} className="inline mr-1 shrink-0" />,
                     label: 'Conforme',
-                    borderClass: 'border-emerald-400/80 bg-emerald-50/20 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
+                    selectedClass: darkMode 
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 backdrop-blur-md shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
+                      : 'bg-emerald-50/40 border-emerald-500/30 text-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
                   },
                   Correct: {
                     badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]',
                     text: 'text-amber-600 dark:text-amber-400',
                     icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
                     label: 'À Inspecter',
-                    borderClass: 'border-amber-400/80 bg-amber-50/20 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
+                    selectedClass: darkMode 
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 backdrop-blur-md shadow-[0_0_20px_rgba(245,158,11,0.1)]' 
+                      : 'bg-amber-50/40 border-amber-500/30 text-amber-700 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
                   },
                   Critique: {
                     badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]',
                     text: 'text-rose-600 dark:text-rose-400',
                     icon: <AlertTriangle size={10} className="inline mr-1 shrink-0" />,
                     label: 'Critique',
-                    borderClass: 'border-rose-400/80 bg-rose-50/20 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
+                    selectedClass: darkMode 
+                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-400 backdrop-blur-md shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
+                      : 'bg-rose-50/40 border-rose-500/30 text-rose-700 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
                   }
                 }[c.condition];
 
@@ -318,9 +324,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     whileHover={{ y: -1, scale: 1.008 }}
                     className={"grid grid-cols-12 items-center p-4.5 rounded-[24px] border cursor-pointer transition-all duration-300 " + dimClass + " " + (
                       isSelected
-                        ? darkMode
-                          ? 'bg-white/10 border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.08)] text-white backdrop-blur-lg'
-                          : conditionStyles.borderClass
+                        ? conditionStyles.selectedClass
                         : darkMode
                           ? 'bg-zinc-900/40 border-zinc-855 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
                           : 'bg-white border-slate-200 hover:border-slate-350 hover:bg-slate-50/30 text-slate-700'
