@@ -403,31 +403,41 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   };
 
   // Handle Send for Signature (generate unique public link)
+  // Data is embedded in the URL as base64 so the public page works without Firebase auth
   const handleSendForSignature = async (document: LegalDocument, adminSigDataUrl?: string) => {
     setIsGeneratingLink(true);
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${document.id.slice(0, 6)}`;
-    const signUrl = `${window.location.origin}${window.location.pathname}?sign=${token}`;
+
+    // Serialize doc data into URL so it works without Firestore auth
+    const payload = {
+      docId: document.id,
+      docTitle: document.title,
+      docSummary: document.summary,
+      companyName: companyName,
+      adminName: document.signedBy || 'Administrateur',
+      adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
+      adminSignatureDataUrl: adminSigDataUrl || document.signatureDataUrl || '',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    let b64 = '';
     try {
-      await setDoc(doc(db, 'pendingSignatures', token), {
-        docId: document.id,
-        docTitle: document.title,
-        docSummary: document.summary,
-        companyName: companyName,
-        adminName: document.signedBy || 'Administrateur',
-        adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
-        adminSignatureDataUrl: adminSigDataUrl || document.signatureDataUrl || '',
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      });
-      setGeneratedLink(signUrl);
-      setSendLinkDoc(document);
-    } catch (e) {
-      // Fallback: generate link client-side anyway (Firebase may not be available)
-      setGeneratedLink(signUrl);
-      setSendLinkDoc(document);
-    } finally {
-      setIsGeneratingLink(false);
+      b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    } catch {}
+
+    const signUrl = `${window.location.origin}${window.location.pathname}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
+
+    // Also try to persist to Firestore (non-blocking, for audit trail)
+    try {
+      await setDoc(doc(db, 'pendingSignatures', token), { ...payload });
+    } catch {
+      // Silent fail — URL-embedded data is the primary mechanism
     }
+
+    setGeneratedLink(signUrl);
+    setSendLinkDoc(document);
+    setIsGeneratingLink(false);
   };
 
   // Handle Add Document

@@ -41,6 +41,23 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   useEffect(() => {
     const load = async () => {
       try {
+        // PRIMARY: read data embedded in URL (?d=base64) — no auth required
+        const urlParams = new URLSearchParams(window.location.search);
+        const b64Data = urlParams.get('d');
+
+        if (b64Data) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(escape(atob(b64Data)))) as SignatureRequestDoc;
+            setDocData(parsed);
+            if (parsed.status === 'signed') setAlreadySigned(true);
+            setLoading(false);
+            return;
+          } catch {
+            // b64 parsing failed, fall through to Firestore
+          }
+        }
+
+        // FALLBACK: try Firestore (requires auth rules allowing public read)
         const docRef = doc(db, 'pendingSignatures', token);
         const snap = await getDoc(docRef);
         if (!snap.exists()) {
@@ -50,17 +67,16 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         }
         const data = snap.data() as SignatureRequestDoc;
         setDocData(data);
-        if (data.status === 'signed') {
-          setAlreadySigned(true);
-        }
+        if (data.status === 'signed') setAlreadySigned(true);
       } catch (e) {
-        setError("Impossible de charger le document. Vérifiez votre connexion et réessayez.");
+        setError("Ce lien de signature est invalide ou a expiré. Veuillez contacter l'expéditeur.");
       } finally {
         setLoading(false);
       }
     };
     load();
   }, [token]);
+
 
   useEffect(() => {
     if (!canvasRef.current || signatureType !== 'draw') return;
