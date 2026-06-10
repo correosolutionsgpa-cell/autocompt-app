@@ -10974,6 +10974,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
     if (ind.toLowerCase().includes("plex")) {
       folders = [
         "Baux Résidentiels",
+        "Promesses d'Achat (PA)",
         "Avis d'Augmentation",
         "Relevés 31",
         "Règlements d'Immeuble",
@@ -10984,7 +10985,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
       ind.toLowerCase().includes("achat")
     ) {
       folders = [
-        "Promesses d'Achat",
+        "Promesses d'Achat (PA)",
         "Ententes de Confidentialité",
         "Analyses de Marché",
         "Contrats OACIQ",
@@ -10995,6 +10996,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
     ) {
       folders = [
         "Contrats de Gestion",
+        "Promesses d'Achat (PA)",
         "Baux de Clients",
         "Documents Corporatifs",
         "Études de Rendement",
@@ -11006,12 +11008,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
       folders = [
         "Permis RBQ & Assurances",
         "Contrats de Sous-traitance",
+        "Promesses d'Achat (PA)",
         "Soumissions de Projet",
         "Fiches Techniques",
       ];
     } else {
       folders = [
         "Contrats Généraux",
+        "Promesses d'Achat (PA)",
         "Baux Locatifs",
         "Documents Juridiques",
         "Conformité Fiscale",
@@ -12119,7 +12123,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => setDocFormName(e.target.value)}
                             disabled={selectedDocuEntry?.status === "Signé"}
                             placeholder="Nommerez votre contrat, ex: Bail Appartement 45B"
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
                           />
                         </div>
 
@@ -12190,22 +12194,29 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
                             Dossier de Classement
                           </label>
-                          <select
-                            value={docFormFolder}
-                            onChange={(e) => {
-                              const nextFld = e.target.value;
-                              setDocFormFolder(nextFld);
-                              setDocFormContent(loadDefaultTemplate(nextFld));
-                            }}
-                            disabled={selectedDocuEntry?.status === "Signé"}
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed font-sans' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
-                          >
-                            {folders.map((f) => (
-                              <option key={f} value={f}>
-                                {f}
-                              </option>
-                            ))}
-                          </select>
+                          {/* Custom-styled select — appearance-none removes native browser chrome */}
+                          <div className="relative">
+                            <select
+                              value={docFormFolder}
+                              onChange={(e) => {
+                                const nextFld = e.target.value;
+                                setDocFormFolder(nextFld);
+                                setDocFormContent(loadDefaultTemplate(nextFld));
+                              }}
+                              disabled={selectedDocuEntry?.status === "Signé"}
+                              className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
+                            >
+                              {folders.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </select>
+                            {/* Custom dropdown arrow */}
+                            <div className={`pointer-events-none absolute inset-y-0 right-3 flex items-center ${darkMode ? 'text-zinc-400' : 'text-[#7c3aed]'}`}>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </div>
                         </div>
                         <div>
                           <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
@@ -12229,7 +12240,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           onChange={(e) => setDocFormContent(e.target.value)}
                           rows={6}
                           disabled={selectedDocuEntry?.status === "Signé"}
-                          className={`w-full p-3.5 rounded-2xl outline-none text-[10.5px] font-mono font-bold transition-all border resize-none leading-relaxed \${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                          className={`w-full p-3.5 rounded-2xl outline-none text-[10.5px] font-mono font-bold transition-all border resize-none leading-relaxed \${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
                           placeholder="Faites valoir les clauses convenues ici..."
                         />
                       </div>

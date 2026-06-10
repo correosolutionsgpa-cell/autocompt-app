@@ -60,8 +60,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     } = await parseBody(req);
 
     const resendApiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'DocuLegal <onboarding@resend.dev>';
+
+    // ─── Resend "from" domain — deliverability notes ──────────────────────────
+    // onboarding@resend.dev = Resend's shared sandbox domain. Works for Gmail &
+    // verified Resend emails but IS BLOCKED by Hotmail/Outlook because Microsoft
+    // rejects emails from shared developer domains via strict DMARC enforcement.
+    //
+    // FIX FOR PRODUCTION (required before Beta launch to Hotmail/Outlook users):
+    //   1. Buy or use existing domain: e.g. autocompt.ca
+    //   2. In Resend dashboard → Domains → Add domain → add SPF/DKIM/DMARC DNS records
+    //   3. Set Vercel env var: RESEND_FROM_EMAIL=DocuLegal <noreply@autocompt.ca>
+    //
+    // Until then: emails to Gmail ✅ | Hotmail/Outlook ⚠️ (likely blocked)
+    // ─────────────────────────────────────────────────────────────────────────
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'DocuLegal AutoCompt <onboarding@resend.dev>';
     const results: Record<string, any> = { emailAdmin: false, emailClient: false, driveUpload: false };
+
 
     const safeTitle = (docTitle).replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
     const dateStr = new Date().toLocaleDateString('fr-CA');
