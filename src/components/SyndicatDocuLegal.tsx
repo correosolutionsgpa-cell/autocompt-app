@@ -38,9 +38,10 @@ interface SyndicatDocuLegalProps {
   darkMode: boolean;
   companyName?: string;
   adminEmail?: string;
+  companyId?: string;  // Workspace ID — routed into signed doc for Drive upload
 }
 
-export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminEmail = '' }: SyndicatDocuLegalProps) {
+export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminEmail = '', companyId = '' }: SyndicatDocuLegalProps) {
   const [activeTab, setActiveTab] = useState<'externe' | 'interne'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
@@ -417,6 +418,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       docTitle: document.title,
       docSummary: document.summary,
       companyName: companyName,
+      companyId: companyId,            // ← workspace ID for Drive routing
       adminName: document.signedBy || 'Administrateur',
       adminEmail: adminEmail,
       adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),

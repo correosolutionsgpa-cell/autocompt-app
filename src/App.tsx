@@ -22536,7 +22536,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
         </header>
 
         <main className="flex-1 max-w-5xl w-full p-4 sm:p-6 space-y-6 mx-auto">
-          <SyndicatDocuLegal darkMode={darkMode} companyName={currentCompany?.nombre || "Solutions GPA Inc."} />
+          <SyndicatDocuLegal
+            darkMode={darkMode}
+            companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+            adminEmail={currentUserEmail || ''}
+            companyId={activeCompanyId || ''}
+          />
         </main>
       </div>
     );
