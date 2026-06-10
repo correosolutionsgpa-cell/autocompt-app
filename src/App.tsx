@@ -102,6 +102,7 @@ import SyndicAiReporter from "./components/SyndicAiReporter";
 import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
+import SuperAdminPanel from "./components/SuperAdminPanel";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
@@ -22320,6 +22321,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
   }
 
   if (vista === "admin") {
+    return (
+      <SuperAdminPanel
+        darkMode={darkMode}
+        onBack={() => setVista("dashboard")}
+        adminName={adminName}
+        adminEmail={currentUserEmail || ''}
+      />
+    );
+  }
+
+  if (vista === "admin_legacy_unused") {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300`}>
         <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
