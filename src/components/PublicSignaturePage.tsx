@@ -1,9 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, AlertTriangle, Loader2, PenTool, X, ShieldCheck, FileText } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Loader2, PenTool, X, ShieldCheck, FileText, Check } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+// ─── Signature Font Options (DocuSign-style) ─────────────────────────────────
+
+const FONT_OPTIONS = [
+  { family: 'cursive',              label: 'Classique',   sample: 'Jean Tremblay', gFontParam: null },
+  { family: 'Great Vibes',          label: 'Great Vibes', sample: 'Jean Tremblay', gFontParam: 'Great+Vibes' },
+  { family: 'Monsieur La Doulaise', label: 'La Doulaise', sample: 'Jean Tremblay', gFontParam: 'Monsieur+La+Doulaise' },
+  { family: 'Alex Brush',           label: 'Alex Brush',  sample: 'Jean Tremblay', gFontParam: 'Alex+Brush' },
+] as const;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SignatureRequestDoc {
   docId: string;
@@ -22,6 +33,8 @@ interface PublicSignaturePageProps {
   token: string;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function PublicSignaturePage({ token }: PublicSignaturePageProps) {
   const [loading, setLoading] = useState(true);
   const [docData, setDocData] = useState<SignatureRequestDoc | null>(null);
@@ -30,6 +43,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
   const [signatureType, setSignatureType] = useState<'draw' | 'type'>('draw');
   const [typedSignature, setTypedSignature] = useState('');
+  const [selectedFontIdx, setSelectedFontIdx] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signerName, setSignerName] = useState('');
@@ -37,8 +51,31 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [isSigning, setIsSigning] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [emailDelivered, setEmailDelivered] = useState<{ admin: boolean; client: boolean } | null>(null);
+  const [fontsReady, setFontsReady] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Load Google Fonts dynamically
+  useEffect(() => {
+    const families = FONT_OPTIONS
+      .filter(f => f.gFontParam !== null)
+      .map(f => f.gFontParam)
+      .join('|');
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${families}&display=swap`;
+    document.head.appendChild(link);
+
+    // Wait for fonts to be ready before rendering previews
+    link.onload = () => {
+      document.fonts.ready.then(() => setFontsReady(true));
+    };
+    // Fallback in case onload doesn't fire
+    setTimeout(() => setFontsReady(true), 2500);
+
+    return () => { document.head.removeChild(link); };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +86,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
         if (b64Data) {
           try {
-            // Restore URL-safe base64 back to standard base64
             const standardB64 = b64Data
               .replace(/-/g, '+')
               .replace(/_/g, '/')
@@ -81,8 +117,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           }
         }
 
-
-        // FALLBACK: try Firestore (requires auth rules allowing public read)
+        // FALLBACK: Firestore
         const docRef = doc(db, 'pendingSignatures', token);
         const snap = await getDoc(docRef);
         if (!snap.exists()) {
@@ -93,7 +128,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         const data = snap.data() as SignatureRequestDoc;
         setDocData(data);
         if (data.status === 'signed') setAlreadySigned(true);
-      } catch (e) {
+      } catch {
         setError("Ce lien de signature est invalide ou a expiré. Veuillez contacter l'expéditeur.");
       } finally {
         setLoading(false);
@@ -101,7 +136,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     };
     load();
   }, [token]);
-
 
   useEffect(() => {
     if (!canvasRef.current || signatureType !== 'draw') return;
@@ -114,6 +148,8 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     ctx.textAlign = 'center';
     ctx.fillText('Dessinez votre signature ici', canvas.width / 2, canvas.height / 2);
   }, [signatureType]);
+
+  // ── Drawing handlers ─────────────────────────────────────────────────────────
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -157,6 +193,8 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     setHasDrawn(false);
   };
 
+  // ── Sign handler ──────────────────────────────────────────────────────────────
+
   const handleSign = async () => {
     if (!docData) return;
     if (!signerName.trim()) {
@@ -182,7 +220,33 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         clientSigDataUrl = canvasRef.current.toDataURL('image/png');
       }
 
-      // Generate the final certified PDF with both signatures (returns base64 too)
+      // Pre-render typed signature to off-screen canvas using the selected Google Font
+      // This ensures the exact font style appears in the PDF (same as web preview)
+      let typedSigDataUrl = '';
+      if (signatureType === 'type' && typedSignature.trim()) {
+        try {
+          const fontFamily = FONT_OPTIONS[selectedFontIdx].family;
+          // Ensure the font is loaded before canvas render
+          if (fontFamily !== 'cursive') {
+            await document.fonts.load(`52px '${fontFamily}'`);
+          }
+          const sigCanvas = document.createElement('canvas');
+          sigCanvas.width = 560;
+          sigCanvas.height = 100;
+          const ctx = sigCanvas.getContext('2d')!;
+          ctx.clearRect(0, 0, 560, 100);
+          ctx.fillStyle = '#059669'; // emerald-600
+          ctx.font = `52px '${fontFamily}', cursive`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(typedSignature, 280, 55);
+          typedSigDataUrl = sigCanvas.toDataURL('image/png');
+        } catch {
+          // Canvas render failed — PDF will fallback to Times italic
+        }
+      }
+
+      // Generate certified bipartite PDF
       const pdfBase64 = generateBipartitePDF(docData, {
         name: signerName,
         email: signerEmail,
@@ -190,6 +254,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         signatureType,
         sigDataUrl: clientSigDataUrl,
         typedSig: typedSignature,
+        typedSigDataUrl,
       });
 
       // Try to save to Firestore (non-blocking, for audit trail)
@@ -201,13 +266,14 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           clientSignerEmail: signerEmail,
           clientSignedDate: `${todayStr} \xE0 ${timeStr}`,
           clientSignatureType: signatureType,
+          clientSignatureFontFamily: FONT_OPTIONS[selectedFontIdx].family,
           clientSignedAt: new Date().toISOString(),
         });
       } catch {
-        // Firestore write may fail if auth rules block it — email delivery is primary
+        // Firestore write may fail — email delivery is primary
       }
 
-      // Send PDF to both parties via server (email + Drive when configured)
+      // Send PDF to both parties via server
       let emailResult = { admin: false, client: false };
       if (pdfBase64) {
         try {
@@ -232,206 +298,217 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             };
           }
         } catch {
-          // Server may not be running in production static — PDF download is the fallback
+          // Server unavailable — PDF download is the fallback
         }
       }
 
       setEmailDelivered(emailResult);
       setIsDone(true);
-    } catch (e) {
-      alert("Erreur lors de la signature. Veuillez r\xE9essayer.");
+    } catch {
+      alert("Erreur lors de la signature. Veuillez réessayer.");
     } finally {
       setIsSigning(false);
     }
   };
 
+  // ── PDF Generator ─────────────────────────────────────────────────────────────
 
-  // Returns base64 string of PDF for server delivery (also triggers local download)
-  const generateBipartitePDF = (data: SignatureRequestDoc, client: {
-    name: string; email: string; date: string;
-    signatureType: string; sigDataUrl: string; typedSig: string;
-  }): string | null => {
+  const generateBipartitePDF = (
+    data: SignatureRequestDoc,
+    client: {
+      name: string; email: string; date: string;
+      signatureType: string; sigDataUrl: string;
+      typedSig: string; typedSigDataUrl?: string;
+    }
+  ): string | null => {
     try {
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-    const W = 210, H = 297, M = 18;
-    const green: [number, number, number] = [5, 150, 105];
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const W = 210, H = 297, M = 18;
+      const green: [number, number, number] = [5, 150, 105];
 
-    // Draw sparkle logo helper
-    const sparkle = (cx: number, cy: number, r: number) => {
-      pdf.setFillColor(255, 255, 255);
-      const pts: [number, number][] = [];
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI / 4) * i - Math.PI / 2;
-        const rad = i % 2 === 0 ? r : r * 0.38;
-        pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
-      }
-      pdf.moveTo(pts[0][0], pts[0][1]);
-      pts.slice(1).forEach(([x, y]) => pdf.lineTo(x, y));
-      pdf.closePath();
-      pdf.fill();
-    };
+      const sparkle = (cx: number, cy: number, r: number) => {
+        pdf.setFillColor(255, 255, 255);
+        const pts: [number, number][] = [];
+        for (let i = 0; i < 8; i++) {
+          const a = (Math.PI / 4) * i - Math.PI / 2;
+          const rad = i % 2 === 0 ? r : r * 0.38;
+          pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
+        }
+        pdf.moveTo(pts[0][0], pts[0][1]);
+        pts.slice(1).forEach(([x, y]) => pdf.lineTo(x, y));
+        pdf.closePath();
+        pdf.fill();
+      };
 
-    // Header
-    pdf.setFillColor(...green);
-    pdf.rect(0, 0, W, 35, 'F');
-    sparkle(M, 17, 7);
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(13);
-    pdf.text(data.companyName.toUpperCase(), M + 12, 14);
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.text('DOCUMENT SIGNÉ BIPARTITE — DOCULEGAL (AUTOCOMPT)', M + 12, 20);
-    pdf.text(`Réf: ${token.slice(0, 16).toUpperCase()}`, W - M, 14, { align: 'right' });
-    pdf.text(`Date: ${new Date().toLocaleDateString('fr-CA')}`, W - M, 20, { align: 'right' });
+      // Header
+      pdf.setFillColor(...green);
+      pdf.rect(0, 0, W, 35, 'F');
+      sparkle(M, 17, 7);
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(13);
+      pdf.text(data.companyName.toUpperCase(), M + 12, 14);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text('DOCUMENT SIGNÉ BIPARTITE — DOCULEGAL (AUTOCOMPT)', M + 12, 20);
+      pdf.text(`Réf: ${token.slice(0, 16).toUpperCase()}`, W - M, 14, { align: 'right' });
+      pdf.text(`Date: ${new Date().toLocaleDateString('fr-CA')}`, W - M, 20, { align: 'right' });
 
-    // Status badge
-    pdf.setFillColor(209, 250, 229);
-    pdf.roundedRect(M + 12, 24, 50, 7, 2, 2, 'F');
-    pdf.setTextColor(5, 150, 105);
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(7);
-    pdf.text('✓  DOCUMENT SIGNÉ PAR LES DEUX PARTIES', M + 16, 28.5);
+      // Status badge
+      pdf.setFillColor(209, 250, 229);
+      pdf.roundedRect(M + 12, 24, 50, 7, 2, 2, 'F');
+      pdf.setTextColor(5, 150, 105);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(7);
+      pdf.text('✓  DOCUMENT SIGNÉ PAR LES DEUX PARTIES', M + 16, 28.5);
 
-    // Document title
-    pdf.setTextColor(30, 41, 59);
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(14);
-    pdf.text(data.docTitle, M, 50);
+      // Document title
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.text(data.docTitle, M, 50);
 
-    // Separator
-    pdf.setDrawColor(226, 232, 240);
-    pdf.setLineWidth(0.5);
-    pdf.line(M, 55, W - M, 55);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.5);
+      pdf.line(M, 55, W - M, 55);
 
-    // Summary
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(10);
-    pdf.setTextColor(71, 85, 105);
-    const lines = pdf.splitTextToSize(data.docSummary, W - M * 2);
-    pdf.text(lines, M, 63);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(71, 85, 105);
+      const lines = pdf.splitTextToSize(data.docSummary, W - M * 2);
+      pdf.text(lines, M, 63);
 
-    // Signatures block
-    const sigY = 140;
-    pdf.setDrawColor(226, 232, 240);
-    pdf.line(M, sigY - 5, W - M, sigY - 5);
+      // Signatures block
+      const sigY = 140;
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(M, sigY - 5, W - M, sigY - 5);
 
-    pdf.setTextColor(30, 41, 59);
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.text('SIGNATURES ÉLECTRONIQUES DES DEUX PARTIES', M, sigY + 2);
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('SIGNATURES ÉLECTRONIQUES DES DEUX PARTIES', M, sigY + 2);
 
-    // Admin signature box (left)
-    pdf.setFillColor(248, 250, 252);
-    pdf.setDrawColor(203, 213, 225);
-    pdf.roundedRect(M, sigY + 8, 82, 50, 4, 4, 'FD');
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(8);
-    pdf.setTextColor(green[0], green[1], green[2]);
-    pdf.text('PARTIE 1 — ADMINISTRATEUR', M + 4, sigY + 15);
-    pdf.setTextColor(100, 116, 139);
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.text(`Signataire: ${data.adminName}`, M + 4, sigY + 22);
-    pdf.text(`Entreprise: ${data.companyName}`, M + 4, sigY + 28);
-    pdf.text(`Date: ${data.adminSignedDate || new Date().toLocaleDateString('fr-CA')}`, M + 4, sigY + 34);
-    // Admin signature visual
-    if (data.adminSignatureDataUrl) {
-      try {
-        pdf.addImage(data.adminSignatureDataUrl, 'PNG', M + 4, sigY + 36, 74, 18);
-      } catch {
+      // Admin signature box (left)
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(203, 213, 225);
+      pdf.roundedRect(M, sigY + 8, 82, 50, 4, 4, 'FD');
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(green[0], green[1], green[2]);
+      pdf.text('PARTIE 1 — ADMINISTRATEUR', M + 4, sigY + 15);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`Signataire: ${data.adminName}`, M + 4, sigY + 22);
+      pdf.text(`Entreprise: ${data.companyName}`, M + 4, sigY + 28);
+      pdf.text(`Date: ${data.adminSignedDate || new Date().toLocaleDateString('fr-CA')}`, M + 4, sigY + 34);
+      if (data.adminSignatureDataUrl) {
+        try {
+          pdf.addImage(data.adminSignatureDataUrl, 'PNG', M + 4, sigY + 36, 74, 18);
+        } catch {
+          pdf.setFont('Times', 'italic');
+          pdf.setFontSize(16);
+          pdf.setTextColor(green[0], green[1], green[2]);
+          pdf.text(data.adminName, M + 41, sigY + 46, { align: 'center' });
+        }
+      } else {
         pdf.setFont('Times', 'italic');
         pdf.setFontSize(16);
         pdf.setTextColor(green[0], green[1], green[2]);
         pdf.text(data.adminName, M + 41, sigY + 46, { align: 'center' });
       }
-    } else {
-      pdf.setFont('Times', 'italic');
-      pdf.setFontSize(16);
-      pdf.setTextColor(green[0], green[1], green[2]);
-      pdf.text(data.adminName, M + 41, sigY + 46, { align: 'center' });
-    }
 
-    // Client signature box (right)
-    const cx = W / 2 + 4;
-    pdf.setFillColor(248, 250, 252);
-    pdf.setDrawColor(203, 213, 225);
-    pdf.roundedRect(cx, sigY + 8, 82, 50, 4, 4, 'FD');
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(8);
-    pdf.setTextColor(green[0], green[1], green[2]);
-    pdf.text('PARTIE 2 — SIGNATAIRE CLIENT', cx + 4, sigY + 15);
-    pdf.setTextColor(100, 116, 139);
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.text(`Signataire: ${client.name}`, cx + 4, sigY + 22);
-    if (client.email) pdf.text(`Courriel: ${client.email}`, cx + 4, sigY + 28);
-    pdf.text(`Date: ${client.date}`, cx + 4, sigY + 34);
-    // Client signature visual
-    if (client.signatureType === 'draw' && client.sigDataUrl) {
-      try {
-        pdf.addImage(client.sigDataUrl, 'PNG', cx + 4, sigY + 36, 74, 18);
-      } catch {
+      // Client signature box (right)
+      const cx = W / 2 + 4;
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(203, 213, 225);
+      pdf.roundedRect(cx, sigY + 8, 82, 50, 4, 4, 'FD');
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(green[0], green[1], green[2]);
+      pdf.text('PARTIE 2 — SIGNATAIRE CLIENT', cx + 4, sigY + 15);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`Signataire: ${client.name}`, cx + 4, sigY + 22);
+      if (client.email) pdf.text(`Courriel: ${client.email}`, cx + 4, sigY + 28);
+      pdf.text(`Date: ${client.date}`, cx + 4, sigY + 34);
+
+      // Client signature visual — draw mode OR typed (Google Font rendered)
+      if (client.signatureType === 'draw' && client.sigDataUrl) {
+        try {
+          pdf.addImage(client.sigDataUrl, 'PNG', cx + 4, sigY + 36, 74, 18);
+        } catch {
+          pdf.setFont('Times', 'italic');
+          pdf.setFontSize(16);
+          pdf.setTextColor(green[0], green[1], green[2]);
+          pdf.text(client.name, cx + 41, sigY + 46, { align: 'center' });
+        }
+      } else if (client.typedSigDataUrl) {
+        // Use the canvas-rendered Google Font signature image
+        try {
+          pdf.addImage(client.typedSigDataUrl, 'PNG', cx + 4, sigY + 33, 74, 22);
+        } catch {
+          pdf.setFont('Times', 'italic');
+          pdf.setFontSize(16);
+          pdf.setTextColor(green[0], green[1], green[2]);
+          pdf.text(client.typedSig || client.name, cx + 41, sigY + 46, { align: 'center' });
+        }
+      } else {
         pdf.setFont('Times', 'italic');
         pdf.setFontSize(16);
         pdf.setTextColor(green[0], green[1], green[2]);
-        pdf.text(client.name, cx + 41, sigY + 46, { align: 'center' });
+        pdf.text(client.typedSig || client.name, cx + 41, sigY + 46, { align: 'center' });
       }
-    } else {
-      pdf.setFont('Times', 'italic');
-      pdf.setFontSize(16);
+
+      // Certification seal
+      const sealY = H - 58;
+      pdf.setDrawColor(green[0], green[1], green[2]);
+      pdf.setLineWidth(0.4);
+      pdf.setLineDashPattern([2, 1], 0);
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(M, sealY, W - M * 2, 32, 'FD');
+      pdf.setLineDashPattern([], 0);
+      pdf.setFillColor(green[0], green[1], green[2]);
+      sparkle(M + 8, sealY + 8, 4);
       pdf.setTextColor(green[0], green[1], green[2]);
-      pdf.text(client.typedSig || client.name, cx + 41, sigY + 46, { align: 'center' });
-    }
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      pdf.text('CERTIFICATION DOCULEGAL — DOCUMENT BIPARTITE VALIDÉ', M + 14, sealY + 8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.text('Ce document a été signé électroniquement par les deux parties via DocuLegal, une solution AutoCompt.', M + 4, sealY + 15);
+      pdf.text("Il constitue une preuve légale d'engagement enregistrée dans les registres sécurisés d'AutoCompt.", M + 4, sealY + 20);
+      const hashStr = `Token: ${token.slice(0, 32).toUpperCase()}`;
+      pdf.setFont('Courier', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(71, 85, 105);
+      pdf.text(hashStr, M + 4, sealY + 27);
 
-    // Seal
-    const sealY = H - 58;
-    pdf.setDrawColor(green[0], green[1], green[2]);
-    pdf.setLineWidth(0.4);
-    pdf.setLineDashPattern([2, 1], 0);
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(M, sealY, W - M * 2, 32, 'FD');
-    pdf.setLineDashPattern([], 0);
-    pdf.setFillColor(green[0], green[1], green[2]);
-    sparkle(M + 8, sealY + 8, 4);
-    pdf.setTextColor(green[0], green[1], green[2]);
-    pdf.setFont('Helvetica', 'bold');
-    pdf.setFontSize(7.5);
-    pdf.text('CERTIFICATION DOCULEGAL — DOCUMENT BIPARTITE VALIDÉ', M + 14, sealY + 8);
-    pdf.setTextColor(100, 116, 139);
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(7);
-    pdf.text('Ce document a été signé électroniquement par les deux parties via DocuLegal, une solution AutoCompt.', M + 4, sealY + 15);
-    pdf.text('Il constitue une preuve légale d\'engagement enregistrée dans les registres sécurisés d\'AutoCompt.', M + 4, sealY + 20);
-    const hashStr = `Token: ${token.slice(0, 32).toUpperCase()}`;
-    pdf.setFont('Courier', 'bold');
-    pdf.setFontSize(6.5);
-    pdf.setTextColor(71, 85, 105);
-    pdf.text(hashStr, M + 4, sealY + 27);
+      // Footer
+      pdf.setFillColor(green[0], green[1], green[2]);
+      pdf.rect(0, H - 12, W, 12, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      pdf.text('Document numérique certifié — DocuLegal by AutoCompt Canada', W / 2, H - 6.5, { align: 'center' });
 
-    // Footer
-    pdf.setFillColor(green[0], green[1], green[2]);
-    pdf.rect(0, H - 12, W, 12, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFont('Helvetica', 'normal');
-    pdf.setFontSize(6.5);
-    pdf.text('Document numérique certifié — DocuLegal by AutoCompt Canada', W / 2, H - 6.5, { align: 'center' });
+      pdf.save('DocuLegal_Bipartite_Signé.pdf');
 
-    pdf.save(`DocuLegal_Bipartite_Sign\xE9.pdf`);
-
-    // Return base64 for server-side email delivery
-    try {
-      return pdf.output('datauristring').split(',')[1];
-    } catch {
-      return null;
-    }
+      try {
+        return pdf.output('datauristring').split(',')[1];
+      } catch {
+        return null;
+      }
     } catch (pdfErr) {
       console.error('PDF generation error:', pdfErr);
       return null;
     }
   };
 
-  // ── Loading state ──
+  // ── States: Loading / Error / Already signed ──────────────────────────────────
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
@@ -443,7 +520,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     );
   }
 
-  // ── Error state ──
   if (error) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-6">
@@ -456,7 +532,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     );
   }
 
-  // ── Already signed ──
   if (alreadySigned || isDone) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-6">
@@ -475,7 +550,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             <p className="text-sm text-slate-500 font-medium mt-2">
               {isDone
                 ? 'Le PDF certifié bipartite a été téléchargé. Vous pouvez fermer cette fenêtre.'
-                : 'Ce lien de signature a déjà été utilisé. Veuillez contacter l\'expéditeur si vous avez des questions.'}
+                : "Ce lien de signature a déjà été utilisé. Veuillez contacter l'expéditeur si vous avez des questions."}
             </p>
           </div>
           {isDone && (
@@ -498,9 +573,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                     <div className="flex items-center gap-2 text-indigo-700">
                       <span>{emailDelivered.client ? '✅' : '⚠️'}</span>
                       <span className="text-sm font-medium">
-                        {emailDelivered.client
-                          ? `Copie envoyée à ${signerEmail}`
-                          : 'Email signataire non envoyé'}
+                        {emailDelivered.client ? `Copie envoyée à ${signerEmail}` : 'Email signataire non envoyé'}
                       </span>
                     </div>
                   )}
@@ -520,7 +593,10 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     );
   }
 
-  // ── Signature form ──
+  // ── Signature Form ────────────────────────────────────────────────────────────
+
+  const selectedFontFamily = FONT_OPTIONS[selectedFontIdx].family;
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       {/* Header */}
@@ -592,8 +668,10 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         </div>
 
         {/* Signature pad */}
-        <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 space-y-5">
           <h2 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Votre Signature</h2>
+
+          {/* Draw / Type toggle */}
           <div className="flex gap-2">
             {(['draw', 'type'] as const).map(t => (
               <button
@@ -605,11 +683,12 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                     : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
                 }`}
               >
-                {t === 'draw' ? '✏️ Dessiner' : '⌨️ Saisir'}
+                {t === 'draw' ? '✏️ Dessiner' : '⌨️ Saisir au clavier'}
               </button>
             ))}
           </div>
 
+          {/* Draw mode */}
           {signatureType === 'draw' ? (
             <div className="space-y-2">
               <canvas
@@ -627,7 +706,9 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            /* Type mode — DocuSign-style font selector */
+            <div className="space-y-4">
+              {/* Text input */}
               <input
                 type="text"
                 value={typedSignature}
@@ -635,10 +716,66 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 placeholder="Saisissez votre nom complet"
                 className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
               />
+
+              {/* Font style picker */}
               {typedSignature.trim() && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
-                  <span className="font-[cursive] italic text-2xl text-emerald-600">{typedSignature}</span>
-                </div>
+                <AnimatePresence>
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                      Choisissez votre style de signature
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {FONT_OPTIONS.map((font, idx) => (
+                        <button
+                          key={font.family}
+                          onClick={() => setSelectedFontIdx(idx)}
+                          className={`relative flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 transition-all text-left ${
+                            selectedFontIdx === idx
+                              ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex-1">
+                            <span
+                              className="text-slate-800 text-2xl leading-none block"
+                              style={{
+                                fontFamily: `'${font.family}', cursive`,
+                                fontStyle: 'normal',
+                                color: selectedFontIdx === idx ? '#059669' : '#334155',
+                              }}
+                            >
+                              {typedSignature}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-3">
+                            <span className="text-[8px] font-black uppercase tracking-wider text-slate-400">{font.label}</span>
+                            {selectedFontIdx === idx && (
+                              <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                                <Check size={10} className="text-white" />
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {/* Final preview */}
+                    <div className="mt-2 p-5 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-2xl text-center">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Aperçu de votre signature</p>
+                      <span
+                        className="text-3xl leading-tight block"
+                        style={{
+                          fontFamily: `'${selectedFontFamily}', cursive`,
+                          color: '#059669',
+                        }}
+                      >
+                        {typedSignature}
+                      </span>
+                      <p className="text-[8px] text-slate-400 mt-2 font-medium">
+                        Style: <strong>{FONT_OPTIONS[selectedFontIdx].label}</strong> · Apparaîtra ainsi dans le PDF
+                      </p>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
               )}
             </div>
           )}
