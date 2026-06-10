@@ -37,9 +37,10 @@ interface LegalDocument {
 interface SyndicatDocuLegalProps {
   darkMode: boolean;
   companyName?: string;
+  adminEmail?: string;
 }
 
-export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc." }: SyndicatDocuLegalProps) {
+export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminEmail = '' }: SyndicatDocuLegalProps) {
   const [activeTab, setActiveTab] = useState<'externe' | 'interne'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
@@ -403,34 +404,43 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   };
 
   // Handle Send for Signature (generate unique public link)
-  // Data is embedded in the URL as base64 so the public page works without Firebase auth
+  // IMPORTANT: adminSignatureDataUrl is intentionally excluded from the URL payload
+  // because PNG images (~100KB+) make URLs too long for email clients to handle.
+  // The admin name is used as text signature on the PDF. Full data is saved to Firestore only.
   const handleSendForSignature = async (document: LegalDocument, adminSigDataUrl?: string) => {
     setIsGeneratingLink(true);
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${document.id.slice(0, 6)}`;
 
-    // Serialize doc data into URL so it works without Firestore auth
-    const payload = {
+    // URL payload: text-only (no images) to keep URL short and email-safe
+    const urlPayload = {
       docId: document.id,
       docTitle: document.title,
       docSummary: document.summary,
       companyName: companyName,
       adminName: document.signedBy || 'Administrateur',
+      adminEmail: adminEmail,
       adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
-      adminSignatureDataUrl: adminSigDataUrl || document.signatureDataUrl || '',
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
 
+    // Use URL-safe base64: replace +→-, /→_, strip trailing =
     let b64 = '';
     try {
-      b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+      b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
     } catch {}
 
     const signUrl = `${window.location.origin}${window.location.pathname}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
 
-    // Also try to persist to Firestore (non-blocking, for audit trail)
+    // Persist full payload (including signature image) to Firestore for audit trail
     try {
-      await setDoc(doc(db, 'pendingSignatures', token), { ...payload });
+      await setDoc(doc(db, 'pendingSignatures', token), {
+        ...urlPayload,
+        adminSignatureDataUrl: adminSigDataUrl || document.signatureDataUrl || '',
+      });
     } catch {
       // Silent fail — URL-embedded data is the primary mechanism
     }

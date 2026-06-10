@@ -325,6 +325,193 @@ async function startServer() {
     }
   });
 
+  // ── DocuLegal: Save signed document, email both parties, route to Drive ──
+  app.post("/api/save-signed-document", async (req, res) => {
+    try {
+      const {
+        pdfBase64,          // Base64 of the final bipartite PDF
+        adminEmail,         // Admin email (building manager)
+        clientEmail,        // Signer client email (optional)
+        clientName,         // Signer display name
+        docTitle,           // Document title
+        companyName,        // Active company name
+        token,              // Unique signature token (for audit)
+        driveAccessToken,   // Company's Google Drive OAuth token (if configured)
+        driveFolderId,      // Company's Drive folder ID (if configured)
+      } = req.body;
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const fromEmail = process.env.RESEND_FROM_EMAIL || "DocuLegal <noreply@autocompt.ca>";
+      const results: Record<string, any> = { emailAdmin: false, emailClient: false, driveUpload: false };
+
+      const safeTitle = (docTitle || "Document").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim();
+      const dateStr = new Date().toLocaleDateString("fr-CA");
+
+      const emailHtml = (recipientType: "admin" | "client") => `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+          <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">DocuLegal · AutoCompt</div>
+              <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">✅ Document Signé</div>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                ${recipientType === "admin"
+                  ? `<strong>${clientName}</strong> a signé le document suivant le <strong>${dateStr}</strong>.`
+                  : `Vous avez signé le document suivant le <strong>${dateStr}</strong>. Une copie vous est remise ci-dessous.`}
+              </p>
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin-bottom:24px">
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Document</div>
+                <div style="font-size:16px;font-weight:900;color:#111827">${docTitle}</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:4px">${companyName}</div>
+              </div>
+              <p style="color:#6b7280;font-size:13px;margin:0 0 8px">
+                📎 Le PDF certifié bipartite est joint à cet email. Il contient les deux signatures avec les métadonnées légales.
+              </p>
+              <p style="color:#9ca3af;font-size:11px;margin:0">
+                🔒 Réf: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace">${token?.slice(0, 24) || "N/A"}</code><br>
+                Ce document a été certifié via DocuLegal (AutoCompt) conformément à la LCCJTI du Québec.
+              </p>
+            </div>
+            <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+              <p style="color:#9ca3af;font-size:11px;margin:0">
+                Document numérique certifié · DocuLegal by AutoCompt Canada<br>
+                <a href="https://autocompt-app.vercel.app" style="color:#059669">autocompt-app.vercel.app</a>
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // ── 1. Send email via Resend REST API (no package needed — uses native fetch) ──
+      if (resendApiKey && pdfBase64) {
+        const attachment = {
+          filename: `DocuLegal_${safeTitle.replace(/\s+/g, "_")}_Signé.pdf`,
+          content: pdfBase64,  // Base64 string
+        };
+
+        // Email to Admin
+        if (adminEmail) {
+          try {
+            const adminResp = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${resendApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: fromEmail,
+                to: [adminEmail],
+                subject: `✅ Signé: ${docTitle} — ${clientName}`,
+                html: emailHtml("admin"),
+                attachments: [attachment],
+              }),
+            });
+            results.emailAdmin = adminResp.ok;
+            if (!adminResp.ok) {
+              const errBody = await adminResp.json().catch(() => ({}));
+              console.error("Resend admin email error:", errBody);
+            }
+          } catch (emailErr) {
+            console.error("Admin email send failed:", emailErr);
+          }
+        }
+
+        // Email to Client (if they provided their email)
+        if (clientEmail) {
+          try {
+            const clientResp = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${resendApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: fromEmail,
+                to: [clientEmail],
+                reply_to: adminEmail || undefined,
+                subject: `📄 Votre copie signée: ${docTitle}`,
+                html: emailHtml("client"),
+                attachments: [attachment],
+              }),
+            });
+            results.emailClient = clientResp.ok;
+          } catch (emailErr) {
+            console.error("Client email send failed:", emailErr);
+          }
+        }
+      } else if (!resendApiKey) {
+        console.log("[DocuLegal] RESEND_API_KEY not configured — email delivery skipped. Set RESEND_API_KEY in .env");
+        results.emailAdmin = "skipped_no_api_key";
+      }
+
+      // ── 2. Google Drive Upload (activates when company OAuth is configured) ──
+      // Architecture: per-company OAuth token stored in Firestore companies/{id}/driveOAuth
+      // This infrastructure is ready — Drive routing activates in Phase 2 when OAuth is set up per workspace.
+      if (driveAccessToken && driveFolderId && pdfBase64) {
+        try {
+          const pdfBuffer = Buffer.from(pdfBase64, "base64");
+          const boundary = "autocompt_boundary";
+          const metadata = JSON.stringify({
+            name: `DocuLegal_${safeTitle}_${dateStr.replace(/\//g, "-")}.pdf`,
+            parents: [driveFolderId],
+            mimeType: "application/pdf",
+          });
+
+          const multipartBody = [
+            `--${boundary}`,
+            "Content-Type: application/json; charset=UTF-8",
+            "",
+            metadata,
+            `--${boundary}`,
+            "Content-Type: application/pdf",
+            "Content-Transfer-Encoding: base64",
+            "",
+            pdfBase64,
+            `--${boundary}--`,
+          ].join("\r\n");
+
+          const driveResp = await fetch(
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${driveAccessToken}`,
+                "Content-Type": `multipart/related; boundary=${boundary}`,
+              },
+              body: multipartBody,
+            }
+          );
+
+          if (driveResp.ok) {
+            const driveFile = await driveResp.json() as { id?: string; webViewLink?: string };
+            results.driveUpload = true;
+            results.driveFileId = driveFile.id;
+            console.log(`[DocuLegal] Document uploaded to Drive folder ${driveFolderId}: ${driveFile.id}`);
+          } else {
+            const driveErr = await driveResp.json().catch(() => ({}));
+            console.error("[DocuLegal] Drive upload failed:", driveErr);
+          }
+        } catch (driveErr) {
+          console.error("[DocuLegal] Drive upload error:", driveErr);
+        }
+      } else if (!driveAccessToken) {
+        results.driveUpload = "pending_oauth_setup";
+        // Drive upload will activate when company OAuth is configured (Phase 2)
+      }
+
+      return res.json({ success: true, results });
+
+    } catch (error: any) {
+      console.error("save-signed-document error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Vite development or production integration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

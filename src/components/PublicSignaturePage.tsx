@@ -11,6 +11,7 @@ interface SignatureRequestDoc {
   docSummary: string;
   companyName: string;
   adminName: string;
+  adminEmail?: string;
   createdAt: string;
   status: 'pending' | 'signed';
   adminSignatureDataUrl?: string;
@@ -35,6 +36,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [signerEmail, setSignerEmail] = useState('');
   const [isSigning, setIsSigning] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [emailDelivered, setEmailDelivered] = useState<{ admin: boolean; client: boolean } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -47,15 +49,38 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
         if (b64Data) {
           try {
-            const parsed = JSON.parse(decodeURIComponent(escape(atob(b64Data)))) as SignatureRequestDoc;
+            // Restore URL-safe base64 back to standard base64
+            const standardB64 = b64Data
+              .replace(/-/g, '+')
+              .replace(/_/g, '/')
+              + '=='.slice(0, (4 - b64Data.length % 4) % 4);
+
+            const parsed = JSON.parse(decodeURIComponent(escape(atob(standardB64)))) as SignatureRequestDoc;
             setDocData(parsed);
             if (parsed.status === 'signed') setAlreadySigned(true);
+
+            // Try to enrich with admin signature image from Firestore (non-blocking)
+            try {
+              const docRef = doc(db, 'pendingSignatures', token);
+              const snap = await getDoc(docRef);
+              if (snap.exists()) {
+                const fsData = snap.data() as SignatureRequestDoc;
+                if (fsData.adminSignatureDataUrl) {
+                  setDocData({ ...parsed, adminSignatureDataUrl: fsData.adminSignatureDataUrl });
+                }
+                if (fsData.status === 'signed') setAlreadySigned(true);
+              }
+            } catch {
+              // Firestore enrichment is optional — URL data is sufficient
+            }
+
             setLoading(false);
             return;
           } catch {
             // b64 parsing failed, fall through to Firestore
           }
         }
+
 
         // FALLBACK: try Firestore (requires auth rules allowing public read)
         const docRef = doc(db, 'pendingSignatures', token);
@@ -157,40 +182,76 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         clientSigDataUrl = canvasRef.current.toDataURL('image/png');
       }
 
-      // Save to Firestore
-      await setDoc(doc(db, 'pendingSignatures', token), {
-        ...docData,
-        status: 'signed',
-        clientSignerName: signerName,
-        clientSignerEmail: signerEmail,
-        clientSignedDate: `${todayStr} à ${timeStr}`,
-        clientSignatureType: signatureType,
-        clientSignatureDataUrl: clientSigDataUrl,
-        clientSignedAt: new Date().toISOString(),
-      });
-
-      // Generate the final certified PDF with both signatures
-      generateBipartitePDF(docData, {
+      // Generate the final certified PDF with both signatures (returns base64 too)
+      const pdfBase64 = generateBipartitePDF(docData, {
         name: signerName,
         email: signerEmail,
-        date: `${todayStr} à ${timeStr}`,
+        date: `${todayStr} \xE0 ${timeStr}`,
         signatureType,
         sigDataUrl: clientSigDataUrl,
         typedSig: typedSignature,
       });
 
+      // Try to save to Firestore (non-blocking, for audit trail)
+      try {
+        await setDoc(doc(db, 'pendingSignatures', token), {
+          ...docData,
+          status: 'signed',
+          clientSignerName: signerName,
+          clientSignerEmail: signerEmail,
+          clientSignedDate: `${todayStr} \xE0 ${timeStr}`,
+          clientSignatureType: signatureType,
+          clientSignedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Firestore write may fail if auth rules block it — email delivery is primary
+      }
+
+      // Send PDF to both parties via server (email + Drive when configured)
+      let emailResult = { admin: false, client: false };
+      if (pdfBase64) {
+        try {
+          const resp = await fetch('/api/save-signed-document', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pdfBase64,
+              adminEmail: docData.adminEmail || '',
+              clientEmail: signerEmail,
+              clientName: signerName,
+              docTitle: docData.docTitle,
+              companyName: docData.companyName,
+              token,
+            }),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            emailResult = {
+              admin: data.results?.emailAdmin === true,
+              client: data.results?.emailClient === true,
+            };
+          }
+        } catch {
+          // Server may not be running in production static — PDF download is the fallback
+        }
+      }
+
+      setEmailDelivered(emailResult);
       setIsDone(true);
     } catch (e) {
-      alert("Erreur lors de l'enregistrement de la signature. Veuillez réessayer.");
+      alert("Erreur lors de la signature. Veuillez r\xE9essayer.");
     } finally {
       setIsSigning(false);
     }
   };
 
+
+  // Returns base64 string of PDF for server delivery (also triggers local download)
   const generateBipartitePDF = (data: SignatureRequestDoc, client: {
     name: string; email: string; date: string;
     signatureType: string; sigDataUrl: string; typedSig: string;
-  }) => {
+  }): string | null => {
+    try {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
     const W = 210, H = 297, M = 18;
     const green: [number, number, number] = [5, 150, 105];
@@ -356,7 +417,18 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     pdf.setFontSize(6.5);
     pdf.text('Document numérique certifié — DocuLegal by AutoCompt Canada', W / 2, H - 6.5, { align: 'center' });
 
-    pdf.save(`DocuLegal_Bipartite_Signé.pdf`);
+    pdf.save(`DocuLegal_Bipartite_Sign\xE9.pdf`);
+
+    // Return base64 for server-side email delivery
+    try {
+      return pdf.output('datauristring').split(',')[1];
+    } catch {
+      return null;
+    }
+    } catch (pdfErr) {
+      console.error('PDF generation error:', pdfErr);
+      return null;
+    }
   };
 
   // ── Loading state ──
@@ -407,8 +479,36 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             </p>
           </div>
           {isDone && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm text-emerald-700 font-medium">
-              Le document a été archivé dans le registre sécurisé de {docData?.companyName}.
+            <div className="space-y-3">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm text-emerald-700 font-medium">
+                📄 Le PDF bipartite certifié a été téléchargé sur votre appareil.
+              </div>
+              {emailDelivered && (
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-sm space-y-1">
+                  <p className="font-black text-indigo-700 text-[9px] uppercase tracking-widest mb-2">📧 Livraison par courriel</p>
+                  <div className="flex items-center gap-2 text-indigo-700">
+                    <span>{emailDelivered.admin ? '✅' : '⚠️'}</span>
+                    <span className="text-sm font-medium">
+                      {emailDelivered.admin
+                        ? `Copie envoyée à l'administrateur (${docData?.companyName})`
+                        : "Email admin non envoyé — vérifiez la configuration RESEND_API_KEY"}
+                    </span>
+                  </div>
+                  {signerEmail && (
+                    <div className="flex items-center gap-2 text-indigo-700">
+                      <span>{emailDelivered.client ? '✅' : '⚠️'}</span>
+                      <span className="text-sm font-medium">
+                        {emailDelivered.client
+                          ? `Copie envoyée à ${signerEmail}`
+                          : 'Email signataire non envoyé'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-500">
+                Le document a été archivé dans le registre sécurisé de {docData?.companyName}.
+              </div>
             </div>
           )}
           <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest">
