@@ -101,6 +101,7 @@ import SyndicTransparencyDashboard from "./components/SyndicTransparencyDashboar
 import SyndicAiReporter from "./components/SyndicAiReporter";
 import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
+import PublicSignaturePage from "./components/PublicSignaturePage";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
@@ -656,6 +657,12 @@ const PolitiqueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 };
 
 const App = () => {
+  // ── Public Signature Page detection (no auth required) ──
+  const signToken = new URLSearchParams(window.location.search).get('sign');
+  if (signToken) {
+    return <PublicSignaturePage token={signToken} />;
+  }
+
   // --- ADMIN PROFILE STATE ---
   const [adminName, setAdminName] = useState(() => localStorage.getItem("autocompt_admin_name") || "Fabiola Beatriz");
   const [adminRole, setAdminRole] = useState(() => localStorage.getItem("autocompt_admin_role") || "Administratrice");

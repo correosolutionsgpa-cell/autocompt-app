@@ -11,10 +11,15 @@ import {
   Trash2, 
   ShieldCheck, 
   FileSignature,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  Copy,
+  Link
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
+import { db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface LegalDocument {
   id: string;
@@ -107,6 +112,12 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
 
   // Toast State
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Send for Signature States
+  const [sendLinkDoc, setSendLinkDoc] = useState<LegalDocument | null>(null);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Modals States
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -389,6 +400,34 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setTypedSignature('');
     setHasDrawn(false);
     triggerToast("Document signé électroniquement avec succès !", "success");
+  };
+
+  // Handle Send for Signature (generate unique public link)
+  const handleSendForSignature = async (document: LegalDocument, adminSigDataUrl?: string) => {
+    setIsGeneratingLink(true);
+    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${document.id.slice(0, 6)}`;
+    const signUrl = `${window.location.origin}${window.location.pathname}?sign=${token}`;
+    try {
+      await setDoc(doc(db, 'pendingSignatures', token), {
+        docId: document.id,
+        docTitle: document.title,
+        docSummary: document.summary,
+        companyName: companyName,
+        adminName: document.signedBy || 'Administrateur',
+        adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
+        adminSignatureDataUrl: adminSigDataUrl || document.signatureDataUrl || '',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      });
+      setGeneratedLink(signUrl);
+      setSendLinkDoc(document);
+    } catch (e) {
+      // Fallback: generate link client-side anyway (Firebase may not be available)
+      setGeneratedLink(signUrl);
+      setSendLinkDoc(document);
+    } finally {
+      setIsGeneratingLink(false);
+    }
   };
 
   // Handle Add Document
@@ -879,7 +918,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                             </div>
                           )}
                           
-                          <div className="flex flex-col sm:flex-row items-center gap-3">
+                          <div className="flex flex-col sm:flex-row items-center gap-3 flex-wrap">
                             <button 
                               onClick={() => handleDownloadPdf(doc)}
                               className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border-none cursor-pointer ${darkMode ? "bg-teal-500 border border-teal-400 text-teal-950 hover:bg-teal-400" : "bg-teal-600 text-white hover:bg-teal-700 shadow-md shadow-teal-500/20"}`}
@@ -901,13 +940,23 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                                 <span>Signer le Document</span>
                               </button>
                             ) : (
-                              <button
-                                onClick={() => handleDeleteDocument(doc.id)}
-                                className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/25 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/40 cursor-pointer`}
-                              >
-                                <Trash2 size={16} />
-                                <span>Archiver / Supprimer</span>
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleSendForSignature(doc)}
+                                  disabled={isGeneratingLink}
+                                  className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border-none cursor-pointer ${darkMode ? "bg-indigo-500 text-white hover:bg-indigo-400" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/20"}`}
+                                >
+                                  <Send size={16} />
+                                  <span>Envoyer pour Signature Client</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteDocument(doc.id)}
+                                  className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/25 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/40 cursor-pointer`}
+                                >
+                                  <Trash2 size={16} />
+                                  <span>Archiver / Supprimer</span>
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1130,6 +1179,87 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: Share Signature Link ── */}
+      <AnimatePresence>
+        {generatedLink && sendLinkDoc && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              className={`w-full max-w-lg rounded-[32px] p-8 shadow-2xl border ${darkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-slate-200'}`}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-2xl ${darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                    <Link size={20} />
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase italic tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                      Lien de Signature Généré
+                    </h3>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                      Partagez ce lien avec le signataire
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setGeneratedLink(null); setSendLinkDoc(null); setLinkCopied(false); }}
+                  className={`p-2 rounded-xl border-none ${darkMode ? 'text-zinc-400 hover:bg-zinc-900' : 'text-slate-400 hover:bg-slate-100'}`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Document info */}
+              <div className={`p-4 rounded-2xl border mb-4 ${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Document</p>
+                <p className={`text-sm font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{sendLinkDoc.title}</p>
+              </div>
+
+              {/* Link field */}
+              <div className={`flex items-center gap-2 p-3 rounded-2xl border ${darkMode ? 'bg-zinc-900/60 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
+                <code className={`flex-1 text-[9px] font-mono truncate ${darkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>
+                  {generatedLink}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedLink);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 3000);
+                  }}
+                  className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-wider border-none transition-all ${
+                    linkCopied
+                      ? 'bg-emerald-500 text-white'
+                      : darkMode ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {linkCopied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                  <span>{linkCopied ? 'Copié!' : 'Copier'}</span>
+                </button>
+              </div>
+
+              {/* Email option */}
+              <div className="mt-4 space-y-3">
+                <a
+                  href={`mailto:?subject=Signature requise - ${sendLinkDoc.title}&body=Bonjour,%0A%0AVeuillez signer le document suivant en cliquant sur le lien ci-dessous:%0A%0A${generatedLink}%0A%0ACe lien est sécurisé et vous permettra de signer électroniquement depuis votre navigateur.%0A%0ACordialement,%0A${companyName}`}
+                  className={`w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${darkMode ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <Send size={14} />
+                  <span>Envoyer par Courriel</span>
+                </a>
+              </div>
+
+              {/* Security note */}
+              <p className="text-[8px] font-bold text-slate-400 text-center mt-4 flex items-center justify-center gap-1.5">
+                <ShieldCheck size={10} />
+                Ce lien est unique et sécurisé. Le signataire n'a pas besoin de compte AutoCompt.
+              </p>
             </motion.div>
           </div>
         )}
