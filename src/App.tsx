@@ -103,6 +103,8 @@ import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
+import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
+import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
@@ -1104,7 +1106,7 @@ const App = () => {
         "cotisations", "contrats", "transparence", "loi16", "muro", "settings",
         "rapport-ia",
         // Other app views
-        "plex", "incident", "taxes_assurances", "accepter-invitation",
+        "plex", "meuble", "incident", "taxes_assurances", "accepter-invitation",
         "preview-email", "setup", "login", "welcome", "benefits",
         "level_selection", "rental_model", "pricing", "portal"
       ];
@@ -1548,6 +1550,7 @@ const App = () => {
 
     const plexNavItems = [
       { id: "plex", label: "Gestion Immobilière", icon: <Building2 size={18} /> },
+      { id: "meuble", label: "Meublé / Airbnb", icon: <Home size={18} /> },
       { id: "dossiers", label: "Dossiers Fiscaux", icon: <FolderOpen size={18} /> },
       { id: "taxes_assurances", label: "Taxes & Assurances", icon: <ShieldAlert size={18} /> },
       { id: "banque", label: "Conciliation", icon: <Wallet size={18} /> },
@@ -17708,6 +17711,47 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </button>
           }
         />
+      </div>
+    );
+  }
+
+  if (vista === "meuble") {
+    return (
+      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
+        <WorkspaceSidebar />
+        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center gap-3 shadow-sm sticky top-0 z-50`}
+          style={{ borderTop: '3px solid #f43f5e' }}>
+          <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}>
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+              <span>AutoCompt</span><span>/</span>
+              <span className="text-rose-500 font-bold">Meublé · Airbnb</span>
+            </div>
+            <h1 className="font-black uppercase italic tracking-tighter text-base mt-0.5">Location Meublée & Courte Durée</h1>
+          </div>
+          <div className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl border ${darkMode ? "bg-rose-500/10 border-rose-500/20 text-rose-400" : "bg-rose-50 border-rose-200 text-rose-600"}`}>
+            <span className="text-[9px] font-black uppercase tracking-widest">🏡 Airbnb · Location Directe</span>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-6 space-y-6">
+          {/* Drive settings for this company */}
+          <WorkspaceDriveSettings
+            companyId={activeCompanyId || 'default'}
+            companyName={currentCompany?.nombre || companyName}
+            companyEmail={currentUserEmail || ''}
+            darkMode={darkMode}
+          />
+
+          <MeubleFinancialModule
+            darkMode={darkMode}
+            companyId={activeCompanyId || 'default'}
+            companyName={currentCompany?.nombre || companyName}
+            unitName={currentCompany?.nombre || 'Mon Logement Meublé'}
+          />
+        </main>
       </div>
     );
   }
