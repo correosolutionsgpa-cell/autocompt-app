@@ -60,6 +60,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     } = await parseBody(req);
 
     const resendApiKey = process.env.RESEND_API_KEY;
+    // Canonical app URL — used in email links and footers
+    const appUrl = process.env.VITE_APP_URL || 'https://autocompt.ca';
 
     // ─── Resend "from" domain — deliverability notes ──────────────────────────
     // onboarding@resend.dev = Resend's shared sandbox domain. Works for Gmail &
@@ -126,7 +128,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
             <p style="color:#9ca3af;font-size:11px;margin:0;line-height:1.6">
               Document numérique certifié · DocuLegal by AutoCompt Canada<br>
-              <a href="https://autocompt-app.vercel.app" style="color:#059669;text-decoration:none;font-weight:600">autocompt-app.vercel.app</a>
+              <a href="${appUrl}" style="color:#059669;text-decoration:none;font-weight:600">${appUrl.replace('https://', '')}</a>
             </p>
           </div>
         </div>

@@ -435,7 +435,16 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
         .replace(/=+$/, '');
     } catch {}
 
-    const signUrl = `${window.location.origin}${window.location.pathname}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
+    // ── Canonical URL resolution ─────────────────────────────────────────────
+    // Priority: VITE_APP_URL env var → autocompt.ca (production) → localhost (dev)
+    // This ensures signing links always point to the correct domain even if the
+    // admin panel is opened from the old *.vercel.app URL during a transition.
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const appBase = (import.meta.env.VITE_APP_URL as string | undefined)
+      || (isLocalhost ? window.location.origin : 'https://autocompt.ca');
+
+    const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
+
 
     // Persist full payload (including signature image) to Firestore for audit trail
     try {
