@@ -71,11 +71,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // FIX FOR PRODUCTION (required before Beta launch to Hotmail/Outlook users):
     //   1. Buy or use existing domain: e.g. autocompt.ca
     //   2. In Resend dashboard → Domains → Add domain → add SPF/DKIM/DMARC DNS records
-    //   3. Set Vercel env var: RESEND_FROM_EMAIL=DocuLegal <noreply@autocompt.ca>
+    //   3. Set Vercel env var: RESEND_FROM_EMAIL=DocuLegal <doculegal@autocompt.ca>
     //
     // Until then: emails to Gmail ✅ | Hotmail/Outlook ⚠️ (likely blocked)
     // ─────────────────────────────────────────────────────────────────────────
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'DocuLegal AutoCompt <onboarding@resend.dev>';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'DocuLegal AutoCompt <doculegal@autocompt.ca>';
+    const replyToEmail = 'info@autocompt.ca'; // Central inbox — all replies land here
     const results: Record<string, any> = { emailAdmin: false, emailClient: false, driveUpload: false };
 
 
@@ -155,6 +156,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             body: JSON.stringify({
               from: fromEmail,
               to: [adminEmail],
+              reply_to: replyToEmail,          // Replies land in central info@ inbox
               subject: `✅ Signé: ${docTitle} — ${clientName}`,
               html: emailHtml('admin'),
               attachments: [attachment],
@@ -186,7 +188,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             body: JSON.stringify({
               from: fromEmail,
               to: [clientEmail],
-              reply_to: adminEmail || undefined,
+              reply_to: replyToEmail,          // Client replies go to info@ central inbox
               subject: `📄 Votre copie signée: ${docTitle}`,
               html: emailHtml('client'),
               attachments: [attachment],

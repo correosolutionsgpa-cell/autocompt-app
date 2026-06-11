@@ -1074,7 +1074,8 @@ const App = () => {
     currentUserEmail ? (
       ["correo.solutionsgpa@gmail.com", "solutionsgpa@gmail.com"].includes(currentUserEmail.toLowerCase().trim()) ||
       currentUserEmail.toLowerCase().trim().startsWith("fabiola") ||
-      currentUserEmail.toLowerCase().trim().includes("solutionsgpa")
+      currentUserEmail.toLowerCase().trim().includes("solutionsgpa") ||
+      currentUserEmail.toLowerCase().trim().endsWith("@autocompt.ca")  // ← toutes les adresses @autocompt.ca
     ) : false;
 
   const visibleEmpresas = isSuperAdmin
@@ -1092,7 +1093,8 @@ const App = () => {
       email === "correo.solutionsgpa@gmail.com" ||
       email === "solutionsgpa@gmail.com" ||
       email?.startsWith("fabiola") ||
-      email?.includes("solutionsgpa")
+      email?.includes("solutionsgpa") ||
+      email?.endsWith("@autocompt.ca")           // ← info@, fabiola@, doculegal@autocompt.ca
     ) {
       // Allow testing of onboarding by skipping force if requested
       if (localStorage.getItem("superadmin_test_onboarding") === "true") {
@@ -1199,7 +1201,8 @@ const App = () => {
         email === "correo.solutionsgpa@gmail.com" ||
         email === "solutionsgpa@gmail.com" ||
         email.startsWith("fabiola") ||
-        email.includes("solutionsgpa")
+        email.includes("solutionsgpa") ||
+        email.endsWith("@autocompt.ca")           // ← info@, fabiola@, doculegal@autocompt.ca
       ) {
         return "superadmin";
       }
@@ -1236,6 +1239,7 @@ const App = () => {
       adminEmail === "solutionsgpa@gmail.com" ||
       adminEmail.startsWith("fabiola") ||
       adminEmail.includes("solutionsgpa") ||
+      adminEmail.endsWith("@autocompt.ca") ||     // ← info@, fabiola@, doculegal@autocompt.ca
       activeCompanyId === "1"
     ) {
       return false; // SuperAdmin bypass
@@ -8785,7 +8789,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     type="email"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="Ex: correo.solutionsgpa@gmail.com"
+                    placeholder="Ex: info@autocompt.ca"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleLoginSubmit(loginEmail);
                     }}
@@ -8812,20 +8816,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 Simulation d'accès rapide
               </h4>
               <div className="grid grid-cols-1 gap-2.5">
-                <button
+                  <button
                   type="button"
                   onClick={() => {
-                    setLoginEmail("correo.solutionsgpa@gmail.com");
-                    handleLoginSubmit("correo.solutionsgpa@gmail.com");
+                    setLoginEmail("info@autocompt.ca");
+                    handleLoginSubmit("info@autocompt.ca");
                   }}
                   className="p-3 text-left rounded-xl border text-[8.5px] font-bold flex items-center justify-between transition-all cursor-pointer bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 hover:shadow-sm"
                 >
                   <div>
                     <span className="block text-[8px] font-black uppercase text-emerald-600">
-                      Solutions GPA
+                      AutoCompt — Admin Principal
                     </span>
                     <span className="text-[7.5px] text-slate-500">
-                      correo.solutionsgpa@gmail.com
+                      info@autocompt.ca
                     </span>
                   </div>
                   <span className="text-[7.5px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full">
