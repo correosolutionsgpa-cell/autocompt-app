@@ -2446,6 +2446,18 @@ const App = () => {
   const [docFormContent, setDocFormContent] = useState("");
   // Quick-fill values for PA (Promesse d'Achat) variable fields
   const [paQuickFillValues, setPaQuickFillValues] = useState<Record<string, string>>({});
+  const [paPropType, setPaPropType] = useState<string>('Maison unifamiliale');
+  const [paConditions, setPaConditions] = useState<Record<string, boolean>>({
+    COND_SANS_GARANTIE:     false,
+    COND_VISITE:            true,
+    COND_INSPECTION:        true,
+    COND_DILIGENCE_MUNIC:   true,
+    COND_VISITE_LOGEMENTS:  false,
+    COND_DOCS_COPROPRIETE:  false,
+    COND_ANNULATION:        true,
+    COND_CERT_LOCALISATION: true,
+  });
+  const [paQfTab, setPaQfTab] = useState<'type'|'champs'|'conditions'|null>('type');
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
@@ -11157,88 +11169,113 @@ Ceci est un message automatisé généré par AutoCompt.`;
           "PROMESSE D'ACHAT D'IMMEUBLE",
           "",
           "Par",
-          "9559-0766 Québec inc, personne morale légalement constituée ayant son siège social au 1210 rue Maurice Cullen, Blainville, QC J7C 0C1, ici représentée par Natalia Ortelli et Fabiola Villegas, ses présidentes, dûment autorisées à l'effet des présentes comme elles le déclarent.",
+          "9559-0766 Québec inc, personne morale légalement constituée ayant son siège social au 1210 rue Maurice Cullen, Blainville, QC J7C 0C1, ici représentée par {{ACHETEUR_1_NOM}} et {{ACHETEUR_2_NOM}}, ses présidentes, dûment autorisées à l'effet des présentes comme elles le déclarent.",
           "",
           "ou tout cessionnaire, nommé ici : {{CESSIONNAIRE}}",
           "",
           "Ci-après désigné « l'ACHETEUR »",
-          "",
           "À",
           "",
-          "{{VENDEUR_NOM}}",
-          "{{VENDEUR_ADRESSE}}",
+          "Vendeur 1 : {{VENDEUR_1_NOM}}{{#IF_VENDEUR_2}}   Vendeur 2 : {{VENDEUR_2_NOM}}{{/IF_VENDEUR_2}}",
           "",
           "Ci-après désigné « le VENDEUR »",
+          "",
           "",
           "1. OBJET",
           "L'ACHETEUR offre par la présente d'acheter l'immeuble situé au {{ADRESSE_IMMEUBLE}} désigné au cadastre du Québec sous le lot numéro {{CADASTRE_LOT}}",
           "",
-          "2. PRIX ET MODALITÉS DE PAIEMENT",
-          "En considération d'un montant de : {{PRIX_TOTAL}}",
-          "MODALITÉS DE PAIEMENT : L'ACHETEUR s'engage à verser la totalité du prix d'achat selon les modalités suivantes :",
+          "2. TYPE DE PROPRIÉTÉ",
+          "{{PROP_TYPE}}",
           "",
-          "{{MODALITES_PAIEMENT}}",
+          "3. PRIX ET MODALITÉS DE PAIEMENT",
+          "Prix d'achat : {{PRIX_TOTAL}}",
+          "• Mise de fonds : {{MISE_DE_FONDS}}",
+          "• Financement hypothécaire : {{FINANCEMENT_MONTANT}}",
           "",
-          "MISE DE FONDS : {{MISE_DE_FONDS}}",
-          "",
-          "FINANCEMENT :",
           "L'ACHETEUR versera au VENDEUR le prix d'achat mentionné ci-dessus, payable lors de la signature de l'acte de vente devant le notaire de l'ACHETEUR. Le débours sera effectué lorsque l'acte de vente donnant effet à la présente transaction (« Acte de Vente ») sera publié au registre foncier, sans inscription préjudiciable.",
           "",
-          "3. PÉRIODE DE VÉRIFICATION DE L'ACHETEUR",
-          "L'ACHETEUR se réserve le droit de visiter la propriété en tout temps après l'acceptation de l'offre.",
+          "4. INCLUSIONS",
+          "{{INCLUSIONS}}",
           "",
-          "4. CLÔTURE",
-          "Le VENDEUR demeurera propriétaire de l'immeuble jusqu'à la signature de l'Acte de Vente. L'Acte de Vente devra être signé au plus tard le {{DATE_ACTE_VENTE}}",
+          "5. CONDITION DE FINANCEMENT",
+          "La présente offre est conditionnelle à ce que l'ACHETEUR obtienne, auprès d'un créancier hypothécaire reconnu, un financement répondant aux conditions minimales suivantes :",
+          "Montant du prêt : {{FINANCEMENT_MONTANT}}",
+          "Rang hypothécaire : hypothèque de 1er rang",
           "",
-          "5. CONDITIONS",
-          "[ ] Conditionnel à visite à l'entière satisfaction de l'ACHETEUR avant et après la signature de la promesse d'achat.",
-          "[ ] Conditionnel à l'inspection effectuée au plus tard 15 jours avant la signature de (\"L'acte de vente\").",
-          "[ ] Conditionnel à une vérification diligente que l'ACHETEUR devra faire auprès des autorités municipales ainsi que de tous les permis pertinents, afin de s'assurer que l'immeuble est conforme et à la totale satisfaction de l'ACHETEUR. Le VENDEUR s'engage à signer une procuration au nom de l'ACHETEUR afin que celui-ci soit en mesure d'effectuer ladite vérification.",
-          "[ ] Conditionnel à la vérification diligente des documents nécessaires, à l'entière satisfaction de l'ACHETEUR.",
+          "L'ACHETEUR devra fournir au VENDEUR, dans les 15 jours avant la date de l'acte notarié, une preuve écrite d'approbation de financement conforme aux conditions ci-dessus.",
           "",
+          "6. PÉRIODE DE VÉRIFICATION DE L'ACHETEUR",
+          "L'ACHETEUR se réserve le droit de visiter la propriété après l'acceptation de la présente offre d'achat.",
+          "",
+          "7. CLÔTURE",
+          "Le VENDEUR continuera de posséder la propriété jusqu'à la date d'exécution de l'Acte de Vente. L'Acte de Vente devra être signé le ou avant le {{DATE_ACTE_VENTE}}.",
+          "",
+          "8. CONDITIONS",
+          "{{#IF_COND_SANS_GARANTIE}}",
+          "L'ACHETEUR reconnaît que l'immeuble est vendu sans garantie légale, aux risques et périls de l'ACHETEUR. L'ACHETEUR accepte d'acheter l'immeuble dans son état actuel, sans aucun recours contre le VENDEUR.",
+          "{{/IF_COND_SANS_GARANTIE}}",
+          "{{#IF_COND_VISITE}}",
+          "Conditionnel à 2 visites à l'entière satisfaction de l'ACHETEUR après la signature de la promesse d'achat.",
+          "{{/IF_COND_VISITE}}",
+          "{{#IF_COND_INSPECTION}}",
+          "Conditionnel à l'inspection effectuée au plus tard 15 jours avant la signature de (L'acte de vente).",
+          "{{/IF_COND_INSPECTION}}",
+          "{{#IF_COND_DILIGENCE_MUNIC}}",
+          "Conditionnel à une vérification diligente que l'ACHETEUR devra faire auprès des autorités municipales ainsi que de tous les permis pertinents, afin de s'assurer que l'immeuble est conforme et à la totale satisfaction de l'ACHETEUR. Le VENDEUR s'engage à signer une procuration au nom de l'ACHETEUR afin que celui-ci soit en mesure d'effectuer ladite vérification.",
+          "{{/IF_COND_DILIGENCE_MUNIC}}",
+          "{{#IF_COND_VISITE_LOGEMENTS}}",
+          "Conditionnel à ce que l'ACHETEUR puisse visiter les logements de l'immeuble et vérifier les baux présentement en vigueur ainsi que les dépenses de l'immeuble. Le VENDEUR devra, dans les sept (7) jours consécutifs suivant l'acceptation de la présente offre d'achat, permettre à l'ACHETEUR de visiter les logements de l'immeuble, et lui remettre une copie des baux, de tous les avis de modification de ces baux s'il y a lieu, des états financiers ainsi qu'une liste de dépenses de l'immeuble. Si l'ACHETEUR n'est pas entièrement satisfait de la visite des logements et/ou de la vérification des documents et qu'il veut annuler la présente offre d'achat pour cette raison, il devra en aviser le VENDEUR par écrit dans les sept (7) jours suivant la date de la 2e visite. La présente offre d'achat deviendra nulle et non avenue à compter de la réception de cet avis par le VENDEUR. À défaut d'aviser le VENDEUR par écrit dans le délai prévu, l'ACHETEUR sera réputé avoir renoncé à la présente condition.",
+          "{{/IF_COND_VISITE_LOGEMENTS}}",
+          "{{#IF_COND_DOCS_COPROPRIETE}}",
+          "Conditionnel à la vérification de la documentation de copropriété : La présente offre est conditionnelle à ce que l'ACHETEUR reçoive et soit entièrement satisfait, à son entière discrétion, des documents suivants : déclaration de copropriété, règlement de l'immeuble, procès-verbaux des assemblées des copropriétaires des 2 dernières années, état des comptes de frais communs, et état du fonds de prévoyance. Le VENDEUR s'engage à fournir ces documents dans un délai de 5 jours suivant l'acceptation de la présente offre.",
+          "{{/IF_COND_DOCS_COPROPRIETE}}",
+          "{{#IF_COND_ANNULATION}}",
           "Dans l'éventualité où cette vérification ne serait pas jugée satisfaisante par l'ACHETEUR, à son entière discrétion, la présente promesse d'achat sera annulée sans aucune pénalité pour l'ACHETEUR.",
+          "{{/IF_COND_ANNULATION}}",
+          "{{#IF_COND_CERT_LOCALISATION}}",
+          "Le vendeur, en tant que propriétaire de l'immeuble, s'engage à obtenir un certificat de localisation valide avant la date de signature de l'acte de vente. Si le certificat de localisation n'est pas disponible au moment de la signature de l'acte, le VENDEUR assumera les frais d'une assurance titre afin de remplacer le certificat de localisation.",
+          "{{/IF_COND_CERT_LOCALISATION}}",
           "",
-          "[ ] Un montant de {{RETENUE_MONTANT}} sera retenu chez le notaire jusqu'à ce que la propriété soit entièrement libérée de tous les biens personnels du VENDEUR, y compris tout objet désuet, encombrant ou destiné à être jeté, et que les lieux soient laissés dans un état propre et dégagé.",
-          "",
-          "La propriété devra être remise dans le même état que lors de la visite de l'ACHETEUR, sous réserve de l'usure normale. Aucun élément fixé, attaché ou inclus dans la vente — tels que les portes, luminaires, robinets, accessoires de plomberie, ne pourra être retiré, remplacé ou modifié sans l'accord écrit de l'ACHETEUR.",
-          "",
-          "La retenue de fonds sera libérée uniquement après vérification complète de l'état des lieux 3 jours avant la signature chez le notaire, à la satisfaction de l'ACHETEUR.",
-          "",
-          "L'ACHETEUR s'engage à obtenir le certificat de localisation avant la date de signature de l'acte de vente. Si le certificat de localisation n'est pas livré au moment de l'acte de vente, le vendeur s'engage à commander une assurance titre à ces frais.",
-          "",
-          "6. DÉLAIS D'ACCEPTATION",
+          "9. DÉLAIS D'ACCEPTATION",
           "La présente promesse d'achat demeure valide jusqu'au {{DATE_VALIDITE}}. L'acceptation du VENDEUR devra être reçue par l'ACHETEUR avant cette heure et cette date, faute de quoi la promesse sera résolue de plein droit.",
           "",
-          "7. COMMISSION DU COURTIER",
-          "Les parties déclarent ne pas avoir eu recours à un courtier pour convenir de la présente transaction, aucune somme à ce titre n'étant payable par les parties.",
+          "10. COMMISSION DU COURTIER",
+          "Les parties déclarent ne pas avoir eu recours à un courtier pour convenir de la présente transaction, aucune somme à ce titre n'étant payable par le VENDEUR.",
           "",
-          "8. HÉRITIERS ET AYANTS-DROITS",
+          "11. HÉRITIER ET AYANTS-DROITS",
           "La présente promesse d'achat liera les héritiers et ayants-droits de chacune des parties.",
           "",
-          "9. EXCLUSION DE GARANTIE LÉGALE",
-          "Cette vente est effectuée sans garantie légale de qualité, aux risques et périls de l'acheteur.",
-          "",
-          "10. SIGNATURES ET ACCEPTATION PAR LES PARTIES",
+          "12. SIGNATURES ET ACCEPTATION PAR LES PARTIES",
           "L'ACHETEUR reconnaît avoir lu et compris cette promesse d'achat et en avoir reçu une copie.",
           "",
           "Signé à {{LIEU_ACHETEUR}}, le {{DATE_SIGNATURE_ACHETEUR}}",
           "",
           "Signature de L'ACHETEUR",
-          "____________________________",
-          "9559-0766 Québec inc. représenté par Natalia Ortelli ou tout cessionnaire.",
           "",
           "____________________________",
-          "9559-0766 Québec inc. représenté par Fabiola Villegas ou tout cessionnaire.",
+          "9559-0766 Québec inc. représenté par {{ACHETEUR_1_NOM}} ou tout cessionnaire.",
+          "",
+          "____________________________",
+          "9559-0766 Québec inc. représenté par {{ACHETEUR_2_NOM}} ou tout cessionnaire.",
           "",
           "LE VENDEUR ACCEPTE la présente promesse d'achat et promet de vendre l'immeuble qui y est décrit au prix et conditions mentionnées ci-haut.",
           "LE VENDEUR reconnaît avoir lu et compris cette promesse d'achat et en avoir reçu une copie.",
           "",
           "Signé à {{LIEU_VENDEUR}}, le {{DATE_SIGNATURE_VENDEUR}}",
+          "(Lieu)                       (Date)",
           "",
-          "Signature du VENDEUR",
-          "________________________________________________________",
+          "Signature du VENDEUR 1",
+          "Signature: ________________________________________",
+          "Nom: {{VENDEUR_1_NOM}}",
+          "{{#IF_VENDEUR_2}}",
+          "",
+          "Signature du VENDEUR 2",
+          "Signature: _________________________________________",
+          "Nom: {{VENDEUR_2_NOM}}",
+          "{{/IF_VENDEUR_2}}",
         ].join("\n");
       }
+
       if (lower.includes("contrat") || lower.includes("gestion")) {
         return `CONTRAT DE SERVICES DE GESTION IMMOBILIÈRE\n\nMandat conféré à:\n${currentCompany?.nombre || "Solutions GPA Inc."}, ci-après le gestionnaire,\nPar:\n[Propriétaire de l'immeuble], ci-après le commettant.\n\nLe gestionnaire administre, loue et perçoit les loyers, gère l'entretien courant et coordonne les sous-traitants pour un taux d'honoraires préétabli de 5% du revenu locatif total.\n\nLiaison BYOS compatible Loi 25 active.`;
       }
@@ -12325,66 +12362,230 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         </div>
                       </div>
 
-                      {/* Quick Fill panel - appears for PA folders OR when PA template is loaded */}
-                      {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
-                        <div className={`p-5 rounded-[24px] border ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/50 border-violet-200/70'}`}>
-                          <div className="flex items-start justify-between mb-4 gap-3">
+                                            {/* ── Quick Fill PA V2 — Accordéon 3 sections ── */}
+                      {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
+                        <div className={`rounded-[24px] border overflow-hidden ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/60 border-violet-200/80'}`}>
+
+                          {/* ── Header + Bouton Appliquer ── */}
+                          <div className="flex items-center justify-between px-5 py-4 gap-3">
                             <div>
-                              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">⚡ Remplissage Rapide — Champs PA</p>
-                              <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5">Remplissez les champs et cliquez « Appliquer » pour compléter le modèle</p>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">⚡ Remplissage Rapide — PA Dynamique</p>
+                              <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5 leading-relaxed">Type · Champs · Conditions → Cliquez Appliquer pour générer le contrat</p>
                             </div>
                             <button
                               type="button"
                               onClick={() => {
-                                let content = docFormContent;
-                                Object.entries(paQuickFillValues).forEach(([key, val]) => {
-                                  if (val.trim()) content = content.split('{{' + key + '}}').join(val.trim());
+                                const defaults: Record<string, string> = {
+                                  ACHETEUR_1_NOM: 'Natalia Ortelli',
+                                  ACHETEUR_2_NOM: 'Fabiola Villegas',
+                                };
+                                const allValues: Record<string, string> = { ...defaults, ...paQuickFillValues };
+
+                                // Start from the loaded template (if PA markers present) or load fresh
+                                const hasV2Markers = docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}');
+                                const baseTemplate = hasV2Markers ? docFormContent : loadDefaultTemplate(docFormFolder);
+
+                                let result = baseTemplate;
+
+                                // 1. Process conditional blocks {{#IF_KEY}}...{{/IF_KEY}}
+                                const condMap: Record<string, boolean> = {
+                                  ...paConditions,
+                                  VENDEUR_2: !!(allValues['VENDEUR_2_NOM']?.trim()),
+                                };
+                                result = result.replace(/\{\{#IF_(\w+)\}\}([\s\S]*?)\{\{\/IF_\1\}\}/g,
+                                  (_match: string, condKey: string, blockContent: string) =>
+                                    condMap[condKey] ? blockContent.trim() : ''
+                                );
+
+                                // 2. Replace {{VARIABLE}} tokens
+                                Object.entries(allValues).forEach(([k, v]) => {
+                                  if (v?.trim()) result = result.split(`{{${k}}}`).join(v.trim());
                                 });
-                                setDocFormContent(content);
-                                setPaQuickFillValues({});
+
+                                // 3. Replace {{PROP_TYPE}}
+                                result = result.split('{{PROP_TYPE}}').join(paPropType);
+
+                                // 4. Clean up excess blank lines (max 2 consecutive)
+                                result = result.replace(/\n{3,}/g, '\n\n');
+
+                                setDocFormContent(result);
                               }}
-                              className="flex-shrink-0 px-4 py-2.5 bg-[#7c3aed] hover:bg-violet-700 active:scale-95 text-white rounded-xl text-[8px] font-black uppercase tracking-wider transition-all"
-                            >Appliquer</button>
+                              className="flex-shrink-0 px-4 py-2.5 bg-[#7c3aed] hover:bg-violet-700 active:scale-95 text-white rounded-xl text-[8px] font-black uppercase tracking-wider transition-all shadow-md shadow-violet-500/20"
+                            >
+                              ✓ Appliquer
+                            </button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {([
-                              { key: 'VENDEUR_NOM',             label: 'Nom du VENDEUR',          ph: 'Ex: Jean Dupont' },
-                              { key: 'VENDEUR_ADRESSE',         label: 'Adresse VENDEUR',           ph: 'Ex: 789 rue Erables, Laval, QC' },
-                              { key: 'ADRESSE_IMMEUBLE',        label: "Adresse de l'immeuble",    ph: 'Ex: 456 av. des Pins, Laval, QC' },
-                              { key: 'CADASTRE_LOT',            label: 'No lot cadastre QC',       ph: 'Ex: 1234567' },
-                              { key: 'PRIX_TOTAL',              label: "Prix d'achat total",       ph: 'Ex: 450 000 $' },
-                              { key: 'MISE_DE_FONDS',           label: 'Mise de fonds',            ph: 'Ex: 45 000 $' },
-                              { key: 'MODALITES_PAIEMENT',      label: 'Modalites paiement',       ph: 'Ex: Financement Desjardins' },
-                              { key: 'DATE_ACTE_VENTE',         label: 'Date acte de vente',       ph: 'Ex: 15 septembre 2026' },
-                              { key: 'RETENUE_MONTANT',         label: 'Retenue notaire (opt.)',   ph: 'Laisser vide si N/A' },
-                              { key: 'DATE_VALIDITE',           label: "Offre valide jusqu'au",    ph: 'Ex: 20 juin 2026' },
-                              { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR', ph: 'Ex: Blainville, QC' },
-                              { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date sign. ACHETEUR',     ph: 'Ex: 15 juin 2026' },
-                              { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR',  ph: 'Ex: Montreal, QC' },
-                              { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date sign. VENDEUR',      ph: 'Ex: 16 juin 2026' },
-                              { key: 'CESSIONNAIRE',            label: 'Cessionnaire (opt.)',      ph: 'Laisser vide si N/A' },
-                            ] as {key:string;label:string;ph:string}[]).map(({ key, label, ph }) => (
-                              <div key={key}>
-                                <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
-                                <input
-                                  type="text"
-                                  value={paQuickFillValues[key] || ''}
-                                  onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
-                                  placeholder={ph}
-                                  className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
-                                />
+
+                          {/* ── Accordéon 1 : Type de propriété ── */}
+                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                            <button
+                              type="button"
+                              onClick={() => setPaQfTab(paQfTab === 'type' ? null : 'type')}
+                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🏠</span>
+                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Type de propriété</span>
+                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>{paPropType}</span>
                               </div>
-                            ))}
+                              <span className="text-slate-400 text-[10px]">{paQfTab === 'type' ? '▲' : '▼'}</span>
+                            </button>
+                            {paQfTab === 'type' && (
+                              <div className="px-5 pb-5">
+                                <div className="flex flex-wrap gap-2">
+                                  {(['Maison unifamiliale', 'Condominium', 'Chalet', 'Plex', 'Terrain'] as const).map(type => (
+                                    <button
+                                      key={type}
+                                      type="button"
+                                      onClick={() => {
+                                        setPaPropType(type);
+                                        setPaConditions(prev => ({
+                                          ...prev,
+                                          COND_VISITE_LOGEMENTS: type === 'Plex',
+                                          COND_DOCS_COPROPRIETE: type === 'Condominium',
+                                        }));
+                                      }}
+                                      className={`px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wide transition-all ${
+                                        paPropType === type
+                                          ? 'bg-[#7c3aed] text-white shadow-md shadow-violet-500/30'
+                                          : darkMode
+                                            ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                                            : 'bg-white text-slate-600 border border-slate-200 hover:border-violet-400 hover:text-violet-600'
+                                      }`}
+                                    >{type}</button>
+                                  ))}
+                                </div>
+                                {paPropType === 'Plex' && (
+                                  <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Visite logements &amp; baux » activée automatiquement</p>
+                                )}
+                                {paPropType === 'Condominium' && (
+                                  <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Documentation copropriété » activée automatiquement</p>
+                                )}
+                              </div>
+                            )}
                           </div>
+
+                          {/* ── Accordéon 2 : Champs à remplir ── */}
+                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                            <button
+                              type="button"
+                              onClick={() => setPaQfTab(paQfTab === 'champs' ? null : 'champs')}
+                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">📝</span>
+                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Champs à remplir</span>
+                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>17 champs</span>
+                              </div>
+                              <span className="text-slate-400 text-[10px]">{paQfTab === 'champs' ? '▲' : '▼'}</span>
+                            </button>
+                            {paQfTab === 'champs' && (
+                              <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {([
+                                  { key: 'ACHETEUR_1_NOM',          label: 'Acheteur 1 (Nom)',           ph: 'Natalia Ortelli',             def: 'Natalia Ortelli' },
+                                  { key: 'ACHETEUR_2_NOM',          label: 'Acheteur 2 (Nom)',           ph: 'Fabiola Villegas',            def: 'Fabiola Villegas' },
+                                  { key: 'CESSIONNAIRE',            label: 'Cessionnaire (opt.)',        ph: 'Laisser vide si N/A',         def: '' },
+                                  { key: 'VENDEUR_1_NOM',           label: 'Vendeur 1 (Nom)',            ph: 'Ex : Jean Dupont',            def: '' },
+                                  { key: 'VENDEUR_2_NOM',           label: 'Vendeur 2 (opt. → masqué si vide)', ph: 'Vide = disparaît du contrat', def: '' },
+                                  { key: 'ADRESSE_IMMEUBLE',        label: "Adresse de l'immeuble",     ph: 'Ex : 456 av. des Pins, Laval', def: '' },
+                                  { key: 'CADASTRE_LOT',            label: 'No lot cadastre QC',         ph: 'Ex : 1 234 567',              def: '' },
+                                  { key: 'PRIX_TOTAL',              label: "Prix d'achat",               ph: 'Ex : 450 000 $',              def: '' },
+                                  { key: 'MISE_DE_FONDS',           label: 'Mise de fonds',              ph: 'Ex : 45 000 $',               def: '' },
+                                  { key: 'FINANCEMENT_MONTANT',     label: 'Montant prêt hypothécaire',  ph: 'Ex : 405 000 $',              def: '' },
+                                  { key: 'DATE_ACTE_VENTE',         label: 'Date acte de vente',         ph: 'Ex : 15 septembre 2026',      def: '' },
+                                  { key: 'DATE_VALIDITE',           label: "Offre valide jusqu'au",     ph: 'Ex : 20 juin 2026 à 23h59',   def: '' },
+                                  { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR',    ph: 'Ex : Blainville, QC',         def: '' },
+                                  { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date signature ACHETEUR',    ph: 'Ex : 15 juin 2026',           def: '' },
+                                  { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR',     ph: 'Ex : Montréal, QC',           def: '' },
+                                  { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date signature VENDEUR',     ph: 'Ex : 16 juin 2026',           def: '' },
+                                ] as Array<{ key: string; label: string; ph: string; def: string }>).map(({ key, label, ph, def }) => (
+                                  <div key={key}>
+                                    <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
+                                    <input
+                                      type="text"
+                                      value={paQuickFillValues[key] !== undefined ? paQuickFillValues[key] : def}
+                                      onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                      placeholder={ph}
+                                      className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                    />
+                                  </div>
+                                ))}
+                                {/* Inclusions — full-width textarea */}
+                                <div className="sm:col-span-2">
+                                  <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">Inclusions (liste libre)</label>
+                                  <textarea
+                                    rows={3}
+                                    value={paQuickFillValues['INCLUSIONS'] || ''}
+                                    onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, INCLUSIONS: e.target.value }))}
+                                    placeholder="Ex : Électroménagers, stores, éclairage extérieur, thermopompe..."
+                                    className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all resize-none ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ── Accordéon 3 : Conditions ── */}
+                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                            <button
+                              type="button"
+                              onClick={() => setPaQfTab(paQfTab === 'conditions' ? null : 'conditions')}
+                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">✅</span>
+                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Conditions actives</span>
+                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>
+                                  {Object.values(paConditions).filter(Boolean).length} / 8
+                                </span>
+                              </div>
+                              <span className="text-slate-400 text-[10px]">{paQfTab === 'conditions' ? '▲' : '▼'}</span>
+                            </button>
+                            {paQfTab === 'conditions' && (
+                              <div className="px-5 pb-5 space-y-2">
+                                {([
+                                  { key: 'COND_SANS_GARANTIE',     label: 'Sans garantie légale',                    badge: '',      desc: 'Vente aux risques et périls de l\'ACHETEUR' },
+                                  { key: 'COND_VISITE',            label: '2 visites satisfaction ACHETEUR',          badge: '',      desc: 'Après signature de la promesse' },
+                                  { key: 'COND_INSPECTION',        label: 'Inspection (15 jours avant acte)',         badge: '',      desc: 'Conditionnel à résultats satisfaisants' },
+                                  { key: 'COND_DILIGENCE_MUNIC',   label: 'Vérification diligente municipale',        badge: '',      desc: 'Permis, conformité, autorités locales' },
+                                  { key: 'COND_VISITE_LOGEMENTS',  label: 'Visite logements & remise des baux',       badge: 'Plex',  desc: 'Auto-activé si type Plex sélectionné' },
+                                  { key: 'COND_DOCS_COPROPRIETE',  label: 'Documentation de copropriété',            badge: 'Condo', desc: 'Déclaration, PV assemblées, fonds de prévoyance' },
+                                  { key: 'COND_ANNULATION',        label: 'Annulation sans pénalité',                badge: '',      desc: 'Si vérification non satisfaisante' },
+                                  { key: 'COND_CERT_LOCALISATION', label: 'Certificat de localisation',              badge: '',      desc: 'Ou assurance titre aux frais du VENDEUR' },
+                                ] as Array<{ key: string; label: string; badge: string; desc: string }>).map(({ key, label, badge, desc }) => (
+                                  <label
+                                    key={key}
+                                    className={`flex items-start gap-3 cursor-pointer p-3 rounded-2xl transition-all ${
+                                      paConditions[key]
+                                        ? (darkMode ? 'bg-violet-950/50 border border-violet-700/40' : 'bg-violet-50 border border-violet-200')
+                                        : (darkMode ? 'hover:bg-zinc-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!paConditions[key]}
+                                      onChange={(e) => setPaConditions(prev => ({ ...prev, [key]: e.target.checked }))}
+                                      className="mt-0.5 w-4 h-4 rounded accent-violet-600 cursor-pointer flex-shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-[9px] font-bold leading-tight ${paConditions[key] ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500'}`}>{label}</span>
+                                        {badge && (
+                                          <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 border border-violet-200 flex-shrink-0">{badge}</span>
+                                        )}
+                                      </div>
+                                      <p className="text-[7px] text-slate-400 mt-0.5">{desc}</p>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
                         </div>
                       )}
-                      <div>
-                        <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                          Clauses contractuelles & Corps de l'accord
-                        </label>
-                        <textarea
-                          value={docFormContent}
-                          onChange={(e) => setDocFormContent(e.target.value)}
+
+
                           rows={14}
                           disabled={selectedDocuEntry?.status === "Signé"}
                           className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-sans font-medium transition-all border resize-y leading-relaxed ${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-50 focus:border-[#7c3aed] placeholder:text-zinc-500' : 'bg-white border-slate-300 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
