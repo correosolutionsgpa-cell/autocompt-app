@@ -2444,6 +2444,8 @@ const App = () => {
   const [docFormEmail, setDocFormEmail] = useState("");
   const [docFormPhone, setDocFormPhone] = useState("");
   const [docFormContent, setDocFormContent] = useState("");
+  // Quick-fill values for PA (Promesse d'Achat) variable fields
+  const [paQuickFillValues, setPaQuickFillValues] = useState<Record<string, string>>({});
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
@@ -2663,9 +2665,11 @@ const App = () => {
             }
 
             .content {
+              font-family: 'Inter', sans-serif;
               font-size: 14px;
               color: #334155;
               white-space: pre-wrap;
+              line-height: 1.75;
               margin-top: 30px;
               padding: 24px;
               background: #f8fafc;
@@ -11149,7 +11153,91 @@ Ceci est un message automatisé généré par AutoCompt.`;
         return `CONTRAT DE BAIL COMMERCIAL & RÉSIDENTIEL\n\nEntre:\n[Nom du Propriétaire], ci-après le bailleur,\nEt:\n[Nom du Client/Locataire], ci-après le preneur.\n\nPAR LES PRÉSENTES, les parties s'entendent pour un bail mensuel d'un montant de 1,200 $ payable le 1er de chaque mois pour le logement mentionné. Le bailleur s'engage à livrer le logement en bon état d'habitabilité et de propreté. Le locataire s'engage à maintenir les lieux propres et en bon état général.\n\nFait et signé en toute bonne foi d'AutoCompt BYOS.`;
       }
       if (lower.includes("promesse") || lower.includes("achat")) {
-        return `PROMESSE D'ACHAT FERME - TRANSACTION OFF-MARKET\n\nNom de l'acheteur: [Acheteur]\nNom du vendeur: [Vendeur]\n\nPar la présente, l'acheteur offre d'acheter l'immeuble situé au Triplex de Laval pour un prix total déterminé de 450,000 $ payable à la conclusion de l'acte de vente notarié.\n\nCette offre est conditionnelle à l'inspection de l'immeuble et à l'approbation d'un financement hypothécaire adéquat dans les 14 jours.\n\nSignatures requises d'AutoCompt.`;
+        return [
+          "PROMESSE D'ACHAT D'IMMEUBLE",
+          "",
+          "Par",
+          "9559-0766 Québec inc, personne morale légalement constituée ayant son siège social au 1210 rue Maurice Cullen, Blainville, QC J7C 0C1, ici représentée par Natalia Ortelli et Fabiola Villegas, ses présidentes, dûment autorisées à l'effet des présentes comme elles le déclarent.",
+          "",
+          "ou tout cessionnaire, nommé ici : {{CESSIONNAIRE}}",
+          "",
+          "Ci-après désigné « l'ACHETEUR »",
+          "",
+          "À",
+          "",
+          "{{VENDEUR_NOM}}",
+          "{{VENDEUR_ADRESSE}}",
+          "",
+          "Ci-après désigné « le VENDEUR »",
+          "",
+          "1. OBJET",
+          "L'ACHETEUR offre par la présente d'acheter l'immeuble situé au {{ADRESSE_IMMEUBLE}} désigné au cadastre du Québec sous le lot numéro {{CADASTRE_LOT}}",
+          "",
+          "2. PRIX ET MODALITÉS DE PAIEMENT",
+          "En considération d'un montant de : {{PRIX_TOTAL}}",
+          "MODALITÉS DE PAIEMENT : L'ACHETEUR s'engage à verser la totalité du prix d'achat selon les modalités suivantes :",
+          "",
+          "{{MODALITES_PAIEMENT}}",
+          "",
+          "MISE DE FONDS : {{MISE_DE_FONDS}}",
+          "",
+          "FINANCEMENT :",
+          "L'ACHETEUR versera au VENDEUR le prix d'achat mentionné ci-dessus, payable lors de la signature de l'acte de vente devant le notaire de l'ACHETEUR. Le débours sera effectué lorsque l'acte de vente donnant effet à la présente transaction (« Acte de Vente ») sera publié au registre foncier, sans inscription préjudiciable.",
+          "",
+          "3. PÉRIODE DE VÉRIFICATION DE L'ACHETEUR",
+          "L'ACHETEUR se réserve le droit de visiter la propriété en tout temps après l'acceptation de l'offre.",
+          "",
+          "4. CLÔTURE",
+          "Le VENDEUR demeurera propriétaire de l'immeuble jusqu'à la signature de l'Acte de Vente. L'Acte de Vente devra être signé au plus tard le {{DATE_ACTE_VENTE}}",
+          "",
+          "5. CONDITIONS",
+          "[ ] Conditionnel à visite à l'entière satisfaction de l'ACHETEUR avant et après la signature de la promesse d'achat.",
+          "[ ] Conditionnel à l'inspection effectuée au plus tard 15 jours avant la signature de (\"L'acte de vente\").",
+          "[ ] Conditionnel à une vérification diligente que l'ACHETEUR devra faire auprès des autorités municipales ainsi que de tous les permis pertinents, afin de s'assurer que l'immeuble est conforme et à la totale satisfaction de l'ACHETEUR. Le VENDEUR s'engage à signer une procuration au nom de l'ACHETEUR afin que celui-ci soit en mesure d'effectuer ladite vérification.",
+          "[ ] Conditionnel à la vérification diligente des documents nécessaires, à l'entière satisfaction de l'ACHETEUR.",
+          "",
+          "Dans l'éventualité où cette vérification ne serait pas jugée satisfaisante par l'ACHETEUR, à son entière discrétion, la présente promesse d'achat sera annulée sans aucune pénalité pour l'ACHETEUR.",
+          "",
+          "[ ] Un montant de {{RETENUE_MONTANT}} sera retenu chez le notaire jusqu'à ce que la propriété soit entièrement libérée de tous les biens personnels du VENDEUR, y compris tout objet désuet, encombrant ou destiné à être jeté, et que les lieux soient laissés dans un état propre et dégagé.",
+          "",
+          "La propriété devra être remise dans le même état que lors de la visite de l'ACHETEUR, sous réserve de l'usure normale. Aucun élément fixé, attaché ou inclus dans la vente — tels que les portes, luminaires, robinets, accessoires de plomberie, ne pourra être retiré, remplacé ou modifié sans l'accord écrit de l'ACHETEUR.",
+          "",
+          "La retenue de fonds sera libérée uniquement après vérification complète de l'état des lieux 3 jours avant la signature chez le notaire, à la satisfaction de l'ACHETEUR.",
+          "",
+          "L'ACHETEUR s'engage à obtenir le certificat de localisation avant la date de signature de l'acte de vente. Si le certificat de localisation n'est pas livré au moment de l'acte de vente, le vendeur s'engage à commander une assurance titre à ces frais.",
+          "",
+          "6. DÉLAIS D'ACCEPTATION",
+          "La présente promesse d'achat demeure valide jusqu'au {{DATE_VALIDITE}}. L'acceptation du VENDEUR devra être reçue par l'ACHETEUR avant cette heure et cette date, faute de quoi la promesse sera résolue de plein droit.",
+          "",
+          "7. COMMISSION DU COURTIER",
+          "Les parties déclarent ne pas avoir eu recours à un courtier pour convenir de la présente transaction, aucune somme à ce titre n'étant payable par les parties.",
+          "",
+          "8. HÉRITIERS ET AYANTS-DROITS",
+          "La présente promesse d'achat liera les héritiers et ayants-droits de chacune des parties.",
+          "",
+          "9. EXCLUSION DE GARANTIE LÉGALE",
+          "Cette vente est effectuée sans garantie légale de qualité, aux risques et périls de l'acheteur.",
+          "",
+          "10. SIGNATURES ET ACCEPTATION PAR LES PARTIES",
+          "L'ACHETEUR reconnaît avoir lu et compris cette promesse d'achat et en avoir reçu une copie.",
+          "",
+          "Signé à {{LIEU_ACHETEUR}}, le {{DATE_SIGNATURE_ACHETEUR}}",
+          "",
+          "Signature de L'ACHETEUR",
+          "____________________________",
+          "9559-0766 Québec inc. représenté par Natalia Ortelli ou tout cessionnaire.",
+          "",
+          "____________________________",
+          "9559-0766 Québec inc. représenté par Fabiola Villegas ou tout cessionnaire.",
+          "",
+          "LE VENDEUR ACCEPTE la présente promesse d'achat et promet de vendre l'immeuble qui y est décrit au prix et conditions mentionnées ci-haut.",
+          "LE VENDEUR reconnaît avoir lu et compris cette promesse d'achat et en avoir reçu une copie.",
+          "",
+          "Signé à {{LIEU_VENDEUR}}, le {{DATE_SIGNATURE_VENDEUR}}",
+          "",
+          "Signature du VENDEUR",
+          "________________________________________________________",
+        ].join("\n");
       }
       if (lower.includes("contrat") || lower.includes("gestion")) {
         return `CONTRAT DE SERVICES DE GESTION IMMOBILIÈRE\n\nMandat conféré à:\n${currentCompany?.nombre || "Solutions GPA Inc."}, ci-après le gestionnaire,\nPar:\n[Propriétaire de l'immeuble], ci-après le commettant.\n\nLe gestionnaire administre, loue et perçoit les loyers, gère l'entretien courant et coordonne les sous-traitants pour un taux d'honoraires préétabli de 5% du revenu locatif total.\n\nLiaison BYOS compatible Loi 25 active.`;
@@ -11849,7 +11937,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   },
                                 ],
                               );
-                              setDocLogo(doc.logo || null);
+                              setDocLogo(doc.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                               setDocPlacedFields(
                                 doc.placedFields || [
                                   {
@@ -12102,7 +12190,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                   {/* DOCUMENT METADATA */}
                   <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm \${darkMode ? 'bg-zinc-950 border-zinc-900' : 'bg-white border-slate-200'}`}
+                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
                   >
                     <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-900">
                       <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
@@ -12127,7 +12215,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => setDocFormName(e.target.value)}
                             disabled={selectedDocuEntry?.status === "Signé"}
                             placeholder="Nommerez votre contrat, ex: Bail Appartement 45B"
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
+                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
                           />
                         </div>
 
@@ -12146,6 +12234,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               if (file) {
                                 const localUrl = URL.createObjectURL(file);
                                 setDocLogo(localUrl);
+                                // Persist logo per company — survives page reloads
+                                localStorage.setItem('doculegal_logo_' + activeCompanyId, localUrl);
                                 playNotificationSound();
                                 alert(
                                   "✨ Logo d'entreprise appliqué !\n\nVotre image de marque s'affichera maintenant dans l'en-tête du document et sur le portail client.",
@@ -12208,7 +12298,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 setDocFormContent(loadDefaultTemplate(nextFld));
                               }}
                               disabled={selectedDocuEntry?.status === "Signé"}
-                              className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
+                              className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
                             >
                               {folders.map((f) => (
                                 <option key={f} value={f}>{f}</option>
@@ -12230,11 +12320,64 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             type="text"
                             value={activeUser}
                             disabled
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border opacity-60 cursor-not-allowed \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-slate-50 border-slate-105 text-slate-400'}`}
+                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border opacity-60 cursor-not-allowed ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-slate-50 border-slate-105 text-slate-400'}`}
                           />
                         </div>
                       </div>
 
+                      {/* Quick Fill panel - appears for PA folders OR when PA template is loaded */}
+                      {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
+                        <div className={`p-5 rounded-[24px] border ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/50 border-violet-200/70'}`}>
+                          <div className="flex items-start justify-between mb-4 gap-3">
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">⚡ Remplissage Rapide — Champs PA</p>
+                              <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5">Remplissez les champs et cliquez « Appliquer » pour compléter le modèle</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                let content = docFormContent;
+                                Object.entries(paQuickFillValues).forEach(([key, val]) => {
+                                  if (val.trim()) content = content.split('{{' + key + '}}').join(val.trim());
+                                });
+                                setDocFormContent(content);
+                                setPaQuickFillValues({});
+                              }}
+                              className="flex-shrink-0 px-4 py-2.5 bg-[#7c3aed] hover:bg-violet-700 active:scale-95 text-white rounded-xl text-[8px] font-black uppercase tracking-wider transition-all"
+                            >Appliquer</button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {([
+                              { key: 'VENDEUR_NOM',             label: 'Nom du VENDEUR',          ph: 'Ex: Jean Dupont' },
+                              { key: 'VENDEUR_ADRESSE',         label: 'Adresse VENDEUR',           ph: 'Ex: 789 rue Erables, Laval, QC' },
+                              { key: 'ADRESSE_IMMEUBLE',        label: "Adresse de l'immeuble",    ph: 'Ex: 456 av. des Pins, Laval, QC' },
+                              { key: 'CADASTRE_LOT',            label: 'No lot cadastre QC',       ph: 'Ex: 1234567' },
+                              { key: 'PRIX_TOTAL',              label: "Prix d'achat total",       ph: 'Ex: 450 000 $' },
+                              { key: 'MISE_DE_FONDS',           label: 'Mise de fonds',            ph: 'Ex: 45 000 $' },
+                              { key: 'MODALITES_PAIEMENT',      label: 'Modalites paiement',       ph: 'Ex: Financement Desjardins' },
+                              { key: 'DATE_ACTE_VENTE',         label: 'Date acte de vente',       ph: 'Ex: 15 septembre 2026' },
+                              { key: 'RETENUE_MONTANT',         label: 'Retenue notaire (opt.)',   ph: 'Laisser vide si N/A' },
+                              { key: 'DATE_VALIDITE',           label: "Offre valide jusqu'au",    ph: 'Ex: 20 juin 2026' },
+                              { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR', ph: 'Ex: Blainville, QC' },
+                              { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date sign. ACHETEUR',     ph: 'Ex: 15 juin 2026' },
+                              { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR',  ph: 'Ex: Montreal, QC' },
+                              { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date sign. VENDEUR',      ph: 'Ex: 16 juin 2026' },
+                              { key: 'CESSIONNAIRE',            label: 'Cessionnaire (opt.)',      ph: 'Laisser vide si N/A' },
+                            ] as {key:string;label:string;ph:string}[]).map(({ key, label, ph }) => (
+                              <div key={key}>
+                                <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
+                                <input
+                                  type="text"
+                                  value={paQuickFillValues[key] || ''}
+                                  onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                  placeholder={ph}
+                                  className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
                           Clauses contractuelles & Corps de l'accord
@@ -12242,10 +12385,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         <textarea
                           value={docFormContent}
                           onChange={(e) => setDocFormContent(e.target.value)}
-                          rows={6}
+                          rows={14}
                           disabled={selectedDocuEntry?.status === "Signé"}
-                          className={`w-full p-3.5 rounded-2xl outline-none text-[10.5px] font-mono font-bold transition-all border resize-none leading-relaxed \${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
+                          className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-sans font-medium transition-all border resize-y leading-relaxed ${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-50 focus:border-[#7c3aed] placeholder:text-zinc-500' : 'bg-white border-slate-300 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
                           placeholder="Faites valoir les clauses convenues ici..."
+                          style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                         />
                       </div>
                     </div>
@@ -12687,7 +12831,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         onChange={(e) => setDocFormRecipient(e.target.value)}
                         disabled={selectedDocuEntry?.status === "Signé"}
                         placeholder="Nom complet du destinataire"
-                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
                       />
                     </div>
 
@@ -12701,7 +12845,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         onChange={(e) => setDocFormEmail(e.target.value)}
                         disabled={selectedDocuEntry?.status === "Signé"}
                         placeholder="ex: richard.duchesne@outlook.com"
-                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
                       />
                     </div>
 
@@ -12716,7 +12860,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           onChange={(e) => setDocFormPhone(e.target.value)}
                           disabled={selectedDocuEntry?.status === "Signé"}
                           placeholder="514-555-1234"
-                          className={`w-full p-3 rounded-2xl outline-none text-[11px] font-mono font-bold transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                          className={`w-full p-3 rounded-2xl outline-none text-[11px] font-mono font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
                         />
                       </div>
                       <button
@@ -12726,7 +12870,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           setDocFormSmsVerify(!docFormSmsVerify);
                           playNotificationSound();
                         }}
-                        className={`w-full p-3 rounded-2xl text-[8px] font-black uppercase italic tracking-tighter transition-all border \${selectedDocuEntry?.status === 'Signé' ? 'opacity-50 cursor-not-allowed' : ''} \${docFormSmsVerify ? (darkMode ? 'bg-violet-955/40 text-violet-400 border-violet-900/40' : 'bg-violet-55/15 text-violet-605 border-violet-150') : (darkMode ? 'bg-zinc-900 text-zinc-600 border-[#7c3aed]' : 'bg-slate-50 text-slate-400 border-slate-100')}`}
+                        className={`w-full p-3 rounded-2xl text-[8px] font-black uppercase italic tracking-tighter transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-50 cursor-not-allowed' : ''} ${docFormSmsVerify ? (darkMode ? 'bg-violet-955/40 text-violet-400 border-violet-900/40' : 'bg-violet-55/15 text-violet-605 border-violet-150') : (darkMode ? 'bg-zinc-900 text-zinc-600 border-[#7c3aed]' : 'bg-slate-50 text-slate-400 border-slate-100')}`}
                       >
                         {docFormSmsVerify ? "✓ SMS requis" : "Pas de SMS"}
                       </button>
@@ -12741,7 +12885,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         onChange={(e) => setDocFormEmailInvite(e.target.value)}
                         disabled={selectedDocuEntry?.status === "Signé"}
                         rows={2}
-                        className={`w-full p-3 rounded-2xl outline-none text-[10.5px] font-bold transition-all border resize-none \${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} \${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                        className={`w-full p-3 rounded-2xl outline-none text-[10.5px] font-bold transition-all border resize-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
                         placeholder="Bonjour, veuillez examiner et signer ce document..."
                       />
                     </div>
@@ -12759,7 +12903,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         setSubVistaDocu("liste");
                         playNotificationSound();
                       }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border \${
+                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${
                          darkMode 
                            ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' 
                            : 'bg-white border-slate-205 text-slate-705 hover:bg-slate-50'
@@ -12796,7 +12940,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                         const isNew = !selectedDocuEntry;
                         const newId = isNew
-                          ? `DOC-\${Date.now().toString().substring(8)}`
+                          ? `DOC-${Date.now().toString().substring(8)}`
                           : selectedDocuEntry.id;
 
                         const newDocObj = {
@@ -12848,7 +12992,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           "🟢 Document sauvegardé en brouillon avec succès.",
                         );
                       }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border \${
+                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${
                          darkMode 
                            ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' 
                            : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
@@ -12870,7 +13014,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         // Configure QR Modal to open
                         const isNew = !selectedDocuEntry;
                         const newId = isNew
-                          ? `DOC-\${Date.now().toString().substring(8)}`
+                          ? `DOC-${Date.now().toString().substring(8)}`
                           : selectedDocuEntry.id;
 
                         const tempDocObj = {
@@ -12895,7 +13039,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         setShowQrModal(true);
                         playNotificationSound();
                       }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border flex items-center justify-center space-x-1.5 \${
+                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border flex items-center justify-center space-x-1.5 ${
                          darkMode 
                            ? 'bg-zinc-900 border-zinc-800 text-zinc-350 hover:text-white' 
                            : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
@@ -12917,7 +13061,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         // Configure QR Modal to open
                         const isNew = !selectedDocuEntry;
                         const newId = isNew
-                          ? `DOC-\${Date.now().toString().substring(8)}`
+                          ? `DOC-${Date.now().toString().substring(8)}`
                           : selectedDocuEntry.id;
 
                         const tempDocObj = {
@@ -12989,7 +13133,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.9, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 15 }}
-                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 \${
+                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${
                   darkMode ? 'bg-zinc-950 border-zinc-900 text-zinc-100' : 'bg-white border-slate-150 text-slate-900'
                 }`}
               >
@@ -13045,7 +13189,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             return (
                               <div
                                 key={i}
-                                className={`rounded-[2px] \${
+                                className={`rounded-[2px] ${
                                        isCornerSquare 
                                          ? 'bg-[#059669]' 
                                          : (isRandomActive ? 'bg-zinc-800 dark:bg-zinc-200' : 'bg-transparent')
@@ -13080,7 +13224,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           Destinataire SMS portable
                         </label>
                         <p className="text-[10px] font-mono font-bold">
-                          \${qrModalDoc.recipientPhone || "514-555-1234"}
+                          ${qrModalDoc.recipientPhone || "514-555-1234"}
                         </p>
                       </div>
                       <div>
@@ -13148,16 +13292,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               ?.nombre || "Solutions GPA Inc."}
                           </p>
                           <h4 className="text-[10px] font-black uppercase italic text-slate-800 dark:text-zinc-200 leading-tight">
-                            \${qrModalDoc.name}
+                            ${qrModalDoc.name}
                           </h4>
                           <p className="text-[6.5px] font-bold text-slate-400 uppercase font-sans">
-                            Signataire destiné : \${qrModalDoc.recipient}
+                            Signataire destiné : ${qrModalDoc.recipient}
                           </p>
                         </div>
 
                         {/* Interactive Scrolling Lease Body inside mobile */}
                         <div className="flex-1 min-h-[90px] border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2.5 rounded-xl overflow-y-auto text-[7.5px] leading-relaxed text-slate-500 dark:text-zinc-400 font-medium select-text mb-3">
-                          \${qrModalDoc.content}
+                          ${qrModalDoc.content}
                         </div>
 
                         {/* Legal validation checks */}
@@ -13214,7 +13358,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 .toISOString()
                                 .replace("T", " ")
                                 .substring(0, 19) + " UTC";
-                            const txIdStr = `TX-BYOS-\${qrModalDoc.id}-\${Math.floor(100000 + Math.random() * 900000)}`;
+                            const txIdStr = `TX-BYOS-${qrModalDoc.id}-${Math.floor(100000 + Math.random() * 900000)}`;
 
                             const signedDoc = {
                               signers: qrModalDoc.signers || docFormSignersList,
@@ -13247,7 +13391,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             setSubVistaDocu("liste");
                             setSelectedDocuFolder(qrModalDoc.cat); // Retain active folder view
                             alert(
-                              `🎉 Document "\${qrModalDoc.name}" signé avec succès sur cellulaire par \${qrModalDoc.recipient} !\n\nHorodatage : \${timestampStr}\nID Transaction : \${txIdStr}`,
+                              `🎉 Document "${qrModalDoc.name}" signé avec succès sur cellulaire par ${qrModalDoc.recipient} !\n\nHorodatage : ${timestampStr}\nID Transaction : ${txIdStr}`,
                             );
                             setMobileClientSignature(null); // Reset temp signature
                           }}
@@ -13292,10 +13436,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       setSelectedDocuFolder(qrModalDoc.cat);
                       playNotificationSound();
                       alert(
-                        `✉️ Invitation de signature envoyée à \${qrModalDoc.recipientEmail || qrModalDoc.recipient} ! Statut : "En attente".`,
+                        `✉️ Invitation de signature envoyée à ${qrModalDoc.recipientEmail || qrModalDoc.recipient} ! Statut : "En attente".`,
                       );
                     }}
-                    className={`px-4 py-2.5 text-[8.5px] font-black uppercase italic rounded-xl border transition-all cursor-pointer \${
+                    className={`px-4 py-2.5 text-[8.5px] font-black uppercase italic rounded-xl border transition-all cursor-pointer ${
                        darkMode 
                          ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200' 
                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'

@@ -1,9 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="description" content="AutoCompt — Gestion immobilière, DocuLegal, comptabilité BYOS pour investisseurs québécois" />
+    <title>AutoCompt — Gestion Immobilière & DocuLegal</title>
+    <style>
+      /* Prevent scroll lock when mobile keyboard opens */
+      html, body { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      #root { min-height: 100%; }
+    </style>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
   </head>
