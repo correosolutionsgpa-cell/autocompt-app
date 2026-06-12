@@ -12586,6 +12586,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       )}
 
 
+                      <div>
+                        <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                          Clauses contractuelles &amp; Corps de l'accord
+                        </label>
+                        <textarea
+                          value={docFormContent}
+                          onChange={(e) => setDocFormContent(e.target.value)}
                           rows={14}
                           disabled={selectedDocuEntry?.status === "Signé"}
                           className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-sans font-medium transition-all border resize-y leading-relaxed ${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-50 focus:border-[#7c3aed] placeholder:text-zinc-500' : 'bg-white border-slate-300 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
@@ -13329,12 +13336,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
         {/* REVISION #3 - MOBILE CELLULAR QR CODE SIGNING SIMULATOR MODAL */}
         <AnimatePresence>
           {showQrModal && qrModalDoc && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 text-left">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 text-left" onClick={() => { setShowQrModal(false); }}>
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 15 }}
-                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${
                   darkMode ? 'bg-zinc-950 border-zinc-900 text-zinc-100' : 'bg-white border-slate-150 text-slate-900'
                 }`}
               >
@@ -15178,7 +15186,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   initial={{ scale: 0.9, opacity: 0, y: 20 }}
                   animate={{ scale: 1, opacity: 1, y: 0 }}
                   exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                  className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden border ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-100 text-slate-900"}`}
+                  className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-100 text-slate-900"}`}
                 >
                   <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                     <div className="flex items-center space-x-2">
@@ -19415,7 +19423,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}
+                className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}
               >
                 <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                   <div className="flex items-center space-x-2">
