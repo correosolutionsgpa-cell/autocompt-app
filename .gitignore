@@ -17,3 +17,19 @@ tmp*
 replace_state.cjs
 replace_table*
 
+
+# Local env vars
+.env
+.env.local
+.env.production
+
+# Large binaries & stray files
+*.exe
+console.log*
+fix_all_bugs.py
+insert_quickfill.py
+patch_app.ps1
+patch_files/
+security_spec.md
+*.txt
+!README.md

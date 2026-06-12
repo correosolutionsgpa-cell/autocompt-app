@@ -1354,12 +1354,13 @@ const App = () => {
   >(null);
 
   useEffect(() => {
-    if (vista === "dashboard" || vista === "welcome" || setupComplet) {
+    // Bug 3 fix: ne scroller qu'au changement de vue, pas sur les interactions de formulaire
+    if (vista === "dashboard" || vista === "welcome") {
       setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'auto' });
       }, 50);
     }
-  }, [vista, setupComplet]);
+  }, [vista]);
 
   useEffect(() => {
     if (dispatcherSuccessToast) {
@@ -2494,7 +2495,8 @@ const App = () => {
   // DocuLegal Module - Custom Premium states
   const [newSignerName, setNewSignerName] = useState("");
   const [newSignerEmail, setNewSignerEmail] = useState("");
-  const [newSignerRole, setNewSignerRole] = useState("Signataire");
+  const [newSignerRole, setNewSignerRole] = useState("");
+  const [newSignerError, setNewSignerError] = useState<string>("");
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [signingFieldId, setSigningFieldId] = useState<string | null>(null);
   const [signingFieldSigner, setSigningFieldSigner] = useState<string | null>(
@@ -12494,10 +12496,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   { key: 'FINANCEMENT_MONTANT',     label: 'Montant prêt hypothécaire',  ph: 'Ex : 405 000 $',              def: '' },
                                   { key: 'DATE_ACTE_VENTE',         label: 'Date acte de vente',         ph: 'Ex : 15 septembre 2026',      def: '' },
                                   { key: 'DATE_VALIDITE',           label: "Offre valide jusqu'au",     ph: 'Ex : 20 juin 2026 à 23h59',   def: '' },
-                                  { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR',    ph: 'Ex : Blainville, QC',         def: '' },
-                                  { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date signature ACHETEUR',    ph: 'Ex : 15 juin 2026',           def: '' },
-                                  { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR',     ph: 'Ex : Montréal, QC',           def: '' },
-                                  { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date signature VENDEUR',     ph: 'Ex : 16 juin 2026',           def: '' },
+                                  { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR (optionnel)',    ph: 'Capturé automatiquement à la signature',  def: '' },
+                                  { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date signature ACHETEUR (optionnel)',    ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
+                                  { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR (optionnel)',     ph: 'Capturé automatiquement à la signature',  def: '' },
+                                  { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date signature VENDEUR (optionnel)',     ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
                                 ] as Array<{ key: string; label: string; ph: string; def: string }>).map(({ key, label, ph, def }) => (
                                   <div key={key}>
                                     <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
@@ -12953,8 +12955,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <input
                         type="text"
                         value={newSignerRole}
-                        onChange={(e) => setNewSignerRole(e.target.value)}
-                        placeholder="Role (ex: Co-signataire)"
+                        onChange={(e) => { setNewSignerRole(e.target.value); setNewSignerError(""); }}
+                        placeholder="Rôle (ex: Vendeur, Cessionnaire, Acheteur)"
                         className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${
                           darkMode
                             ? "bg-zinc-900 border-zinc-801 text-zinc-100"
@@ -12963,20 +12965,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       />
                     </div>
 
+                    {newSignerError && (
+                      <p className="text-[9px] font-bold text-rose-500 text-center bg-rose-50 dark:bg-rose-950/40 rounded-xl px-3 py-2 border border-rose-200 dark:border-rose-900">
+                        {newSignerError}
+                      </p>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
-                        if (!newSignerName || !newSignerEmail) {
-                          try {
-                            alert(
-                              "⚠️ Le nom et l'adresse courriel sont obligatoires.",
-                            );
-                          } catch (err) {
-                            console.error(
-                              "Alert blocked by iframe security:",
-                              err,
-                            );
-                          }
+                        setNewSignerError("");
+                        if (!newSignerName.trim() || !newSignerEmail.trim()) {
+                          setNewSignerError("⚠️ Le nom et le courriel sont obligatoires.");
                           return;
                         }
                         const possibleColors = [
@@ -13016,7 +13016,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         // Reset input form
                         setNewSignerName("");
                         setNewSignerEmail("");
-                        setNewSignerRole("Signataire");
+                        setNewSignerRole("");
+                        setNewSignerError("");
                         playNotificationSound();
                       }}
                       className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[8px] font-black uppercase italic tracking-widest rounded-xl transition-all cursor-pointer border-none shadow"
