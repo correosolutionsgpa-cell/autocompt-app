@@ -292,7 +292,8 @@ export default function MeubleFinancialModule({
     section('Résultat net');
     pdf.setFont('Helvetica','bold');
     pdf.setFontSize(13);
-    pdf.setTextColor(...(netProfit >= 0 ? [5,150,105] : [220,38,38]));
+    const netProfitColor = netProfit >= 0 ? [5, 150, 105] : [220, 38, 38];
+    pdf.setTextColor(netProfitColor[0], netProfitColor[1], netProfitColor[2]);
     pdf.text(`Bénéfice net: ${netProfit.toFixed(2)} $`, W/2, y + 4, { align: 'center' });
 
     pdf.save(`Rapport_Meuble_${MONTHS_FR[reportMonth]}_${reportYear}.pdf`);

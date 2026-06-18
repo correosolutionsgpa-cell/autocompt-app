@@ -105,6 +105,7 @@ import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
+import SofiOnboarding from "./components/SofiOnboarding";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
@@ -1110,7 +1111,7 @@ const App = () => {
         // Other app views
         "plex", "meuble", "incident", "taxes_assurances", "accepter-invitation",
         "preview-email", "setup", "login", "welcome", "benefits",
-        "level_selection", "rental_model", "pricing", "portal"
+        "level_selection", "rental_model", "pricing", "portal", "sofi-onboarding"
       ];
       if (!internalViews.includes(vista) && vista !== "splash") {
         setActiveUser("SuperAdmin");
@@ -1132,10 +1133,11 @@ const App = () => {
       const timer = setTimeout(() => {
         const savedMode = localStorage.getItem("autocompt_dashboard_mode");
         const savedLevel = localStorage.getItem("autocompt_user_level");
-        if (savedMode === "Syndic" || (savedMode === "Plex" && savedLevel)) {
+        const savedProfile = localStorage.getItem("autocompt_selected_profile");
+        if (savedProfile && (savedMode === "Syndic" || (savedMode === "Plex" && savedLevel))) {
           setVista("dashboard");
         } else {
-          setVista("benefits");
+          setVista("sofi-onboarding");
         }
       }, 2500);
       return () => clearTimeout(timer);
@@ -1624,11 +1626,12 @@ const App = () => {
               <div className="w-px h-6 bg-white/30 mx-2"></div>
               <button 
                 onClick={() => {
+                  localStorage.removeItem("autocompt_selected_profile");
                   localStorage.removeItem("autocompt_user_level");
                   localStorage.removeItem("autocompt_dashboard_mode");
+                  setSelectedProfile(null);
                   setSetupComplet(false);
-                  setOnboardingStatus("welcome");
-                  setVista("benefits");
+                  setVista("sofi-onboarding");
                   if (typeof window !== "undefined" && typeof (window as any).playNotificationSound === "function") {
                     (window as any).playNotificationSound();
                   }
@@ -6841,6 +6844,47 @@ Ceci est un message automatisé généré par AutoCompt.`;
         </motion.p>
       </div>
     );
+
+  if (vista === "sofi-onboarding") {
+    return (
+      <SofiOnboarding
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        playNotificationSound={playNotificationSound}
+        onComplete={(profile, lang) => {
+          localStorage.setItem("autocompt_selected_profile", profile);
+          setSelectedProfile(profile);
+          setActiveLang(lang);
+          
+          let mode: "Plex" | "Syndic" | "Global" = "Plex";
+          let level = "Investisseur Immobilier";
+          if (profile === "prospecteur") {
+            mode = "Plex";
+            level = "Prospecteur Immobilier";
+          } else if (profile === "investisseur") {
+            mode = "Plex";
+            level = "Investisseur Immobilier";
+          } else if (profile === "flippeur") {
+            mode = "Plex";
+            level = "Flippeur Immobilier";
+          } else if (profile === "gestionnaire") {
+            mode = "Plex";
+            level = "Gestionnaire Immobilier";
+          } else if (profile === "syndicat") {
+            mode = "Syndic";
+            level = "Syndicat de Copropriété";
+          }
+          
+          localStorage.setItem("autocompt_dashboard_mode", mode);
+          localStorage.setItem("autocompt_user_level", level);
+          setDashboardMode(mode);
+          setUserLevel(level);
+          setSetupComplet(true);
+          setVista("dashboard");
+        }}
+      />
+    );
+  }
 
   if (vista === "portal") {
     return (
@@ -18109,7 +18153,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {/* Drive settings for this company */}
           <WorkspaceDriveSettings
             companyId={activeCompanyId || 'default'}
-            companyName={currentCompany?.nombre || companyName}
+            companyName={currentCompany?.nombre || "Solutions GPA Inc."}
             companyEmail={currentUserEmail || ''}
             darkMode={darkMode}
           />
@@ -18117,7 +18161,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <MeubleFinancialModule
             darkMode={darkMode}
             companyId={activeCompanyId || 'default'}
-            companyName={currentCompany?.nombre || companyName}
+            companyName={currentCompany?.nombre || "Solutions GPA Inc."}
             unitName={currentCompany?.nombre || 'Mon Logement Meublé'}
           />
         </main>

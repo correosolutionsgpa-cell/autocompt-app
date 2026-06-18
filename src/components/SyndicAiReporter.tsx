@@ -462,7 +462,6 @@ ${adminRole} — ${companyName}`;
       }
       doc.moveTo(points[0][0], points[0][1]);
       points.slice(1).forEach(([x, y]) => doc.lineTo(x, y));
-      doc.closePath();
       doc.fill();
     };
     drawStar(margin, 19, 8);

@@ -356,7 +356,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         }
         pdf.moveTo(pts[0][0], pts[0][1]);
         pts.slice(1).forEach(([x, y]) => pdf.lineTo(x, y));
-        pdf.closePath();
         pdf.fill();
       };
 
