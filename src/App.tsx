@@ -106,11 +106,14 @@ import SuperAdminPanel from "./components/SuperAdminPanel";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
+import SyndicModuleGrid from "./components/SyndicModuleGrid";
+import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
   "#059669", // Émeraude (Solutions GPA standard)
@@ -624,14 +627,14 @@ const PolitiqueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 shadow-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
-       <div className="flex justify-between items-start mb-6">
+        <div className="flex justify-between items-start mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-emerald-100/50 dark:bg-emerald-900/30 rounded-xl">
               <ShieldCheck className="text-emerald-600 dark:text-emerald-400" size={24} />
             </div>
             <div>
-               <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Politique de confidentialité</h2>
-               <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Conformité Loi 25 (Québec)</p>
+              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Politique de confidentialité</h2>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Conformité Loi 25 (Québec)</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 bg-slate-100 dark:bg-zinc-800 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors">
@@ -700,6 +703,15 @@ const App = () => {
   const [userRole, setUserRole] = useState("admin");
   const [onboardingStatus, setOnboardingStatus] = useState("welcome");
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  // ── RBAC: typed profile derived from selectedProfile ──────────────────────────
+  // Defined here at App scope so it is available in both the sidebar inner
+  // component (which captures it via closure) and in every vista renderer.
+  const _RBAC_VALID_PROFILES: ProfileId[] = [
+    "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat",
+  ];
+  const activeProfile: ProfileId = _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
+    ? (selectedProfile as ProfileId)
+    : "investisseur"; // safe default: broadest Plex access
   const [rentalBusinessModel, setRentalBusinessModel] = useState("Fixe");
   const [isShortTerm, setIsShortTerm] = useState(false);
   const [showWelcomeNewClientModal, setShowWelcomeNewClientModal] =
@@ -757,13 +769,13 @@ const App = () => {
 
   const [loyerForm, setLoyerForm] = useState({ adresse: "", unite: "", montant: "", date: "", locataire: "", typeBail: "Logement complet" });
   const [plexExpenseForm, setPlexExpenseForm] = useState({ adresse: "", categorie: "Taxes", montant: "", date: "", professionnel: "" });
-  const [autonomeExpenseForm, setAutonomeExpenseForm] = useState({ 
-    categorie: "Réparations et entretien", 
+  const [autonomeExpenseForm, setAutonomeExpenseForm] = useState({
+    categorie: "Réparations et entretien",
     net: "",
     tps: "",
     tvq: "",
     total: "",
-    date: new Date().toISOString().split("T")[0], 
+    date: new Date().toISOString().split("T")[0],
     professionnel: "",
     concilie: false,
     warning: ""
@@ -804,12 +816,12 @@ const App = () => {
       return next;
     });
   };
-  const [plexManagementForm, setPlexManagementForm] = useState<any>({ 
-    typeLocation: "Appartement/Maison", 
-    nombrePieces: "", 
-    adresse: "", 
-    montant: "", 
-    locataire: "", 
+  const [plexManagementForm, setPlexManagementForm] = useState<any>({
+    typeLocation: "Appartement/Maison",
+    nombrePieces: "",
+    adresse: "",
+    montant: "",
+    locataire: "",
     nomBail: "",
     status: "Actif",
     nombreChambres: 1,
@@ -867,7 +879,7 @@ const App = () => {
     const lower = newAddr.toLowerCase();
     // Simulate AI Logic Check
     const impliedType = (lower.includes("chambre") || lower.includes("room") || lower.includes("coloc") || lower.includes("habitation")) ? "Habitation" : loyerForm.typeBail;
-    setLoyerForm((prev) => ({...prev, adresse: newAddr, typeBail: impliedType}));
+    setLoyerForm((prev) => ({ ...prev, adresse: newAddr, typeBail: impliedType }));
   };
 
   const handleSaveLoyer = () => {
@@ -880,7 +892,7 @@ const App = () => {
         ...l,
         uniteAdresse: newUnitId,
         locataire: loyerForm.locataire,
-        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g,"")),
+        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
         date: loyerForm.date,
         typeBail: loyerForm.typeBail
       } : l));
@@ -889,7 +901,7 @@ const App = () => {
         id: Date.now(),
         uniteAdresse: newUnitId,
         locataire: loyerForm.locataire,
-        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g,"")),
+        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
         statut: "Payé",
         date: loyerForm.date,
         typeBail: loyerForm.typeBail
@@ -904,18 +916,18 @@ const App = () => {
   const handleSavePlexExpense = () => {
     if (!plexExpenseForm.adresse || !plexExpenseForm.categorie || !plexExpenseForm.montant) return;
     if (checkPlexLimit(plexExpenseForm.adresse, null, plexExpenseEditingId)) return;
-    
+
     if (plexExpenseForm.categorie === "Sous-traitance" && !plexExpenseForm.professionnel) {
       alert("Veuillez indiquer le nom du professionnel ou de la compagnie.");
       return;
     }
-    
+
     if (plexExpenseEditingId) {
       setPlexDepenses(plexDepenses.map(d => d.id === plexExpenseEditingId ? {
         ...d,
         adresse: plexExpenseForm.adresse,
         categorie: plexExpenseForm.categorie,
-        montant: parseFloat(plexExpenseForm.montant.replace(/[^0-9.-]+/g,"")),
+        montant: parseFloat(plexExpenseForm.montant.replace(/[^0-9.-]+/g, "")),
         date: plexExpenseForm.date,
         professionnel: plexExpenseForm.professionnel || undefined
       } : d));
@@ -924,7 +936,7 @@ const App = () => {
         id: Date.now(),
         adresse: plexExpenseForm.adresse,
         categorie: plexExpenseForm.categorie,
-        montant: parseFloat(plexExpenseForm.montant.replace(/[^0-9.-]+/g,"")),
+        montant: parseFloat(plexExpenseForm.montant.replace(/[^0-9.-]+/g, "")),
         date: plexExpenseForm.date,
         professionnel: plexExpenseForm.professionnel || undefined
       };
@@ -943,11 +955,11 @@ const App = () => {
       alert("Veuillez indiquer le nom du professionnel ou de la compagnie.");
       return;
     }
-    const subtotalNet = parseFloat(autonomeExpenseForm.net.replace(/[^0-9.-]+/g,"")) || 0;
-    const tpsAmt = parseFloat(autonomeExpenseForm.tps.replace(/[^0-9.-]+/g,"")) || 0;
-    const tvqAmt = parseFloat(autonomeExpenseForm.tvq.replace(/[^0-9.-]+/g,"")) || 0;
-    const totalAmount = parseFloat(autonomeExpenseForm.total.replace(/[^0-9.-]+/g,"")) || 0;
-    
+    const subtotalNet = parseFloat(autonomeExpenseForm.net.replace(/[^0-9.-]+/g, "")) || 0;
+    const tpsAmt = parseFloat(autonomeExpenseForm.tps.replace(/[^0-9.-]+/g, "")) || 0;
+    const tvqAmt = parseFloat(autonomeExpenseForm.tvq.replace(/[^0-9.-]+/g, "")) || 0;
+    const totalAmount = parseFloat(autonomeExpenseForm.total.replace(/[^0-9.-]+/g, "")) || 0;
+
     const newExpense = {
       id: `DEP-${Date.now()}`,
       date: autonomeExpenseForm.date || new Date().toLocaleDateString(),
@@ -1050,11 +1062,11 @@ const App = () => {
     const saved = localStorage.getItem("autocompt_sound");
     return saved !== "false";
   });
-  
+
   useEffect(() => {
     localStorage.setItem("autocompt_sound", soundEnabled.toString());
   }, [soundEnabled]);
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -1103,7 +1115,7 @@ const App = () => {
       }
       const internalViews = [
         "dashboard", "profile", "admin", "reportes", "equipe", "heures-paie",
-        "kilometraje", "facturas", "dossiers", "documents", "drive", 
+        "kilometraje", "facturas", "dossiers", "documents", "drive",
         "homeoffice", "taxes", "rapports", "banque", "sous-traitance", "doculegal",
         // Syndic views
         "cotisations", "contrats", "transparence", "loi16", "muro", "settings",
@@ -1154,7 +1166,7 @@ const App = () => {
   const [selectedFac, setSelectedFac] = useState(null);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
   const [isTrackingAuto, setIsTrackingAuto] = useState(false);
-  
+
   // --- Nouveaux états pour le Kilométrage Hybride ---
   const [activeKilometrageTab, setActiveKilometrageTab] = useState<"calculateur" | "gps">("calculateur");
   const [kilometrageAddresses, setKilometrageAddresses] = useState<string[]>(["", ""]);
@@ -1163,7 +1175,7 @@ const App = () => {
   const [gpsLongitude, setGpsLongitude] = useState<number | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string>("En attente de signal");
-  
+
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [activeUser, setActiveUser] = useState("Fabiola");
   const [partners, setPartners] = useState(["Fabiola", "Natalia"]);
@@ -1409,10 +1421,10 @@ const App = () => {
       if (empresa.nombrePortes !== undefined) setNombrePortes(empresa.nombrePortes);
       setPartnersPct(
         empresa.partnersPct ||
-          (empresa.partners || []).reduce((acc: any, p: string) => {
-            acc[p] = 50;
-            return acc;
-          }, {}),
+        (empresa.partners || []).reduce((acc: any, p: string) => {
+          acc[p] = 50;
+          return acc;
+        }, {}),
       );
 
       // Update dynamic accountant inputs based on active company
@@ -1572,16 +1584,44 @@ const App = () => {
       { id: "settings", label: "Paramètres", icon: <Settings size={18} /> },
     ];
 
-    const syndicNavItems = [
-      { id: "dashboard", label: "Tableau de Bord", icon: <Layout size={18} />, bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
-      { id: "cotisations", label: "Gestion des Cotisations", icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
-      { id: "contrats", label: "Contrats & Résolutions (DocuLegal)", icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
-      { id: "transparence", label: "Tableau de Transparence", icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
-      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
-      { id: "rapport-ia", label: "Rapport IA (SyndicAI)", icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
-      { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
-      { id: "settings", label: "Paramètres", icon: <Settings size={18} />, bgClass: "bg-slate-100 dark:bg-slate-800", textClass: "text-slate-600 dark:text-slate-400" },
+    // ── RBAC module-id → vista-id mapping for syndicNavItems filtering ──────
+    // Keeps only the items whose rbacConfig moduleId is accessible to the profile.
+    const SYNDIC_ITEM_RBAC: Record<string, import("./lib/rbacConfig").ModuleId | null> = {
+      dashboard:    null,         // always visible (general nav)
+      cotisations:  "cotisations",
+      contrats:     "contrats",
+      transparence: "transparence",
+      loi16:        "loi16",
+      "rapport-ia": "rapport_ia",
+      muro:         "mur_communication",
+      settings:     null,         // always visible
+    };
+
+    const syndicNavItemsAll = [
+      { id: "dashboard",    label: "Tableau de Bord",                    icon: <Layout size={18} />,        bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
+      { id: "cotisations",  label: "Gestion des Cotisations",             icon: <Wallet size={18} />,        bgClass: "bg-amber-100 dark:bg-amber-500/20",   textClass: "text-amber-600 dark:text-amber-400" },
+      { id: "contrats",     label: "Contrats & Résolutions (DocuLegal)",  icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20",    textClass: "text-teal-600 dark:text-teal-400" },
+      { id: "transparence", label: "Tableau de Transparence",             icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
+      { id: "loi16",        label: "Loi 16 & Carnet Entretien",           icon: <Wrench size={18} />,        bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
+      { id: "rapport-ia",   label: "Rapport IA (SyndicAI)",               icon: <Sparkles size={18} />,      bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
+      { id: "muro",         label: "Mur de Communication",                icon: <Bell size={18} />,          bgClass: "bg-rose-100 dark:bg-rose-500/20",    textClass: "text-rose-600 dark:text-rose-400" },
+      { id: "settings",     label: "Paramètres",                          icon: <Settings size={18} />,      bgClass: "bg-slate-100 dark:bg-slate-800",      textClass: "text-slate-600 dark:text-slate-400" },
     ];
+
+    // RBAC filter: keep items whose mapped moduleId is granted, or null (always-on items)
+    const VALID_PROFILES_SIDEBAR: ProfileId[] = [
+      "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat",
+    ];
+    const sidebarProfile: ProfileId =
+      VALID_PROFILES_SIDEBAR.includes(selectedProfile as ProfileId)
+        ? (selectedProfile as ProfileId)
+        : "syndicat";
+
+    const syndicNavItems = syndicNavItemsAll.filter((item) => {
+      const moduleId = SYNDIC_ITEM_RBAC[item.id];
+      if (moduleId === null || moduleId === undefined) return true; // always-on
+      return hasAccess(sidebarProfile, moduleId);
+    });
 
     const coproprietaireNavItems = [
       { id: "dashboard", label: "Espace Copropriétaire", icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
@@ -1590,6 +1630,8 @@ const App = () => {
     ];
 
     const navItems = [...baseNavItems, ...plexNavItems];
+
+    // activeProfile is derived at outer App scope — available here via closure.
 
     // Determine color representation for active enterprise
     const getCompanyAccentBorder = (companyId: string) => {
@@ -1624,7 +1666,7 @@ const App = () => {
               <button onClick={() => setDashboardMode("Syndic")} className={`px-2 sm:px-4 py-1.5 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${dashboardMode === 'Syndic' ? 'bg-white text-rose-600 shadow-md' : 'bg-rose-700 hover:bg-rose-800'}`}>Vista Syndic</button>
               <button onClick={() => setDashboardMode("Global")} className={`px-2 sm:px-4 py-1.5 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${dashboardMode === 'Global' ? 'bg-white text-rose-600 shadow-md' : 'bg-rose-700 hover:bg-rose-800'}`}>Vista Global</button>
               <div className="w-px h-6 bg-white/30 mx-2"></div>
-              <button 
+              <button
                 onClick={() => {
                   localStorage.removeItem("autocompt_selected_profile");
                   localStorage.removeItem("autocompt_user_level");
@@ -1635,14 +1677,14 @@ const App = () => {
                   if (typeof window !== "undefined" && typeof (window as any).playNotificationSound === "function") {
                     (window as any).playNotificationSound();
                   }
-                }} 
+                }}
                 className="px-2 sm:px-4 py-1.5 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all bg-amber-500 hover:bg-amber-400 text-slate-900 shadow-md flex items-center space-x-1"
               >
                 <RotateCcw size={10} />
                 <span className="hidden sm:inline">Reset Onboarding</span>
               </button>
             </div>
-            <button onClick={() => setMasterAccess(false)} className="shrink-0 px-2 sm:px-3 py-1.5 bg-black/20 hover:bg-black/40 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all">X</button>
+            <button onClick={() => setMasterAccess(false)} className="shrink-0 px-2 sm:px-3 py-1.5 /20 hover:bg-black/40 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all">X</button>
           </div>
         )}
         {/* MOBILE SIDEBAR SCREEN OVERLAY */}
@@ -1653,7 +1695,7 @@ const App = () => {
 
         {/* PERSISTENT ON DESKTOP & SLIDING PANEL ON MOBILE */}
         <aside
-          className={`print:hidden fixed top-0 bottom-0 left-0 border-r ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} z-50 md:w-72 w-80 md:translate-x-0 transition-transform duration-300 transform ${isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} flex flex-col h-screen select-none`}
+          className={`print:hidden fixed top-0 bottom-0 left-0 border-r ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} z-50 md:w-72 w-80 md:translate-x-0 transition-transform duration-300 transform ${isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} flex flex-col h-screen select-none`}
         >
           {/* TOP INNER HEADER */}
           <div className="p-6 border-b border-slate-100 dark:border-zinc-900/60 flex items-center justify-between">
@@ -1933,29 +1975,29 @@ const App = () => {
                       };
                       const color = themeMap[itemId] || "emerald";
                       const config = {
-                        emerald: darkMode 
-                          ? "bg-[#10b981]/15 border border-[#10b981]/40 text-[#34d399] shadow-[0_0_15px_rgba(16,185,129,0.05)] backdrop-blur-md" 
+                        emerald: darkMode
+                          ? "bg-[#10b981]/15 border border-[#10b981]/40 text-[#34d399] shadow-[0_0_15px_rgba(16,185,129,0.05)] backdrop-blur-md"
                           : "bg-[#10b981]/10 border border-[#10b981]/35 text-[#065f46] shadow-[0_0_15px_rgba(16,185,129,0.05)] backdrop-blur-md",
-                        amber: darkMode 
-                          ? "bg-[#f59e0b]/15 border border-[#f59e0b]/40 text-[#fbbf24] shadow-[0_0_15px_rgba(245,158,11,0.05)] backdrop-blur-md" 
+                        amber: darkMode
+                          ? "bg-[#f59e0b]/15 border border-[#f59e0b]/40 text-[#fbbf24] shadow-[0_0_15px_rgba(245,158,11,0.05)] backdrop-blur-md"
                           : "bg-[#f59e0b]/10 border border-[#f59e0b]/35 text-[#78350f] shadow-[0_0_15px_rgba(245,158,11,0.05)] backdrop-blur-md",
-                        teal: darkMode 
-                          ? "bg-[#14b8a6]/15 border border-[#14b8a6]/40 text-[#2dd4bf] shadow-[0_0_15px_rgba(20,184,166,0.05)] backdrop-blur-md" 
+                        teal: darkMode
+                          ? "bg-[#14b8a6]/15 border border-[#14b8a6]/40 text-[#2dd4bf] shadow-[0_0_15px_rgba(20,184,166,0.05)] backdrop-blur-md"
                           : "bg-[#14b8a6]/10 border border-[#14b8a6]/35 text-[#0f766e] shadow-[0_0_15px_rgba(20,184,166,0.05)] backdrop-blur-md",
-                        blue: darkMode 
-                          ? "bg-[#3b82f6]/15 border border-[#3b82f6]/40 text-[#60a5fa] shadow-[0_0_15px_rgba(59,130,246,0.05)] backdrop-blur-md" 
+                        blue: darkMode
+                          ? "bg-[#3b82f6]/15 border border-[#3b82f6]/40 text-[#60a5fa] shadow-[0_0_15px_rgba(59,130,246,0.05)] backdrop-blur-md"
                           : "bg-[#3b82f6]/10 border border-[#3b82f6]/35 text-[#1d4ed8] shadow-[0_0_15px_rgba(59,130,246,0.05)] backdrop-blur-md",
-                        violet: darkMode 
-                          ? "bg-[#8b5cf6]/15 border border-[#8b5cf6]/40 text-[#a78bfa] shadow-[0_0_15px_rgba(139,92,246,0.05)] backdrop-blur-md" 
+                        violet: darkMode
+                          ? "bg-[#8b5cf6]/15 border border-[#8b5cf6]/40 text-[#a78bfa] shadow-[0_0_15px_rgba(139,92,246,0.05)] backdrop-blur-md"
                           : "bg-[#8b5cf6]/10 border border-[#8b5cf6]/35 text-[#6d28d9] shadow-[0_0_15px_rgba(139,92,246,0.05)] backdrop-blur-md",
-                        rose: darkMode 
-                          ? "bg-[#f43f5e]/15 border border-[#f43f5e]/40 text-[#fda4af] shadow-[0_0_15px_rgba(244,63,94,0.05)] backdrop-blur-md" 
+                        rose: darkMode
+                          ? "bg-[#f43f5e]/15 border border-[#f43f5e]/40 text-[#fda4af] shadow-[0_0_15px_rgba(244,63,94,0.05)] backdrop-blur-md"
                           : "bg-[#f43f5e]/10 border border-[#f43f5e]/35 text-[#9f1239] shadow-[0_0_15px_rgba(244,63,94,0.05)] backdrop-blur-md",
-                        indigo: darkMode 
-                          ? "bg-[#6366f1]/15 border border-[#6366f1]/40 text-[#818cf8] shadow-[0_0_15px_rgba(99,102,241,0.05)] backdrop-blur-md" 
+                        indigo: darkMode
+                          ? "bg-[#6366f1]/15 border border-[#6366f1]/40 text-[#818cf8] shadow-[0_0_15px_rgba(99,102,241,0.05)] backdrop-blur-md"
                           : "bg-[#6366f1]/10 border border-[#6366f1]/35 text-[#3730a3] shadow-[0_0_15px_rgba(99,102,241,0.05)] backdrop-blur-md",
-                        slate: darkMode 
-                          ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa] shadow-[0_0_15px_rgba(113,113,122,0.05)] backdrop-blur-md" 
+                        slate: darkMode
+                          ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa] shadow-[0_0_15px_rgba(113,113,122,0.05)] backdrop-blur-md"
                           : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155] shadow-[0_0_15px_rgba(100,116,139,0.05)] backdrop-blur-md"
                       }[color] || "";
                       return config;
@@ -2080,11 +2122,10 @@ const App = () => {
                 {/* BOUTON DE SUPPORT CONTACT DIRECT */}
                 <a
                   href="mailto:info@solutionsgpa.com"
-                  className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${
-                    darkMode
+                  className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
                       ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
                       : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
-                  }`}
+                    }`}
                 >
                   <Mail size={12} />
                   <span>Contactez le support</span>
@@ -2452,16 +2493,16 @@ const App = () => {
   const [paQuickFillValues, setPaQuickFillValues] = useState<Record<string, string>>({});
   const [paPropType, setPaPropType] = useState<string>('Maison unifamiliale');
   const [paConditions, setPaConditions] = useState<Record<string, boolean>>({
-    COND_SANS_GARANTIE:     false,
-    COND_VISITE:            true,
-    COND_INSPECTION:        true,
-    COND_DILIGENCE_MUNIC:   true,
-    COND_VISITE_LOGEMENTS:  false,
-    COND_DOCS_COPROPRIETE:  false,
-    COND_ANNULATION:        true,
+    COND_SANS_GARANTIE: false,
+    COND_VISITE: true,
+    COND_INSPECTION: true,
+    COND_DILIGENCE_MUNIC: true,
+    COND_VISITE_LOGEMENTS: false,
+    COND_DOCS_COPROPRIETE: false,
+    COND_ANNULATION: true,
     COND_CERT_LOCALISATION: true,
   });
-  const [paQfTab, setPaQfTab] = useState<'type'|'champs'|'conditions'|null>('type');
+  const [paQfTab, setPaQfTab] = useState<'type' | 'champs' | 'conditions' | null>('type');
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
@@ -2854,9 +2895,9 @@ const App = () => {
               </div>
 
               ${auditedDoc.signers
-                .filter((s: any) => s.name !== auditedDoc.author)
-                .map(
-                  (sig: any) => `
+        .filter((s: any) => s.name !== auditedDoc.author)
+        .map(
+          (sig: any) => `
                 <div class="sig-box">
                   <div class="sig-label">Signataire (${sig.role})</div>
                   <div class="sig-image-container">
@@ -2866,8 +2907,8 @@ const App = () => {
                   <div style="font-size: 8.5px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-top: 2px;">${sig.email}</div>
                 </div>
               `,
-                )
-                .join("")}
+        )
+        .join("")}
             </div>
           </div>
 
@@ -3382,11 +3423,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
         className="fixed inset-0 z-[300] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300"
       >
         <div
-          className={`w-full max-w-sm border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-300 ${
-            darkMode
+          className={`w-full max-w-sm border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-300 ${darkMode
               ? "bg-[#1e1515] border-rose-950 text-white"
               : "bg-[#FFF5F5] border-rose-100/80 text-[#1E293B]"
-          }`}
+            }`}
         >
           {/* Circular danger badge */}
           <div className="w-16 h-16 rounded-full bg-rose-100/90 dark:bg-rose-955/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm shrink-0 shadow-rose-950/10">
@@ -3565,11 +3605,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
         className="fixed inset-0 z-[400] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300"
       >
         <div
-          className={`w-full max-w-md border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${
-            darkMode
+          className={`w-full max-w-md border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${darkMode
               ? "bg-[#121214] border-zinc-900 text-white"
               : "bg-white border-slate-100 text-[#1E293B]"
-          }`}
+            }`}
         >
           {/* Header */}
           <div className="flex justify-between items-center border-b border-slate-150 dark:border-zinc-900 pb-3">
@@ -3721,11 +3760,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
             {/* Partner Split 50/50 */}
             <div
-              className={`p-5 rounded-[28px] border text-center space-y-4 ${
-                darkMode
+              className={`p-5 rounded-[28px] border text-center space-y-4 ${darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-indigo-50/50 border-indigo-100 text-slate-800"
-              }`}
+                }`}
             >
               <span className="text-[8.5px] font-black uppercase tracking-widest text-[#059669] bg-emerald-500/10 px-3 py-1 rounded-full">
                 Rapport Fiscal Détaillé (50% / 50%)
@@ -3790,7 +3828,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
     return (
       <div
         id="prets-actifs-panel"
-        className={`m-6 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-90 w-full bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
+        className={`m-6 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-90 w-full bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-4">
           <div className="flex items-center space-x-3 text-left">
@@ -4144,7 +4182,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
     return (
       <div
         id="locataires-actifs-panel"
-        className={`mx-6 mb-6 mt-0 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
+        className={`mx-6 mb-6 mt-0 p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
       >
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-4">
@@ -4176,11 +4214,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
           <div className="flex flex-wrap items-center gap-2 animate-pulse-subtle">
             <span
-              className={`text-[8px] font-black uppercase italic px-3 py-1.5 rounded-full ${
-                activeModulesCount > 0
+              className={`text-[8px] font-black uppercase italic px-3 py-1.5 rounded-full ${activeModulesCount > 0
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                   : "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 border border-transparent"
-              }`}
+                }`}
             >
               📊 {activeModulesCount}{" "}
               {activeModulesCount > 1 ? "Modules Actifs" : "Module Actif"}
@@ -4449,18 +4486,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setShowServicesHorsLoyer(!showServicesHorsLoyer);
                     playNotificationSound();
                   }}
-                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-205 ease-in-out focus:outline-none ${
-                    showServicesHorsLoyer
+                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-205 ease-in-out focus:outline-none ${showServicesHorsLoyer
                       ? "bg-[#059669]"
                       : "bg-zinc-300 dark:bg-zinc-750"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-205 ease-in-out ${
-                      showServicesHorsLoyer
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-205 ease-in-out ${showServicesHorsLoyer
                         ? "translate-x-3.5"
                         : "translate-x-0"
-                    }`}
+                      }`}
                   />
                 </button>
               </div>
@@ -4527,18 +4562,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setShowSurchargesEntretien(!showSurchargesEntretien);
                     playNotificationSound();
                   }}
-                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${
-                    showSurchargesEntretien
+                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showSurchargesEntretien
                       ? "bg-[#059669]"
                       : "bg-zinc-300 dark:bg-zinc-750"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${
-                      showSurchargesEntretien
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${showSurchargesEntretien
                         ? "translate-x-3.5"
                         : "translate-x-0"
-                    }`}
+                      }`}
                   />
                 </button>
               </div>
@@ -4605,16 +4638,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setShowGestionContrats(!showGestionContrats);
                     playNotificationSound();
                   }}
-                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${
-                    showGestionContrats
+                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showGestionContrats
                       ? "bg-[#059669]"
                       : "bg-zinc-300 dark:bg-zinc-750"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${
-                      showGestionContrats ? "translate-x-3.5" : "translate-x-0"
-                    }`}
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${showGestionContrats ? "translate-x-3.5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -4681,18 +4712,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setShowPretsPrivesModule(!showPretsPrivesModule);
                     playNotificationSound();
                   }}
-                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${
-                    showPretsPrivesModule
+                  className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showPretsPrivesModule
                       ? "bg-[#059669]"
                       : "bg-zinc-300 dark:bg-zinc-750"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${
-                      showPretsPrivesModule
+                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${showPretsPrivesModule
                         ? "translate-x-3.5"
                         : "translate-x-0"
-                    }`}
+                      }`}
                   />
                 </button>
               </div>
@@ -5065,7 +5094,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           return searchData.files[0].id;
         }
       }
-      
+
       const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?key=${GOOGLE_API_KEY}`, {
         method: "POST",
         headers: {
@@ -5566,8 +5595,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
             scanResults.categorie ||
             scanResults.category ||
             "À classer";
-            
-          extractedAdresse = 
+
+          extractedAdresse =
             normalized.adresse ||
             normalized.address ||
             scanResults.adresse ||
@@ -5703,7 +5732,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             d.id !== tempId &&
             String(d.id) !== String(tempId) &&
             d.fournisseur.trim().toLowerCase() ===
-              supplierName.trim().toLowerCase() &&
+            supplierName.trim().toLowerCase() &&
             d.fecha === extractedDate &&
             Number(d.total) === Number(totalToUse),
         );
@@ -5761,7 +5790,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 d.id !== tempId &&
                 String(d.id) !== String(tempId) &&
                 d.fournisseur.trim().toLowerCase() ===
-                  supplierName.trim().toLowerCase() &&
+                supplierName.trim().toLowerCase() &&
                 d.fecha === extractedDate &&
                 Number(d.total) === Number(totalToUse),
             );
@@ -5958,9 +5987,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
           customMessage: `Facture de ${supplierName} (${total.toFixed(2)}$) traitée y enregistrée avec succès.`,
           actionText: "Voir dans le registre",
           onAction: () => {
-             setVista("reportes");
-             setTabReporte("taxes");
-             // Add highlight logic if needed, actually staying on top and opening tab is good
+            setVista("reportes");
+            setTabReporte("taxes");
+            // Add highlight logic if needed, actually staying on top and opening tab is good
           }
         });
 
@@ -6160,8 +6189,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         "Facture de Home Depot (Simulé) (206.96$) traitée et classée dans Réparations / Entretien.",
       actionText: "Voir dans le registre",
       onAction: () => {
-         setVista("reportes");
-         setTabReporte("taxes");
+        setVista("reportes");
+        setTabReporte("taxes");
       }
     });
 
@@ -6330,46 +6359,46 @@ Ceci est un message automatisé généré par AutoCompt.`;
       const itemsToExport =
         tabReporte === "banque"
           ? filteredBankByMonth.map((t) => ({
-              fecha: t.date,
-              tiers: t.desc,
-              cat: "Banque",
-              p: "",
-              net: t.amt,
-              tps: 0,
-              tvq: 0,
-              total: t.amt,
-              url: "",
-            }))
+            fecha: t.date,
+            tiers: t.desc,
+            cat: "Banque",
+            p: "",
+            net: t.amt,
+            tps: 0,
+            tvq: 0,
+            total: t.amt,
+            url: "",
+          }))
           : [
-              ...filteredHistoriqueByMonth.map((h) => {
-                const catName = h.cat || "Ventes";
-                const label = isSolutionsGPA
-                  ? ` [Classification Fiscale: ${getTaxClassification(catName)}]`
-                  : "";
-                return {
-                  fecha: h.fecha,
-                  tiers: h.cliente,
-                  cat: `${catName}${label}`,
-                  p: h.partnerTag || activeUser,
-                  net: h.subtotal,
-                  tps: h.tps,
-                  tvq: h.tvq,
-                  total: h.total,
-                  url: h.lien || "",
-                };
-              }),
-              ...filteredDepensesByMonth.map((d) => ({
-                fecha: d.fecha,
-                tiers: d.fournisseur,
-                cat: d.cat,
-                p: d.partnerTag || activeUser,
-                net: d.subtotal,
-                tps: d.tps,
-                tvq: d.tvq,
-                total: d.total,
-                url: d.lien || "",
-              })),
-            ];
+            ...filteredHistoriqueByMonth.map((h) => {
+              const catName = h.cat || "Ventes";
+              const label = isSolutionsGPA
+                ? ` [Classification Fiscale: ${getTaxClassification(catName)}]`
+                : "";
+              return {
+                fecha: h.fecha,
+                tiers: h.cliente,
+                cat: `${catName}${label}`,
+                p: h.partnerTag || activeUser,
+                net: h.subtotal,
+                tps: h.tps,
+                tvq: h.tvq,
+                total: h.total,
+                url: h.lien || "",
+              };
+            }),
+            ...filteredDepensesByMonth.map((d) => ({
+              fecha: d.fecha,
+              tiers: d.fournisseur,
+              cat: d.cat,
+              p: d.partnerTag || activeUser,
+              net: d.subtotal,
+              tps: d.tps,
+              tvq: d.tvq,
+              total: d.total,
+              url: d.lien || "",
+            })),
+          ];
 
       const keysMissing =
         !gClientId ||
@@ -6716,7 +6745,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
     let bestMatch: any = null;
     let matchScore = 0; // 0 = none, 1 = amount only, 2 = name only, 3 = both
-    
+
     for (const exp of expectedDeposits) {
       const expName = cleanStr(exp.locataire);
       const nameParts = expName.split(" ").filter((p: string) => p.length > 2);
@@ -6724,17 +6753,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
       const hasAmountMatch = Math.abs(exp.expectedAmount - amount) < 0.01;
 
       if (hasNameMatch && hasAmountMatch) {
-         return { status: "Contabilisé", reason: "Correspondance Parfaite (Nom + Montant)", match: exp };
+        return { status: "Contabilisé", reason: "Correspondance Parfaite (Nom + Montant)", match: exp };
       } else if (hasNameMatch && !hasAmountMatch) {
-         return { status: "À Confirmer", reason: "Nom Correspondant, Montant Différent", match: exp };
+        return { status: "À Confirmer", reason: "Nom Correspondant, Montant Différent", match: exp };
       } else if (!hasNameMatch && hasAmountMatch) {
-         bestMatch = exp;
-         matchScore = 1;
+        bestMatch = exp;
+        matchScore = 1;
       }
     }
 
     if (bestMatch && matchScore === 1) {
-       return { status: "À Confirmer", reason: "Montant Correspondant, Nom Différent", match: bestMatch };
+      return { status: "À Confirmer", reason: "Montant Correspondant, Nom Différent", match: bestMatch };
     }
 
     return { status: "Erreur/Rejet", reason: "Aucune Correspondance", match: null };
@@ -6767,26 +6796,26 @@ Ceci est un message automatisé généré par AutoCompt.`;
             });
             setUserRole("admin");
           }
-          
+
           // Fetch user's dynamic workspace list
           const workspaces = await dataService.fetchWorkspaces(user.uid);
           setListaEmpresas(workspaces);
           if (workspaces.length > 0) {
             setActiveCompanyId(workspaces[0].id);
           }
-          
+
           // Fetch user's expenses (depenses)
           const exp = await dataService.fetchExpenses(user.uid);
           setDepenses(exp);
-          
+
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid);
           setPlexManagementProperties(props);
-          
+
           // Fetch tenants/loyers
           const loyers = await dataService.fetchLoyers(user.uid);
           setPlexLoyers(loyers);
-          
+
           setSetupComplet(true);
           setIsForfaitSelected(true);
           setVista("dashboard");
@@ -6808,14 +6837,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (isLoadingData) {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black" : "bg-slate-50"} flex items-center justify-center flex-col space-y-6 font-sans`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent" : "bg-slate-50"} flex items-center justify-center flex-col space-y-6 font-sans`}>
         <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-            className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"
         />
         <p className="text-emerald-500 font-black uppercase tracking-widest text-sm animate-pulse">
-            Chargement des données...
+          Chargement des données...
         </p>
       </div>
     );
@@ -6824,11 +6853,22 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "splash")
     return (
       <div
-        className={`min-h-screen relative ${darkMode ? "bg-[#0A0A0A]" : "bg-[#FAF9F6]"} flex flex-col items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden max-w-full`}
+        className={`min-h-screen relative ${darkMode ? "bg-transparent" : "bg-[#FAF9F6]"} flex flex-col items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden max-w-full`}
       >
-        {/* Premium ambient glows */}
-        <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] rounded-full bg-teal-500/[0.06] dark:bg-teal-500/[0.03] blur-[100px] pointer-events-none select-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-[320px] h-[320px] rounded-full bg-emerald-500/[0.06] dark:bg-emerald-500/[0.03] blur-[100px] pointer-events-none select-none" />
+        {/* Living Light ambient glows — design_system_rules.md §1 dark mode */}
+        {darkMode && (
+          <>
+            <div className="absolute top-0 left-0 w-[400px] h-[400px] rounded-full bg-emerald-500/[0.06] blur-[180px] pointer-events-none select-none" />
+            <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-indigo-500/[0.06] blur-[180px] pointer-events-none select-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full bg-cyan-500/[0.04] blur-[200px] pointer-events-none select-none" />
+          </>
+        )}
+        {!darkMode && (
+          <>
+            <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] rounded-full bg-teal-500/[0.06] blur-[100px] pointer-events-none select-none" />
+            <div className="absolute bottom-1/4 right-1/4 w-[320px] h-[320px] rounded-full bg-emerald-500/[0.06] blur-[100px] pointer-events-none select-none" />
+          </>
+        )}
 
         <div className="relative z-10">
           <LogoPrincipal animate showText size={140} />
@@ -6855,7 +6895,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           localStorage.setItem("autocompt_selected_profile", profile);
           setSelectedProfile(profile);
           setActiveLang(lang);
-          
+
           let mode: "Plex" | "Syndic" | "Global" = "Plex";
           let level = "Investisseur Immobilier";
           if (profile === "prospecteur") {
@@ -6874,7 +6914,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             mode = "Syndic";
             level = "Syndicat de Copropriété";
           }
-          
+
           localStorage.setItem("autocompt_dashboard_mode", mode);
           localStorage.setItem("autocompt_user_level", level);
           setDashboardMode(mode);
@@ -7007,11 +7047,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     localStorage.setItem("autocompt_user_level", lvl.title);
                     if (typeof playNotificationSound === "function") playNotificationSound();
                   }}
-                  className={`p-6 rounded-[28px] border-2 bg-gradient-to-br hover:shadow-xl transition-all duration-300 flex flex-col justify-between min-h-[260px] cursor-pointer text-left ${
-                    isSelected 
-                      ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10" 
+                  className={`p-6 rounded-[28px] border-2 bg-gradient-to-br hover:shadow-xl transition-all duration-300 flex flex-col justify-between min-h-[260px] cursor-pointer text-left ${isSelected
+                      ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10"
                       : "border-slate-100 hover:border-slate-350 bg-white"
-                  }`}
+                    }`}
                 >
                   <div>
                     <div className={`p-3.5 rounded-2xl w-min mb-4 text-emerald-600 ${lvl.tagColor}`}>
@@ -7061,11 +7100,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 }
                 if (typeof playNotificationSound === "function") playNotificationSound();
               }}
-              className={`py-4 px-10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 ${
-                userLevel
+              className={`py-4 px-10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 ${userLevel
                   ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed border-none shadow-none"
-              }`}
+                }`}
             >
               Confirmer et Continuer
             </button>
@@ -7307,11 +7345,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     if (typeof playNotificationSound === "function")
                       playNotificationSound();
                   }}
-                  className={`p-5 rounded-[24px] border flex flex-col items-start transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased hover:scale-105 hover:shadow-2xl hover:z-10 cursor-pointer ${
-                    isSelected
+                  className={`p-5 rounded-[24px] border flex flex-col items-start transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased hover:scale-105 hover:shadow-2xl hover:z-10 cursor-pointer ${isSelected
                       ? `${getRingClass(prof.color)} ring-2 scale-105 shadow-2xl z-10`
                       : "border-slate-200 hover:border-slate-300 bg-white text-slate-800"
-                  }`}
+                    }`}
                 >
                   <div
                     className={`flex items-center justify-center p-3 rounded-xl mb-3 ${getIconBgClass(prof.color)}`}
@@ -7346,11 +7383,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 if (typeof playNotificationSound === "function")
                   playNotificationSound();
               }}
-              className={`py-4 px-8 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg ${
-                selectedProfile
+              className={`py-4 px-8 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg ${selectedProfile
                   ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none shadow-emerald-600/20"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed border-none"
-              }`}
+                }`}
             >
               Confirmer mon profil
             </button>
@@ -7462,11 +7498,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     if (typeof playNotificationSound === "function")
                       playNotificationSound();
                   }}
-                  className={`p-5 rounded-[24px] border flex flex-col items-center justify-center transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased cursor-pointer ${
-                    isSelected
+                  className={`p-5 rounded-[24px] border flex flex-col items-center justify-center transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased cursor-pointer ${isSelected
                       ? `${model.activeBorder} ring-2 scale-105 shadow-2xl z-10`
                       : `border-slate-200 bg-white text-slate-800 hover:scale-[1.03] hover:z-10 ${model.hoverBorder}`
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-center p-3 rounded-xl mb-3 bg-transparent">
                     {model.icon}
@@ -7565,12 +7600,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
         <div className="w-full max-w-5xl relative mt-16 md:mt-0 pt-8 px-6 pb-24 md:p-10 md:pb-10 rounded-[32px] border border-slate-100 bg-white shadow-xl flex flex-col z-10 animate-in slide-in-from-right-8 mx-auto">
           <div className="text-center space-y-4 max-w-2xl mx-auto mb-10">
-             <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-slate-900 leading-tight">
-               Choisissez votre forfait
-             </h2>
-             <p className="text-sm md:text-base font-medium text-slate-500">
-               Optimisez votre comptabilité immobilière avec le plan qui correspond parfaitement à vos besoins.
-             </p>
+            <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-slate-900 leading-tight">
+              Choisissez votre forfait
+            </h2>
+            <p className="text-sm md:text-base font-medium text-slate-500">
+              Optimisez votre comptabilité immobilière avec le plan qui correspond parfaitement à vos besoins.
+            </p>
           </div>
 
           {/* Toggle & Promo Section */}
@@ -7582,7 +7617,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   Combien de portes / unités gérez-vous ?
                 </label>
                 <div className="flex justify-center items-center gap-4">
-                  <button 
+                  <button
                     onClick={() => setNombrePortes(Math.max(1, nombrePortes - 1))}
                     className="w-12 h-12 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition-all shadow-sm"
                   >
@@ -7598,7 +7633,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     }}
                     className="w-24 text-center p-3 rounded-2xl text-2xl font-black border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/50 outline-none text-slate-800 transition-all bg-white shadow-sm"
                   />
-                  <button 
+                  <button
                     onClick={() => setNombrePortes(nombrePortes + 1)}
                     className="w-12 h-12 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition-all shadow-sm"
                   >
@@ -7632,16 +7667,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
             {/* Promo Box */}
             <div className="w-full flex flex-col items-center gap-2">
               <div className="w-full flex gap-2">
-                 <input 
-                    type="text" 
-                    value={promoCode} 
-                    onChange={(e) => setPromoCode(e.target.value)} 
-                    placeholder="Avez-vous un code promo ?" 
-                    className="flex-1 text-xs px-4 py-3 rounded-full border bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
-                 />
-                 <button onClick={handleApplyPromo} className="px-4 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm shrink-0">
-                   Appliquer
-                 </button>
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  placeholder="Avez-vous un code promo ?"
+                  className="flex-1 text-xs px-4 py-3 rounded-full border bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
+                />
+                <button onClick={handleApplyPromo} className="px-4 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm shrink-0">
+                  Appliquer
+                </button>
               </div>
               {promoStatus !== "idle" && (
                 <div className={`text-[11px] font-bold mt-1 px-3 py-1.5 rounded-full ${promoStatus === "success" ? "text-emerald-700 bg-emerald-100/50" : "text-rose-600 bg-rose-100/50"}`}>
@@ -7654,248 +7689,248 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {/* Pricing Cards Grid */}
           <div className={`grid grid-cols-1 gap-6 lg:gap-8 items-stretch pt-4 ${dashboardMode === "Plex" ? "md:grid-cols-3 max-w-5xl" : "md:grid-cols-2 max-w-3xl"} mx-auto`}>
             {dashboardMode === "Plex" ? (
-             <>
-            {/* Card 1: Forfait Portes Ouvertes */}
-            <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes <= 4 ? "md:-translate-y-4 border-teal-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-teal-500 hover:shadow-[0_0_30px_rgba(20,184,166,0.15)]`}>
-               {nombrePortes <= 4 && (
-                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                   Recommandé
-                 </div>
-               )}
-               <div className="flex justify-between items-start mb-4">
-                 <h3 className={`text-xl font-black italic uppercase tracking-tight text-teal-600`}>Forfait Portes Ouvertes</h3>
-                 <div className="opacity-50 group-hover:opacity-100 transition-opacity"><ShieldCheck size={36} className="text-teal-500"/></div>
-               </div>
-               <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Spécialement conçu pour les Propriétaires de Plex (jusqu'à 4 portes) et Travailleurs autonomes.</p>
-               
-               <div className="mb-6 h-20 flex flex-col justify-center">
-                 <div className="flex items-end gap-1 mb-1">
-                   {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>19.99$</span>}
-                   <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "11.24" : "14.99") : (promoStatus === "success" ? "4.49" : "5.99")}$</span>
-                   <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                 </div>
-                 <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-teal-600`}>
-                   {isAnnual ? "179.91$ / an (Basé sur tarif régulier)" : "(Promo 3 mois, régulier 19.99$ après)"}
-                 </p>
-               </div>
-               
-               <ul className="space-y-4 flex-1 mb-8 text-left">
-                 {[
-                   "Tenue de livres automatisée",
-                   "Scan IA pour factures",
-                   "Suivi de kilométrage (10 adresses)",
-                   "Espace sécurisé (Stockage chiffré et protection bancaire)",
-                   "Exportation comptable (Excel/CSV)",
-                   "Support IA 24/7"
-                 ].map((feature, i) => (
-                   <li key={i} className="flex items-start gap-3">
-                     <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><CheckCircle2 size={12} /></div>
-                     <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                   </li>
-                 ))}
-                 <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                   <span className="text-xs font-black uppercase tracking-widest text-teal-600 px-3 py-1 rounded-full bg-teal-50">Jusqu'à 4 portes</span>
-                 </li>
-               </ul>
+              <>
+                {/* Card 1: Forfait Portes Ouvertes */}
+                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes <= 4 ? "md:-translate-y-4 border-teal-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-teal-500 hover:shadow-[0_0_30px_rgba(20,184,166,0.15)]`}>
+                  {nombrePortes <= 4 && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                      Recommandé
+                    </div>
+                  )}
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-teal-600`}>Forfait Portes Ouvertes</h3>
+                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><ShieldCheck size={36} className="text-teal-500" /></div>
+                  </div>
+                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Spécialement conçu pour les Propriétaires de Plex (jusqu'à 4 portes) et Travailleurs autonomes.</p>
 
-               <button 
-                 onClick={() => { setActiveMobilePricingTab("porte_ouverte"); setSelectedTier("assistant"); setVista("setup"); }} 
-                 disabled={nombrePortes > 4}
-                 className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 4 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-teal-700 hover:bg-teal-500 hover:text-white border-2 border-transparent hover:border-teal-500"} mt-auto shrink-0`}
-               >
-                 {nombrePortes > 4 ? "Limite Dépassée" : "Choisir ce plan"}
-               </button>
-            </div>
+                  <div className="mb-6 h-20 flex flex-col justify-center">
+                    <div className="flex items-end gap-1 mb-1">
+                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>19.99$</span>}
+                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "11.24" : "14.99") : (promoStatus === "success" ? "4.49" : "5.99")}$</span>
+                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                    </div>
+                    <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-teal-600`}>
+                      {isAnnual ? "179.91$ / an (Basé sur tarif régulier)" : "(Promo 3 mois, régulier 19.99$ après)"}
+                    </p>
+                  </div>
 
-            {/* Card 2: Pro */}
-            <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 4 && nombrePortes <= 15 ? "md:-translate-y-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-blue-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]`}>
-               {nombrePortes > 4 && nombrePortes <= 15 && (
-                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                   Recommandé
-                 </div>
-               )}
-               <div className="flex justify-between items-start mb-4 mt-2">
-                 <h3 className={`text-xl font-black italic uppercase tracking-tight text-blue-600`}>Forfait Pro</h3>
-                 <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Briefcase size={36} className="text-blue-500"/></div>
-               </div>
-               <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Une solution complète pour vos investissements.</p>
-               
-               <div className="mb-6 h-20 flex flex-col justify-center">
-                 <div className="flex items-end gap-1 mb-1">
-                   {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>34.99$</span>}
-                   <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "19.68" : "26.24") : (promoStatus === "success" ? "26.24" : "34.99")}$</span>
-                   <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                 </div>
-                 <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-blue-600`}>
-                   {isAnnual ? "314.91$ / an (-25%)" : ""}
-                 </p>
-               </div>
-               
-               <ul className="space-y-4 flex-1 mb-8 text-left">
-                 {[
-                   "Jusqu'à 1 entreprise",
-                   "1 abonné inclus",
-                   "DocuLegal inclus (Ilimité)",
-                   "Archivage et factures illimités",
-                   "Rapports fiscaux avancés"
-                 ].map((feature, i) => (
-                   <li key={i} className="flex items-start gap-3">
-                     <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><CheckCircle2 size={12} /></div>
-                     <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                   </li>
-                 ))}
-                 <li className="flex items-start gap-3">
-                   <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><Plus size={12} /></div>
-                   <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Portes Ouvertes</span>
-                 </li>
-                 <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                   <span className="text-xs font-black uppercase tracking-widest text-blue-600 px-3 py-1 rounded-full bg-blue-50">Jusqu'à 15 portes (Max global)</span>
-                 </li>
-               </ul>
+                  <ul className="space-y-4 flex-1 mb-8 text-left">
+                    {[
+                      "Tenue de livres automatisée",
+                      "Scan IA pour factures",
+                      "Suivi de kilométrage (10 adresses)",
+                      "Espace sécurisé (Stockage chiffré et protection bancaire)",
+                      "Exportation comptable (Excel/CSV)",
+                      "Support IA 24/7"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><CheckCircle2 size={12} /></div>
+                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
+                      </li>
+                    ))}
+                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
+                      <span className="text-xs font-black uppercase tracking-widest text-teal-600 px-3 py-1 rounded-full bg-teal-50">Jusqu'à 4 portes</span>
+                    </li>
+                  </ul>
 
-               <button 
-                 onClick={() => { setActiveMobilePricingTab("pro"); setSelectedTier("premium"); setVista("setup"); }} 
-                 disabled={nombrePortes > 15}
-                 className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 15 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-blue-700 hover:bg-blue-500 hover:text-white border-2 border-transparent hover:border-blue-500"} mt-auto shrink-0`}
-               >
-                 {nombrePortes > 15 ? "Limite Dépassée" : "Choisir ce plan"}
-               </button>
-            </div>
+                  <button
+                    onClick={() => { setActiveMobilePricingTab("porte_ouverte"); setSelectedTier("assistant"); setVista("setup"); }}
+                    disabled={nombrePortes > 4}
+                    className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 4 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-teal-700 hover:bg-teal-500 hover:text-white border-2 border-transparent hover:border-teal-500"} mt-auto shrink-0`}
+                  >
+                    {nombrePortes > 4 ? "Limite Dépassée" : "Choisir ce plan"}
+                  </button>
+                </div>
 
-            {/* Card 3: Multi-Entreprise */}
-            <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 15 ? "md:-translate-y-4 border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-indigo-500 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]`}>
-               {nombrePortes > 15 && (
-                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                   Recommandé
-                 </div>
-               )}
-               <div className="flex justify-between items-start mb-4">
-                 <h3 className={`text-xl font-black italic uppercase tracking-tight text-indigo-600`}>Multi-Entreprise</h3>
-                 <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-indigo-500"/></div>
-               </div>
-               <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Croissance optimale et partenariats.</p>
-               
-               <div className="mb-6 h-20 flex flex-col justify-center">
-                 <div className="flex items-end gap-1 mb-1">
-                   {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>49.99$</span>}
-                   <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? "37.49" : "49.99"}$</span>
-                   <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                 </div>
-               </div>
-               
-               <ul className="space-y-4 flex-1 mb-8 text-left">
-                 {[
-                   "Jusqu'à 2 entreprises",
-                   "1 abonné + 1 invité inclus",
-                   "Partage des bénéfices et dépenses",
-                   "Rapports personnalisables"
-                 ].map((feature, i) => (
-                   <li key={i} className="flex items-start gap-3">
-                     <div className={`p-1 rounded shrink-0 mt-0.5 bg-indigo-50 text-indigo-600`}><CheckCircle2 size={12} /></div>
-                     <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                   </li>
-                 ))}
-                 <li className="flex items-start gap-3">
-                   <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><Plus size={12} /></div>
-                   <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Pro</span>
-                 </li>
-                 <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                   <span className="text-xs font-black uppercase tracking-widest text-indigo-600 px-3 py-1 rounded-full bg-indigo-50">Jusqu'à 15 portes (Max global)</span>
-                 </li>
-               </ul>
+                {/* Card 2: Pro */}
+                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 4 && nombrePortes <= 15 ? "md:-translate-y-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-blue-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]`}>
+                  {nombrePortes > 4 && nombrePortes <= 15 && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                      Recommandé
+                    </div>
+                  )}
+                  <div className="flex justify-between items-start mb-4 mt-2">
+                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-blue-600`}>Forfait Pro</h3>
+                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Briefcase size={36} className="text-blue-500" /></div>
+                  </div>
+                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Une solution complète pour vos investissements.</p>
 
-               <button onClick={() => { setActiveMobilePricingTab("multi_entreprise"); setSelectedTier("integral"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-indigo-700 hover:bg-indigo-500 hover:text-white border-2 border-transparent hover:border-indigo-500 mt-auto shrink-0`}>
-                 Choisir ce plan
-               </button>
-            </div>
-             </>
+                  <div className="mb-6 h-20 flex flex-col justify-center">
+                    <div className="flex items-end gap-1 mb-1">
+                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>34.99$</span>}
+                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "19.68" : "26.24") : (promoStatus === "success" ? "26.24" : "34.99")}$</span>
+                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                    </div>
+                    <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-blue-600`}>
+                      {isAnnual ? "314.91$ / an (-25%)" : ""}
+                    </p>
+                  </div>
+
+                  <ul className="space-y-4 flex-1 mb-8 text-left">
+                    {[
+                      "Jusqu'à 1 entreprise",
+                      "1 abonné inclus",
+                      "DocuLegal inclus (Ilimité)",
+                      "Archivage et factures illimités",
+                      "Rapports fiscaux avancés"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><CheckCircle2 size={12} /></div>
+                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
+                      </li>
+                    ))}
+                    <li className="flex items-start gap-3">
+                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><Plus size={12} /></div>
+                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Portes Ouvertes</span>
+                    </li>
+                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
+                      <span className="text-xs font-black uppercase tracking-widest text-blue-600 px-3 py-1 rounded-full bg-blue-50">Jusqu'à 15 portes (Max global)</span>
+                    </li>
+                  </ul>
+
+                  <button
+                    onClick={() => { setActiveMobilePricingTab("pro"); setSelectedTier("premium"); setVista("setup"); }}
+                    disabled={nombrePortes > 15}
+                    className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 15 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-blue-700 hover:bg-blue-500 hover:text-white border-2 border-transparent hover:border-blue-500"} mt-auto shrink-0`}
+                  >
+                    {nombrePortes > 15 ? "Limite Dépassée" : "Choisir ce plan"}
+                  </button>
+                </div>
+
+                {/* Card 3: Multi-Entreprise */}
+                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 15 ? "md:-translate-y-4 border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-indigo-500 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]`}>
+                  {nombrePortes > 15 && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                      Recommandé
+                    </div>
+                  )}
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-indigo-600`}>Multi-Entreprise</h3>
+                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-indigo-500" /></div>
+                  </div>
+                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Croissance optimale et partenariats.</p>
+
+                  <div className="mb-6 h-20 flex flex-col justify-center">
+                    <div className="flex items-end gap-1 mb-1">
+                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>49.99$</span>}
+                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? "37.49" : "49.99"}$</span>
+                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-4 flex-1 mb-8 text-left">
+                    {[
+                      "Jusqu'à 2 entreprises",
+                      "1 abonné + 1 invité inclus",
+                      "Partage des bénéfices et dépenses",
+                      "Rapports personnalisables"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-indigo-50 text-indigo-600`}><CheckCircle2 size={12} /></div>
+                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
+                      </li>
+                    ))}
+                    <li className="flex items-start gap-3">
+                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><Plus size={12} /></div>
+                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Pro</span>
+                    </li>
+                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
+                      <span className="text-xs font-black uppercase tracking-widest text-indigo-600 px-3 py-1 rounded-full bg-indigo-50">Jusqu'à 15 portes (Max global)</span>
+                    </li>
+                  </ul>
+
+                  <button onClick={() => { setActiveMobilePricingTab("multi_entreprise"); setSelectedTier("integral"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-indigo-700 hover:bg-indigo-500 hover:text-white border-2 border-transparent hover:border-indigo-500 mt-auto shrink-0`}>
+                    Choisir ce plan
+                  </button>
+                </div>
+              </>
             ) : (
-             <>
-            {/* Card Syndicat 1: Essentiel */}
-            <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white border-slate-200 hover:border-sky-500 hover:shadow-[0_0_30px_rgba(14,165,233,0.15)]`}>
-               <div className="flex justify-between items-start mb-4">
-                 <h3 className={`text-xl font-black italic uppercase tracking-tight text-sky-600`}>Syndicat Essentiel</h3>
-                 <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-sky-500"/></div>
-               </div>
-               <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les petits immeubles sans équipements complexes.</p>
-               
-               <div className="mb-6 h-20 flex flex-col justify-center">
-                 <div className="flex items-end gap-1 mb-1">
-                   <span className={`text-3xl md:text-4xl font-black text-slate-900`}>29.99$</span>
-                   <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
-                 </div>
-               </div>
-               
-               <ul className="space-y-4 flex-1 mb-8 text-left">
-                 {[
-                   "Gouvernance et suivi de CA",
-                   "Registre des Actifs basiques",
-                   "Communication basique avec copropriétaires",
-                   "1 administrateur avec droits complets",
-                   "Accès limité aux membres simples"
-                 ].map((feature, i) => (
-                   <li key={i} className="flex items-start gap-3">
-                     <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><CheckCircle2 size={12} /></div>
-                     <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                   </li>
-                 ))}
-               </ul>
+              <>
+                {/* Card Syndicat 1: Essentiel */}
+                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white border-slate-200 hover:border-sky-500 hover:shadow-[0_0_30px_rgba(14,165,233,0.15)]`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-sky-600`}>Syndicat Essentiel</h3>
+                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-sky-500" /></div>
+                  </div>
+                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les petits immeubles sans équipements complexes.</p>
 
-               <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_essentiel"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-sky-700 hover:bg-sky-500 hover:text-white border-2 border-transparent hover:border-sky-500 mt-auto shrink-0`}>
-                 Continuer l'inscription
-               </button>
-            </div>
+                  <div className="mb-6 h-20 flex flex-col justify-center">
+                    <div className="flex items-end gap-1 mb-1">
+                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>29.99$</span>
+                      <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
+                    </div>
+                  </div>
 
-            {/* Card Syndicat 2: Gestion Complète */}
-            <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group md:-translate-y-4 bg-white border-emerald-200 shadow-xl hover:border-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]`}>
-               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                 Recommandé
-               </div>
-               <div className="flex justify-between items-start mb-4 mt-2">
-                 <h3 className={`text-xl font-black italic uppercase tracking-tight text-emerald-600`}>Syndicat Gestion Complète</h3>
-                 <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building2 size={36} className="text-emerald-500"/></div>
-               </div>
-               <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les immeubles avec piscines, concierges ou équipements complexes.</p>
-               
-               <div className="mb-6 h-20 flex flex-col justify-center">
-                 <div className="flex items-end gap-1 mb-1">
-                   <span className={`text-3xl md:text-4xl font-black text-slate-900`}>59.99$</span>
-                   <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
-                 </div>
-               </div>
-               
-               <ul className="space-y-4 flex-1 mb-8 text-left">
-                 {[
-                   "Maintenance préventive des actifs complexes",
-                   "Suivi des fournisseurs spécialisés",
-                   "Rapports financiers avancés pour le CA",
-                   "Modules Piscine, Gym, Ascenseurs activés",
-                   "Transparence totale et illimitée"
-                 ].map((feature, i) => (
-                   <li key={i} className="flex items-start gap-3">
-                     <div className={`p-1 rounded shrink-0 mt-0.5 bg-emerald-50 text-emerald-600`}><CheckCircle2 size={12} /></div>
-                     <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                   </li>
-                 ))}
-                 <li className="flex items-start gap-3">
-                   <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><Plus size={12} /></div>
-                   <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Essentiel</span>
-                 </li>
-               </ul>
+                  <ul className="space-y-4 flex-1 mb-8 text-left">
+                    {[
+                      "Gouvernance et suivi de CA",
+                      "Registre des Actifs basiques",
+                      "Communication basique avec copropriétaires",
+                      "1 administrateur avec droits complets",
+                      "Accès limité aux membres simples"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><CheckCircle2 size={12} /></div>
+                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-               <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_complet"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 border-2 border-transparent hover:border-emerald-600 mt-auto shrink-0 shadow-md`}>
-                 Choisir ce plan
-               </button>
-            </div>
-             </>
+                  <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_essentiel"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-sky-700 hover:bg-sky-500 hover:text-white border-2 border-transparent hover:border-sky-500 mt-auto shrink-0`}>
+                    Continuer l'inscription
+                  </button>
+                </div>
+
+                {/* Card Syndicat 2: Gestion Complète */}
+                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group md:-translate-y-4 bg-white border-emerald-200 shadow-xl hover:border-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]`}>
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                    Recommandé
+                  </div>
+                  <div className="flex justify-between items-start mb-4 mt-2">
+                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-emerald-600`}>Syndicat Gestion Complète</h3>
+                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building2 size={36} className="text-emerald-500" /></div>
+                  </div>
+                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les immeubles avec piscines, concierges ou équipements complexes.</p>
+
+                  <div className="mb-6 h-20 flex flex-col justify-center">
+                    <div className="flex items-end gap-1 mb-1">
+                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>59.99$</span>
+                      <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-4 flex-1 mb-8 text-left">
+                    {[
+                      "Maintenance préventive des actifs complexes",
+                      "Suivi des fournisseurs spécialisés",
+                      "Rapports financiers avancés pour le CA",
+                      "Modules Piscine, Gym, Ascenseurs activés",
+                      "Transparence totale et illimitée"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-emerald-50 text-emerald-600`}><CheckCircle2 size={12} /></div>
+                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
+                      </li>
+                    ))}
+                    <li className="flex items-start gap-3">
+                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><Plus size={12} /></div>
+                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Essentiel</span>
+                    </li>
+                  </ul>
+
+                  <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_complet"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 border-2 border-transparent hover:border-emerald-600 mt-auto shrink-0 shadow-md`}>
+                    Choisir ce plan
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
           {/* Footer Note */}
           <div className="mt-12 text-center max-w-2xl mx-auto px-4">
-             <p className={`text-sm font-medium italic text-slate-600`}>
-               "Nos modules à la carte sont en développement constant. AutoCompt évolue avec votre patrimoine immobilier."
-             </p>
+            <p className={`text-sm font-medium italic text-slate-600`}>
+              "Nos modules à la carte sont en développement constant. AutoCompt évolue avec votre patrimoine immobilier."
+            </p>
           </div>
 
           {/* Value Statement */}
@@ -7968,7 +8003,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <input
                       type="text"
                       value={syndicatSetup.adresse}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, adresse: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, adresse: e.target.value })}
                       placeholder="Ex: 123 Rue des Copropriétaires..."
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -7981,7 +8016,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="number"
                       min="0"
                       value={syndicatSetup.unites}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, unites: e.target.value.replace(/[^0-9]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, unites: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 12"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -7994,7 +8029,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="number"
                       min="0"
                       value={syndicatSetup.construction}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, construction: e.target.value.replace(/[^0-9]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, construction: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 2010"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8007,7 +8042,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="number"
                       min="0"
                       value={syndicatSetup.etages}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, etages: e.target.value.replace(/[^0-9]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, etages: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 3"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8020,7 +8055,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="number"
                       min="0"
                       value={syndicatSetup.stationnements}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, stationnements: e.target.value.replace(/[^0-9]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, stationnements: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 10"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8033,7 +8068,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="number"
                       min="0"
                       value={syndicatSetup.casiers}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, casiers: e.target.value.replace(/[^0-9]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, casiers: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 12"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8053,7 +8088,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="text"
                       required
                       value={syndicatSetup.president}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, president: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, president: e.target.value })}
                       placeholder="Nom complet"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8066,7 +8101,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="text"
                       required
                       value={syndicatSetup.tresorier}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, tresorier: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, tresorier: e.target.value })}
                       placeholder="Nom complet"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8079,7 +8114,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="text"
                       required
                       value={syndicatSetup.secretaire}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, secretaire: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, secretaire: e.target.value })}
                       placeholder="Nom complet"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8092,7 +8127,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       type="text"
                       required
                       value={syndicatSetup.administrateurs}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, administrateurs: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, administrateurs: e.target.value })}
                       placeholder="Nom des autres administrateurs"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8104,8 +8139,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
               <div className="space-y-4">
                 <h3 className="text-sm font-black uppercase tracking-widest text-[#1e293b]">3. Actifs et Équipements</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {(selectedTier === "syndicat_essentiel" 
-                    ? ["Salle communautaire", "Espaces de rangement", "Stationnement extérieur"] 
+                  {(selectedTier === "syndicat_essentiel"
+                    ? ["Salle communautaire", "Espaces de rangement", "Stationnement extérieur"]
                     : ["Piscine / Spa", "Salle communautaire", "Ascenseur(s)", "Garage intérieur", "Salle de Gym", "Concierge résident", "Stationnement extérieur"]
                   ).map((actif) => (
                     <label key={actif} className="flex items-center space-x-2 p-3 border border-slate-200/60 rounded-xl bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors">
@@ -8127,7 +8162,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <input
                       type="text"
                       value={syndicatSetup.cadastre}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, cadastre: e.target.value.replace(/[^0-9 ]/g, '')})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, cadastre: e.target.value.replace(/[^0-9 ]/g, '') })}
                       placeholder="Ex: 1 234 567"
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
@@ -8139,7 +8174,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <input
                       type="date"
                       value={syndicatSetup.renouvellement}
-                      onChange={(e) => setSyndicatSetup({...syndicatSetup, renouvellement: e.target.value})}
+                      onChange={(e) => setSyndicatSetup({ ...syndicatSetup, renouvellement: e.target.value })}
                       className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                     />
                   </div>
@@ -8258,7 +8293,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <input
                     type="text"
                     value={userProfile.nom}
-                    onChange={(e) => setUserProfile({...userProfile, nom: e.target.value})}
+                    onChange={(e) => setUserProfile({ ...userProfile, nom: e.target.value })}
                     placeholder="Entrez le nom légal..."
                     className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                   />
@@ -8270,7 +8305,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <input
                     type="text"
                     value={userProfile.neq}
-                    onChange={(e) => setUserProfile({...userProfile, neq: e.target.value.replace(/[^0-9 ]/g, '')})}
+                    onChange={(e) => setUserProfile({ ...userProfile, neq: e.target.value.replace(/[^0-9 ]/g, '') })}
                     placeholder="Ex: 1144556677"
                     className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                   />
@@ -8282,7 +8317,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <input
                     type="tel"
                     value={userProfile.tel}
-                    onChange={(e) => setUserProfile({...userProfile, tel: e.target.value})}
+                    onChange={(e) => setUserProfile({ ...userProfile, tel: e.target.value })}
                     placeholder="(514) 000-0000"
                     className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                   />
@@ -8294,7 +8329,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <input
                     type="text"
                     value={userProfile.adresse}
-                    onChange={(e) => setUserProfile({...userProfile, adresse: e.target.value})}
+                    onChange={(e) => setUserProfile({ ...userProfile, adresse: e.target.value })}
                     placeholder="Numéro, rue, ville, code postal..."
                     className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                   />
@@ -8306,7 +8341,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <input
                     type="url"
                     value={userProfile.site}
-                    onChange={(e) => setUserProfile({...userProfile, site: e.target.value})}
+                    onChange={(e) => setUserProfile({ ...userProfile, site: e.target.value })}
                     placeholder="https://..."
                     className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
                   />
@@ -8787,11 +8822,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-sm`}
+          className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -8817,7 +8852,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               }}
               className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
-               <ArrowLeft size={16} />
+              <ArrowLeft size={16} />
             </button>
           </div>
         </header>
@@ -8878,7 +8913,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 Simulation d'accès rapide
               </h4>
               <div className="grid grid-cols-1 gap-2.5">
-                  <button
+                <button
                   type="button"
                   onClick={() => {
                     setLoginEmail("info@autocompt.ca");
@@ -8923,7 +8958,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </div>
           </div>
           <div className="absolute bottom-4 left-0 right-0 text-center z-10 w-full animate-in fade-in delay-200">
-             <p className="text-[10px] font-medium text-slate-400">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
+            <p className="text-[10px] font-medium text-slate-400">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
           </div>
         </div>
       </div>
@@ -8933,33 +8968,31 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "accepter-invitation") {
     return (
       <div
-        className={`min-h-screen flex items-center justify-center p-6 bg-gradient-to-br ${
-          darkMode
+        className={`min-h-screen flex items-center justify-center p-6 bg-gradient-to-br ${darkMode
             ? "from-zinc-950 via-emerald-950/10 to-zinc-900"
             : "from-slate-50 via-emerald-50/30 to-slate-100"
-        }`}
+          }`}
       >
         <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-500 relative z-20">
-          <div className={`p-8 sm:p-10 rounded-[40px] border shadow-2xl relative overflow-hidden backdrop-blur-xl ${
-            darkMode
+          <div className={`p-8 sm:p-10 rounded-[40px] border shadow-2xl relative overflow-hidden backdrop-blur-xl ${darkMode
               ? "bg-zinc-900/80 border-zinc-800 shadow-black/50"
               : "bg-white/80 border-slate-200/60 shadow-slate-200/50"
-          }`}>
+            }`}>
             <div className="text-center space-y-6">
               <LogoPrincipal size={32} showText animate textColor={darkMode ? "text-white" : "text-slate-900"} />
-              
+
               <div className="space-y-4">
-                 <h2 className={`text-xl font-black uppercase tracking-tight italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
-                   Bienvenue sur AutoCompt
-                 </h2>
-                 <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
-                   <span className="font-bold text-[#059669]">Solutions GPA</span> vous a invité à rejoindre son équipe sur AutoCompt.
-                 </p>
-                 <div className="inline-block py-1.5 px-4 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
-                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-                     Votre rôle : Prospecteur
-                   </p>
-                 </div>
+                <h2 className={`text-xl font-black uppercase tracking-tight italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                  Bienvenue sur AutoCompt
+                </h2>
+                <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                  <span className="font-bold text-[#059669]">Solutions GPA</span> vous a invité à rejoindre son équipe sur AutoCompt.
+                </p>
+                <div className="inline-block py-1.5 px-4 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                    Votre rôle : Prospecteur
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-4 pt-4 text-left">
@@ -9005,12 +9038,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </div>
 
               <div className="pt-6 border-t border-slate-100 dark:border-zinc-800">
-                 <button 
+                <button
                   onClick={() => setVista("login")}
                   className={`text-[10px] font-bold uppercase tracking-widest transition-colors hover:underline ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
-                 >
-                   J'ai déjà un compte. Me connecter.
-                 </button>
+                >
+                  J'ai déjà un compte. Me connecter.
+                </button>
               </div>
 
             </div>
@@ -9027,15 +9060,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className={`rounded-3xl shadow-xl overflow-hidden border ${darkMode ? "bg-zinc-900 border-zinc-800 shadow-black/50" : "bg-white border-slate-200 shadow-slate-200/50"}`}>
             {/* Header */}
             <div className={`p-8 flex justify-center border-b ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-100 bg-slate-50/50"}`}>
-               <LogoPrincipal size={40} showText animate textColor={darkMode ? "text-white" : "text-slate-900"} />
+              <LogoPrincipal size={40} showText animate textColor={darkMode ? "text-white" : "text-slate-900"} />
             </div>
-            
+
             {/* Body */}
             <div className="p-8 sm:p-12 space-y-8 text-center sm:text-left">
               <h2 className={`text-xl sm:text-2xl font-black uppercase tracking-tight italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
                 Vous avez été invité(e) à rejoindre une équipe sur AutoCompt.
               </h2>
-              
+
               <div className={`space-y-6 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
                 <p>Bonjour,</p>
                 <p>
@@ -9047,13 +9080,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </div>
 
               <div className="pt-4 flex justify-center">
-                <button 
+                <button
                   onClick={() => setVista("equipe")}
-                  className={`inline-flex items-center justify-center px-8 py-4 rounded-[20px] text-xs font-black uppercase tracking-widest transition-all ${
-                    darkMode 
-                      ? "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 shadow-md" 
+                  className={`inline-flex items-center justify-center px-8 py-4 rounded-[20px] text-xs font-black uppercase tracking-widest transition-all ${darkMode
+                      ? "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 shadow-md"
                       : "bg-slate-800 text-white hover:bg-slate-700 border border-slate-900 shadow-md"
-                  }`}
+                    }`}
                 >
                   Accepter l'invitation
                 </button>
@@ -9065,9 +9097,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
               Si vous n'attendez pas cette invitation, veuillez ignorer ce courriel.
             </div>
           </div>
-          
+
           <div className="mt-8 flex justify-center">
-            <button 
+            <button
               onClick={() => setVista("equipe")}
               className={`text-[10px] font-bold uppercase tracking-widest transition-colors hover:underline ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
             >
@@ -9086,7 +9118,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "dashboard")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         {/* Background gradient blooms for premium look */}
         {darkMode && (
@@ -9098,41 +9130,41 @@ Ceci est un message automatisé généré par AutoCompt.`;
         )}
         {isSuperAdmin && (
           <div className="fixed top-0 right-4 md:right-1/2 md:translate-x-1/2 z-[100] flex items-center space-x-1 group opacity-0 hover:opacity-100 transition-opacity duration-300">
-             <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-sm rounded-b-xl border border-slate-200 dark:border-zinc-800 border-t-0 p-1 flex space-x-1">
-                <button 
-                  onClick={() => {
-                    localStorage.removeItem("superadmin_test_onboarding");
-                    setDashboardMode(dashboardMode === "Plex" ? "Syndic" : "Plex");
-                  }}
-                  className="px-2 py-1 flex items-center space-x-1 text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition-colors"
-                >
-                  <RefreshCw size={10} />
-                  <span>Cambiar Perfil</span>
-                </button>
-                <div className="w-px h-4 self-center bg-slate-300 dark:bg-zinc-700"></div>
-                <button 
-                  onClick={() => {
-                    localStorage.setItem("superadmin_test_onboarding", "true");
-                    localStorage.removeItem("autocompt_user_level");
-                    localStorage.removeItem("autocompt_dashboard_mode");
-                    setSetupComplet(false);
-                    setOnboardingStatus("welcome");
-                    window.location.reload();
-                  }}
-                  className="px-2 py-1 flex items-center space-x-1 text-[9px] font-black uppercase text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded transition-colors"
-                >
-                  <RotateCcw size={10} />
-                  <span>Reset</span>
-                </button>
-             </div>
-             {/* Invisible hover area trigger sticking out below */}
-             <div className="absolute top-full left-0 w-full h-4 bg-transparent cursor-default"></div>
+            <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-sm rounded-b-xl border border-slate-200 dark:border-zinc-800 border-t-0 p-1 flex space-x-1">
+              <button
+                onClick={() => {
+                  localStorage.removeItem("superadmin_test_onboarding");
+                  setDashboardMode(dashboardMode === "Plex" ? "Syndic" : "Plex");
+                }}
+                className="px-2 py-1 flex items-center space-x-1 text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition-colors"
+              >
+                <RefreshCw size={10} />
+                <span>Cambiar Perfil</span>
+              </button>
+              <div className="w-px h-4 self-center bg-slate-300 dark:bg-zinc-700"></div>
+              <button
+                onClick={() => {
+                  localStorage.setItem("superadmin_test_onboarding", "true");
+                  localStorage.removeItem("autocompt_user_level");
+                  localStorage.removeItem("autocompt_dashboard_mode");
+                  setSetupComplet(false);
+                  setOnboardingStatus("welcome");
+                  window.location.reload();
+                }}
+                className="px-2 py-1 flex items-center space-x-1 text-[9px] font-black uppercase text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded transition-colors"
+              >
+                <RotateCcw size={10} />
+                <span>Reset</span>
+              </button>
+            </div>
+            {/* Invisible hover area trigger sticking out below */}
+            <div className="absolute top-full left-0 w-full h-4 bg-transparent cursor-default"></div>
           </div>
         )}
         <ScrollToTopOnMount />
         <WorkspaceSidebar />
         <header
-          className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-sm`}
+          className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -9179,9 +9211,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className="flex items-center space-x-3">
             {dashboardMode === "Syndic" && (
               <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
+                <img
+                  src={adminPhoto}
+                  alt={adminName}
                   className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm"
                 />
                 <div className="text-left hidden sm:block">
@@ -9251,15 +9283,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 setShowLangDropdown(false);
                                 playNotificationSound();
                               }}
-                              className={`w-full px-3 py-2 rounded-xl text-left text-[9.5px] font-bold tracking-tight transition-all flex items-center justify-between cursor-pointer ${
-                                idx !== 0
+                              className={`w-full px-3 py-2 rounded-xl text-left text-[9.5px] font-bold tracking-tight transition-all flex items-center justify-between cursor-pointer ${idx !== 0
                                   ? "border-t border-slate-100/50 dark:border-zinc-800/40"
                                   : ""
-                              } ${
-                                isSelected
+                                } ${isSelected
                                   ? "bg-emerald-50 text-emerald-750 dark:bg-emerald-950/25 dark:text-emerald-400 font-black"
                                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800/50"
-                              }`}
+                                }`}
                             >
                               <span>{lang.label}</span>
                               {isSelected && (
@@ -9335,7 +9365,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <main className="p-4 space-y-4">
           {/* BARRE DE RECHERCHE RAPIDE INTÉLLIGENTE */}
           <div
-            className={`relative rounded-[28px] border p-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-emerald-500/25 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+            className={`relative rounded-[28px] border p-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-emerald-500/25 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"}`}
           >
             <div className="flex items-center space-x-3">
               <Search size={18} className="text-slate-400 dark:text-zinc-500" />
@@ -9790,9 +9820,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
             )}
           </div>
 
+
           {/* WIDGET : RÉPARTITION DES DÉPENSES PAR CATÉGORIE (DONUT CHART) */}
           <div
-            className={`p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} shadow-sm text-left relative overflow-hidden transition-all duration-300`}
+            className={`p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"} shadow-sm text-left relative overflow-hidden transition-all duration-300`}
           >
             <div className="flex items-center space-x-2.5 mb-5">
               <span
@@ -9987,327 +10018,22 @@ Ceci est un message automatisé généré par AutoCompt.`;
             })()}
           </div>
 
-          {dashboardMode === "Syndic" ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-left col-span-2">
-              <button
-                onClick={() => setVista("cotisations")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-amber-500/60 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-amber-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}>
-                  <Wallet size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Gestion des Cotisations
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Suivi des charges de copropriété et encaissement des payments.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("contrats")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-emerald-500/60 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-emerald-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}>
-                  <FileSignature size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Contrats & Résolutions (DocuLegal)
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Suivez, gérez et signez numériquement vos contrats et résolutions.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("transparence")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-blue-500/60 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-blue-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-blue-900/20 text-indigo-400" : "bg-blue-100 text-indigo-500"} p-3 rounded-2xl`}>
-                  <FileSpreadsheet size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Tableau de Transparence
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Visibilité totale des finances, livres et fonds de prévoyance.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("loi16")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-violet-500/60 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-violet-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-violet-900/20 text-violet-400" : "bg-violet-100 text-violet-600"} p-3 rounded-2xl`}>
-                  <Wrench size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Loi 16 & Carnet Entretien
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Carnet d'entretien technique et projections financières réglementaires.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("muro")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-rose-500/60 hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-rose-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-rose-900/20 text-rose-400" : "bg-rose-100 text-rose-600"} p-3 rounded-2xl`}>
-                  <MessageSquare size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Mur de Communication
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Discussions et avis officiels partagés pour les copropriétaires.
-                </p>
-              </button>
-              <button
-                onClick={() => setVista("settings")}
-                className={`${darkMode ? "bg-zinc-950/60 border-zinc-900/80 text-white backdrop-blur-md hover:border-zinc-700/60 hover:shadow-[0_0_20px_rgba(113,113,122,0.15)]" : "bg-white/85 border-slate-200/80 text-slate-900 shadow-sm hover:border-zinc-500 hover:shadow-md"} p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left transition-all active:scale-95 cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-zinc-900 text-zinc-400" : "bg-slate-100 text-slate-600"} p-3 rounded-2xl`}>
-                  <Settings size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Paramètres SYNDICAT
-                </span>
-                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                  Configurez les informações du Syndicat, de facturation et accès.
-                </p>
-              </button>
-              {/* Featured wide card — Rapport IA */}
-              <button
-                onClick={() => setVista("rapport-ia")}
-                className={`col-span-2 md:col-span-3 ${darkMode ? "bg-gradient-to-r from-purple-950/60 via-zinc-950/60 to-indigo-950/60 border-purple-900/50 text-white backdrop-blur-md hover:border-purple-500/60 hover:shadow-[0_0_30px_rgba(147,51,234,0.2)]" : "bg-gradient-to-r from-purple-50 via-white to-indigo-50 border-purple-200/80 text-slate-900 shadow-sm hover:border-purple-400 hover:shadow-lg"} p-5 rounded-[32px] border flex items-center gap-5 text-left transition-all active:scale-[0.99] cursor-pointer`}
-              >
-                <div className={`${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-600"} p-4 rounded-2xl shrink-0`}>
-                  <Sparkles size={28} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-black uppercase italic tracking-tighter block">
-                    Rapport IA — SyndicAI
-                  </span>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight leading-snug mt-1">
-                    Génération intelligente de rapports financiers, convocations, mises en demeure et inspections Loi 16 — propulsé par l'IA.
-                  </p>
-                </div>
-                <div className={`shrink-0 px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest ${darkMode ? "bg-purple-600 text-white" : "bg-purple-600 text-white"}`}>
-                  Ouvrir →
-                </div>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 text-left">
-              <button
-                onClick={() => setVista("facturas")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}
-                >
-                  <Receipt size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Facturation
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("reportes")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-100 text-blue-600 shadow-inner"} p-3 rounded-2xl`}
-                >
-                  <FileSpreadsheet size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Tenue de Livres
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("homeoffice")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}
-                >
-                  <Home size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  Bureau à domicile
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("taxes")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-rose-905/20 text-rose-450" : "bg-rose-100 text-rose-600"} p-3 rounded-2xl`}
-                >
-                  <Percent size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-tight">
-                  Déclaration
-                  <br />
-                  TPS / TVQ
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  const currentTier = getEffectiveTier();
-                  if (currentTier === "gratuit" || currentTier === "basique") {
-                    setVista("dashboard");
-                    setDispatcherSuccessToast({
-                      text: "Restriction Forfait",
-                      channel: "DocuLégal 🔒",
-                      customMessage:
-                        "« Module réservé aux membres PRO et INTÉGRAL. »",
-                    });
-                    playNotificationSound();
-                    return;
-                  }
-                  setVista("doculegal");
-                }}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-indigo-900/20 text-indigo-400" : "bg-indigo-100 text-indigo-600"} p-3 rounded-2xl relative`}
-                >
-                  <FileSignature size={22} />
-                  {(getEffectiveTier() === "gratuit" ||
-                    getEffectiveTier() === "basique") && (
-                    <div className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow border border-white/20">
-                      <span>🔒</span>
-                    </div>
-                  )}
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter">
-                  DocuLegal{" "}
-                  {(getEffectiveTier() === "gratuit" ||
-                    getEffectiveTier() === "basique") &&
-                    "🔒"}
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("dossiers")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}
-                >
-                  <Folder size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Dossiers
-                  <br />
-                  Fiscaux
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("heures-paie")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-105 text-[#059669]"} p-3 rounded-2xl`}
-                >
-                  <Timer size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Heures &
-                  <br />
-                  Paie
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("banque")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-teal-900/20 text-teal-400" : "bg-teal-100 text-teal-600"} p-3 rounded-2xl`}
-                >
-                  <Wallet size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Conciliation
-                  <br />
-                  Bancaire
-                </span>
-              </button>
-              <button
-                onClick={() => setVista("plex")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}
-                >
-                  <Building2 size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Gestion
-                  <br />
-                  Immobilière
-                </span>
-                {plexManagementProperties.length > 0 && (
-                  <div className="mt-2 space-y-1 w-full flex flex-col gap-1 items-start text-[8px] font-bold uppercase tracking-wider">
-                    <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                      <span>{plexManagementProperties.filter(p => p.status === 'Actif').length} Unités Actives</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-orange-500/20 to-amber-600/20 text-orange-600 dark:text-orange-400">
-                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                      <span>{plexManagementProperties.filter(p => p.status === 'Vacant').length} Vacantes</span>
-                    </div>
-                  </div>
-                )}
-              </button>
-              <button
-                onClick={() => setVista("taxes_assurances")}
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`}
-              >
-                <div
-                  className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-emerald-600"} p-3 rounded-2xl`}
-                >
-                  <ShieldAlert size={22} />
-                </div>
-                <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Taxes &
-                  <br />
-                  Assurances
-                </span>
-              </button>
 
-              <div className="col-span-2 grid grid-cols-1 gap-6 mt-6">
-                <button
-                  onClick={() => {
-                    const currentTier = getEffectiveTier();
-                    if (currentTier === "gratuit") {
-                      setPaywallTargetTier("basique");
-                      setShowPaywallModal(true);
-                      playNotificationSound();
-                      return;
-                    }
-                    setShowFiscalChat(true);
-                    playNotificationSound();
-                  }}
-                  className={`${darkMode ? "bg-gradient-to-br from-emerald-950/40 to-zinc-900 border-zinc-900 text-white" : "bg-gradient-to-br from-emerald-500/5 to-slate-50 border-emerald-500/20 text-slate-900"} p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95 relative`}
-                >
-                  <div
-                    className={`bg-emerald-600 p-2.5 rounded-2xl text-white shadow-md shadow-emerald-600/20 animate-pulse relative`}
-                  >
-                    <Sparkles size={20} />
-                    {getEffectiveTier() === "gratuit" && (
-                      <div className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow border border-white/20">
-                        <span className="text-[8px]">🔒</span>
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none mt-1">
-                    ✨ Assistant IA {getEffectiveTier() === "gratuit" && "🔒"}
-                  </span>
-                  <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
-                    Posez vos questions fiscales ou demandez de l'aide en direct !
-                  </p>
-                </button>
-              </div>
-            </div>
+          {dashboardMode === "Syndic" ? (
+            <SyndicModuleGrid
+              darkMode={darkMode}
+              setVista={setVista}
+            />
+          ) : (
+            <PlexModuleGrid
+              darkMode={darkMode}
+              setVista={setVista}
+              getEffectiveTier={getEffectiveTier}
+              plexManagementProperties={plexManagementProperties}
+              setDispatcherSuccessToast={setDispatcherSuccessToast}
+              playNotificationSound={playNotificationSound}
+              setShowFiscalChat={setShowFiscalChat}
+            />
           )}
 
         </main>
@@ -10320,7 +10046,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className={`w-full max-w-lg ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} rounded-t-[40px] sm:rounded-[48px] border shadow-2xl flex flex-col overflow-hidden h-[85vh] sm:h-[700px]`}
+                className={`w-full max-w-lg ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} rounded-t-[40px] sm:rounded-[48px] border shadow-2xl flex flex-col overflow-hidden h-[85vh] sm:h-[700px]`}
               >
                 <div
                   className={`p-6 border-b flex items-center justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
@@ -10357,11 +10083,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         className={`flex ${isUser ? "justify-end pr-2" : "justify-start pl-2"}`}
                       >
                         <div
-                          className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${
-                            isUser
+                          className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${isUser
                               ? "bg-[#059669] text-white rounded-tr-none border-[#059669]"
-                              : `${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
-                          }`}
+                              : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
+                            }`}
                         >
                           <div className="flex items-center space-x-2 mb-2 opacity-80">
                             {!isUser && (
@@ -10387,7 +10112,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   {isChatLoading && (
                     <div className="flex justify-start pl-2 animate-pulse">
                       <div
-                        className={`max-w-[85%] ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-450" : "bg-slate-100 border-slate-250 text-slate-500"} p-4 rounded-[32px] rounded-tl-none border shadow-sm flex items-center space-x-2`}
+                        className={`max-w-[85%] ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-450" : "bg-slate-100 border-slate-250 text-slate-500"} p-4 rounded-[32px] rounded-tl-none border shadow-sm flex items-center space-x-2`}
                       >
                         <span
                           className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"
@@ -10461,7 +10186,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
                 transition={{ type: "spring", duration: 0.5 }}
-                className={`w-full max-w-5xl ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[32px] border shadow-2xl relative overflow-hidden flex flex-col max-h-[96vh]`}
+                className={`w-full max-w-5xl ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[32px] border shadow-2xl relative overflow-hidden flex flex-col max-h-[96vh]`}
               >
                 {/* Close Button Header */}
                 <div className="flex justify-end p-4 pb-0 z-20 absolute top-0 right-0">
@@ -10506,16 +10231,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     {/* Promo Box */}
                     <div className="w-full max-w-xs mx-auto flex flex-col gap-2 relative">
                       <div className="w-full flex gap-2">
-                         <input 
-                            type="text" 
-                            value={promoCode} 
-                            onChange={(e) => setPromoCode(e.target.value)} 
-                            placeholder="Avez-vous un code promo ?" 
-                            className={`flex-1 text-xs px-4 py-3 rounded-full border focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all ${darkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'}`}
-                         />
-                         <button onClick={handleApplyPromo} className={`px-4 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${darkMode ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-zinc-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm shrink-0'}`}>
-                           Appliquer
-                         </button>
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value)}
+                          placeholder="Avez-vous un code promo ?"
+                          className={`flex-1 text-xs px-4 py-3 rounded-full border focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all ${darkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'}`}
+                        />
+                        <button onClick={handleApplyPromo} className={`px-4 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${darkMode ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-zinc-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm shrink-0'}`}>
+                          Appliquer
+                        </button>
                       </div>
                       {promoStatus !== "idle" && (
                         <div className={`text-[11px] font-bold mt-1 px-3 py-1.5 rounded-full text-center ${promoStatus === "success" ? (darkMode ? "text-emerald-400 bg-emerald-900/30" : "text-emerald-700 bg-emerald-100/50") : (darkMode ? "text-rose-400 bg-rose-900/30" : "text-rose-600 bg-rose-100/50")}`}>
@@ -10531,216 +10256,216 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <>
                         {/* Card 1: Forfait Portes Ouvertes */}
                         <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group ${darkMode ? "bg-zinc-950 border-zinc-800 hover:border-teal-500 hover:shadow-[0_0_20px_rgba(20,184,166,0.2)]" : "bg-white border-slate-200 hover:border-teal-500 hover:shadow-[0_0_30px_rgba(20,184,166,0.15)]"}`}>
-                           <div className="flex justify-between items-start mb-4">
-                             <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-teal-400" : "text-teal-600"}`}>Forfait Portes Ouvertes</h3>
-                             <div className="opacity-50 group-hover:opacity-100 transition-opacity"><ShieldCheck size={36} className="text-teal-500"/></div>
-                           </div>
-                           <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Idéal pour débuter (Plex, Travailleurs autonomes).</p>
-                           
-                           <div className="mb-6 h-20 flex flex-col justify-center">
-                             <div className="flex items-end gap-1 mb-1">
-                               {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>19.99$</span>}
-                               <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "11.24" : "14.99") : (promoStatus === "success" ? "4.49" : "5.99")}$</span>
-                               <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                             </div>
-                             <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug ${darkMode ? "text-teal-400" : "text-teal-600"}`}>
-                               {isAnnual ? "179.91$ / an (Basé sur tarif régulier)" : "(Promo 3 mois, régulier 19.99$ après)"}
-                             </p>
-                           </div>
-                           
-                           <ul className="space-y-4 flex-1 mb-8 text-left">
-                             {[
-                               "Tenue de livres automatisée",
-                               "Scan IA pour factures",
-                               "Suivi de kilométrage (10 adresses)",
-                               "Espace Drive sécurisé",
-                               "Exportation comptable (Excel/CSV)",
-                               "Support IA 24/7"
-                             ].map((feature, i) => (
-                               <li key={i} className="flex items-start gap-3">
-                                 <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-teal-500/20 text-teal-400" : "bg-teal-50 text-teal-600"}`}><CheckCircle2 size={12} /></div>
-                                 <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
-                               </li>
-                             ))}
-                             <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
-                               <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-teal-400 bg-teal-900/30" : "text-teal-600 bg-teal-50"}`}>Jusqu'à 4 portes</span>
-                             </li>
-                           </ul>
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-teal-400" : "text-teal-600"}`}>Forfait Portes Ouvertes</h3>
+                            <div className="opacity-50 group-hover:opacity-100 transition-opacity"><ShieldCheck size={36} className="text-teal-500" /></div>
+                          </div>
+                          <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Idéal pour débuter (Plex, Travailleurs autonomes).</p>
 
-                           <button onClick={() => { setSelectedTier("assistant"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-teal-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-teal-400 hover:bg-teal-500 hover:text-white" : "bg-slate-50 text-teal-700 hover:bg-teal-500 hover:text-white"}`}>
-                             Choisir ce plan
-                           </button>
+                          <div className="mb-6 h-20 flex flex-col justify-center">
+                            <div className="flex items-end gap-1 mb-1">
+                              {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>19.99$</span>}
+                              <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "11.24" : "14.99") : (promoStatus === "success" ? "4.49" : "5.99")}$</span>
+                              <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                            </div>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug ${darkMode ? "text-teal-400" : "text-teal-600"}`}>
+                              {isAnnual ? "179.91$ / an (Basé sur tarif régulier)" : "(Promo 3 mois, régulier 19.99$ après)"}
+                            </p>
+                          </div>
+
+                          <ul className="space-y-4 flex-1 mb-8 text-left">
+                            {[
+                              "Tenue de livres automatisée",
+                              "Scan IA pour factures",
+                              "Suivi de kilométrage (10 adresses)",
+                              "Espace Drive sécurisé",
+                              "Exportation comptable (Excel/CSV)",
+                              "Support IA 24/7"
+                            ].map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-teal-500/20 text-teal-400" : "bg-teal-50 text-teal-600"}`}><CheckCircle2 size={12} /></div>
+                                <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
+                              </li>
+                            ))}
+                            <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
+                              <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-teal-400 bg-teal-900/30" : "text-teal-600 bg-teal-50"}`}>Jusqu'à 4 portes</span>
+                            </li>
+                          </ul>
+
+                          <button onClick={() => { setSelectedTier("assistant"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-teal-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-teal-400 hover:bg-teal-500 hover:text-white" : "bg-slate-50 text-teal-700 hover:bg-teal-500 hover:text-white"}`}>
+                            Choisir ce plan
+                          </button>
                         </div>
 
                         {/* Card 2: Pro */}
                         <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group md:-translate-y-4 ${darkMode ? "bg-zinc-950 border-zinc-800 hover:border-blue-500 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]" : "bg-white border-slate-200 hover:border-blue-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"}`}>
-                           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                             Recommandé
-                           </div>
-                           <div className="flex justify-between items-start mb-4 mt-2">
-                             <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-blue-400" : "text-blue-600"}`}>Forfait Pro</h3>
-                             <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Briefcase size={36} className="text-blue-500"/></div>
-                           </div>
-                           <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Multi-Partenaire / Multi-Entreprise.</p>
-                           
-                           <div className="mb-6 h-20 flex flex-col justify-center">
-                             <div className="flex items-end gap-1 mb-1">
-                               {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>34.99$</span>}
-                               <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "19.68" : "26.24") : (promoStatus === "success" ? "26.24" : "34.99")}$</span>
-                               <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                             </div>
-                             <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
-                               {isAnnual ? "314.91$ / an (-25%)" : ""}
-                             </p>
-                           </div>
-                           
-                           <ul className="space-y-4 flex-1 mb-8 text-left">
-                             {[
-                               "Gestion Multi-entreprises",
-                               "Multi-partenaires",
-                               "Rapports fiscaux avancés",
-                               "Support prioritaire"
-                             ].map((feature, i) => (
-                               <li key={i} className="flex items-start gap-3">
-                                 <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}><CheckCircle2 size={12} /></div>
-                                 <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
-                               </li>
-                             ))}
-                             <li className="flex items-start gap-3">
-                               <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-teal-500/20 text-teal-400" : "bg-teal-50 text-teal-600"}`}><Plus size={12} /></div>
-                               <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Portes Ouvertes</span>
-                             </li>
-                             <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
-                               <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-blue-400 bg-blue-900/30" : "text-blue-600 bg-blue-50"}`}>Jusqu'à 15 portes</span>
-                             </li>
-                           </ul>
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                            Recommandé
+                          </div>
+                          <div className="flex justify-between items-start mb-4 mt-2">
+                            <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-blue-400" : "text-blue-600"}`}>Forfait Pro</h3>
+                            <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Briefcase size={36} className="text-blue-500" /></div>
+                          </div>
+                          <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Multi-Partenaire / Multi-Entreprise.</p>
 
-                           <button onClick={() => { setSelectedTier("premium"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-blue-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-blue-400 hover:bg-blue-500 hover:text-white" : "bg-slate-50 text-blue-700 hover:bg-blue-500 hover:text-white"}`}>
-                             Choisir ce plan
-                           </button>
+                          <div className="mb-6 h-20 flex flex-col justify-center">
+                            <div className="flex items-end gap-1 mb-1">
+                              {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>34.99$</span>}
+                              <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "19.68" : "26.24") : (promoStatus === "success" ? "26.24" : "34.99")}$</span>
+                              <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                            </div>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                              {isAnnual ? "314.91$ / an (-25%)" : ""}
+                            </p>
+                          </div>
+
+                          <ul className="space-y-4 flex-1 mb-8 text-left">
+                            {[
+                              "Gestion Multi-entreprises",
+                              "Multi-partenaires",
+                              "Rapports fiscaux avancés",
+                              "Support prioritaire"
+                            ].map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}><CheckCircle2 size={12} /></div>
+                                <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
+                              </li>
+                            ))}
+                            <li className="flex items-start gap-3">
+                              <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-teal-500/20 text-teal-400" : "bg-teal-50 text-teal-600"}`}><Plus size={12} /></div>
+                              <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Portes Ouvertes</span>
+                            </li>
+                            <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
+                              <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-blue-400 bg-blue-900/30" : "text-blue-600 bg-blue-50"}`}>Jusqu'à 15 portes</span>
+                            </li>
+                          </ul>
+
+                          <button onClick={() => { setSelectedTier("premium"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-blue-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-blue-400 hover:bg-blue-500 hover:text-white" : "bg-slate-50 text-blue-700 hover:bg-blue-500 hover:text-white"}`}>
+                            Choisir ce plan
+                          </button>
                         </div>
-                        
+
                         {/* Card 3: Multi-Entreprise */}
                         <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group ${darkMode ? "bg-zinc-950 border-zinc-800 hover:border-indigo-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]" : "bg-white border-slate-200 hover:border-indigo-500 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]"}`}>
-                           <div className="flex justify-between items-start mb-4">
-                             <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-indigo-400" : "text-indigo-600"}`}>Multi-Entreprise</h3>
-                             <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-indigo-500"/></div>
-                           </div>
-                           <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Croissance optimale et partenariats.</p>
-                           
-                           <div className="mb-6 h-20 flex flex-col justify-center">
-                             <div className="flex items-end gap-1 mb-1">
-                               {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>49.99$</span>}
-                               <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? "37.49" : "49.99"}$</span>
-                               <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                             </div>
-                           </div>
-                           
-                           <ul className="space-y-4 flex-1 mb-8 text-left">
-                             {[
-                               "Jusqu'à 2 entreprises",
-                               "1 abonné + 1 invité inclus",
-                               "Partage des bénéfices et dépenses",
-                               "Rapports personnalisables"
-                             ].map((feature, i) => (
-                               <li key={i} className="flex items-start gap-3">
-                                 <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}><CheckCircle2 size={12} /></div>
-                                 <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
-                               </li>
-                             ))}
-                             <li className="flex items-start gap-3">
-                               <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}><Plus size={12} /></div>
-                               <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Pro</span>
-                             </li>
-                             <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
-                               <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-indigo-400 bg-indigo-900/30" : "text-indigo-600 bg-indigo-50"}`}>Jusqu'à 15 portes (Max global)</span>
-                             </li>
-                           </ul>
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-indigo-400" : "text-indigo-600"}`}>Multi-Entreprise</h3>
+                            <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-indigo-500" /></div>
+                          </div>
+                          <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Croissance optimale et partenariats.</p>
 
-                           <button onClick={() => { setSelectedTier("integral"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-indigo-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-indigo-400 hover:bg-indigo-500 hover:text-white" : "bg-slate-50 text-indigo-700 hover:bg-indigo-500 hover:text-white"}`}>
-                             Choisir ce plan
-                           </button>
+                          <div className="mb-6 h-20 flex flex-col justify-center">
+                            <div className="flex items-end gap-1 mb-1">
+                              {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>49.99$</span>}
+                              <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? "37.49" : "49.99"}$</span>
+                              <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                            </div>
+                          </div>
+
+                          <ul className="space-y-4 flex-1 mb-8 text-left">
+                            {[
+                              "Jusqu'à 2 entreprises",
+                              "1 abonné + 1 invité inclus",
+                              "Partage des bénéfices et dépenses",
+                              "Rapports personnalisables"
+                            ].map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}><CheckCircle2 size={12} /></div>
+                                <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
+                              </li>
+                            ))}
+                            <li className="flex items-start gap-3">
+                              <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}><Plus size={12} /></div>
+                              <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Pro</span>
+                            </li>
+                            <li className={`mt-4 pt-4 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-center items-start gap-3`}>
+                              <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? "text-indigo-400 bg-indigo-900/30" : "text-indigo-600 bg-indigo-50"}`}>Jusqu'à 15 portes (Max global)</span>
+                            </li>
+                          </ul>
+
+                          <button onClick={() => { setSelectedTier("integral"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-indigo-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-indigo-400 hover:bg-indigo-500 hover:text-white" : "bg-slate-50 text-indigo-700 hover:bg-indigo-500 hover:text-white"}`}>
+                            Choisir ce plan
+                          </button>
                         </div>
                       </>
                     ) : (
                       <>
                         {/* Card Syndicat 1: Essentiel */}
                         <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group ${darkMode ? "bg-zinc-950 border-zinc-800 hover:border-sky-500 hover:shadow-[0_0_20px_rgba(14,165,233,0.2)]" : "bg-white border-slate-200 hover:border-sky-500 hover:shadow-[0_0_30px_rgba(14,165,233,0.15)]"}`}>
-                           <div className="flex justify-between items-start mb-4">
-                             <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-sky-400" : "text-sky-600"}`}>Syndicat Essentiel</h3>
-                             <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-sky-500"/></div>
-                           </div>
-                           <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Pour les petits immeubles sans équipements complexes.</p>
-                           
-                           <div className="mb-6 h-20 flex flex-col justify-center">
-                             <div className="flex items-end gap-1 mb-1">
-                               {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>34.99$</span>}
-                               <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? "29.99" : "29.99"}$</span>
-                               <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                             </div>
-                           </div>
-                           
-                           <ul className="space-y-4 flex-1 mb-8 text-left">
-                             {[
-                               "Gouvernance et suivi de CA",
-                               "Registre des Actifs basiques",
-                               "Communication basique avec copropriétaires",
-                               "1 administrateur avec droits complets",
-                               "Accès limité aux membres simples"
-                             ].map((feature, i) => (
-                               <li key={i} className="flex items-start gap-3">
-                                 <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-sky-500/20 text-sky-400" : "bg-sky-50 text-sky-600"}`}><CheckCircle2 size={12} /></div>
-                                 <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
-                               </li>
-                             ))}
-                           </ul>
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-sky-400" : "text-sky-600"}`}>Syndicat Essentiel</h3>
+                            <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-sky-500" /></div>
+                          </div>
+                          <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Pour les petits immeubles sans équipements complexes.</p>
 
-                           <button onClick={() => { setSelectedTier("syndicat_essentiel"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-sky-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-sky-400 hover:bg-sky-500 hover:text-white" : "bg-slate-50 text-sky-700 hover:bg-sky-500 hover:text-white"}`}>
-                             Choisir ce plan
-                           </button>
+                          <div className="mb-6 h-20 flex flex-col justify-center">
+                            <div className="flex items-end gap-1 mb-1">
+                              {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>34.99$</span>}
+                              <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? "29.99" : "29.99"}$</span>
+                              <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                            </div>
+                          </div>
+
+                          <ul className="space-y-4 flex-1 mb-8 text-left">
+                            {[
+                              "Gouvernance et suivi de CA",
+                              "Registre des Actifs basiques",
+                              "Communication basique avec copropriétaires",
+                              "1 administrateur avec droits complets",
+                              "Accès limité aux membres simples"
+                            ].map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-sky-500/20 text-sky-400" : "bg-sky-50 text-sky-600"}`}><CheckCircle2 size={12} /></div>
+                                <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+
+                          <button onClick={() => { setSelectedTier("syndicat_essentiel"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all border-2 border-transparent hover:border-sky-500 mt-auto shrink-0 ${darkMode ? "bg-zinc-800 text-sky-400 hover:bg-sky-500 hover:text-white" : "bg-slate-50 text-sky-700 hover:bg-sky-500 hover:text-white"}`}>
+                            Choisir ce plan
+                          </button>
                         </div>
 
                         {/* Card Syndicat 2: Gestion Complète */}
                         <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group md:-translate-y-4 ${darkMode ? "bg-zinc-900 border-emerald-500 shadow-xl hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]" : "bg-white border-emerald-200 shadow-xl hover:border-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]"}`}>
-                           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                             Recommandé
-                           </div>
-                           <div className="flex justify-between items-start mb-4 mt-2">
-                             <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>Syndicat Gestion Complète</h3>
-                             <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building2 size={36} className="text-emerald-500"/></div>
-                           </div>
-                           <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Pour immeubles avec équipements complexes.</p>
-                           
-                           <div className="mb-6 h-20 flex flex-col justify-center">
-                             <div className="flex items-end gap-1 mb-1">
-                               {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>59.99$</span>}
-                               <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "44.99" : "59.99") : (promoStatus === "success" ? "59.99" : "59.99")}$</span>
-                               <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                             </div>
-                           </div>
-                           
-                           <ul className="space-y-4 flex-1 mb-8 text-left">
-                             {[
-                               "Maintenance préventive (complexes)",
-                               "Suivi des fournisseurs spécialisés",
-                               "Rapports financiers avancés pour le CA",
-                               "Modules Piscine, Gym, Ascenseurs",
-                               "Transparence totale et illimitée"
-                             ].map((feature, i) => (
-                               <li key={i} className="flex items-start gap-3">
-                                 <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}><CheckCircle2 size={12} /></div>
-                                 <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
-                               </li>
-                             ))}
-                             <li className="flex items-start gap-3">
-                               <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-sky-500/20 text-sky-400" : "bg-sky-50 text-sky-600"}`}><Plus size={12} /></div>
-                               <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Essentiel</span>
-                             </li>
-                           </ul>
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
+                            Recommandé
+                          </div>
+                          <div className="flex justify-between items-start mb-4 mt-2">
+                            <h3 className={`text-xl font-black italic uppercase tracking-tight ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>Syndicat Gestion Complète</h3>
+                            <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building2 size={36} className="text-emerald-500" /></div>
+                          </div>
+                          <p className={`text-xs font-medium mb-6 h-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Pour immeubles avec équipements complexes.</p>
 
-                           <button onClick={() => { setSelectedTier("syndicat_complet"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 border-2 border-transparent hover:border-emerald-600 mt-auto shrink-0 shadow-md`}>
-                             Choisir ce plan
-                           </button>
+                          <div className="mb-6 h-20 flex flex-col justify-center">
+                            <div className="flex items-end gap-1 mb-1">
+                              {isAnnual && <span className={`text-2xl font-black line-through mr-2 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>59.99$</span>}
+                              <span className={`text-3xl md:text-4xl font-black ${darkMode ? "text-white" : "text-slate-900"}`}>{isAnnual ? (promoStatus === "success" ? "44.99" : "59.99") : (promoStatus === "success" ? "59.99" : "59.99")}$</span>
+                              <span className={`text-sm font-bold mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{isAnnual ? "/ mois" : "/ mois"}</span>
+                            </div>
+                          </div>
+
+                          <ul className="space-y-4 flex-1 mb-8 text-left">
+                            {[
+                              "Maintenance préventive (complexes)",
+                              "Suivi des fournisseurs spécialisés",
+                              "Rapports financiers avancés pour le CA",
+                              "Modules Piscine, Gym, Ascenseurs",
+                              "Transparence totale et illimitée"
+                            ].map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}><CheckCircle2 size={12} /></div>
+                                <span className={`text-xs font-semibold leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{feature}</span>
+                              </li>
+                            ))}
+                            <li className="flex items-start gap-3">
+                              <div className={`p-1 rounded shrink-0 mt-0.5 ${darkMode ? "bg-sky-500/20 text-sky-400" : "bg-sky-50 text-sky-600"}`}><Plus size={12} /></div>
+                              <span className={`text-xs font-medium italic ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Tout du forfait Essentiel</span>
+                            </li>
+                          </ul>
+
+                          <button onClick={() => { setSelectedTier("syndicat_complet"); setShowPaywallModal(false); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 border-2 border-transparent hover:border-emerald-600 mt-auto shrink-0 shadow-md`}>
+                            Choisir ce plan
+                          </button>
                         </div>
                       </>
                     )}
@@ -10760,7 +10485,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 transition={{ type: "spring", duration: 0.4 }}
-                className={`w-full max-w-md ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[36px] border p-8 shadow-2xl space-y-6 relative overflow-hidden`}
+                className={`w-full max-w-md ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[36px] border p-8 shadow-2xl space-y-6 relative overflow-hidden`}
               >
                 {/* Background accent */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none"></div>
@@ -10835,11 +10560,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                   <button
                     onClick={() => setShowCorporatifModal(false)}
-                    className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${
-                      darkMode
+                    className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${darkMode
                         ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
                         : "bg-white border-slate-200 text-slate-500 hover:text-slate-900"
-                    } border cursor-pointer`}
+                      } border cursor-pointer`}
                   >
                     Fermer
                   </button>
@@ -10858,7 +10582,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 transition={{ type: "spring", duration: 0.4 }}
-                className={`w-full max-w-md ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[36px] border p-8 shadow-2xl space-y-6 relative overflow-hidden text-center`}
+                className={`w-full max-w-md ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-100 text-slate-900"} rounded-[36px] border p-8 shadow-2xl space-y-6 relative overflow-hidden text-center`}
               >
                 {/* Background accent decor */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -10917,11 +10641,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                   <button
                     onClick={handleSkipDriveAndScan}
-                    className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${
-                      darkMode
+                    className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${darkMode
                         ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white"
                         : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
-                    } border cursor-pointer`}
+                      } border cursor-pointer`}
                   >
                     ⚡ Continuer en mode local (OCR IA uniquement)
                   </button>
@@ -11330,13 +11053,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden pb-12 md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden pb-12 md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
 
         {/* Top Header strictly matching main workspace navigation styles */}
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left sticky top-0 z-50`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left sticky top-0 z-50`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(124, 58, 237, 0.2)" : "rgba(124, 58, 237, 0.3)"}`,
           }}
@@ -11379,312 +11102,600 @@ Ceci est un message automatisé généré par AutoCompt.`;
           className={`p-6 flex-1 flex flex-col space-y-6 ${subVistaDocu === "editor" ? "max-w-5xl" : "max-w-lg"} mx-auto w-full transition-all duration-300`}
         >
           {docActiveVue === 'resolutions' ? (
-             <LivreDeSociete darkMode={darkMode} onBack={() => setDocActiveVue('contrats')} />
+            <LivreDeSociete darkMode={darkMode} onBack={() => setDocActiveVue('contrats')} />
           ) : (
             <>
               <div className="space-y-1">
                 <h3 className="text-sm font-black uppercase italic tracking-tight">
-              Espace d'Archivage Légale
-            </h3>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-              Propriété exclusive de {activeUser} | Cryptage BYOS
-            </p>
-          </div>
+                  Espace d'Archivage Légale
+                </h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Propriété exclusive de {activeUser} | Cryptage BYOS
+                </p>
+              </div>
 
-          {subVistaDocu === "liste" ? (
-            <>
-              {selectedDocuFolder === null ? (
-                // 1. GRID OF FOLDERS
-                <div className="space-y-6">
-                  {/* Summary Metric Card */}
-                  <div
-                    className={`p-5 rounded-[28px] border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"} shadow-sm flex justify-between items-center`}
-                  >
-                    <div>
-                      <p className="text-[7.5px] font-black uppercase tracking-widest text-[#7c3aed]">
-                        Tableau des Signatures
-                      </p>
-                      <h4 className="text-lg font-black italic uppercase leading-none mt-1">
-                        {companyDocs.length} Total •{" "}
-                        {companyDocs.filter((d) => d.status === "Signé").length}{" "}
-                        Signé(s)
-                      </h4>
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="text-center px-3 py-1.5 bg-violet-500/10 text-violet-550 rounded-xl border border-violet-500/10">
-                        <p className="text-[7.5px] font-bold uppercase leading-none text-slate-400">
-                          Signé
-                        </p>
-                        <p className="text-[12px] font-black tracking-tighter mt-1">
-                          {
-                            companyDocs.filter((d) => d.status === "Signé")
-                              .length
-                          }
-                        </p>
-                      </div>
-                      <div className="text-center px-3 py-1.5 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/10">
-                        <p className="text-[7.5px] font-bold uppercase leading-none text-slate-400">
-                          En attente
-                        </p>
-                        <p className="text-[12px] font-black tracking-tighter mt-1">
-                          {
-                            companyDocs.filter((d) => d.status === "En attente")
-                              .length
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SIGNATURE PROFILE SETTINGS TRIGGER */}
-                  <div
-                    className={`p-5 rounded-[28px] border text-left ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-gradient-to-r from-violet-50/20 to-purple-50/20 border-slate-200"} shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#7c3aed] animate-pulse" />
-                        <span className="text-[7.5px] font-black uppercase tracking-wider text-[#7c3aed]">
-                          Votre Profil Électronique
-                        </span>
-                      </div>
-                      <h4 className="text-[11px] font-black italic uppercase leading-tight">
-                        {savedSignature || savedInitials ? (
-                          <span className="text-violet-600 dark:text-violet-400">
-                            ✓ Signature & Initiales Configures
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 dark:text-zinc-500">
-                            Pas de signature active
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-550 uppercase">
-                        {savedSignature
-                          ? "Signature active enregistree (Image)"
-                          : "Profil par defaut (Fabiola Villegas)"}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-                      {savedSignature && (
-                        <div className="h-10 px-3 bg-white dark:bg-zinc-950 rounded-xl border border-slate-200 dark:border-zinc-800 flex items-center justify-center">
-                          <img
-                            src={savedSignature}
-                            alt="Signature Active"
-                            className="h-7 object-contain mix-blend-multiply dark:mix-blend-normal invert dark:invert-0"
-                          />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSigProfileModal(true);
-                          playNotificationSound();
-                        }}
-                        className="py-2.5 px-4 bg-[#7c3aed] hover:bg-violet-600 text-white rounded-xl text-[8.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-sm flex items-center space-x-1 border-none cursor-pointer"
+              {subVistaDocu === "liste" ? (
+                <>
+                  {selectedDocuFolder === null ? (
+                    // 1. GRID OF FOLDERS
+                    <div className="space-y-6">
+                      {/* Summary Metric Card */}
+                      <div
+                        className={`p-5 rounded-[28px] border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"} shadow-sm flex justify-between items-center`}
                       >
-                        <PenLine size={13} />
-                        <span>Configurer Ma Signature & Initiales</span>
-                      </button>
-                    </div>
-                  </div>
+                        <div>
+                          <p className="text-[7.5px] font-black uppercase tracking-widest text-[#7c3aed]">
+                            Tableau des Signatures
+                          </p>
+                          <h4 className="text-lg font-black italic uppercase leading-none mt-1">
+                            {companyDocs.length} Total •{" "}
+                            {companyDocs.filter((d) => d.status === "Signé").length}{" "}
+                            Signé(s)
+                          </h4>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="text-center px-3 py-1.5 bg-violet-500/10 text-violet-550 rounded-xl border border-violet-500/10">
+                            <p className="text-[7.5px] font-bold uppercase leading-none text-slate-400">
+                              Signé
+                            </p>
+                            <p className="text-[12px] font-black tracking-tighter mt-1">
+                              {
+                                companyDocs.filter((d) => d.status === "Signé")
+                                  .length
+                              }
+                            </p>
+                          </div>
+                          <div className="text-center px-3 py-1.5 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/10">
+                            <p className="text-[7.5px] font-bold uppercase leading-none text-slate-400">
+                              En attente
+                            </p>
+                            <p className="text-[12px] font-black tracking-tighter mt-1">
+                              {
+                                companyDocs.filter((d) => d.status === "En attente")
+                                  .length
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Dynamic Folders Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {folders.map((fName, i) => {
-                      const cMap = getFolderColorMap(fName);
-                      const dCount = companyDocs.filter(
-                        (d) => d.cat === fName,
-                      ).length;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            setSelectedDocuFolder(fName);
-                            playNotificationSound();
-                          }}
-                          className={`p-5 rounded-[28px] border text-left ${cMap.border} ${cMap.bgColor} relative overflow-hidden flex flex-col space-y-4 hover:scale-[1.02] active:scale-98 transition-all duration-300 shadow-sm`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <Folder size={32} className={cMap.iconColor} />
-                            <span
-                              className={`text-[6px] font-black uppercase px-2 py-0.5 rounded-full ${darkMode ? "bg-violet-500/10 text-violet-400" : "bg-violet-100 text-violet-750"}`}
-                            >
-                              Cloud Sync
+                      {/* SIGNATURE PROFILE SETTINGS TRIGGER */}
+                      <div
+                        className={`p-5 rounded-[28px] border text-left ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-gradient-to-r from-violet-50/20 to-purple-50/20 border-slate-200"} shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#7c3aed] animate-pulse" />
+                            <span className="text-[7.5px] font-black uppercase tracking-wider text-[#7c3aed]">
+                              Votre Profil Électronique
                             </span>
                           </div>
-                          <div>
-                            <p
-                              className={`text-[10.5px] font-black uppercase italic tracking-tight leading-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                            >
-                              {fName}
-                            </p>
-                            <p
-                              className={`text-[7.5px] font-bold text-slate-400 mt-1.5 uppercase`}
-                            >
-                              {dCount} document(s)
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <h4 className="text-[11px] font-black italic uppercase leading-tight">
+                            {savedSignature || savedInitials ? (
+                              <span className="text-violet-600 dark:text-violet-400">
+                                ✓ Signature & Initiales Configures
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 dark:text-zinc-500">
+                                Pas de signature active
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-550 uppercase">
+                            {savedSignature
+                              ? "Signature active enregistree (Image)"
+                              : "Profil par defaut (Fabiola Villegas)"}
+                          </p>
+                        </div>
 
-                  {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* DROPZONE */}
-                    <div
-                      onClick={() => {
-                        setDocSimulatedFile(
-                          "Contrat_Location_Officiel_GPA.pdf",
-                        );
-                        setDocFormName("Contrat de Location - Apt. 3");
-                        setDocFormFolder(folders[0] || "Baux Locatifs");
-                        setDocFormRecipient("Richard Duchesne");
-                        setDocFormEmail("richard.duchesne@outlook.com");
-                        setDocFormPhone("514-555-8822");
-                        setDocFormContent(
-                          loadDefaultTemplate(folders[0] || "Baux Locatifs"),
-                        );
-                        setDocFormEmailInvite(
-                          "Bonjour Richard, voici la version finale du contrat de location pour signature électronique.",
-                        );
-                        setDocFormSmsVerify(true);
-                        setSubVistaDocu("editor");
-                        playNotificationSound();
-                        alert(
-                          "📂 Document 'Contrat_Location_Officiel_GPA.pdf' importé avec succès ! Nous l'avons injecté dans l'outil de préparation.",
-                        );
-                      }}
-                      className={`p-6 rounded-[32px] border-2 border-dashed ${
-                        darkMode
-                          ? "bg-zinc-950/40 border-teal-500/20 hover:border-teal-400 text-zinc-300"
-                          : "bg-teal-50/10 border-[#14b8a6]/30 hover:border-[#059669] text-slate-800"
-                      } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px]`}
-                    >
-                      <div
-                        className={`p-3 rounded-2xl ${darkMode ? "bg-teal-950/20 text-teal-400" : "bg-teal-50 text-teal-600"} transition-transform group-hover:scale-110 mb-2`}
-                      >
-                        <Upload size={20} />
-                      </div>
-                      <span className="text-[10px] font-black uppercase italic tracking-wider">
-                        Importer votre document (PDF / Word)
-                      </span>
-                      <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5">
-                        Glissez-déposez ou cliquez
-                      </p>
-                      <button
-                        type="button"
-                        className={`mt-3 px-4 py-2 rounded-xl text-[7.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-md ${
-                          darkMode
-                            ? "bg-teal-950/50 hover:bg-teal-900/60 text-teal-400 border border-teal-500/10"
-                            : "bg-[#059669] hover:bg-emerald-600 text-white"
-                        }`}
-                      >
-                        Sélectionner un fichier
-                      </button>
-                    </div>
-
-                    {/* MANUAL EDITOR BUTTON */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDocSimulatedFile(null);
-                        setDocFormName("");
-                        setDocFormFolder(folders[0] || "");
-                        setDocFormRecipient("");
-                        setDocFormEmail("");
-                        setDocFormPhone("");
-                        setDocFormContent(
-                          loadDefaultTemplate(folders[0] || ""),
-                        );
-                        setDocFormEmailInvite(
-                          `Bonjour, veuillez prendre connaissance et signer électroniquement le document ci-joint.`,
-                        );
-                        setDocFormSmsVerify(true);
-                        setSelectedDocuEntry(null);
-                        setSubVistaDocu("editor");
-                        playNotificationSound();
-                      }}
-                      className="w-full relative overflow-hidden p-6 rounded-[32px] border border-dashed border-slate-300 dark:border-zinc-805 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-zinc-900/30 dark:to-zinc-950 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#059669] hover:brightness-105 active:scale-95 transition-all duration-300 shadow-sm min-h-[160px]"
-                    >
-                      <div className="absolute right-4 bottom-[-10px] opacity-10 pointer-events-none select-none text-slate-900 dark:text-white">
-                        <FileSignature size={100} className="rotate-12" />
-                      </div>
-                      <span className="text-[10px] font-black uppercase italic tracking-widest text-[#059669] flex items-center space-x-1.5 relative z-10 mb-1">
-                        <span>✍️ Rédiger un nouveau document</span>
-                      </span>
-                      <p className="text-[7.5px] font-bold text-slate-400 uppercase leading-normal max-w-[180px] font-sans">
-                        Créez un accord de toutes pièces grâce à nos modèles
-                        pré-approuvés.
-                      </p>
-                    </button>
-                  </div>
-
-                  {/* All Recent Company Documents */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1 border-b border-slate-100 dark:border-zinc-900 pb-2">
-                      <h4
-                        className={`text-[9.5px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-400" : "text-slate-650"}`}
-                      >
-                        Tous les Documents
-                      </h4>
-                      {/* ADMINISTRATION PANEL FILTER TABS */}
-                      <div className="flex flex-wrap gap-1">
-                        {[
-                          { id: "all", label: "Tous" },
-                          { id: "pending", label: "En attente 🔔" },
-                          { id: "signed", label: "Signés 📜" },
-                          { id: "revoked", label: "Révoqués ✕" },
-                        ].map((tab) => (
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                          {savedSignature && (
+                            <div className="h-10 px-3 bg-white dark:bg-zinc-950 rounded-xl border border-slate-200 dark:border-zinc-800 flex items-center justify-center">
+                              <img
+                                src={savedSignature}
+                                alt="Signature Active"
+                                className="h-7 object-contain mix-blend-multiply dark:mix-blend-normal invert dark:invert-0"
+                              />
+                            </div>
+                          )}
                           <button
-                            key={tab.id}
                             type="button"
                             onClick={() => {
-                              setDocuFilterTab(tab.id);
+                              setShowSigProfileModal(true);
                               playNotificationSound();
                             }}
-                            className={`px-2 py-1 rounded-lg text-[6.5px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${
-                              docuFilterTab === tab.id
-                                ? "bg-[#7c3aed] text-white shadow-sm shadow-violet-900/10"
-                                : "bg-slate-150/40 text-slate-400 hover:text-slate-600 dark:bg-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-350"
-                            }`}
+                            className="py-2.5 px-4 bg-[#7c3aed] hover:bg-violet-600 text-white rounded-xl text-[8.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-sm flex items-center space-x-1 border-none cursor-pointer"
                           >
-                            {tab.label}
+                            <PenLine size={13} />
+                            <span>Configurer Ma Signature & Initiales</span>
                           </button>
-                        ))}
+                        </div>
+                      </div>
+
+                      {/* Dynamic Folders Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {folders.map((fName, i) => {
+                          const cMap = getFolderColorMap(fName);
+                          const dCount = companyDocs.filter(
+                            (d) => d.cat === fName,
+                          ).length;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                setSelectedDocuFolder(fName);
+                                playNotificationSound();
+                              }}
+                              className={`p-5 rounded-[28px] border text-left ${cMap.border} ${cMap.bgColor} relative overflow-hidden flex flex-col space-y-4 hover:scale-[1.02] active:scale-98 transition-all duration-300 shadow-sm`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <Folder size={32} className={cMap.iconColor} />
+                                <span
+                                  className={`text-[6px] font-black uppercase px-2 py-0.5 rounded-full ${darkMode ? "bg-violet-500/10 text-violet-400" : "bg-violet-100 text-violet-750"}`}
+                                >
+                                  Cloud Sync
+                                </span>
+                              </div>
+                              <div>
+                                <p
+                                  className={`text-[10.5px] font-black uppercase italic tracking-tight leading-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                                >
+                                  {fName}
+                                </p>
+                                <p
+                                  className={`text-[7.5px] font-bold text-slate-400 mt-1.5 uppercase`}
+                                >
+                                  {dCount} document(s)
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* DROPZONE */}
+                        <div
+                          onClick={() => {
+                            setDocSimulatedFile(
+                              "Contrat_Location_Officiel_GPA.pdf",
+                            );
+                            setDocFormName("Contrat de Location - Apt. 3");
+                            setDocFormFolder(folders[0] || "Baux Locatifs");
+                            setDocFormRecipient("Richard Duchesne");
+                            setDocFormEmail("richard.duchesne@outlook.com");
+                            setDocFormPhone("514-555-8822");
+                            setDocFormContent(
+                              loadDefaultTemplate(folders[0] || "Baux Locatifs"),
+                            );
+                            setDocFormEmailInvite(
+                              "Bonjour Richard, voici la version finale du contrat de location pour signature électronique.",
+                            );
+                            setDocFormSmsVerify(true);
+                            setSubVistaDocu("editor");
+                            playNotificationSound();
+                            alert(
+                              "📂 Document 'Contrat_Location_Officiel_GPA.pdf' importé avec succès ! Nous l'avons injecté dans l'outil de préparation.",
+                            );
+                          }}
+                          className={`p-6 rounded-[32px] border-2 border-dashed ${darkMode
+                              ? "bg-zinc-950/40 border-teal-500/20 hover:border-teal-400 text-zinc-300"
+                              : "bg-teal-50/10 border-[#14b8a6]/30 hover:border-[#059669] text-slate-800"
+                            } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px]`}
+                        >
+                          <div
+                            className={`p-3 rounded-2xl ${darkMode ? "bg-teal-950/20 text-teal-400" : "bg-teal-50 text-teal-600"} transition-transform group-hover:scale-110 mb-2`}
+                          >
+                            <Upload size={20} />
+                          </div>
+                          <span className="text-[10px] font-black uppercase italic tracking-wider">
+                            Importer votre document (PDF / Word)
+                          </span>
+                          <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5">
+                            Glissez-déposez ou cliquez
+                          </p>
+                          <button
+                            type="button"
+                            className={`mt-3 px-4 py-2 rounded-xl text-[7.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-md ${darkMode
+                                ? "bg-teal-950/50 hover:bg-teal-900/60 text-teal-400 border border-teal-500/10"
+                                : "bg-[#059669] hover:bg-emerald-600 text-white"
+                              }`}
+                          >
+                            Sélectionner un fichier
+                          </button>
+                        </div>
+
+                        {/* MANUAL EDITOR BUTTON */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocSimulatedFile(null);
+                            setDocFormName("");
+                            setDocFormFolder(folders[0] || "");
+                            setDocFormRecipient("");
+                            setDocFormEmail("");
+                            setDocFormPhone("");
+                            setDocFormContent(
+                              loadDefaultTemplate(folders[0] || ""),
+                            );
+                            setDocFormEmailInvite(
+                              `Bonjour, veuillez prendre connaissance et signer électroniquement le document ci-joint.`,
+                            );
+                            setDocFormSmsVerify(true);
+                            setSelectedDocuEntry(null);
+                            setSubVistaDocu("editor");
+                            playNotificationSound();
+                          }}
+                          className="w-full relative overflow-hidden p-6 rounded-[32px] border border-dashed border-slate-300 dark:border-zinc-805 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-zinc-900/30 dark:to-zinc-950 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#059669] hover:brightness-105 active:scale-95 transition-all duration-300 shadow-sm min-h-[160px]"
+                        >
+                          <div className="absolute right-4 bottom-[-10px] opacity-10 pointer-events-none select-none text-slate-900 dark:text-white">
+                            <FileSignature size={100} className="rotate-12" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase italic tracking-widest text-[#059669] flex items-center space-x-1.5 relative z-10 mb-1">
+                            <span>✍️ Rédiger un nouveau document</span>
+                          </span>
+                          <p className="text-[7.5px] font-bold text-slate-400 uppercase leading-normal max-w-[180px] font-sans">
+                            Créez un accord de toutes pièces grâce à nos modèles
+                            pré-approuvés.
+                          </p>
+                        </button>
+                      </div>
+
+                      {/* All Recent Company Documents */}
+                      <div className="space-y-3 pt-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1 border-b border-slate-100 dark:border-zinc-900 pb-2">
+                          <h4
+                            className={`text-[9.5px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-400" : "text-slate-650"}`}
+                          >
+                            Tous les Documents
+                          </h4>
+                          {/* ADMINISTRATION PANEL FILTER TABS */}
+                          <div className="flex flex-wrap gap-1">
+                            {[
+                              { id: "all", label: "Tous" },
+                              { id: "pending", label: "En attente 🔔" },
+                              { id: "signed", label: "Signés 📜" },
+                              { id: "revoked", label: "Révoqués ✕" },
+                            ].map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => {
+                                  setDocuFilterTab(tab.id);
+                                  playNotificationSound();
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[6.5px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${docuFilterTab === tab.id
+                                    ? "bg-[#7c3aed] text-white shadow-sm shadow-violet-900/10"
+                                    : "bg-slate-150/40 text-slate-400 hover:text-slate-600 dark:bg-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-350"
+                                  }`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {companyDocs.length === 0 ? (
+                          <p className="text-[9.5px] italic text-slate-400 font-bold px-1">
+                            Aucun document pour cette entreprise.
+                          </p>
+                        ) : (
+                          <div className="space-y-2.5">
+                            {(() => {
+                              const filteredDocs = companyDocs.filter((d) => {
+                                if (docuFilterTab === "pending")
+                                  return d.status === "En attente";
+                                if (docuFilterTab === "signed")
+                                  return d.status === "Signé";
+                                if (docuFilterTab === "revoked")
+                                  return (
+                                    d.status === "Révoqué" || d.status === "Annulé"
+                                  );
+                                return true;
+                              });
+
+                              if (filteredDocs.length === 0) {
+                                return (
+                                  <p className="text-[8.5px] italic text-slate-400 font-bold p-4 text-center">
+                                    Aucun document trouvé pour ce filtre.
+                                  </p>
+                                );
+                              }
+
+                              return filteredDocs.map((doc) => {
+                                return (
+                                  <div
+                                    key={doc.id}
+                                    onClick={() => {
+                                      setSelectedDocuEntry(doc);
+                                      setDocFormName(doc.name);
+                                      setDocFormFolder(doc.cat);
+                                      setDocFormRecipient(doc.recipient || "");
+                                      setDocFormEmail(doc.recipientEmail || "");
+                                      setDocFormPhone(doc.recipientPhone || "");
+                                      setDocFormContent(doc.content || "");
+                                      setDocFormEmailInvite(doc.emailInvite || "");
+                                      setDocFormSmsVerify(doc.smsVerify ?? true);
+                                      setDocFormSignersList(
+                                        doc.signers || [
+                                          {
+                                            id: "1",
+                                            name: "Fabiola Villegas",
+                                            email: "fabiola@propiosolutions.com",
+                                            phone: "514-555-1111",
+                                            role: "Propriétaire / Émetteur",
+                                            color: "Purple",
+                                          },
+                                          {
+                                            id: "2",
+                                            name: "Natalia Lopez",
+                                            email: "natalia@propiosolutions.com",
+                                            phone: "514-555-2222",
+                                            role: "Collaborateur direct",
+                                            color: "Emerald",
+                                          },
+                                          {
+                                            id: "3",
+                                            name: doc.recipient || "Richard",
+                                            email:
+                                              doc.recipientEmail ||
+                                              "richard@outlook.com",
+                                            role: "Signataire",
+                                            color: "Amber",
+                                          },
+                                        ],
+                                      );
+                                      setDocLogo(doc.logo || null);
+                                      setDocPlacedFields(
+                                        doc.placedFields || [
+                                          {
+                                            id: "field-1",
+                                            type: "Signature",
+                                            signer: doc.recipient || "Richard",
+                                            roleColor: "Amber",
+                                          },
+                                          {
+                                            id: "field-2",
+                                            type: "Initiales",
+                                            signer: "Fabiola Villegas",
+                                            roleColor: "Purple",
+                                          },
+                                        ],
+                                      );
+                                      setSubVistaDocu("editor");
+                                      playNotificationSound();
+                                    }}
+                                    className={`p-4 rounded-[28px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.012] ${darkMode
+                                        ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md hover:border-[#7c3aed]/40"
+                                        : "bg-white border-slate-150 hover:border-[#7c3aed]/40"
+                                      } hover:shadow-md duration-200`}
+                                  >
+                                    <div className="flex items-center space-x-3 max-w-[65%] text-left">
+                                      {doc.status === "Signé" ? (
+                                        <div className="w-8 h-8 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/10">
+                                          <CheckCircle2 size={14} />
+                                        </div>
+                                      ) : doc.status === "Révoqué" ||
+                                        doc.status === "Annulé" ? (
+                                        <div className="w-8 h-8 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0 shadow-sm border border-rose-500/10">
+                                          <X size={14} />
+                                        </div>
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 shadow-sm animate-pulse border border-amber-500/10">
+                                          <PenLine size={14} />
+                                        </div>
+                                      )}
+                                      <div className="truncate text-left">
+                                        <p className="text-[10px] font-black uppercase italic tracking-tight truncate leading-tight">
+                                          {doc.name}
+                                        </p>
+                                        <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase leading-none font-sans">
+                                          Pour: {doc.recipient} • Émis le {doc.date}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-2 shrink-0">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[6px] font-black uppercase italic ${doc.status === "Signé"
+                                            ? "bg-emerald-500/10 text-emerald-500"
+                                            : doc.status === "Révoqué" ||
+                                              doc.status === "Annulé"
+                                              ? "bg-rose-500/10 text-rose-500"
+                                              : "bg-amber-500/10 text-amber-505"
+                                          }`}
+                                      >
+                                        {doc.status}
+                                      </span>
+
+                                      {/* PENDING MANAGE ACTIONS FOR CLIENT ADMIN */}
+                                      {doc.status === "En attente" && (
+                                        <div
+                                          className="flex items-center space-x-1"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setRemindedDocs((prev) => ({
+                                                ...prev,
+                                                [doc.id]: true,
+                                              }));
+                                              playNotificationSound();
+                                              alert(
+                                                `🔔 Relance envoyée !\n\nUn courriel de relance d'accord et un rappel SMS immuable ont été transmis à ${doc.recipient} (${doc.recipientEmail || "richard.duchesne@outlook.com"}).`,
+                                              );
+                                            }}
+                                            title="Envoyer une relance par Courriel / SMS"
+                                            className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
+                                                ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
+                                                : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
+                                              }`}
+                                          >
+                                            <Bell
+                                              size={10}
+                                              className={
+                                                remindedDocs[doc.id]
+                                                  ? "animate-bounce"
+                                                  : ""
+                                              }
+                                            />
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (
+                                                confirm(
+                                                  `⚠ Annuler la demande de signature?\n\nVoulez-vous révoquer et désactiver définitivement le lien d'accès pour "${doc.name}"? Celui-ci sera invalide.`,
+                                                )
+                                              ) {
+                                                setDocuLegalList(
+                                                  docuLegalList.map((d) =>
+                                                    d.id === doc.id
+                                                      ? { ...d, status: "Révoqué" }
+                                                      : d,
+                                                  ),
+                                                );
+                                                playNotificationSound();
+                                              }
+                                            }}
+                                            title="Retirer / Annuler la demande"
+                                            className="p-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer"
+                                          >
+                                            <X size={10} />
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {doc.status === "Signé" && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleExportPDF(doc);
+                                            playNotificationSound();
+                                          }}
+                                          title="Exporter en PDF avec Certificat d'Audit"
+                                          className="p-1 px-1.5 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white rounded-lg text-[6.5px] font-black uppercase italic tracking-tighter flex items-center space-x-1 border-none transition-all cursor-pointer"
+                                        >
+                                          <Printer size={9} />
+                                          <span>PDF</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
+                  ) : (
+                    // 2. FOLDER DETAIL VIEW
+                    <div className="space-y-4">
+                      {/* Return breadcrumb */}
+                      <div className="flex items-center justify-between mb-2">
+                        <button
+                          onClick={() => {
+                            setSelectedDocuFolder(null);
+                            playNotificationSound();
+                          }}
+                          className="text-[9px] font-black uppercase italic text-[#7c3aed] flex items-center space-x-1.5"
+                        >
+                          <ArrowLeft size={12} />
+                          <span>Retour aux Dossiers</span>
+                        </button>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                          {selectedDocuFolder}
+                        </span>
+                      </div>
 
-                    {companyDocs.length === 0 ? (
-                      <p className="text-[9.5px] italic text-slate-400 font-bold px-1">
-                        Aucun document pour cette entreprise.
-                      </p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {(() => {
-                          const filteredDocs = companyDocs.filter((d) => {
-                            if (docuFilterTab === "pending")
-                              return d.status === "En attente";
-                            if (docuFilterTab === "signed")
-                              return d.status === "Signé";
-                            if (docuFilterTab === "revoked")
-                              return (
-                                d.status === "Révoqué" || d.status === "Annulé"
-                              );
-                            return true;
-                          });
-
-                          if (filteredDocs.length === 0) {
-                            return (
-                              <p className="text-[8.5px] italic text-slate-400 font-bold p-4 text-center">
-                                Aucun document trouvé pour ce filtre.
-                              </p>
-                            );
-                          }
-
-                          return filteredDocs.map((doc) => {
-                            return (
+                      {/* Documents list in selected folder */}
+                      <div className="space-y-3">
+                        {docsInFolder.length === 0 ? (
+                          <div
+                            className={`p-10 text-center border-2 border-dashed rounded-[32px] ${darkMode ? "border-zinc-900 bg-zinc-950/20 text-zinc-500" : "border-slate-100 bg-slate-50/50 text-slate-400"}`}
+                          >
+                            <FileText
+                              size={40}
+                              className="mx-auto mb-3 opacity-20"
+                            />
+                            <p className="text-[10px] font-black uppercase italic tracking-wider">
+                              Aucun document dans {selectedDocuFolder}
+                            </p>
+                            <button
+                              onClick={() => {
+                                setDocFormFolder(selectedDocuFolder || "");
+                                setDocFormName(
+                                  `${selectedDocuFolder} - ${currentCompany?.nombre}`,
+                                );
+                                setDocFormRecipient("");
+                                setDocFormEmail("");
+                                setDocFormPhone("");
+                                setDocFormContent(
+                                  loadDefaultTemplate(selectedDocuFolder || ""),
+                                );
+                                setDocFormEmailInvite(
+                                  "Bonjour, veuillez prendre connaissance et signer électroniquement le document ci-joint.",
+                                );
+                                setDocFormSmsVerify(true);
+                                setDocFormSignersList([
+                                  {
+                                    id: "1",
+                                    name: "Fabiola Villegas",
+                                    email: "fabiola@propiosolutions.com",
+                                    phone: "514-555-1111",
+                                    role: "Propriétaire / Émetteur",
+                                    color: "Purple",
+                                  },
+                                  {
+                                    id: "2",
+                                    name: "Natalia Lopez",
+                                    email: "natalia@propiosolutions.com",
+                                    phone: "514-555-2222",
+                                    role: "Collaborateur direct",
+                                    color: "Emerald",
+                                  },
+                                  {
+                                    id: "3",
+                                    name: "Richard",
+                                    email: "richard.duchesne@outlook.com",
+                                    role: "Signataire",
+                                    color: "Amber",
+                                  },
+                                ]);
+                                setDocLogo(null);
+                                setDocPlacedFields([
+                                  {
+                                    id: "field-1",
+                                    type: "Signature",
+                                    signer: "Richard",
+                                    roleColor: "Amber",
+                                  },
+                                  {
+                                    id: "field-2",
+                                    type: "Initiales",
+                                    signer: "Fabiola Villegas",
+                                    roleColor: "Purple",
+                                  },
+                                ]);
+                                setSelectedDocuEntry(null);
+                                setSubVistaDocu("editor");
+                                playNotificationSound();
+                              }}
+                              className="mt-4 px-4 py-3 bg-[#7c3aed] hover:bg-violet-600 text-white rounded-2xl text-[8px] font-black uppercase italic tracking-widest transition-all shadow-md shadow-violet-900/10"
+                            >
+                              + Créer un document
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {docsInFolder.map((doc) => (
                               <div
                                 key={doc.id}
                                 onClick={() => {
@@ -11726,7 +11737,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       },
                                     ],
                                   );
-                                  setDocLogo(doc.logo || null);
+                                  setDocLogo(doc.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                   setDocPlacedFields(
                                     doc.placedFields || [
                                       {
@@ -11746,52 +11757,51 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   setSubVistaDocu("editor");
                                   playNotificationSound();
                                 }}
-                                className={`p-4 rounded-[28px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.012] ${
-                                  darkMode
-                                    ? "bg-zinc-950 border-zinc-900 hover:border-[#7c3aed]/40"
-                                    : "bg-white border-slate-150 hover:border-[#7c3aed]/40"
-                                } hover:shadow-md duration-200`}
+                                className={`p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md ${darkMode
+                                    ? "bg-zinc-950 border-zinc-905 hover:border-zinc-800 text-zinc-100"
+                                    : "bg-white border-slate-200 hover:border-slate-300 text-slate-900"
+                                  }`}
                               >
-                                <div className="flex items-center space-x-3 max-w-[65%] text-left">
+                                <div className="flex items-center space-x-3.5 flex-1 min-w-0 pr-3">
+                                  {/* STATUS EMBEDDED GRAPHICS - REVISION 2 */}
                                   {doc.status === "Signé" ? (
-                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/10">
-                                      <CheckCircle2 size={14} />
+                                    <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-605 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/10">
+                                      <CheckCircle2 size={16} />
                                     </div>
                                   ) : doc.status === "Révoqué" ||
                                     doc.status === "Annulé" ? (
-                                    <div className="w-8 h-8 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0 shadow-sm border border-rose-500/10">
-                                      <X size={14} />
+                                    <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-505 flex items-center justify-center shrink-0 shadow-sm border border-rose-500/10">
+                                      <X size={16} />
                                     </div>
                                   ) : (
-                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 shadow-sm animate-pulse border border-amber-500/10">
-                                      <PenLine size={14} />
+                                    <div className="w-9 h-9 rounded-full bg-amber-500/10 text-amber-605 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-sm animate-pulse border border-amber-500/10">
+                                      <PenLine size={16} />
                                     </div>
                                   )}
-                                  <div className="truncate text-left">
-                                    <p className="text-[10px] font-black uppercase italic tracking-tight truncate leading-tight">
+                                  <div className="truncate">
+                                    <p className="text-[11px] font-black uppercase italic tracking-tight truncate leading-tight text-left">
                                       {doc.name}
                                     </p>
-                                    <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase leading-none font-sans">
-                                      Pour: {doc.recipient} • Émis le {doc.date}
+                                    <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-sans text-left">
+                                      Pour : {doc.recipient} • Émis le {doc.date}
                                     </p>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center space-x-2 shrink-0">
+                                <div className="text-right flex items-center space-x-2 shrink-0">
                                   <span
-                                    className={`px-2 py-0.5 rounded-full text-[6px] font-black uppercase italic ${
-                                      doc.status === "Signé"
+                                    className={`px-2.5 py-1 rounded-full text-[6.5px] font-black uppercase italic leading-none whitespace-nowrap ${doc.status === "Signé"
                                         ? "bg-emerald-500/10 text-emerald-500"
                                         : doc.status === "Révoqué" ||
-                                            doc.status === "Annulé"
-                                          ? "bg-rose-500/10 text-rose-500"
+                                          doc.status === "Annulé"
+                                          ? "bg-rose-500/10 text-rose-505"
                                           : "bg-amber-500/10 text-amber-505"
-                                    }`}
+                                      }`}
                                   >
                                     {doc.status}
                                   </span>
 
-                                  {/* PENDING MANAGE ACTIONS FOR CLIENT ADMIN */}
+                                  {/* PENDING ACTIONS */}
                                   {doc.status === "En attente" && (
                                     <div
                                       className="flex items-center space-x-1"
@@ -11811,11 +11821,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                           );
                                         }}
                                         title="Envoyer une relance par Courriel / SMS"
-                                        className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${
-                                          remindedDocs[doc.id]
+                                        className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
                                             ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
                                             : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
-                                        }`}
+                                          }`}
                                       >
                                         <Bell
                                           size={10}
@@ -11863,1518 +11872,1213 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                         playNotificationSound();
                                       }}
                                       title="Exporter en PDF avec Certificat d'Audit"
-                                      className="p-1 px-1.5 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white rounded-lg text-[6.5px] font-black uppercase italic tracking-tighter flex items-center space-x-1 border-none transition-all cursor-pointer"
+                                      className="p-1.5 px-2 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white rounded-lg text-[6.5px] font-black uppercase italic tracking-tighter flex items-center space-x-1 border-none transition-all cursor-pointer"
                                     >
-                                      <Printer size={9} />
+                                      <Printer size={10} />
                                       <span>PDF</span>
                                     </button>
                                   )}
                                 </div>
                               </div>
-                            );
-                          });
-                        })()}
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                // 2. FOLDER DETAIL VIEW
-                <div className="space-y-4">
-                  {/* Return breadcrumb */}
-                  <div className="flex items-center justify-between mb-2">
+                // 3. WORKSPACE HEADER & FORM EDITOR (DocumentEditor View)
+                <div className="space-y-6 w-full animate-in fade-in duration-300 text-left">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2 pb-4 border-b border-slate-100 dark:border-zinc-900">
                     <button
+                      type="button"
                       onClick={() => {
-                        setSelectedDocuFolder(null);
+                        setSubVistaDocu("liste");
                         playNotificationSound();
                       }}
-                      className="text-[9px] font-black uppercase italic text-[#7c3aed] flex items-center space-x-1.5"
+                      className={`text-[9.5px] font-black uppercase italic text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 flex items-center space-x-1.5`}
                     >
-                      <ArrowLeft size={12} />
-                      <span>Retour aux Dossiers</span>
+                      <ArrowLeft size={13} />
+                      <span>Annuler & Retour aux dossiers</span>
                     </button>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                      {selectedDocuFolder}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[8.5px] font-black text-[#059669] uppercase tracking-widest italic animate-pulse">
+                        {selectedDocuEntry
+                          ? "Édition de " + selectedDocuEntry.name
+                          : "Tableau de Préparation Documentaire BYOS"}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Documents list in selected folder */}
-                  <div className="space-y-3">
-                    {docsInFolder.length === 0 ? (
+                  {/* TWO COLUMN GRID FOR HIGH-END SPACING */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* COLUMN LEFT (lg:col-span-7) - THE DOCUMENT CANVAS & PREPARATION TOOLS */}
+                    <div className="lg:col-span-7 space-y-6">
+                      {/* CRYPTOGRAPHIC AUDIT SEAL FOR SIGNED CONTRACTS */}
+                      {selectedDocuEntry?.status === "Signé" && (
+                        <div className="p-5 rounded-[32px] border border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/20 text-left space-y-3.5 shadow-sm animate-in zoom-in-95">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="p-1 px-1.5 bg-[#059669] text-white rounded-lg text-[7px] font-black uppercase tracking-widest leading-none flex items-center space-x-1">
+                              <ShieldCheck size={10} className="animate-pulse" />
+                              <span>SCELLÉ PROTECTEUR BYOS</span>
+                            </div>
+                            <span className="text-[7.5px] font-extrabold text-[#059669] uppercase tracking-wider">
+                              CONFORMATOIRE LOI 25 (QUÉBEC)
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 border-l-2 border-[#059669]/30 pl-3.5">
+                            <p className="text-[10px] font-bold text-slate-700 dark:text-zinc-200 uppercase tracking-tight">
+                              Ce bail/document a été scellé électroniquement par les
+                              signataires sous clé biométrique.
+                            </p>
+                            <ul className="text-[7.5px] font-semibold text-slate-500 dark:text-zinc-400 space-y-1 uppercase tracking-tight font-sans">
+                              <li>
+                                • Signataire principal:{" "}
+                                <span className="font-extrabold text-slate-800 dark:text-white">
+                                  {selectedDocuEntry.recipient}
+                                </span>{" "}
+                                ({selectedDocuEntry.recipientEmail})
+                              </li>
+                              <li>
+                                • Horodatage certifié:{" "}
+                                <span className="font-extrabold text-slate-800 dark:text-white">
+                                  {selectedDocuEntry.signatureTimestamp ||
+                                    new Date().toISOString()}
+                                </span>
+                              </li>
+                              <li>
+                                • ID de Transaction:{" "}
+                                <span className="font-mono text-[8.5px] font-extrabold text-[#059669]">
+                                  {selectedDocuEntry.transactionId ||
+                                    "TX-BYOS-PENDING"}
+                                </span>
+                              </li>
+                              <li>
+                                • Hachage cryptographique SHA-256:{" "}
+                                <span className="font-mono text-[7px] font-bold text-slate-400 break-all">
+                                  {selectedDocuEntry.transactionId
+                                    ? `sha256-hash-${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`
+                                    : "Calculated on download"}
+                                </span>
+                              </li>
+                            </ul>
+                          </div>
+
+                          <div className="flex items-center space-x-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleExportPDF(selectedDocuEntry);
+                                playNotificationSound();
+                              }}
+                              className="px-3.5 py-2 bg-[#059669] hover:bg-emerald-600 text-white rounded-xl text-[8.5px] font-black uppercase italic tracking-widest flex items-center space-x-1 border-none transition-all cursor-pointer"
+                            >
+                              <Printer size={11} />
+                              <span>
+                                TÉLÉCHARGER LE PDF OFFICIEL AVEC CERTIFICAT
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* DOCUMENT METADATA */}
                       <div
-                        className={`p-10 text-center border-2 border-dashed rounded-[32px] ${darkMode ? "border-zinc-900 bg-zinc-950/20 text-zinc-500" : "border-slate-100 bg-slate-50/50 text-slate-400"}`}
+                        className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                       >
-                        <FileText
-                          size={40}
-                          className="mx-auto mb-3 opacity-20"
-                        />
-                        <p className="text-[10px] font-black uppercase italic tracking-wider">
-                          Aucun document dans {selectedDocuFolder}
-                        </p>
-                        <button
-                          onClick={() => {
-                            setDocFormFolder(selectedDocuFolder || "");
-                            setDocFormName(
-                              `${selectedDocuFolder} - ${currentCompany?.nombre}`,
-                            );
-                            setDocFormRecipient("");
-                            setDocFormEmail("");
-                            setDocFormPhone("");
-                            setDocFormContent(
-                              loadDefaultTemplate(selectedDocuFolder || ""),
-                            );
-                            setDocFormEmailInvite(
-                              "Bonjour, veuillez prendre connaissance et signer électroniquement le document ci-joint.",
-                            );
-                            setDocFormSmsVerify(true);
-                            setDocFormSignersList([
-                              {
-                                id: "1",
-                                name: "Fabiola Villegas",
-                                email: "fabiola@propiosolutions.com",
-                                phone: "514-555-1111",
-                                role: "Propriétaire / Émetteur",
-                                color: "Purple",
-                              },
-                              {
-                                id: "2",
-                                name: "Natalia Lopez",
-                                email: "natalia@propiosolutions.com",
-                                phone: "514-555-2222",
-                                role: "Collaborateur direct",
-                                color: "Emerald",
-                              },
-                              {
-                                id: "3",
-                                name: "Richard",
-                                email: "richard.duchesne@outlook.com",
-                                role: "Signataire",
-                                color: "Amber",
-                              },
-                            ]);
-                            setDocLogo(null);
-                            setDocPlacedFields([
-                              {
-                                id: "field-1",
-                                type: "Signature",
-                                signer: "Richard",
-                                roleColor: "Amber",
-                              },
-                              {
-                                id: "field-2",
-                                type: "Initiales",
-                                signer: "Fabiola Villegas",
-                                roleColor: "Purple",
-                              },
-                            ]);
-                            setSelectedDocuEntry(null);
-                            setSubVistaDocu("editor");
-                            playNotificationSound();
-                          }}
-                          className="mt-4 px-4 py-3 bg-[#7c3aed] hover:bg-violet-600 text-white rounded-2xl text-[8px] font-black uppercase italic tracking-widest transition-all shadow-md shadow-violet-900/10"
-                        >
-                          + Créer un document
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {docsInFolder.map((doc) => (
-                          <div
-                            key={doc.id}
-                            onClick={() => {
-                              setSelectedDocuEntry(doc);
-                              setDocFormName(doc.name);
-                              setDocFormFolder(doc.cat);
-                              setDocFormRecipient(doc.recipient || "");
-                              setDocFormEmail(doc.recipientEmail || "");
-                              setDocFormPhone(doc.recipientPhone || "");
-                              setDocFormContent(doc.content || "");
-                              setDocFormEmailInvite(doc.emailInvite || "");
-                              setDocFormSmsVerify(doc.smsVerify ?? true);
-                              setDocFormSignersList(
-                                doc.signers || [
-                                  {
-                                    id: "1",
-                                    name: "Fabiola Villegas",
-                                    email: "fabiola@propiosolutions.com",
-                                    phone: "514-555-1111",
-                                    role: "Propriétaire / Émetteur",
-                                    color: "Purple",
-                                  },
-                                  {
-                                    id: "2",
-                                    name: "Natalia Lopez",
-                                    email: "natalia@propiosolutions.com",
-                                    phone: "514-555-2222",
-                                    role: "Collaborateur direct",
-                                    color: "Emerald",
-                                  },
-                                  {
-                                    id: "3",
-                                    name: doc.recipient || "Richard",
-                                    email:
-                                      doc.recipientEmail ||
-                                      "richard@outlook.com",
-                                    role: "Signataire",
-                                    color: "Amber",
-                                  },
-                                ],
-                              );
-                              setDocLogo(doc.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
-                              setDocPlacedFields(
-                                doc.placedFields || [
-                                  {
-                                    id: "field-1",
-                                    type: "Signature",
-                                    signer: doc.recipient || "Richard",
-                                    roleColor: "Amber",
-                                  },
-                                  {
-                                    id: "field-2",
-                                    type: "Initiales",
-                                    signer: "Fabiola Villegas",
-                                    roleColor: "Purple",
-                                  },
-                                ],
-                              );
-                              setSubVistaDocu("editor");
-                              playNotificationSound();
-                            }}
-                            className={`p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md ${
-                              darkMode
-                                ? "bg-zinc-950 border-zinc-905 hover:border-zinc-800 text-zinc-100"
-                                : "bg-white border-slate-200 hover:border-slate-300 text-slate-900"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3.5 flex-1 min-w-0 pr-3">
-                              {/* STATUS EMBEDDED GRAPHICS - REVISION 2 */}
-                              {doc.status === "Signé" ? (
-                                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-605 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/10">
-                                  <CheckCircle2 size={16} />
-                                </div>
-                              ) : doc.status === "Révoqué" ||
-                                doc.status === "Annulé" ? (
-                                <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-505 flex items-center justify-center shrink-0 shadow-sm border border-rose-500/10">
-                                  <X size={16} />
-                                </div>
-                              ) : (
-                                <div className="w-9 h-9 rounded-full bg-amber-500/10 text-amber-605 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-sm animate-pulse border border-amber-500/10">
-                                  <PenLine size={16} />
-                                </div>
-                              )}
-                              <div className="truncate">
-                                <p className="text-[11px] font-black uppercase italic tracking-tight truncate leading-tight text-left">
-                                  {doc.name}
-                                </p>
-                                <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-sans text-left">
-                                  Pour : {doc.recipient} • Émis le {doc.date}
-                                </p>
-                              </div>
+                        <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-900">
+                          <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
+                            Spécifications de l'Accord
+                          </p>
+                          {docSimulatedFile && (
+                            <span className="text-[7.5px] font-black uppercase bg-violet-500/10 text-violet-650 px-2.5 py-1 rounded-full border border-violet-500/15">
+                              📄 {docSimulatedFile}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                                Nom du document contractuel
+                              </label>
+                              <input
+                                type="text"
+                                value={docFormName}
+                                onChange={(e) => setDocFormName(e.target.value)}
+                                disabled={selectedDocuEntry?.status === "Signé"}
+                                placeholder="Nommerez votre contrat, ex: Bail Appartement 45B"
+                                className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
+                              />
                             </div>
 
-                            <div className="text-right flex items-center space-x-2 shrink-0">
-                              <span
-                                className={`px-2.5 py-1 rounded-full text-[6.5px] font-black uppercase italic leading-none whitespace-nowrap ${
-                                  doc.status === "Signé"
-                                    ? "bg-emerald-500/10 text-emerald-500"
-                                    : doc.status === "Révoqué" ||
-                                        doc.status === "Annulé"
-                                      ? "bg-rose-500/10 text-rose-505"
-                                      : "bg-amber-500/10 text-amber-505"
-                                }`}
-                              >
-                                {doc.status}
-                              </span>
-
-                              {/* PENDING ACTIONS */}
-                              {doc.status === "En attente" && (
-                                <div
-                                  className="flex items-center space-x-1"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
+                            {/* BRANDING LOGO INTERACTION */}
+                            <div>
+                              <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                                Logo d'entreprise (Smart Branding)
+                              </label>
+                              <input
+                                type="file"
+                                ref={docLogoInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const localUrl = URL.createObjectURL(file);
+                                    setDocLogo(localUrl);
+                                    // Persist logo per company — survives page reloads
+                                    localStorage.setItem('doculegal_logo_' + activeCompanyId, localUrl);
+                                    playNotificationSound();
+                                    alert(
+                                      "✨ Logo d'entreprise appliqué !\n\nVotre image de marque s'affichera maintenant dans l'en-tête du document et sur le portail client.",
+                                    );
+                                  }
+                                }}
+                              />
+                              <div className="flex items-center space-x-2">
+                                {docLogo ? (
+                                  <div className="flex items-center space-x-2 bg-slate-50 dark:bg-zinc-900/60 p-2 rounded-2xl border border-slate-110 dark:border-zinc-850 w-full justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <img
+                                        src={docLogo}
+                                        alt="Logo"
+                                        className="h-7 max-w-[80px] object-contain rounded"
+                                      />
+                                      <span className="text-[6.5px] font-bold text-slate-400 uppercase">
+                                        Actif
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDocLogo(null);
+                                        playNotificationSound();
+                                      }}
+                                      className="text-[7.5px] font-black uppercase text-rose-500 hover:text-rose-600 bg-transparent border-none cursor-pointer pr-1"
+                                    >
+                                      Retirer
+                                    </button>
+                                  </div>
+                                ) : (
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setRemindedDocs((prev) => ({
-                                        ...prev,
-                                        [doc.id]: true,
-                                      }));
-                                      playNotificationSound();
-                                      alert(
-                                        `🔔 Relance envoyée !\n\nUn courriel de relance d'accord et un rappel SMS immuable ont été transmis à ${doc.recipient} (${doc.recipientEmail || "richard.duchesne@outlook.com"}).`,
-                                      );
+                                    onClick={() => {
+                                      docLogoInputRef.current?.click();
                                     }}
-                                    title="Envoyer une relance par Courriel / SMS"
-                                    className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${
-                                      remindedDocs[doc.id]
-                                        ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
-                                        : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
-                                    }`}
+                                    className="w-full py-3 bg-violet-500/10 hover:bg-violet-500/15 text-[#7c3aed] border border-dashed border-[#7c3aed]/30 rounded-2xl text-[8.5px] font-black uppercase tracking-wider flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
                                   >
-                                    <Bell
-                                      size={10}
-                                      className={
-                                        remindedDocs[doc.id]
-                                          ? "animate-bounce"
-                                          : ""
-                                      }
-                                    />
+                                    <Upload size={11} />
+                                    <span>Téléverser un logo (Branding)</span>
                                   </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (
-                                        confirm(
-                                          `⚠ Annuler la demande de signature?\n\nVoulez-vous révoquer et désactiver définitivement le lien d'accès pour "${doc.name}"? Celui-ci sera invalide.`,
-                                        )
-                                      ) {
-                                        setDocuLegalList(
-                                          docuLegalList.map((d) =>
-                                            d.id === doc.id
-                                              ? { ...d, status: "Révoqué" }
-                                              : d,
+                          <div className="grid grid-cols-2 gap-35">
+                            <div>
+                              <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                                Dossier de Classement
+                              </label>
+                              {/* Custom-styled select — appearance-none removes native browser chrome */}
+                              <div className="relative">
+                                <select
+                                  value={docFormFolder}
+                                  onChange={(e) => {
+                                    const nextFld = e.target.value;
+                                    setDocFormFolder(nextFld);
+                                    setDocFormContent(loadDefaultTemplate(nextFld));
+                                  }}
+                                  disabled={selectedDocuEntry?.status === "Signé"}
+                                  className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
+                                >
+                                  {folders.map((f) => (
+                                    <option key={f} value={f}>{f}</option>
+                                  ))}
+                                </select>
+                                {/* Custom dropdown arrow */}
+                                <div className={`pointer-events-none absolute inset-y-0 right-3 flex items-center ${darkMode ? 'text-zinc-400' : 'text-[#7c3aed]'}`}>
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                                Auteur émetteur (IP Certifié)
+                              </label>
+                              <input
+                                type="text"
+                                value={activeUser}
+                                disabled
+                                className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border opacity-60 cursor-not-allowed ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-slate-50 border-slate-105 text-slate-400'}`}
+                              />
+                            </div>
+                          </div>
+
+                          {/* ── Quick Fill PA V2 — Accordéon 3 sections ── */}
+                          {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
+                            <div className={`rounded-[24px] border overflow-hidden ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/60 border-violet-200/80'}`}>
+
+                              {/* ── Header + Bouton Appliquer ── */}
+                              <div className="flex items-center justify-between px-5 py-4 gap-3">
+                                <div>
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">⚡ Remplissage Rapide — PA Dynamique</p>
+                                  <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5 leading-relaxed">Type · Champs · Conditions → Cliquez Appliquer pour générer le contrat</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const defaults: Record<string, string> = {
+                                      ACHETEUR_1_NOM: 'Natalia Ortelli',
+                                      ACHETEUR_2_NOM: 'Fabiola Villegas',
+                                    };
+                                    const allValues: Record<string, string> = { ...defaults, ...paQuickFillValues };
+
+                                    // Start from the loaded template (if PA markers present) or load fresh
+                                    const hasV2Markers = docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}');
+                                    const baseTemplate = hasV2Markers ? docFormContent : loadDefaultTemplate(docFormFolder);
+
+                                    let result = baseTemplate;
+
+                                    // 1. Process conditional blocks {{#IF_KEY}}...{{/IF_KEY}}
+                                    const condMap: Record<string, boolean> = {
+                                      ...paConditions,
+                                      VENDEUR_2: !!(allValues['VENDEUR_2_NOM']?.trim()),
+                                    };
+                                    result = result.replace(/\{\{#IF_(\w+)\}\}([\s\S]*?)\{\{\/IF_\1\}\}/g,
+                                      (_match: string, condKey: string, blockContent: string) =>
+                                        condMap[condKey] ? blockContent.trim() : ''
+                                    );
+
+                                    // 2. Replace {{VARIABLE}} tokens
+                                    Object.entries(allValues).forEach(([k, v]) => {
+                                      if (v?.trim()) result = result.split(`{{${k}}}`).join(v.trim());
+                                    });
+
+                                    // 3. Replace {{PROP_TYPE}}
+                                    result = result.split('{{PROP_TYPE}}').join(paPropType);
+
+                                    // 4. Clean up excess blank lines (max 2 consecutive)
+                                    result = result.replace(/\n{3,}/g, '\n\n');
+
+                                    setDocFormContent(result);
+                                  }}
+                                  className="flex-shrink-0 px-4 py-2.5 bg-[#7c3aed] hover:bg-violet-700 active:scale-95 text-white rounded-xl text-[8px] font-black uppercase tracking-wider transition-all shadow-md shadow-violet-500/20"
+                                >
+                                  ✓ Appliquer
+                                </button>
+                              </div>
+
+                              {/* ── Accordéon 1 : Type de propriété ── */}
+                              <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPaQfTab(paQfTab === 'type' ? null : 'type')}
+                                  className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">🏠</span>
+                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Type de propriété</span>
+                                    <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>{paPropType}</span>
+                                  </div>
+                                  <span className="text-slate-400 text-[10px]">{paQfTab === 'type' ? '▲' : '▼'}</span>
+                                </button>
+                                {paQfTab === 'type' && (
+                                  <div className="px-5 pb-5">
+                                    <div className="flex flex-wrap gap-2">
+                                      {(['Maison unifamiliale', 'Condominium', 'Chalet', 'Plex', 'Terrain'] as const).map(type => (
+                                        <button
+                                          key={type}
+                                          type="button"
+                                          onClick={() => {
+                                            setPaPropType(type);
+                                            setPaConditions(prev => ({
+                                              ...prev,
+                                              COND_VISITE_LOGEMENTS: type === 'Plex',
+                                              COND_DOCS_COPROPRIETE: type === 'Condominium',
+                                            }));
+                                          }}
+                                          className={`px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wide transition-all ${paPropType === type
+                                              ? 'bg-[#7c3aed] text-white shadow-md shadow-violet-500/30'
+                                              : darkMode
+                                                ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                                                : 'bg-white text-slate-600 border border-slate-200 hover:border-violet-400 hover:text-violet-600'
+                                            }`}
+                                        >{type}</button>
+                                      ))}
+                                    </div>
+                                    {paPropType === 'Plex' && (
+                                      <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Visite logements &amp; baux » activée automatiquement</p>
+                                    )}
+                                    {paPropType === 'Condominium' && (
+                                      <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Documentation copropriété » activée automatiquement</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* ── Accordéon 2 : Champs à remplir ── */}
+                              <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPaQfTab(paQfTab === 'champs' ? null : 'champs')}
+                                  className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">📝</span>
+                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Champs à remplir</span>
+                                    <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>17 champs</span>
+                                  </div>
+                                  <span className="text-slate-400 text-[10px]">{paQfTab === 'champs' ? '▲' : '▼'}</span>
+                                </button>
+                                {paQfTab === 'champs' && (
+                                  <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {([
+                                      { key: 'ACHETEUR_1_NOM', label: 'Acheteur 1 (Nom)', ph: 'Natalia Ortelli', def: 'Natalia Ortelli' },
+                                      { key: 'ACHETEUR_2_NOM', label: 'Acheteur 2 (Nom)', ph: 'Fabiola Villegas', def: 'Fabiola Villegas' },
+                                      { key: 'CESSIONNAIRE', label: 'Cessionnaire (opt.)', ph: 'Laisser vide si N/A', def: '' },
+                                      { key: 'VENDEUR_1_NOM', label: 'Vendeur 1 (Nom)', ph: 'Ex : Jean Dupont', def: '' },
+                                      { key: 'VENDEUR_2_NOM', label: 'Vendeur 2 (opt. → masqué si vide)', ph: 'Vide = disparaît du contrat', def: '' },
+                                      { key: 'ADRESSE_IMMEUBLE', label: "Adresse de l'immeuble", ph: 'Ex : 456 av. des Pins, Laval', def: '' },
+                                      { key: 'CADASTRE_LOT', label: 'No lot cadastre QC', ph: 'Ex : 1 234 567', def: '' },
+                                      { key: 'PRIX_TOTAL', label: "Prix d'achat", ph: 'Ex : 450 000 $', def: '' },
+                                      { key: 'MISE_DE_FONDS', label: 'Mise de fonds', ph: 'Ex : 45 000 $', def: '' },
+                                      { key: 'FINANCEMENT_MONTANT', label: 'Montant prêt hypothécaire', ph: 'Ex : 405 000 $', def: '' },
+                                      { key: 'DATE_ACTE_VENTE', label: 'Date acte de vente', ph: 'Ex : 15 septembre 2026', def: '' },
+                                      { key: 'DATE_VALIDITE', label: "Offre valide jusqu'au", ph: 'Ex : 20 juin 2026 à 23h59', def: '' },
+                                      { key: 'LIEU_ACHETEUR', label: 'Lieu signature ACHETEUR (optionnel)', ph: 'Capturé automatiquement à la signature', def: '' },
+                                      { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date signature ACHETEUR (optionnel)', ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
+                                      { key: 'LIEU_VENDEUR', label: 'Lieu signature VENDEUR (optionnel)', ph: 'Capturé automatiquement à la signature', def: '' },
+                                      { key: 'DATE_SIGNATURE_VENDEUR', label: 'Date signature VENDEUR (optionnel)', ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
+                                    ] as Array<{ key: string; label: string; ph: string; def: string }>).map(({ key, label, ph, def }) => (
+                                      <div key={key}>
+                                        <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
+                                        <input
+                                          type="text"
+                                          value={paQuickFillValues[key] !== undefined ? paQuickFillValues[key] : def}
+                                          onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                          placeholder={ph}
+                                          className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                        />
+                                      </div>
+                                    ))}
+                                    {/* Inclusions — full-width textarea */}
+                                    <div className="sm:col-span-2">
+                                      <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">Inclusions (liste libre)</label>
+                                      <textarea
+                                        rows={3}
+                                        value={paQuickFillValues['INCLUSIONS'] || ''}
+                                        onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, INCLUSIONS: e.target.value }))}
+                                        placeholder="Ex : Électroménagers, stores, éclairage extérieur, thermopompe..."
+                                        className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all resize-none ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* ── Accordéon 3 : Conditions ── */}
+                              <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPaQfTab(paQfTab === 'conditions' ? null : 'conditions')}
+                                  className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">✅</span>
+                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Conditions actives</span>
+                                    <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>
+                                      {Object.values(paConditions).filter(Boolean).length} / 8
+                                    </span>
+                                  </div>
+                                  <span className="text-slate-400 text-[10px]">{paQfTab === 'conditions' ? '▲' : '▼'}</span>
+                                </button>
+                                {paQfTab === 'conditions' && (
+                                  <div className="px-5 pb-5 space-y-2">
+                                    {([
+                                      { key: 'COND_SANS_GARANTIE', label: 'Sans garantie légale', badge: '', desc: 'Vente aux risques et périls de l\'ACHETEUR' },
+                                      { key: 'COND_VISITE', label: '2 visites satisfaction ACHETEUR', badge: '', desc: 'Après signature de la promesse' },
+                                      { key: 'COND_INSPECTION', label: 'Inspection (15 jours avant acte)', badge: '', desc: 'Conditionnel à résultats satisfaisants' },
+                                      { key: 'COND_DILIGENCE_MUNIC', label: 'Vérification diligente municipale', badge: '', desc: 'Permis, conformité, autorités locales' },
+                                      { key: 'COND_VISITE_LOGEMENTS', label: 'Visite logements & remise des baux', badge: 'Plex', desc: 'Auto-activé si type Plex sélectionné' },
+                                      { key: 'COND_DOCS_COPROPRIETE', label: 'Documentation de copropriété', badge: 'Condo', desc: 'Déclaration, PV assemblées, fonds de prévoyance' },
+                                      { key: 'COND_ANNULATION', label: 'Annulation sans pénalité', badge: '', desc: 'Si vérification non satisfaisante' },
+                                      { key: 'COND_CERT_LOCALISATION', label: 'Certificat de localisation', badge: '', desc: 'Ou assurance titre aux frais du VENDEUR' },
+                                    ] as Array<{ key: string; label: string; badge: string; desc: string }>).map(({ key, label, badge, desc }) => (
+                                      <label
+                                        key={key}
+                                        className={`flex items-start gap-3 cursor-pointer p-3 rounded-2xl transition-all ${paConditions[key]
+                                            ? (darkMode ? 'bg-violet-950/50 border border-violet-700/40' : 'bg-violet-50 border border-violet-200')
+                                            : (darkMode ? 'hover:bg-zinc-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')
+                                          }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={!!paConditions[key]}
+                                          onChange={(e) => setPaConditions(prev => ({ ...prev, [key]: e.target.checked }))}
+                                          className="mt-0.5 w-4 h-4 rounded accent-violet-600 cursor-pointer flex-shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`text-[9px] font-bold leading-tight ${paConditions[key] ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500'}`}>{label}</span>
+                                            {badge && (
+                                              <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 border border-violet-200 flex-shrink-0">{badge}</span>
+                                            )}
+                                          </div>
+                                          <p className="text-[7px] text-slate-400 mt-0.5">{desc}</p>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                            </div>
+                          )}
+
+
+                          <div>
+                            <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                              Clauses contractuelles &amp; Corps de l'accord
+                            </label>
+                            <textarea
+                              value={docFormContent}
+                              onChange={(e) => setDocFormContent(e.target.value)}
+                              rows={14}
+                              disabled={selectedDocuEntry?.status === "Signé"}
+                              className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-sans font-medium transition-all border resize-y leading-relaxed ${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-50 focus:border-[#7c3aed] placeholder:text-zinc-500' : 'bg-white border-slate-300 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
+                              placeholder="Faites valoir les clauses convenues ici..."
+                              style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* VISUAL FIELD PLACEMENT TOOL & LIVE SIMULATED DOC */}
+                      <div
+                        className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
+                      >
+                        <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-900">
+                          <div>
+                            <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
+                              Placement Visuel de Validation
+                            </p>
+                            <p className="text-[7.5px] text-slate-400 dark:text-zinc-500 uppercase font-semibold mt-0.5">
+                              Cliquez sur un outil pour l'apposer instantanément
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* FIELD SIGNER SELECTOR */}
+                        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850/40">
+                          <span className="text-[7.5px] font-black uppercase text-slate-400 italic block mb-1.5">
+                            Signataire cible pour l'élément à apposer :
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {docFormSignersList.map((sig) => {
+                              const isSelected = docSignerActive === sig.name;
+                              const colorMeta = getSignerColorClasses(sig.color);
+                              return (
+                                <button
+                                  key={sig.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setDocSignerActive(sig.name);
+                                    playNotificationSound();
+                                  }}
+                                  className={`flex items-center justify-center space-x-1.5 p-2 rounded-xl text-[8px] font-black uppercase italic tracking-tight border transition-all ${isSelected
+                                      ? `${colorMeta.border} border-2 scale-[1.03] ring-1 ring-violet-500/20`
+                                      : "bg-transparent border-slate-150 dark:border-zinc-850 text-slate-405 dark:text-zinc-500 hover:text-slate-650"
+                                    }`}
+                                >
+                                  <div
+                                    className={`w-1.5 h-1.5 rounded-full ${colorMeta.dot} shrink-0`}
+                                  />
+                                  <span className="truncate">
+                                    {sig.name.split(" ")[0]}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* TOOLBAR FOR INSTANT FIELD CREATION */}
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            {
+                              type: "Signature",
+                              label: "Signature",
+                              icon: <PenLine size={13} />,
+                              textClass: "text-[#e11d48]",
+                              borderClass: "border-rose-500/20 bg-rose-500/[0.02]",
+                              hClass: "hover:bg-rose-500/5",
+                            },
+                            {
+                              type: "Initiales",
+                              label: "Initiales (AA)",
+                              icon: <Type size={13} />,
+                              textClass: "text-[#2563eb]",
+                              borderClass: "border-blue-500/20 bg-blue-500/[0.02]",
+                              hClass: "hover:bg-blue-500/5",
+                            },
+                            {
+                              type: "Date de signature",
+                              label: "Date",
+                              icon: <Calendar size={13} />,
+                              textClass: "text-[#7c3aed]",
+                              borderClass:
+                                "border-violet-500/20 bg-violet-500/[0.02]",
+                              hClass: "hover:bg-violet-500/5",
+                            },
+                          ].map((tool) => (
+                            <button
+                              key={tool.type}
+                              type="button"
+                              onClick={() => {
+                                const id = `field-${Date.now()}`;
+                                const foundSigner =
+                                  docFormSignersList.find(
+                                    (s) => s.name === docSignerActive,
+                                  ) || docFormSignersList[0];
+                                const roleColor = foundSigner.color || "Purple";
+                                const nextFields = [
+                                  ...docPlacedFields,
+                                  {
+                                    id,
+                                    type: tool.type,
+                                    signer: docSignerActive,
+                                    roleColor,
+                                  },
+                                ];
+                                setDocPlacedFields(nextFields);
+                                playNotificationSound();
+                              }}
+                              className={`py-3 px-3 rounded-2xl border border-dashed transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center text-center cursor-pointer ${tool.borderClass} ${tool.hClass}`}
+                            >
+                              <div
+                                className={`${tool.textClass} mb-1 ${tool.type === "Signature" ? "animate-pulse" : ""}`}
+                              >
+                                {tool.icon}
+                              </div>
+                              <span
+                                className={`text-[8px] font-black uppercase italic tracking-tight ${tool.textClass}`}
+                              >
+                                {tool.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* SIMULATED A4 DOCUMENT RENDER */}
+                        <div
+                          className={`relative rounded-[28px] border p-5 overflow-hidden min-h-[350px] flex flex-col justify-between text-gray-900 dark:text-zinc-100 ${darkMode ? "bg-zinc-900 border-zinc-800/80 shadow-inner" : "bg-white border-slate-150 shadow-md"}`}
+                        >
+                          {/* Background template design */}
+                          <div className="space-y-3 relative z-10 w-full">
+                            <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-zinc-800">
+                              <span className="text-[7px] font-black text-[#059669] italic">
+                                CONTRAT DIGITAL AUTOCOMPT
+                              </span>
+                              <span className="text-[6px] font-black uppercase text-slate-400">
+                                Page 1 de 1
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] font-extrabold uppercase italic text-gray-900 dark:text-zinc-100">
+                              {docFormName || "Document non-nommé"}
+                            </div>
+
+                            <div className="text-[8.5px] leading-relaxed text-gray-900 dark:text-zinc-300 font-medium whitespace-pre-wrap font-sans max-h-[140px] overflow-y-auto p-1 pr-2">
+                              {docFormContent ||
+                                "Veuillez entrer des clauses à l'aide de l'éditeur ci-dessus pour observer le document."}
+                            </div>
+                          </div>
+
+                          {/* GRAPHICAL PLACED VALIDATION FIELDS */}
+                          <div className="space-y-2 pt-4 border-t border-dashed border-slate-200 dark:border-zinc-850 w-full relative z-10 text-left">
+                            <p className="text-[6.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mb-1">
+                              Champs de signature apposés :
+                            </p>
+
+                            {docPlacedFields.length === 0 ? (
+                              <div className="py-6 text-center text-[7.5px] font-bold uppercase italic text-slate-400/80 bg-white/40 dark:bg-transparent/30 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-800">
+                                ⚠️ Aucun champ actif. Remplissez puis cliquez sur
+                                les outils de validation ci-dessus !
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {docPlacedFields.map((field) => {
+                                  const isPurp = field.roleColor === "Purple";
+                                  const isEmer = field.roleColor === "Emerald";
+                                  const styleSpec = isPurp
+                                    ? {
+                                      border:
+                                        "border-purple-500/25 bg-purple-500/[0.03] text-purple-600 dark:text-purple-400",
+                                      dot: "bg-purple-500",
+                                    }
+                                    : isEmer
+                                      ? {
+                                        border:
+                                          "border-emerald-500/25 bg-emerald-500/[0.03] text-emerald-600 dark:text-emerald-400",
+                                        dot: "bg-emerald-500",
+                                      }
+                                      : {
+                                        border:
+                                          "border-amber-500/25 bg-amber-500/[0.03] text-amber-600 dark:text-amber-400",
+                                        dot: "bg-amber-505",
+                                      };
+
+                                  return (
+                                    <div
+                                      key={field.id}
+                                      className={`p-2 rounded-xl border border-dashed text-left flex items-center justify-between ${styleSpec.border} animate-in zoom-in-95 duration-200`}
+                                    >
+                                      <div className="flex items-center space-x-1.5 min-w-0">
+                                        <div
+                                          className={`w-1.5 h-1.5 rounded-full ${styleSpec.dot} shrink-0 animate-pulse`}
+                                        />
+                                        <div className="truncate">
+                                          <p className="text-[8px] font-black uppercase italic leading-none">
+                                            {field.type}
+                                          </p>
+                                          <p className="text-[6.5px] font-semibold text-slate-400 dark:text-zinc-500 uppercase mt-0.5 truncate leading-tight">
+                                            {field.signer}
+                                          </p>
+                                          {field.type === "Signature" &&
+                                            field.signer === "Fabiola Villegas" &&
+                                            savedSignature && (
+                                              <div className="mt-1 h-6 px-1.5 py-0.5 bg-white dark:bg-zinc-950 rounded border border-emerald-500/10 flex items-center justify-center">
+                                                <img
+                                                  src={savedSignature}
+                                                  alt="Fabiola Sig"
+                                                  className="h-[20px] object-contain mix-blend-multiply dark:mix-blend-normal invert dark:invert-0"
+                                                />
+                                              </div>
+                                            )}
+                                          {field.type === "Initiales" &&
+                                            field.signer === "Fabiola Villegas" &&
+                                            savedInitials && (
+                                              <p className="text-[8px] font-mono tracking-wider font-extrabold text-[#1e3a8a] dark:text-blue-300 italic mt-0.5 border border-[#1e3a8a]/10 px-1 bg-white dark:bg-zinc-950 rounded inline-block">
+                                                [{savedInitials}]
+                                              </p>
+                                            )}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setDocPlacedFields(
+                                            docPlacedFields.filter(
+                                              (f) => f.id !== field.id,
+                                            ),
+                                          );
+                                          playNotificationSound();
+                                        }}
+                                        className="p-1 hover:bg-slate-200/50 dark:hover:bg-zinc-800 rounded text-[7.5px] font-black uppercase text-slate-400 hover:text-rose-500 dark:hover:text-rose-450 transition-colors shrink-0"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-[6px] text-slate-400/80 pt-2 border-t border-slate-150 dark:border-zinc-800/50 relative z-10 font-sans">
+                            <span>
+                              Technologie de Signature Mobile Intelligente BYOS
+                            </span>
+                            <span>Norme ISO-Loi 25 Certifiée</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* COLUMN RIGHT (lg:col-span-5) - THE SIGNER MANAGEMENT PANEL */}
+                    <div className="lg:col-span-5 space-y-6">
+                      {/* SIGNER LIST & ROLES */}
+                      <div
+                        className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-205"}`}
+                      >
+                        <div className="flex items-center justify-between border-b pb-3 border-slate-150 dark:border-zinc-900">
+                          <div>
+                            <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
+                              Signataires & Rôles
+                            </p>
+                            <p className="text-[7.5px] text-slate-400 dark:text-zinc-500 uppercase font-semibold mt-0.5">
+                              Destinataires du document d'audit
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Prepopulated roles and customizable recipient */}
+                        <div className="space-y-2.5">
+                          {docFormSignersList.map((signer, index) => {
+                            const styleSpec = getSignerColorClasses(signer.color);
+                            return (
+                              <div
+                                key={signer.id}
+                                className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${darkMode
+                                    ? "bg-zinc-900/40 border-zinc-900/45 animate-in slide-in-from-left-2"
+                                    : "bg-slate-50/50 border-slate-100 animate-in slide-in-from-left-2"
+                                  }`}
+                              >
+                                <div className="flex items-center space-x-2.5 min-w-0 text-left">
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full ${styleSpec.dot} shadow-md shrink-0`}
+                                  />
+                                  <div className="truncate text-left">
+                                    <p className="text-[9.5px] font-black leading-none uppercase text-left">
+                                      {signer.name}
+                                    </p>
+                                    <p className="text-[7px] text-slate-400 uppercase font-semibold mt-0.5 truncate text-left">
+                                      {signer.email}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2 shrink-0">
+                                  <span
+                                    className={`text-[6.5px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${styleSpec.bg} ${styleSpec.text}`}
+                                  >
+                                    {signer.role}
+                                  </span>
+                                  {index > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDocFormSignersList(
+                                          docFormSignersList.filter(
+                                            (s) => s.id !== signer.id,
                                           ),
                                         );
                                         playNotificationSound();
-                                      }
-                                    }}
-                                    title="Retirer / Annuler la demande"
-                                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer"
-                                  >
-                                    <X size={10} />
-                                  </button>
+                                      }}
+                                      className="text-[10px] font-black text-rose-500 hover:text-rose-700 p-0.5 bg-transparent border-none cursor-pointer"
+                                      title="Retirer ce signataire"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
                                 </div>
-                              )}
-
-                              {doc.status === "Signé" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleExportPDF(doc);
-                                    playNotificationSound();
-                                  }}
-                                  title="Exporter en PDF avec Certificat d'Audit"
-                                  className="p-1.5 px-2 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white rounded-lg text-[6.5px] font-black uppercase italic tracking-tighter flex items-center space-x-1 border-none transition-all cursor-pointer"
-                                >
-                                  <Printer size={10} />
-                                  <span>PDF</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {/* DYNAMIC SIGNERS ADDER DRAWER PANEL */}
+                      <div
+                        className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-205"}`}
+                      >
+                        <span className="text-[7.5px] font-black uppercase text-slate-400 block tracking-wider italic">
+                          ✍️ NOUVEAU SIGNATAIRE DYNAMIQUE :
+                        </span>
+
+                        <div className="grid grid-cols-1 gap-2">
+                          <input
+                            type="text"
+                            value={newSignerName}
+                            onChange={(e) => setNewSignerName(e.target.value)}
+                            placeholder="Nom complet (ex: Jean Talon)"
+                            className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
+                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              } focus:border-[#7c3aed]`}
+                          />
+                          <input
+                            type="email"
+                            value={newSignerEmail}
+                            onChange={(e) => setNewSignerEmail(e.target.value)}
+                            placeholder="Courriel (ex: jean@talon.com)"
+                            className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
+                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              } focus:border-[#7c3aed]`}
+                          />
+                          <input
+                            type="text"
+                            value={newSignerRole}
+                            onChange={(e) => { setNewSignerRole(e.target.value); setNewSignerError(""); }}
+                            placeholder="Rôle (ex: Vendeur, Cessionnaire, Acheteur)"
+                            className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
+                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              } focus:border-[#7c3aed]`}
+                          />
+                        </div>
+
+                        {newSignerError && (
+                          <p className="text-[9px] font-bold text-rose-500 text-center bg-rose-50 dark:bg-rose-950/40 rounded-xl px-3 py-2 border border-rose-200 dark:border-rose-900">
+                            {newSignerError}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewSignerError("");
+                            if (!newSignerName.trim() || !newSignerEmail.trim()) {
+                              setNewSignerError("⚠️ Le nom et le courriel sont obligatoires.");
+                              return;
+                            }
+                            const possibleColors = [
+                              "Purple",
+                              "Emerald",
+                              "Blue",
+                              "Pink",
+                              "Indigo",
+                              "Orange",
+                              "Teal",
+                              "Red",
+                            ];
+                            const chosenColor =
+                              possibleColors[
+                              docFormSignersList.length % possibleColors.length
+                              ];
+                            const newSigItem = {
+                              id: `sig-${Date.now()}`,
+                              name: newSignerName,
+                              email: newSignerEmail,
+                              role: newSignerRole || "Signataire",
+                              color: chosenColor,
+                            };
+
+                            // Add to signers list
+                            const nextSigners = [...docFormSignersList, newSigItem];
+                            setDocFormSignersList(nextSigners);
+
+                            // Liaison with target selector (Crucial)
+                            // This immediately points the visual widget drawer's target selector to this new signer
+                            setDocSignerActive(newSignerName);
+
+                            // Compatibility: automatically set recipient to last added for single email workflows
+                            setDocFormRecipient(newSignerName);
+                            setDocFormEmail(newSignerEmail);
+
+                            // Reset input form
+                            setNewSignerName("");
+                            setNewSignerEmail("");
+                            setNewSignerRole("");
+                            setNewSignerError("");
+                            playNotificationSound();
+                          }}
+                          className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[8px] font-black uppercase italic tracking-widest rounded-xl transition-all cursor-pointer border-none shadow"
+                        >
+                          + Ajouter le signataire
+                        </button>
+                      </div>
+
+                      {/* EXTRA SMS & ROUTING CONTROLS */}
+                      <div
+                        className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-205"}`}
+                      >
+                        <div>
+                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                            Destinataire pour action par défaut
+                          </label>
+                          <input
+                            type="text"
+                            value={docFormRecipient}
+                            onChange={(e) => setDocFormRecipient(e.target.value)}
+                            disabled={selectedDocuEntry?.status === "Signé"}
+                            placeholder="Nom complet du destinataire"
+                            className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                            Email pour action par défaut
+                          </label>
+                          <input
+                            type="email"
+                            value={docFormEmail}
+                            onChange={(e) => setDocFormEmail(e.target.value)}
+                            disabled={selectedDocuEntry?.status === "Signé"}
+                            placeholder="ex: richard.duchesne@outlook.com"
+                            className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 items-end">
+                          <div>
+                            <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                              Cellulaire (SMS OTP)
+                            </label>
+                            <input
+                              type="text"
+                              value={docFormPhone}
+                              onChange={(e) => setDocFormPhone(e.target.value)}
+                              disabled={selectedDocuEntry?.status === "Signé"}
+                              placeholder="514-555-1234"
+                              className={`w-full p-3 rounded-2xl outline-none text-[11px] font-mono font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={selectedDocuEntry?.status === "Signé"}
+                            onClick={() => {
+                              setDocFormSmsVerify(!docFormSmsVerify);
+                              playNotificationSound();
+                            }}
+                            className={`w-full p-3 rounded-2xl text-[8px] font-black uppercase italic tracking-tighter transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-50 cursor-not-allowed' : ''} ${docFormSmsVerify ? (darkMode ? 'bg-violet-955/40 text-violet-400 border-violet-900/40' : 'bg-violet-55/15 text-violet-605 border-violet-150') : (darkMode ? 'bg-zinc-900 text-zinc-600 border-[#7c3aed]' : 'bg-slate-50 text-slate-400 border-slate-100')}`}
+                          >
+                            {docFormSmsVerify ? "✓ SMS requis" : "Pas de SMS"}
+                          </button>
+                        </div>
+
+                        <div>
+                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
+                            Message d'accompagnement email
+                          </label>
+                          <textarea
+                            value={docFormEmailInvite}
+                            onChange={(e) => setDocFormEmailInvite(e.target.value)}
+                            disabled={selectedDocuEntry?.status === "Signé"}
+                            rows={2}
+                            className={`w-full p-3 rounded-2xl outline-none text-[10.5px] font-bold transition-all border resize-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
+                            placeholder="Bonjour, veuillez examiner et signer ce document..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACTION WIDE BUTTONS WITH HIGHEST CLASS ELEGANCE */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-105 dark:border-zinc-900 w-full">
+                    {selectedDocuEntry?.status === "Signé" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubVistaDocu("liste");
+                            playNotificationSound();
+                          }}
+                          className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${darkMode
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                              : 'bg-white border-slate-205 text-slate-705 hover:bg-slate-50'
+                            }`}
+                        >
+                          Retourner aux dossiers
+                        </button>
+
+                        <div className="md:col-span-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleExportPDF(selectedDocuEntry);
+                              playNotificationSound();
+                            }}
+                            className="w-full py-4 bg-[#059669] hover:bg-emerald-600 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none cursor-pointer"
+                          >
+                            <Printer size={14} />
+                            <span>Exporter en PDF Officiel (Avec Certificat)</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!docFormName || !docFormRecipient) {
+                              alert(
+                                "⚠️ Le nom du document et le destinataire sont requis.",
+                              );
+                              return;
+                            }
+
+                            const isNew = !selectedDocuEntry;
+                            const newId = isNew
+                              ? `DOC-${Date.now().toString().substring(8)}`
+                              : selectedDocuEntry.id;
+
+                            const newDocObj = {
+                              id: newId,
+                              name: docFormName,
+                              cat: docFormFolder,
+                              status: isNew
+                                ? "Brouillon"
+                                : selectedDocuEntry.status,
+                              date: isNew
+                                ? new Date().toISOString().split("T")[0]
+                                : selectedDocuEntry.date,
+                              companyId: activeCompanyId,
+                              author: activeUser,
+                              recipient: docFormRecipient,
+                              recipientEmail: docFormEmail,
+                              recipientPhone: docFormPhone,
+                              content: docFormContent,
+                              smsVerify: docFormSmsVerify,
+                              emailInvite: docFormEmailInvite,
+                            };
+
+                            if (isNew) {
+                              setDocuLegalList([
+                                {
+                                  ...newDocObj,
+                                  signers: docFormSignersList,
+                                  placedFields: docPlacedFields,
+                                },
+                                ...docuLegalList,
+                              ]);
+                            } else {
+                              setDocuLegalList(
+                                docuLegalList.map((d) =>
+                                  d.id === selectedDocuEntry.id
+                                    ? {
+                                      ...newDocObj,
+                                      signers: docFormSignersList,
+                                      placedFields: docPlacedFields,
+                                    }
+                                    : d,
+                                ),
+                              );
+                            }
+
+                            setSubVistaDocu("liste");
+                            playNotificationSound();
+                            alert(
+                              "🟢 Document sauvegardé en brouillon avec succès.",
+                            );
+                          }}
+                          className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${darkMode
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                              : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
+                            }`}
+                        >
+                          Sauvegarder Brouillon
+                        </button>
+
+                        {/* RE-ADD THE QR PREVIEW / MOBILE INSTANT SIGN aperçu button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!docFormName || !docFormRecipient) {
+                              alert(
+                                "⚠️ Le nom du document et le destinataire sont requis pour l'aperçu mobile.",
+                              );
+                              return;
+                            }
+                            // Configure QR Modal to open
+                            const isNew = !selectedDocuEntry;
+                            const newId = isNew
+                              ? `DOC-${Date.now().toString().substring(8)}`
+                              : selectedDocuEntry.id;
+
+                            const tempDocObj = {
+                              id: newId,
+                              name: docFormName,
+                              cat: docFormFolder,
+                              status: "En attente",
+                              date: isNew
+                                ? new Date().toISOString().split("T")[0]
+                                : selectedDocuEntry.date,
+                              companyId: activeCompanyId,
+                              author: activeUser,
+                              recipient: docFormRecipient,
+                              recipientEmail: docFormEmail,
+                              recipientPhone: docFormPhone,
+                              content: docFormContent,
+                              smsVerify: docFormSmsVerify,
+                              emailInvite: docFormEmailInvite,
+                            };
+
+                            setQrModalDoc(tempDocObj);
+                            setShowQrModal(true);
+                            playNotificationSound();
+                          }}
+                          className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border flex items-center justify-center space-x-1.5 ${darkMode
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-350 hover:text-white'
+                              : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
+                            }`}
+                        >
+                          <Eye size={13} className="text-[#059669]" />
+                          <span>Aperçu de la signature mobile</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!docFormName || !docFormRecipient) {
+                              alert(
+                                "⚠️ Le nom du document et le destinataire sont requis.",
+                              );
+                              return;
+                            }
+                            // Configure QR Modal to open
+                            const isNew = !selectedDocuEntry;
+                            const newId = isNew
+                              ? `DOC-${Date.now().toString().substring(8)}`
+                              : selectedDocuEntry.id;
+
+                            const tempDocObj = {
+                              id: newId,
+                              name: docFormName,
+                              cat: docFormFolder,
+                              status: "En attente",
+                              date: isNew
+                                ? new Date().toISOString().split("T")[0]
+                                : selectedDocuEntry.date,
+                              companyId: activeCompanyId,
+                              author: activeUser,
+                              recipient: docFormRecipient,
+                              recipientEmail: docFormEmail,
+                              recipientPhone: docFormPhone,
+                              content: docFormContent,
+                              smsVerify: docFormSmsVerify,
+                              emailInvite: docFormEmailInvite,
+                            };
+
+                            setQrModalDoc(tempDocObj);
+                            setShowQrModal(true);
+                            playNotificationSound();
+                          }}
+                          className="w-full py-4 bg-[#059669] hover:bg-emerald-650 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none"
+                        >
+                          <Sparkles size={14} />
+                          <span>Envoyer pour Signature</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
               )}
+
+              {/* ADVANTAGES FOOTER */}
+              <div className="pt-8 mt-auto border-t border-slate-200 dark:border-zinc-900 text-left space-y-1">
+                <p className="text-[8px] font-black uppercase italic text-slate-400 dark:text-zinc-500 tracking-widest">
+                  Charte d'Engagement Sécurité & Traçabilité (Forfaits PRO &
+                  INTÉGRAL Directs) :
+                </p>
+                <ul className="space-y-1 border-l-2 border-emerald-500/30 pl-3">
+                  <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
+                    • Archivage structurel automatisé selon la Loi 25 (Québec).
+                  </li>
+                  <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
+                    • Sceau d'audit immuable avec traçabilité d'IP et signature
+                    électronique certifiée par SMS.
+                  </li>
+                  <li className="text-[8px] font-bold text-[#059669] dark:text-emerald-400 uppercase tracking-tight">
+                    • Liaison directe entre les baux signés et le Grand Livre fiscal
+                    des membres PRO et INTÉGRAL.
+                  </li>
+                  <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
+                    • Synchronisation multi-période vers Google Drive et coffre-fort
+                    hautement sécurisé.
+                  </li>
+                </ul>
+              </div>
             </>
-          ) : (
-            // 3. WORKSPACE HEADER & FORM EDITOR (DocumentEditor View)
-            <div className="space-y-6 w-full animate-in fade-in duration-300 text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2 pb-4 border-b border-slate-100 dark:border-zinc-900">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubVistaDocu("liste");
-                    playNotificationSound();
-                  }}
-                  className={`text-[9.5px] font-black uppercase italic text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 flex items-center space-x-1.5`}
-                >
-                  <ArrowLeft size={13} />
-                  <span>Annuler & Retour aux dossiers</span>
-                </button>
-                <div className="flex items-center space-x-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[8.5px] font-black text-[#059669] uppercase tracking-widest italic animate-pulse">
-                    {selectedDocuEntry
-                      ? "Édition de " + selectedDocuEntry.name
-                      : "Tableau de Préparation Documentaire BYOS"}
-                  </span>
-                </div>
-              </div>
-
-              {/* TWO COLUMN GRID FOR HIGH-END SPACING */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* COLUMN LEFT (lg:col-span-7) - THE DOCUMENT CANVAS & PREPARATION TOOLS */}
-                <div className="lg:col-span-7 space-y-6">
-                  {/* CRYPTOGRAPHIC AUDIT SEAL FOR SIGNED CONTRACTS */}
-                  {selectedDocuEntry?.status === "Signé" && (
-                    <div className="p-5 rounded-[32px] border border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/20 text-left space-y-3.5 shadow-sm animate-in zoom-in-95">
-                      <div className="flex items-center space-x-2.5">
-                        <div className="p-1 px-1.5 bg-[#059669] text-white rounded-lg text-[7px] font-black uppercase tracking-widest leading-none flex items-center space-x-1">
-                          <ShieldCheck size={10} className="animate-pulse" />
-                          <span>SCELLÉ PROTECTEUR BYOS</span>
-                        </div>
-                        <span className="text-[7.5px] font-extrabold text-[#059669] uppercase tracking-wider">
-                          CONFORMATOIRE LOI 25 (QUÉBEC)
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 border-l-2 border-[#059669]/30 pl-3.5">
-                        <p className="text-[10px] font-bold text-slate-700 dark:text-zinc-200 uppercase tracking-tight">
-                          Ce bail/document a été scellé électroniquement par les
-                          signataires sous clé biométrique.
-                        </p>
-                        <ul className="text-[7.5px] font-semibold text-slate-500 dark:text-zinc-400 space-y-1 uppercase tracking-tight font-sans">
-                          <li>
-                            • Signataire principal:{" "}
-                            <span className="font-extrabold text-slate-800 dark:text-white">
-                              {selectedDocuEntry.recipient}
-                            </span>{" "}
-                            ({selectedDocuEntry.recipientEmail})
-                          </li>
-                          <li>
-                            • Horodatage certifié:{" "}
-                            <span className="font-extrabold text-slate-800 dark:text-white">
-                              {selectedDocuEntry.signatureTimestamp ||
-                                new Date().toISOString()}
-                            </span>
-                          </li>
-                          <li>
-                            • ID de Transaction:{" "}
-                            <span className="font-mono text-[8.5px] font-extrabold text-[#059669]">
-                              {selectedDocuEntry.transactionId ||
-                                "TX-BYOS-PENDING"}
-                            </span>
-                          </li>
-                          <li>
-                            • Hachage cryptographique SHA-256:{" "}
-                            <span className="font-mono text-[7px] font-bold text-slate-400 break-all">
-                              {selectedDocuEntry.transactionId
-                                ? `sha256-hash-${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`
-                                : "Calculated on download"}
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="flex items-center space-x-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleExportPDF(selectedDocuEntry);
-                            playNotificationSound();
-                          }}
-                          className="px-3.5 py-2 bg-[#059669] hover:bg-emerald-600 text-white rounded-xl text-[8.5px] font-black uppercase italic tracking-widest flex items-center space-x-1 border-none transition-all cursor-pointer"
-                        >
-                          <Printer size={11} />
-                          <span>
-                            TÉLÉCHARGER LE PDF OFFICIEL AVEC CERTIFICAT
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* DOCUMENT METADATA */}
-                  <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
-                  >
-                    <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-900">
-                      <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
-                        Spécifications de l'Accord
-                      </p>
-                      {docSimulatedFile && (
-                        <span className="text-[7.5px] font-black uppercase bg-violet-500/10 text-violet-650 px-2.5 py-1 rounded-full border border-violet-500/15">
-                          📄 {docSimulatedFile}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                            Nom du document contractuel
-                          </label>
-                          <input
-                            type="text"
-                            value={docFormName}
-                            onChange={(e) => setDocFormName(e.target.value)}
-                            disabled={selectedDocuEntry?.status === "Signé"}
-                            placeholder="Nommerez votre contrat, ex: Bail Appartement 45B"
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed] placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
-                          />
-                        </div>
-
-                        {/* BRANDING LOGO INTERACTION */}
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                            Logo d'entreprise (Smart Branding)
-                          </label>
-                          <input
-                            type="file"
-                            ref={docLogoInputRef}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const localUrl = URL.createObjectURL(file);
-                                setDocLogo(localUrl);
-                                // Persist logo per company — survives page reloads
-                                localStorage.setItem('doculegal_logo_' + activeCompanyId, localUrl);
-                                playNotificationSound();
-                                alert(
-                                  "✨ Logo d'entreprise appliqué !\n\nVotre image de marque s'affichera maintenant dans l'en-tête du document et sur le portail client.",
-                                );
-                              }
-                            }}
-                          />
-                          <div className="flex items-center space-x-2">
-                            {docLogo ? (
-                              <div className="flex items-center space-x-2 bg-slate-50 dark:bg-zinc-900/60 p-2 rounded-2xl border border-slate-110 dark:border-zinc-850 w-full justify-between">
-                                <div className="flex items-center space-x-2">
-                                  <img
-                                    src={docLogo}
-                                    alt="Logo"
-                                    className="h-7 max-w-[80px] object-contain rounded"
-                                  />
-                                  <span className="text-[6.5px] font-bold text-slate-400 uppercase">
-                                    Actif
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDocLogo(null);
-                                    playNotificationSound();
-                                  }}
-                                  className="text-[7.5px] font-black uppercase text-rose-500 hover:text-rose-600 bg-transparent border-none cursor-pointer pr-1"
-                                >
-                                  Retirer
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  docLogoInputRef.current?.click();
-                                }}
-                                className="w-full py-3 bg-violet-500/10 hover:bg-violet-500/15 text-[#7c3aed] border border-dashed border-[#7c3aed]/30 rounded-2xl text-[8.5px] font-black uppercase tracking-wider flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
-                              >
-                                <Upload size={11} />
-                                <span>Téléverser un logo (Branding)</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-35">
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                            Dossier de Classement
-                          </label>
-                          {/* Custom-styled select — appearance-none removes native browser chrome */}
-                          <div className="relative">
-                            <select
-                              value={docFormFolder}
-                              onChange={(e) => {
-                                const nextFld = e.target.value;
-                                setDocFormFolder(nextFld);
-                                setDocFormContent(loadDefaultTemplate(nextFld));
-                              }}
-                              disabled={selectedDocuEntry?.status === "Signé"}
-                              className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
-                            >
-                              {folders.map((f) => (
-                                <option key={f} value={f}>{f}</option>
-                              ))}
-                            </select>
-                            {/* Custom dropdown arrow */}
-                            <div className={`pointer-events-none absolute inset-y-0 right-3 flex items-center ${darkMode ? 'text-zinc-400' : 'text-[#7c3aed]'}`}>
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                            Auteur émetteur (IP Certifié)
-                          </label>
-                          <input
-                            type="text"
-                            value={activeUser}
-                            disabled
-                            className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border opacity-60 cursor-not-allowed ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-slate-50 border-slate-105 text-slate-400'}`}
-                          />
-                        </div>
-                      </div>
-
-                                            {/* ── Quick Fill PA V2 — Accordéon 3 sections ── */}
-                      {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
-                        <div className={`rounded-[24px] border overflow-hidden ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/60 border-violet-200/80'}`}>
-
-                          {/* ── Header + Bouton Appliquer ── */}
-                          <div className="flex items-center justify-between px-5 py-4 gap-3">
-                            <div>
-                              <p className="text-[9px] font-black uppercase tracking-widest text-[#7c3aed]">⚡ Remplissage Rapide — PA Dynamique</p>
-                              <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5 leading-relaxed">Type · Champs · Conditions → Cliquez Appliquer pour générer le contrat</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const defaults: Record<string, string> = {
-                                  ACHETEUR_1_NOM: 'Natalia Ortelli',
-                                  ACHETEUR_2_NOM: 'Fabiola Villegas',
-                                };
-                                const allValues: Record<string, string> = { ...defaults, ...paQuickFillValues };
-
-                                // Start from the loaded template (if PA markers present) or load fresh
-                                const hasV2Markers = docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}');
-                                const baseTemplate = hasV2Markers ? docFormContent : loadDefaultTemplate(docFormFolder);
-
-                                let result = baseTemplate;
-
-                                // 1. Process conditional blocks {{#IF_KEY}}...{{/IF_KEY}}
-                                const condMap: Record<string, boolean> = {
-                                  ...paConditions,
-                                  VENDEUR_2: !!(allValues['VENDEUR_2_NOM']?.trim()),
-                                };
-                                result = result.replace(/\{\{#IF_(\w+)\}\}([\s\S]*?)\{\{\/IF_\1\}\}/g,
-                                  (_match: string, condKey: string, blockContent: string) =>
-                                    condMap[condKey] ? blockContent.trim() : ''
-                                );
-
-                                // 2. Replace {{VARIABLE}} tokens
-                                Object.entries(allValues).forEach(([k, v]) => {
-                                  if (v?.trim()) result = result.split(`{{${k}}}`).join(v.trim());
-                                });
-
-                                // 3. Replace {{PROP_TYPE}}
-                                result = result.split('{{PROP_TYPE}}').join(paPropType);
-
-                                // 4. Clean up excess blank lines (max 2 consecutive)
-                                result = result.replace(/\n{3,}/g, '\n\n');
-
-                                setDocFormContent(result);
-                              }}
-                              className="flex-shrink-0 px-4 py-2.5 bg-[#7c3aed] hover:bg-violet-700 active:scale-95 text-white rounded-xl text-[8px] font-black uppercase tracking-wider transition-all shadow-md shadow-violet-500/20"
-                            >
-                              ✓ Appliquer
-                            </button>
-                          </div>
-
-                          {/* ── Accordéon 1 : Type de propriété ── */}
-                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
-                            <button
-                              type="button"
-                              onClick={() => setPaQfTab(paQfTab === 'type' ? null : 'type')}
-                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">🏠</span>
-                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Type de propriété</span>
-                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>{paPropType}</span>
-                              </div>
-                              <span className="text-slate-400 text-[10px]">{paQfTab === 'type' ? '▲' : '▼'}</span>
-                            </button>
-                            {paQfTab === 'type' && (
-                              <div className="px-5 pb-5">
-                                <div className="flex flex-wrap gap-2">
-                                  {(['Maison unifamiliale', 'Condominium', 'Chalet', 'Plex', 'Terrain'] as const).map(type => (
-                                    <button
-                                      key={type}
-                                      type="button"
-                                      onClick={() => {
-                                        setPaPropType(type);
-                                        setPaConditions(prev => ({
-                                          ...prev,
-                                          COND_VISITE_LOGEMENTS: type === 'Plex',
-                                          COND_DOCS_COPROPRIETE: type === 'Condominium',
-                                        }));
-                                      }}
-                                      className={`px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wide transition-all ${
-                                        paPropType === type
-                                          ? 'bg-[#7c3aed] text-white shadow-md shadow-violet-500/30'
-                                          : darkMode
-                                            ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-                                            : 'bg-white text-slate-600 border border-slate-200 hover:border-violet-400 hover:text-violet-600'
-                                      }`}
-                                    >{type}</button>
-                                  ))}
-                                </div>
-                                {paPropType === 'Plex' && (
-                                  <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Visite logements &amp; baux » activée automatiquement</p>
-                                )}
-                                {paPropType === 'Condominium' && (
-                                  <p className="text-[7px] font-bold text-violet-500 uppercase tracking-wider mt-2.5">→ Condition « Documentation copropriété » activée automatiquement</p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* ── Accordéon 2 : Champs à remplir ── */}
-                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
-                            <button
-                              type="button"
-                              onClick={() => setPaQfTab(paQfTab === 'champs' ? null : 'champs')}
-                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">📝</span>
-                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Champs à remplir</span>
-                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>17 champs</span>
-                              </div>
-                              <span className="text-slate-400 text-[10px]">{paQfTab === 'champs' ? '▲' : '▼'}</span>
-                            </button>
-                            {paQfTab === 'champs' && (
-                              <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {([
-                                  { key: 'ACHETEUR_1_NOM',          label: 'Acheteur 1 (Nom)',           ph: 'Natalia Ortelli',             def: 'Natalia Ortelli' },
-                                  { key: 'ACHETEUR_2_NOM',          label: 'Acheteur 2 (Nom)',           ph: 'Fabiola Villegas',            def: 'Fabiola Villegas' },
-                                  { key: 'CESSIONNAIRE',            label: 'Cessionnaire (opt.)',        ph: 'Laisser vide si N/A',         def: '' },
-                                  { key: 'VENDEUR_1_NOM',           label: 'Vendeur 1 (Nom)',            ph: 'Ex : Jean Dupont',            def: '' },
-                                  { key: 'VENDEUR_2_NOM',           label: 'Vendeur 2 (opt. → masqué si vide)', ph: 'Vide = disparaît du contrat', def: '' },
-                                  { key: 'ADRESSE_IMMEUBLE',        label: "Adresse de l'immeuble",     ph: 'Ex : 456 av. des Pins, Laval', def: '' },
-                                  { key: 'CADASTRE_LOT',            label: 'No lot cadastre QC',         ph: 'Ex : 1 234 567',              def: '' },
-                                  { key: 'PRIX_TOTAL',              label: "Prix d'achat",               ph: 'Ex : 450 000 $',              def: '' },
-                                  { key: 'MISE_DE_FONDS',           label: 'Mise de fonds',              ph: 'Ex : 45 000 $',               def: '' },
-                                  { key: 'FINANCEMENT_MONTANT',     label: 'Montant prêt hypothécaire',  ph: 'Ex : 405 000 $',              def: '' },
-                                  { key: 'DATE_ACTE_VENTE',         label: 'Date acte de vente',         ph: 'Ex : 15 septembre 2026',      def: '' },
-                                  { key: 'DATE_VALIDITE',           label: "Offre valide jusqu'au",     ph: 'Ex : 20 juin 2026 à 23h59',   def: '' },
-                                  { key: 'LIEU_ACHETEUR',           label: 'Lieu signature ACHETEUR (optionnel)',    ph: 'Capturé automatiquement à la signature',  def: '' },
-                                  { key: 'DATE_SIGNATURE_ACHETEUR', label: 'Date signature ACHETEUR (optionnel)',    ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
-                                  { key: 'LIEU_VENDEUR',            label: 'Lieu signature VENDEUR (optionnel)',     ph: 'Capturé automatiquement à la signature',  def: '' },
-                                  { key: 'DATE_SIGNATURE_VENDEUR',  label: 'Date signature VENDEUR (optionnel)',     ph: 'Capturée automatiquement à la signature', def: new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) },
-                                ] as Array<{ key: string; label: string; ph: string; def: string }>).map(({ key, label, ph, def }) => (
-                                  <div key={key}>
-                                    <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
-                                    <input
-                                      type="text"
-                                      value={paQuickFillValues[key] !== undefined ? paQuickFillValues[key] : def}
-                                      onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
-                                      placeholder={ph}
-                                      className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
-                                    />
-                                  </div>
-                                ))}
-                                {/* Inclusions — full-width textarea */}
-                                <div className="sm:col-span-2">
-                                  <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">Inclusions (liste libre)</label>
-                                  <textarea
-                                    rows={3}
-                                    value={paQuickFillValues['INCLUSIONS'] || ''}
-                                    onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, INCLUSIONS: e.target.value }))}
-                                    placeholder="Ex : Électroménagers, stores, éclairage extérieur, thermopompe..."
-                                    className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all resize-none ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* ── Accordéon 3 : Conditions ── */}
-                          <div className={`border-t ${darkMode ? 'border-violet-800/30' : 'border-violet-200/60'}`}>
-                            <button
-                              type="button"
-                              onClick={() => setPaQfTab(paQfTab === 'conditions' ? null : 'conditions')}
-                              className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${darkMode ? 'hover:bg-violet-950/40' : 'hover:bg-violet-100/60'}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">✅</span>
-                                <span className="text-[8.5px] font-black uppercase tracking-wider text-[#7c3aed]">Conditions actives</span>
-                                <span className={`text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${darkMode ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>
-                                  {Object.values(paConditions).filter(Boolean).length} / 8
-                                </span>
-                              </div>
-                              <span className="text-slate-400 text-[10px]">{paQfTab === 'conditions' ? '▲' : '▼'}</span>
-                            </button>
-                            {paQfTab === 'conditions' && (
-                              <div className="px-5 pb-5 space-y-2">
-                                {([
-                                  { key: 'COND_SANS_GARANTIE',     label: 'Sans garantie légale',                    badge: '',      desc: 'Vente aux risques et périls de l\'ACHETEUR' },
-                                  { key: 'COND_VISITE',            label: '2 visites satisfaction ACHETEUR',          badge: '',      desc: 'Après signature de la promesse' },
-                                  { key: 'COND_INSPECTION',        label: 'Inspection (15 jours avant acte)',         badge: '',      desc: 'Conditionnel à résultats satisfaisants' },
-                                  { key: 'COND_DILIGENCE_MUNIC',   label: 'Vérification diligente municipale',        badge: '',      desc: 'Permis, conformité, autorités locales' },
-                                  { key: 'COND_VISITE_LOGEMENTS',  label: 'Visite logements & remise des baux',       badge: 'Plex',  desc: 'Auto-activé si type Plex sélectionné' },
-                                  { key: 'COND_DOCS_COPROPRIETE',  label: 'Documentation de copropriété',            badge: 'Condo', desc: 'Déclaration, PV assemblées, fonds de prévoyance' },
-                                  { key: 'COND_ANNULATION',        label: 'Annulation sans pénalité',                badge: '',      desc: 'Si vérification non satisfaisante' },
-                                  { key: 'COND_CERT_LOCALISATION', label: 'Certificat de localisation',              badge: '',      desc: 'Ou assurance titre aux frais du VENDEUR' },
-                                ] as Array<{ key: string; label: string; badge: string; desc: string }>).map(({ key, label, badge, desc }) => (
-                                  <label
-                                    key={key}
-                                    className={`flex items-start gap-3 cursor-pointer p-3 rounded-2xl transition-all ${
-                                      paConditions[key]
-                                        ? (darkMode ? 'bg-violet-950/50 border border-violet-700/40' : 'bg-violet-50 border border-violet-200')
-                                        : (darkMode ? 'hover:bg-zinc-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={!!paConditions[key]}
-                                      onChange={(e) => setPaConditions(prev => ({ ...prev, [key]: e.target.checked }))}
-                                      className="mt-0.5 w-4 h-4 rounded accent-violet-600 cursor-pointer flex-shrink-0"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-[9px] font-bold leading-tight ${paConditions[key] ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500'}`}>{label}</span>
-                                        {badge && (
-                                          <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 border border-violet-200 flex-shrink-0">{badge}</span>
-                                        )}
-                                      </div>
-                                      <p className="text-[7px] text-slate-400 mt-0.5">{desc}</p>
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                        </div>
-                      )}
-
-
-                      <div>
-                        <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                          Clauses contractuelles &amp; Corps de l'accord
-                        </label>
-                        <textarea
-                          value={docFormContent}
-                          onChange={(e) => setDocFormContent(e.target.value)}
-                          rows={14}
-                          disabled={selectedDocuEntry?.status === "Signé"}
-                          className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-sans font-medium transition-all border resize-y leading-relaxed ${selectedDocuEntry?.status === 'Signé' ? 'opacity-70 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-50 focus:border-[#7c3aed] placeholder:text-zinc-500' : 'bg-white border-slate-300 text-slate-900 focus:border-[#7c3aed] placeholder:text-slate-400'}`}
-                          placeholder="Faites valoir les clauses convenues ici..."
-                          style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* VISUAL FIELD PLACEMENT TOOL & LIVE SIMULATED DOC */}
-                  <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
-                  >
-                    <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-900">
-                      <div>
-                        <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
-                          Placement Visuel de Validation
-                        </p>
-                        <p className="text-[7.5px] text-slate-400 dark:text-zinc-500 uppercase font-semibold mt-0.5">
-                          Cliquez sur un outil pour l'apposer instantanément
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* FIELD SIGNER SELECTOR */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850/40">
-                      <span className="text-[7.5px] font-black uppercase text-slate-400 italic block mb-1.5">
-                        Signataire cible pour l'élément à apposer :
-                      </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {docFormSignersList.map((sig) => {
-                          const isSelected = docSignerActive === sig.name;
-                          const colorMeta = getSignerColorClasses(sig.color);
-                          return (
-                            <button
-                              key={sig.id}
-                              type="button"
-                              onClick={() => {
-                                setDocSignerActive(sig.name);
-                                playNotificationSound();
-                              }}
-                              className={`flex items-center justify-center space-x-1.5 p-2 rounded-xl text-[8px] font-black uppercase italic tracking-tight border transition-all ${
-                                isSelected
-                                  ? `${colorMeta.border} border-2 scale-[1.03] ring-1 ring-violet-500/20`
-                                  : "bg-transparent border-slate-150 dark:border-zinc-850 text-slate-405 dark:text-zinc-500 hover:text-slate-650"
-                              }`}
-                            >
-                              <div
-                                className={`w-1.5 h-1.5 rounded-full ${colorMeta.dot} shrink-0`}
-                              />
-                              <span className="truncate">
-                                {sig.name.split(" ")[0]}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* TOOLBAR FOR INSTANT FIELD CREATION */}
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        {
-                          type: "Signature",
-                          label: "Signature",
-                          icon: <PenLine size={13} />,
-                          textClass: "text-[#e11d48]",
-                          borderClass: "border-rose-500/20 bg-rose-500/[0.02]",
-                          hClass: "hover:bg-rose-500/5",
-                        },
-                        {
-                          type: "Initiales",
-                          label: "Initiales (AA)",
-                          icon: <Type size={13} />,
-                          textClass: "text-[#2563eb]",
-                          borderClass: "border-blue-500/20 bg-blue-500/[0.02]",
-                          hClass: "hover:bg-blue-500/5",
-                        },
-                        {
-                          type: "Date de signature",
-                          label: "Date",
-                          icon: <Calendar size={13} />,
-                          textClass: "text-[#7c3aed]",
-                          borderClass:
-                            "border-violet-500/20 bg-violet-500/[0.02]",
-                          hClass: "hover:bg-violet-500/5",
-                        },
-                      ].map((tool) => (
-                        <button
-                          key={tool.type}
-                          type="button"
-                          onClick={() => {
-                            const id = `field-${Date.now()}`;
-                            const foundSigner =
-                              docFormSignersList.find(
-                                (s) => s.name === docSignerActive,
-                              ) || docFormSignersList[0];
-                            const roleColor = foundSigner.color || "Purple";
-                            const nextFields = [
-                              ...docPlacedFields,
-                              {
-                                id,
-                                type: tool.type,
-                                signer: docSignerActive,
-                                roleColor,
-                              },
-                            ];
-                            setDocPlacedFields(nextFields);
-                            playNotificationSound();
-                          }}
-                          className={`py-3 px-3 rounded-2xl border border-dashed transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center text-center cursor-pointer ${tool.borderClass} ${tool.hClass}`}
-                        >
-                          <div
-                            className={`${tool.textClass} mb-1 ${tool.type === "Signature" ? "animate-pulse" : ""}`}
-                          >
-                            {tool.icon}
-                          </div>
-                          <span
-                            className={`text-[8px] font-black uppercase italic tracking-tight ${tool.textClass}`}
-                          >
-                            {tool.label}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* SIMULATED A4 DOCUMENT RENDER */}
-                    <div
-                      className={`relative rounded-[28px] border p-5 overflow-hidden min-h-[350px] flex flex-col justify-between text-gray-900 dark:text-zinc-100 ${darkMode ? "bg-zinc-900 border-zinc-800/80 shadow-inner" : "bg-white border-slate-150 shadow-md"}`}
-                    >
-                      {/* Background template design */}
-                      <div className="space-y-3 relative z-10 w-full">
-                        <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-zinc-800">
-                          <span className="text-[7px] font-black text-[#059669] italic">
-                            CONTRAT DIGITAL AUTOCOMPT
-                          </span>
-                          <span className="text-[6px] font-black uppercase text-slate-400">
-                            Page 1 de 1
-                          </span>
-                        </div>
-
-                        <div className="text-[11px] font-extrabold uppercase italic text-gray-900 dark:text-zinc-100">
-                          {docFormName || "Document non-nommé"}
-                        </div>
-
-                        <div className="text-[8.5px] leading-relaxed text-gray-900 dark:text-zinc-300 font-medium whitespace-pre-wrap font-sans max-h-[140px] overflow-y-auto p-1 pr-2">
-                          {docFormContent ||
-                            "Veuillez entrer des clauses à l'aide de l'éditeur ci-dessus pour observer le document."}
-                        </div>
-                      </div>
-
-                      {/* GRAPHICAL PLACED VALIDATION FIELDS */}
-                      <div className="space-y-2 pt-4 border-t border-dashed border-slate-200 dark:border-zinc-850 w-full relative z-10 text-left">
-                        <p className="text-[6.5px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                          Champs de signature apposés :
-                        </p>
-
-                        {docPlacedFields.length === 0 ? (
-                          <div className="py-6 text-center text-[7.5px] font-bold uppercase italic text-slate-400/80 bg-white/40 dark:bg-black/30 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-800">
-                            ⚠️ Aucun champ actif. Remplissez puis cliquez sur
-                            les outils de validation ci-dessus !
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {docPlacedFields.map((field) => {
-                              const isPurp = field.roleColor === "Purple";
-                              const isEmer = field.roleColor === "Emerald";
-                              const styleSpec = isPurp
-                                ? {
-                                    border:
-                                      "border-purple-500/25 bg-purple-500/[0.03] text-purple-600 dark:text-purple-400",
-                                    dot: "bg-purple-500",
-                                  }
-                                : isEmer
-                                  ? {
-                                      border:
-                                        "border-emerald-500/25 bg-emerald-500/[0.03] text-emerald-600 dark:text-emerald-400",
-                                      dot: "bg-emerald-500",
-                                    }
-                                  : {
-                                      border:
-                                        "border-amber-500/25 bg-amber-500/[0.03] text-amber-600 dark:text-amber-400",
-                                      dot: "bg-amber-505",
-                                    };
-
-                              return (
-                                <div
-                                  key={field.id}
-                                  className={`p-2 rounded-xl border border-dashed text-left flex items-center justify-between ${styleSpec.border} animate-in zoom-in-95 duration-200`}
-                                >
-                                  <div className="flex items-center space-x-1.5 min-w-0">
-                                    <div
-                                      className={`w-1.5 h-1.5 rounded-full ${styleSpec.dot} shrink-0 animate-pulse`}
-                                    />
-                                    <div className="truncate">
-                                      <p className="text-[8px] font-black uppercase italic leading-none">
-                                        {field.type}
-                                      </p>
-                                      <p className="text-[6.5px] font-semibold text-slate-400 dark:text-zinc-500 uppercase mt-0.5 truncate leading-tight">
-                                        {field.signer}
-                                      </p>
-                                      {field.type === "Signature" &&
-                                        field.signer === "Fabiola Villegas" &&
-                                        savedSignature && (
-                                          <div className="mt-1 h-6 px-1.5 py-0.5 bg-white dark:bg-zinc-950 rounded border border-emerald-500/10 flex items-center justify-center">
-                                            <img
-                                              src={savedSignature}
-                                              alt="Fabiola Sig"
-                                              className="h-[20px] object-contain mix-blend-multiply dark:mix-blend-normal invert dark:invert-0"
-                                            />
-                                          </div>
-                                        )}
-                                      {field.type === "Initiales" &&
-                                        field.signer === "Fabiola Villegas" &&
-                                        savedInitials && (
-                                          <p className="text-[8px] font-mono tracking-wider font-extrabold text-[#1e3a8a] dark:text-blue-300 italic mt-0.5 border border-[#1e3a8a]/10 px-1 bg-white dark:bg-zinc-950 rounded inline-block">
-                                            [{savedInitials}]
-                                          </p>
-                                        )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDocPlacedFields(
-                                        docPlacedFields.filter(
-                                          (f) => f.id !== field.id,
-                                        ),
-                                      );
-                                      playNotificationSound();
-                                    }}
-                                    className="p-1 hover:bg-slate-200/50 dark:hover:bg-zinc-800 rounded text-[7.5px] font-black uppercase text-slate-400 hover:text-rose-500 dark:hover:text-rose-450 transition-colors shrink-0"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between text-[6px] text-slate-400/80 pt-2 border-t border-slate-150 dark:border-zinc-800/50 relative z-10 font-sans">
-                        <span>
-                          Technologie de Signature Mobile Intelligente BYOS
-                        </span>
-                        <span>Norme ISO-Loi 25 Certifiée</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* COLUMN RIGHT (lg:col-span-5) - THE SIGNER MANAGEMENT PANEL */}
-                <div className="lg:col-span-5 space-y-6">
-                  {/* SIGNER LIST & ROLES */}
-                  <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-205"}`}
-                  >
-                    <div className="flex items-center justify-between border-b pb-3 border-slate-150 dark:border-zinc-900">
-                      <div>
-                        <p className="text-[9.5px] font-black uppercase text-[#7c3aed] italic">
-                          Signataires & Rôles
-                        </p>
-                        <p className="text-[7.5px] text-slate-400 dark:text-zinc-500 uppercase font-semibold mt-0.5">
-                          Destinataires du document d'audit
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Prepopulated roles and customizable recipient */}
-                    <div className="space-y-2.5">
-                      {docFormSignersList.map((signer, index) => {
-                        const styleSpec = getSignerColorClasses(signer.color);
-                        return (
-                          <div
-                            key={signer.id}
-                            className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
-                              darkMode
-                                ? "bg-zinc-900/40 border-zinc-900/45 animate-in slide-in-from-left-2"
-                                : "bg-slate-50/50 border-slate-100 animate-in slide-in-from-left-2"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2.5 min-w-0 text-left">
-                              <span
-                                className={`w-2.5 h-2.5 rounded-full ${styleSpec.dot} shadow-md shrink-0`}
-                              />
-                              <div className="truncate text-left">
-                                <p className="text-[9.5px] font-black leading-none uppercase text-left">
-                                  {signer.name}
-                                </p>
-                                <p className="text-[7px] text-slate-400 uppercase font-semibold mt-0.5 truncate text-left">
-                                  {signer.email}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2 shrink-0">
-                              <span
-                                className={`text-[6.5px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${styleSpec.bg} ${styleSpec.text}`}
-                              >
-                                {signer.role}
-                              </span>
-                              {index > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDocFormSignersList(
-                                      docFormSignersList.filter(
-                                        (s) => s.id !== signer.id,
-                                      ),
-                                    );
-                                    playNotificationSound();
-                                  }}
-                                  className="text-[10px] font-black text-rose-500 hover:text-rose-700 p-0.5 bg-transparent border-none cursor-pointer"
-                                  title="Retirer ce signataire"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* DYNAMIC SIGNERS ADDER DRAWER PANEL */}
-                  <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-205"}`}
-                  >
-                    <span className="text-[7.5px] font-black uppercase text-slate-400 block tracking-wider italic">
-                      ✍️ NOUVEAU SIGNATAIRE DYNAMIQUE :
-                    </span>
-
-                    <div className="grid grid-cols-1 gap-2">
-                      <input
-                        type="text"
-                        value={newSignerName}
-                        onChange={(e) => setNewSignerName(e.target.value)}
-                        placeholder="Nom complet (ex: Jean Talon)"
-                        className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${
-                          darkMode
-                            ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                            : "bg-slate-50 border-slate-105 text-slate-800"
-                        } focus:border-[#7c3aed]`}
-                      />
-                      <input
-                        type="email"
-                        value={newSignerEmail}
-                        onChange={(e) => setNewSignerEmail(e.target.value)}
-                        placeholder="Courriel (ex: jean@talon.com)"
-                        className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${
-                          darkMode
-                            ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                            : "bg-slate-50 border-slate-105 text-slate-800"
-                        } focus:border-[#7c3aed]`}
-                      />
-                      <input
-                        type="text"
-                        value={newSignerRole}
-                        onChange={(e) => { setNewSignerRole(e.target.value); setNewSignerError(""); }}
-                        placeholder="Rôle (ex: Vendeur, Cessionnaire, Acheteur)"
-                        className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${
-                          darkMode
-                            ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                            : "bg-slate-50 border-slate-105 text-slate-800"
-                        } focus:border-[#7c3aed]`}
-                      />
-                    </div>
-
-                    {newSignerError && (
-                      <p className="text-[9px] font-bold text-rose-500 text-center bg-rose-50 dark:bg-rose-950/40 rounded-xl px-3 py-2 border border-rose-200 dark:border-rose-900">
-                        {newSignerError}
-                      </p>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewSignerError("");
-                        if (!newSignerName.trim() || !newSignerEmail.trim()) {
-                          setNewSignerError("⚠️ Le nom et le courriel sont obligatoires.");
-                          return;
-                        }
-                        const possibleColors = [
-                          "Purple",
-                          "Emerald",
-                          "Blue",
-                          "Pink",
-                          "Indigo",
-                          "Orange",
-                          "Teal",
-                          "Red",
-                        ];
-                        const chosenColor =
-                          possibleColors[
-                            docFormSignersList.length % possibleColors.length
-                          ];
-                        const newSigItem = {
-                          id: `sig-${Date.now()}`,
-                          name: newSignerName,
-                          email: newSignerEmail,
-                          role: newSignerRole || "Signataire",
-                          color: chosenColor,
-                        };
-
-                        // Add to signers list
-                        const nextSigners = [...docFormSignersList, newSigItem];
-                        setDocFormSignersList(nextSigners);
-
-                        // Liaison with target selector (Crucial)
-                        // This immediately points the visual widget drawer's target selector to this new signer
-                        setDocSignerActive(newSignerName);
-
-                        // Compatibility: automatically set recipient to last added for single email workflows
-                        setDocFormRecipient(newSignerName);
-                        setDocFormEmail(newSignerEmail);
-
-                        // Reset input form
-                        setNewSignerName("");
-                        setNewSignerEmail("");
-                        setNewSignerRole("");
-                        setNewSignerError("");
-                        playNotificationSound();
-                      }}
-                      className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[8px] font-black uppercase italic tracking-widest rounded-xl transition-all cursor-pointer border-none shadow"
-                    >
-                      + Ajouter le signataire
-                    </button>
-                  </div>
-
-                  {/* EXTRA SMS & ROUTING CONTROLS */}
-                  <div
-                    className={`p-6 rounded-[32px] border text-left space-y-4 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-205"}`}
-                  >
-                    <div>
-                      <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                        Destinataire pour action par défaut
-                      </label>
-                      <input
-                        type="text"
-                        value={docFormRecipient}
-                        onChange={(e) => setDocFormRecipient(e.target.value)}
-                        disabled={selectedDocuEntry?.status === "Signé"}
-                        placeholder="Nom complet du destinataire"
-                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                        Email pour action par défaut
-                      </label>
-                      <input
-                        type="email"
-                        value={docFormEmail}
-                        onChange={(e) => setDocFormEmail(e.target.value)}
-                        disabled={selectedDocuEntry?.status === "Signé"}
-                        placeholder="ex: richard.duchesne@outlook.com"
-                        className={`w-full p-3 rounded-2xl outline-none text-[11px] font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 items-end">
-                      <div>
-                        <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                          Cellulaire (SMS OTP)
-                        </label>
-                        <input
-                          type="text"
-                          value={docFormPhone}
-                          onChange={(e) => setDocFormPhone(e.target.value)}
-                          disabled={selectedDocuEntry?.status === "Signé"}
-                          placeholder="514-555-1234"
-                          className={`w-full p-3 rounded-2xl outline-none text-[11px] font-mono font-bold transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        disabled={selectedDocuEntry?.status === "Signé"}
-                        onClick={() => {
-                          setDocFormSmsVerify(!docFormSmsVerify);
-                          playNotificationSound();
-                        }}
-                        className={`w-full p-3 rounded-2xl text-[8px] font-black uppercase italic tracking-tighter transition-all border ${selectedDocuEntry?.status === 'Signé' ? 'opacity-50 cursor-not-allowed' : ''} ${docFormSmsVerify ? (darkMode ? 'bg-violet-955/40 text-violet-400 border-violet-900/40' : 'bg-violet-55/15 text-violet-605 border-violet-150') : (darkMode ? 'bg-zinc-900 text-zinc-600 border-[#7c3aed]' : 'bg-slate-50 text-slate-400 border-slate-100')}`}
-                      >
-                        {docFormSmsVerify ? "✓ SMS requis" : "Pas de SMS"}
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                        Message d'accompagnement email
-                      </label>
-                      <textarea
-                        value={docFormEmailInvite}
-                        onChange={(e) => setDocFormEmailInvite(e.target.value)}
-                        disabled={selectedDocuEntry?.status === "Signé"}
-                        rows={2}
-                        className={`w-full p-3 rounded-2xl outline-none text-[10.5px] font-bold transition-all border resize-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-105 focus:border-[#7c3aed]'}`}
-                        placeholder="Bonjour, veuillez examiner et signer ce document..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ACTION WIDE BUTTONS WITH HIGHEST CLASS ELEGANCE */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-105 dark:border-zinc-900 w-full">
-                {selectedDocuEntry?.status === "Signé" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSubVistaDocu("liste");
-                        playNotificationSound();
-                      }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${
-                         darkMode 
-                           ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' 
-                           : 'bg-white border-slate-205 text-slate-705 hover:bg-slate-50'
-                       }`}
-                    >
-                      Retourner aux dossiers
-                    </button>
-
-                    <div className="md:col-span-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleExportPDF(selectedDocuEntry);
-                          playNotificationSound();
-                        }}
-                        className="w-full py-4 bg-[#059669] hover:bg-emerald-600 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none cursor-pointer"
-                      >
-                        <Printer size={14} />
-                        <span>Exporter en PDF Officiel (Avec Certificat)</span>
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!docFormName || !docFormRecipient) {
-                          alert(
-                            "⚠️ Le nom du document et le destinataire sont requis.",
-                          );
-                          return;
-                        }
-
-                        const isNew = !selectedDocuEntry;
-                        const newId = isNew
-                          ? `DOC-${Date.now().toString().substring(8)}`
-                          : selectedDocuEntry.id;
-
-                        const newDocObj = {
-                          id: newId,
-                          name: docFormName,
-                          cat: docFormFolder,
-                          status: isNew
-                            ? "Brouillon"
-                            : selectedDocuEntry.status,
-                          date: isNew
-                            ? new Date().toISOString().split("T")[0]
-                            : selectedDocuEntry.date,
-                          companyId: activeCompanyId,
-                          author: activeUser,
-                          recipient: docFormRecipient,
-                          recipientEmail: docFormEmail,
-                          recipientPhone: docFormPhone,
-                          content: docFormContent,
-                          smsVerify: docFormSmsVerify,
-                          emailInvite: docFormEmailInvite,
-                        };
-
-                        if (isNew) {
-                          setDocuLegalList([
-                            {
-                              ...newDocObj,
-                              signers: docFormSignersList,
-                              placedFields: docPlacedFields,
-                            },
-                            ...docuLegalList,
-                          ]);
-                        } else {
-                          setDocuLegalList(
-                            docuLegalList.map((d) =>
-                              d.id === selectedDocuEntry.id
-                                ? {
-                                    ...newDocObj,
-                                    signers: docFormSignersList,
-                                    placedFields: docPlacedFields,
-                                  }
-                                : d,
-                            ),
-                          );
-                        }
-
-                        setSubVistaDocu("liste");
-                        playNotificationSound();
-                        alert(
-                          "🟢 Document sauvegardé en brouillon avec succès.",
-                        );
-                      }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${
-                         darkMode 
-                           ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' 
-                           : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
-                       }`}
-                    >
-                      Sauvegarder Brouillon
-                    </button>
-
-                    {/* RE-ADD THE QR PREVIEW / MOBILE INSTANT SIGN aperçu button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!docFormName || !docFormRecipient) {
-                          alert(
-                            "⚠️ Le nom du document et le destinataire sont requis pour l'aperçu mobile.",
-                          );
-                          return;
-                        }
-                        // Configure QR Modal to open
-                        const isNew = !selectedDocuEntry;
-                        const newId = isNew
-                          ? `DOC-${Date.now().toString().substring(8)}`
-                          : selectedDocuEntry.id;
-
-                        const tempDocObj = {
-                          id: newId,
-                          name: docFormName,
-                          cat: docFormFolder,
-                          status: "En attente",
-                          date: isNew
-                            ? new Date().toISOString().split("T")[0]
-                            : selectedDocuEntry.date,
-                          companyId: activeCompanyId,
-                          author: activeUser,
-                          recipient: docFormRecipient,
-                          recipientEmail: docFormEmail,
-                          recipientPhone: docFormPhone,
-                          content: docFormContent,
-                          smsVerify: docFormSmsVerify,
-                          emailInvite: docFormEmailInvite,
-                        };
-
-                        setQrModalDoc(tempDocObj);
-                        setShowQrModal(true);
-                        playNotificationSound();
-                      }}
-                      className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border flex items-center justify-center space-x-1.5 ${
-                         darkMode 
-                           ? 'bg-zinc-900 border-zinc-800 text-zinc-350 hover:text-white' 
-                           : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
-                       }`}
-                    >
-                      <Eye size={13} className="text-[#059669]" />
-                      <span>Aperçu de la signature mobile</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!docFormName || !docFormRecipient) {
-                          alert(
-                            "⚠️ Le nom du document et le destinataire sont requis.",
-                          );
-                          return;
-                        }
-                        // Configure QR Modal to open
-                        const isNew = !selectedDocuEntry;
-                        const newId = isNew
-                          ? `DOC-${Date.now().toString().substring(8)}`
-                          : selectedDocuEntry.id;
-
-                        const tempDocObj = {
-                          id: newId,
-                          name: docFormName,
-                          cat: docFormFolder,
-                          status: "En attente",
-                          date: isNew
-                            ? new Date().toISOString().split("T")[0]
-                            : selectedDocuEntry.date,
-                          companyId: activeCompanyId,
-                          author: activeUser,
-                          recipient: docFormRecipient,
-                          recipientEmail: docFormEmail,
-                          recipientPhone: docFormPhone,
-                          content: docFormContent,
-                          smsVerify: docFormSmsVerify,
-                          emailInvite: docFormEmailInvite,
-                        };
-
-                        setQrModalDoc(tempDocObj);
-                        setShowQrModal(true);
-                        playNotificationSound();
-                      }}
-                      className="w-full py-4 bg-[#059669] hover:bg-emerald-650 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none"
-                    >
-                      <Sparkles size={14} />
-                      <span>Envoyer pour Signature</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ADVANTAGES FOOTER */}
-          <div className="pt-8 mt-auto border-t border-slate-200 dark:border-zinc-900 text-left space-y-1">
-            <p className="text-[8px] font-black uppercase italic text-slate-400 dark:text-zinc-500 tracking-widest">
-              Charte d'Engagement Sécurité & Traçabilité (Forfaits PRO &
-              INTÉGRAL Directs) :
-            </p>
-            <ul className="space-y-1 border-l-2 border-emerald-500/30 pl-3">
-              <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
-                • Archivage structurel automatisé selon la Loi 25 (Québec).
-              </li>
-              <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
-                • Sceau d'audit immuable avec traçabilité d'IP et signature
-                électronique certifiée par SMS.
-              </li>
-              <li className="text-[8px] font-bold text-[#059669] dark:text-emerald-400 uppercase tracking-tight">
-                • Liaison directe entre les baux signés et le Grand Livre fiscal
-                des membres PRO et INTÉGRAL.
-              </li>
-              <li className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight">
-                • Synchronisation multi-période vers Google Drive et coffre-fort
-                hautement sécurisé.
-              </li>
-            </ul>
-          </div>
-          </>
           )}
         </main>
 
@@ -13387,9 +13091,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 15 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${
-                  darkMode ? 'bg-zinc-950 border-zinc-900 text-zinc-100' : 'bg-white border-slate-150 text-slate-900'
-                }`}
+                className={`w-full max-w-4xl rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border p-6 md:p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${darkMode ? 'bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100' : 'bg-white border-slate-150 text-slate-900'
+                  }`}
               >
                 {/* Header Title with X Close Button */}
                 <div className="flex justify-between items-start border-b pb-4 border-slate-100 dark:border-zinc-900 w-full">
@@ -13443,11 +13146,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             return (
                               <div
                                 key={i}
-                                className={`rounded-[2px] ${
-                                       isCornerSquare 
-                                         ? 'bg-[#059669]' 
-                                         : (isRandomActive ? 'bg-zinc-800 dark:bg-zinc-200' : 'bg-transparent')
-                                     }`}
+                                className={`rounded-[2px] ${isCornerSquare
+                                    ? 'bg-[#059669]'
+                                    : (isRandomActive ? 'bg-zinc-800 dark:bg-zinc-200' : 'bg-transparent')
+                                  }`}
                               />
                             );
                           })}
@@ -13693,11 +13395,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         `✉️ Invitation de signature envoyée à ${qrModalDoc.recipientEmail || qrModalDoc.recipient} ! Statut : "En attente".`,
                       );
                     }}
-                    className={`px-4 py-2.5 text-[8.5px] font-black uppercase italic rounded-xl border transition-all cursor-pointer ${
-                       darkMode 
-                         ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200' 
-                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                     }`}
+                    className={`px-4 py-2.5 text-[8.5px] font-black uppercase italic rounded-xl border transition-all cursor-pointer ${darkMode
+                        ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
                   >
                     Annuler & Sauvegarder "En attente"
                   </button>
@@ -13712,11 +13413,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className={`w-full max-w-xl rounded-[36px] shadow-2xl overflow-hidden border p-6 flex flex-col space-y-5 animate-in zoom-in-95 duration-300 ${
-                  darkMode
+                className={`w-full max-w-xl rounded-[36px] shadow-2xl overflow-hidden border p-6 flex flex-col space-y-5 animate-in zoom-in-95 duration-300 ${darkMode
                     ? "bg-zinc-950 border-zinc-905 text-zinc-100"
                     : "bg-white border-slate-150 text-slate-900"
-                }`}
+                  }`}
               >
                 {/* Modal Header */}
                 <div className="flex justify-between items-start border-b border-slate-100 dark:border-zinc-900 pb-4">
@@ -13757,11 +13457,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           setActiveSigTab(tab);
                           playNotificationSound();
                         }}
-                        className={`py-2 rounded-xl text-[8.5px] font-black uppercase italic tracking-wider transition-all border-none cursor-pointer ${
-                          isActive
+                        className={`py-2 rounded-xl text-[8.5px] font-black uppercase italic tracking-wider transition-all border-none cursor-pointer ${isActive
                             ? "bg-[#059669] text-white shadow-sm"
                             : "text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 bg-transparent"
-                        }`}
+                          }`}
                       >
                         {labels[tab]}
                       </button>
@@ -13805,11 +13504,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             type="text"
                             value={typeSigName}
                             onChange={(e) => setTypeSigName(e.target.value)}
-                            className={`w-full p-2.5 rounded-xl text-xs font-bold border outline-none ${
-                              darkMode
+                            className={`w-full p-2.5 rounded-xl text-xs font-bold border outline-none ${darkMode
                                 ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
                                 : "bg-slate-50 border-slate-100 focus:border-[#059669]"
-                            }`}
+                              }`}
                           />
                         </div>
                         <div>
@@ -13821,11 +13519,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             value={typeInitials}
                             onChange={(e) => setTypeInitials(e.target.value)}
                             maxLength={3}
-                            className={`w-full p-2.5 rounded-xl text-xs font-mono font-bold border outline-none ${
-                              darkMode
+                            className={`w-full p-2.5 rounded-xl text-xs font-mono font-bold border outline-none ${darkMode
                                 ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
                                 : "bg-slate-50 border-slate-100 focus:border-[#059669]"
-                            }`}
+                              }`}
                           />
                         </div>
                       </div>
@@ -13855,9 +13552,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         ].map((fontSpec) => (
                           <div
                             key={fontSpec.name}
-                            className={`p-3 rounded-2xl border flex items-center justify-between transition-all bg-slate-50/50 dark:bg-zinc-900/30 hover:border-[#059669]/50 ${
-                              darkMode ? "border-zinc-900" : "border-slate-100"
-                            }`}
+                            className={`p-3 rounded-2xl border flex items-center justify-between transition-all bg-slate-50/50 dark:bg-zinc-900/30 hover:border-[#059669]/50 ${darkMode ? "border-zinc-900" : "border-slate-100"
+                              }`}
                           >
                             <div className="text-left">
                               <p className="text-[6.5px] font-black uppercase text-slate-400 dark:text-zinc-500 italic mb-1">
@@ -13991,11 +13687,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       playNotificationSound();
                       alert("🗑️ Profil de signature effacé.");
                     }}
-                    className={`py-3 text-[9px] font-black uppercase italic rounded-2xl border transition-all cursor-pointer ${
-                      darkMode
+                    className={`py-3 text-[9px] font-black uppercase italic rounded-2xl border transition-all cursor-pointer ${darkMode
                         ? "bg-zinc-905 border-zinc-800 text-rose-455 hover:text-rose-300"
                         : "bg-white border-slate-205 text-rose-600 hover:bg-rose-50"
-                    }`}
+                      }`}
                   >
                     Effacer le profil
                   </button>
@@ -14029,11 +13724,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "reportes")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left animate-in zoom-in-95 max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left animate-in zoom-in-95 max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -14105,17 +13800,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <div className="flex flex-col space-y-4 pt-4 px-4">
           {/* Alerta de Vencimiento Legal */}
           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-             <div className="flex items-center space-x-3">
-                <AlertTriangle className="text-amber-500" size={18} />
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
-                  ⚠️ Échéance fiscale proche : Remise TPS/TVQ trimestrielle (dans 5 jours)
-                </span>
-             </div>
+            <div className="flex items-center space-x-3">
+              <AlertTriangle className="text-amber-500" size={18} />
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                ⚠️ Échéance fiscale proche : Remise TPS/TVQ trimestrielle (dans 5 jours)
+              </span>
+            </div>
           </div>
         </div>
 
         <div
-          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
         >
           {(getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin" ? (activeUser === "Fabiola" ? ["ventes", "taxes", "paie", "banque", "resume"] : ["ventes", "taxes", "banque", "resume"]) : ["ventes", "taxes", "banque", "resume"]).map((tab) => (
             <button
@@ -14131,9 +13826,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   ? "Dépenses"
                   : tab === "paie"
                     ? "Paie / Personnel"
-                  : tab === "banque"
-                    ? "Banque"
-                    : "Résumé Annuel"}
+                    : tab === "banque"
+                      ? "Banque"
+                      : "Résumé Annuel"}
             </button>
           ))}
         </div>
@@ -14356,7 +14051,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     className={`px-4.5 py-3 rounded-[18px] text-[9.5px] font-black uppercase italic tracking-wider transition-all border flex items-center space-x-2 active:scale-95 cursor-pointer bg-[#25D366] hover:bg-[#20BE5C] text-white border-transparent shadow-lg shadow-green-500/20`}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="shrink-0">
-                      <path d="M11.996 2a9.96 9.96 0 00-8.514 15.116L2 22l4.985-1.428A9.964 9.964 0 1011.996 2zm5.72 13.916c-.244.68-1.436 1.258-2.023 1.341-.53.076-1.22.181-3.486-.757-2.738-1.135-4.52-4.01-4.656-4.195-.138-.184-1.111-1.48-1.111-2.825 0-1.346.7-2.012.952-2.288.24-.265.525-.332.7-.332.176 0 .351.002.508.01.164.007.384-.062.593.442.215.518.734 1.79.799 1.921.066.13.111.282.022.46-.089.176-.134.286-.268.441-.129.15-.276.326-.395.45-.13.14-.267.29-.115.556.152.266.677 1.121 1.455 1.815.998.89 1.83 1.157 2.096 1.285.267.13.423.11.58-.068.16-.177.683-.79.866-1.061.185-.271.365-.226.608-.135.244.09 1.545.729 1.81.86.265.132.441.198.508.309.066.111.066.643-.178 1.32z"/>
+                      <path d="M11.996 2a9.96 9.96 0 00-8.514 15.116L2 22l4.985-1.428A9.964 9.964 0 1011.996 2zm5.72 13.916c-.244.68-1.436 1.258-2.023 1.341-.53.076-1.22.181-3.486-.757-2.738-1.135-4.52-4.01-4.656-4.195-.138-.184-1.111-1.48-1.111-2.825 0-1.346.7-2.012.952-2.288.24-.265.525-.332.7-.332.176 0 .351.002.508.01.164.007.384-.062.593.442.215.518.734 1.79.799 1.921.066.13.111.282.022.46-.089.176-.134.286-.268.441-.129.15-.276.326-.395.45-.13.14-.267.29-.115.556.152.266.677 1.121 1.455 1.815.998.89 1.83 1.157 2.096 1.285.267.13.423.11.58-.068.16-.177.683-.79.866-1.061.185-.271.365-.226.608-.135.244.09 1.545.729 1.81.86.265.132.441.198.508.309.066.111.066.643-.178 1.32z" />
                     </svg>
                     <span>Envoyer sur WhatsApp</span>
                   </button>
@@ -14380,11 +14075,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         `https://drive.google.com/drive/folders/${currentCompany?.driveConfig?.folderId || "vault"}`;
                       window.open(driveUrl, "_blank");
                     }}
-                    className={`px-4.5 py-3 rounded-[18px] text-[9.5px] font-black uppercase italic tracking-wider transition-all border flex items-center space-x-2 active:scale-95 cursor-pointer ${
-                      darkMode
+                    className={`px-4.5 py-3 rounded-[18px] text-[9.5px] font-black uppercase italic tracking-wider transition-all border flex items-center space-x-2 active:scale-95 cursor-pointer ${darkMode
                         ? "bg-zinc-90 w-full bg-zinc-900 border-zinc-800 text-teal-400 hover:bg-zinc-850 hover:border-zinc-750"
                         : "bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100/40 hover:border-teal-200"
-                    }`}
+                      }`}
                   >
                     <Folder size={13} className="shrink-0 text-amber-500" fill="currentColor" />
                     <span>Partager Dossier Drive</span>
@@ -14400,19 +14094,19 @@ Ceci est un message automatisé généré par AutoCompt.`;
             <div className="w-full flex flex-col space-y-6 pb-8 px-6 pt-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex justify-between items-center w-full">
                 <h4 className="text-[11px] font-black uppercase tracking-widest text-[#059669] text-left">
-                     Registre des Revenus
+                  Registre des Revenus
                 </h4>
                 <button
                   onClick={() => {
-                      setNewTxData({
-                        fecha: new Date().toISOString().split("T")[0],
-                        tiers: "",
-                        cat: "Ventes",
-                        total: "",
-                        isTaxable: activeCompanyId !== "3",
-                      });
-                      setShowAddTxModal(true);
-                      playNotificationSound();
+                    setNewTxData({
+                      fecha: new Date().toISOString().split("T")[0],
+                      tiers: "",
+                      cat: "Ventes",
+                      total: "",
+                      isTaxable: activeCompanyId !== "3",
+                    });
+                    setShowAddTxModal(true);
+                    playNotificationSound();
                   }}
                   className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm flex items-center space-x-2 ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}
                 >
@@ -14488,7 +14182,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               </td>
                               <td className="py-2 px-6">
                                 <div className="flex items-center justify-center space-x-4">
-                                  <button 
+                                  <button
                                     onClick={() => {
                                       setHistorique(prev => prev.map(d => d.id === vente.id ? { ...d, concilied: !d.concilied } : d));
                                     }}
@@ -14497,9 +14191,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   >
                                     <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm ${vente.concilied ? "left-[18px]" : "left-[3px]"}`} />
                                   </button>
-                                  
+
                                   {(vente.lien || vente.documentUrl) ? (
-                                    <button 
+                                    <button
                                       onClick={() => setEditingExpense(vente)}
                                       className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
                                       title="Voir la facture"
@@ -14510,7 +14204,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     <div className="w-[27px]"></div>
                                   )}
                                   {vente.noteComptable && (
-                                    <button 
+                                    <button
                                       onClick={() => alert(`Note pour le comptable :\n\n${vente.noteComptable}`)}
                                       className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-amber-500 hover:bg-amber-900/30" : "text-amber-500 hover:bg-amber-50"}`}
                                       title="Note pour le comptable"
@@ -14543,14 +14237,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   })
                   .map((folderTitle, idx) => {
                     const isExpanded = activeBookkeepingFolder === folderTitle;
-                    
+
                     let bgClass = "bg-[#10b981]/10 text-[#10b981]";
                     let ringClass = "ring-emerald-500/50";
                     let shadowClass = "shadow-emerald-500/10";
                     let hoverBorderClass = "hover:border-emerald-500/30";
                     let darkBgClass = "text-[#10b981]";
-                    
-                    if (folderTitle === 'Dépenses Voiture') { 
+
+                    if (folderTitle === 'Dépenses Voiture') {
                       bgClass = "bg-[#84cc16]/10 text-[#84cc16]"; ringClass = "ring-lime-500/50"; shadowClass = "shadow-lime-500/10"; hoverBorderClass = "hover:border-lime-500/30"; darkBgClass = "text-lime-400";
                     }
 
@@ -14577,7 +14271,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             </h3>
                           </div>
                           <div className="flex items-center">
-                             <ChevronDown size={18} className={`transition-transform duration-300 ${darkMode ? "text-zinc-500" : "text-slate-400"} ${isExpanded ? "rotate-180" : ""}`} />
+                            <ChevronDown size={18} className={`transition-transform duration-300 ${darkMode ? "text-zinc-500" : "text-slate-400"} ${isExpanded ? "rotate-180" : ""}`} />
                           </div>
                         </div>
 
@@ -14592,7 +14286,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               <div className={`p-6 space-y-4 ${darkMode ? "bg-black/20" : "bg-slate-50/50"}`}>
                                 {folderTitle === 'Dépenses Travailleur Autonome' ? (
                                   <div className="w-full space-y-4">
-                                    <div className={`p-5 lg:p-6 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-6 border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white/80 backdrop-blur-xl border-slate-100 shadow-emerald-900/5"}`}>
+                                    <div className={`p-5 lg:p-6 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-6 border shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white/80 backdrop-blur-xl border-slate-100 shadow-emerald-900/5"}`}>
                                       <div className="flex flex-col text-left">
                                         <h4 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Total des dépenses (Mois en cours)</h4>
                                         <div className={`text-4xl font-black mt-1 ${darkMode ? "text-zinc-300" : "text-slate-800"}`}>0,00 $</div>
@@ -14626,7 +14320,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   </div>
                                 ) : folderTitle === 'Dépenses Voiture' ? (
                                   <div className="w-full space-y-4">
-                                    <div className={`p-5 lg:p-6 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-6 border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white/80 backdrop-blur-xl border-slate-100 shadow-emerald-900/5"}`}>
+                                    <div className={`p-5 lg:p-6 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-6 border shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white/80 backdrop-blur-xl border-slate-100 shadow-emerald-900/5"}`}>
                                       <div className="flex flex-col text-left">
                                         <h4 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                                           Kilométrage d'affaires total (Lecture Seule)
@@ -14684,7 +14378,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
               <div className="space-y-4 w-full border-t border-slate-100 dark:border-zinc-900/50 pt-6">
                 <h4 className="text-[11px] font-black uppercase tracking-widest text-left text-slate-400">Tableau d'Audit & Validation IA (8 Colonnes)</h4>
-              {filteredDepensesByMonth.length === 0 ? (
+                {filteredDepensesByMonth.length === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
                     <div className={`p-5 rounded-full ${darkMode ? "bg-zinc-900/50 text-zinc-600" : "bg-slate-50 text-slate-400"}`}>
                       <FileText size={32} />
@@ -14750,7 +14444,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 </td>
                                 <td className="py-2 px-6">
                                   <div className="flex items-center justify-center space-x-4">
-                                    <button 
+                                    <button
                                       onClick={() => {
                                         setDepenses(prev => prev.map(d => d.id === depense.id ? { ...d, concilied: !d.concilied } : d));
                                       }}
@@ -14759,9 +14453,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     >
                                       <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm ${depense.concilied ? "left-[18px]" : "left-[3px]"}`} />
                                     </button>
-                                    
+
                                     {(depense.lien || depense.documentUrl) ? (
-                                      <button 
+                                      <button
                                         onClick={() => setEditingExpense(depense)}
                                         className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
                                         title="Voir le document"
@@ -14772,7 +14466,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       <div className="w-[27px]"></div>
                                     )}
                                     {depense.noteComptable && (
-                                      <button 
+                                      <button
                                         onClick={() => alert(`Note pour le comptable :\n\n${depense.noteComptable}`)}
                                         className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-amber-500 hover:bg-amber-900/30" : "text-amber-500 hover:bg-amber-50"}`}
                                         title="Note pour le comptable"
@@ -14796,17 +14490,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           {tabReporte === "paie" && activeUser !== "Fabiola" && (
             <div className="w-full flex flex-col items-center justify-center space-y-4 p-12 text-center">
-               <Lock size={48} className={`mb-2 ${darkMode ? "text-zinc-700" : "text-slate-300"}`} />
-               <h3 className={`text-sm font-black tracking-widest uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Accès Restreint</h3>
-               <p className={`text-[10px] uppercase font-bold tracking-wider max-w-sm ${darkMode ? "text-zinc-600" : "text-slate-500"}`}>
-                 Le module de gestion de la paie est exclusivement réservé au profil administrateur.
-               </p>
+              <Lock size={48} className={`mb-2 ${darkMode ? "text-zinc-700" : "text-slate-300"}`} />
+              <h3 className={`text-sm font-black tracking-widest uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Accès Restreint</h3>
+              <p className={`text-[10px] uppercase font-bold tracking-wider max-w-sm ${darkMode ? "text-zinc-600" : "text-slate-500"}`}>
+                Le module de gestion de la paie est exclusivement réservé au profil administrateur.
+              </p>
             </div>
           )}
 
           {tabReporte === "paie" && activeUser === "Fabiola" && (
             <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <HeuresPaieView 
+              <HeuresPaieView
                 paieRecords={paieRecords}
                 setPaieRecords={setPaieRecords}
                 darkMode={darkMode}
@@ -14949,68 +14643,68 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* Revenus vs Dépenses */}
-                 <div className={`p-6 rounded-[32px] border flex flex-col ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-xl`}>
-                    <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Bilan des Opérations</p>
-                    <div className="flex flex-col space-y-5">
-                       <div className="flex justify-between items-center">
-                          <span className={`text-sm font-bold uppercase ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>Ingresos Totales (Revenus)</span>
-                          <span className={`text-xl font-black italic shadow-emerald-500/10 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0).toFixed(2)} $</span>
-                       </div>
-                       <div className="flex justify-between items-center">
-                          <span className={`text-sm font-bold uppercase ${darkMode ? "text-rose-400" : "text-rose-600"}`}>Dépenses Totales</span>
-                          <span className={`text-xl font-black italic shadow-emerald-500/10 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0).toFixed(2)} $</span>
-                       </div>
-                       <div className={`w-full h-2 rounded-full overflow-hidden flex shadow-inner ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>
-                          <div className="bg-emerald-500 h-full" style={{width: `${Math.max(5, (processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) / (Math.max(1, processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) + processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)))) * 100)}%`}}></div>
-                          <div className="bg-rose-500 h-full" style={{width: `${Math.max(5, (processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0) / (Math.max(1, processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) + processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)))) * 100)}%`}}></div>
-                       </div>
+                {/* Revenus vs Dépenses */}
+                <div className={`p-6 rounded-[32px] border flex flex-col ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-xl`}>
+                  <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Bilan des Opérations</p>
+                  <div className="flex flex-col space-y-5">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm font-bold uppercase ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>Ingresos Totales (Revenus)</span>
+                      <span className={`text-xl font-black italic shadow-emerald-500/10 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0).toFixed(2)} $</span>
                     </div>
-                 </div>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm font-bold uppercase ${darkMode ? "text-rose-400" : "text-rose-600"}`}>Dépenses Totales</span>
+                      <span className={`text-xl font-black italic shadow-emerald-500/10 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0).toFixed(2)} $</span>
+                    </div>
+                    <div className={`w-full h-2 rounded-full overflow-hidden flex shadow-inner ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>
+                      <div className="bg-emerald-500 h-full" style={{ width: `${Math.max(5, (processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) / (Math.max(1, processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) + processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)))) * 100)}%` }}></div>
+                      <div className="bg-rose-500 h-full" style={{ width: `${Math.max(5, (processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0) / (Math.max(1, processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) + processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)))) * 100)}%` }}></div>
+                    </div>
+                  </div>
+                </div>
 
-                 {/* TPS / TVQ */}
-                 <div className={`p-6 rounded-[32px] border flex flex-col ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-xl`}>
-                    <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Taxes (TPS / TVQ)</p>
-                    <div className="flex flex-col space-y-5">
-                       <div className="flex justify-between items-center">
-                          <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Perçues (Ventes)</span>
-                          <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
-                       </div>
-                       <div className="flex justify-between items-center">
-                          <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Payées (Récupérables)</span>
-                          <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
-                       </div>
-                       <div className={`pt-3 mt-3 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-between items-center`}>
-                          <span className={`text-xs font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-[#059669]"}`}>Net à Remettre / Recevoir</span>
-                          <span className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-white w-[fit-content]" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) - processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
-                       </div>
+                {/* TPS / TVQ */}
+                <div className={`p-6 rounded-[32px] border flex flex-col ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-xl`}>
+                  <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Taxes (TPS / TVQ)</p>
+                  <div className="flex flex-col space-y-5">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Perçues (Ventes)</span>
+                      <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
                     </div>
-                 </div>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Payées (Récupérables)</span>
+                      <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
+                    </div>
+                    <div className={`pt-3 mt-3 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-between items-center`}>
+                      <span className={`text-xs font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-[#059669]"}`}>Net à Remettre / Recevoir</span>
+                      <span className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-white w-[fit-content]" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) - processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
+                    </div>
+                  </div>
+                </div>
 
-                 {/* Rentabilité et Vacances */}
-                 <div className={`p-6 rounded-[32px] border flex flex-col md:col-span-2 ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-emerald-50 border-emerald-100"} shadow-xl`}>
-                    <div className="flex justify-between items-center mb-6">
-                      <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-emerald-800"}`}>Rentabilité Réelle & pertes par vacance</p>
-                      <span className="p-2 bg-emerald-500/10 text-emerald-600 rounded-full"><TrendingUp size={16}/></span>
+                {/* Rentabilité et Vacances */}
+                <div className={`p-6 rounded-[32px] border flex flex-col md:col-span-2 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-emerald-50 border-emerald-100"} shadow-xl`}>
+                  <div className="flex justify-between items-center mb-6">
+                    <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-emerald-800"}`}>Rentabilité Réelle & pertes par vacance</p>
+                    <span className="p-2 bg-emerald-500/10 text-emerald-600 rounded-full"><TrendingUp size={16} /></span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bénéfice Net</span>
+                      <span className="text-2xl font-black italic mt-1 text-[#059669] drop-shadow-sm">{(processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) - processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)).toFixed(2)} $</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                       <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bénéfice Net</span>
-                          <span className="text-2xl font-black italic mt-1 text-[#059669] drop-shadow-sm">{(processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) - processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)).toFixed(2)} $</span>
-                       </div>
-                       <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pertes par vacance (Est.)</span>
-                          <span className="text-2xl font-black italic mt-1 text-slate-700 dark:text-zinc-400">0.00 $</span>
-                       </div>
-                       <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ROI (Marge)</span>
-                          <span className="text-2xl font-black italic mt-1 text-teal-600">{
-                            processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) > 0 ? 
-                            (((processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) - processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)) / processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0)) * 100).toFixed(1) + "%" : "0.0%"
-                          }</span>
-                       </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pertes par vacance (Est.)</span>
+                      <span className="text-2xl font-black italic mt-1 text-slate-700 dark:text-zinc-400">0.00 $</span>
                     </div>
-                 </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ROI (Marge)</span>
+                      <span className="text-2xl font-black italic mt-1 text-teal-600">{
+                        processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) > 0 ?
+                          (((processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0) - processedDepenses.reduce((a, b) => a + b.deductibleTotal, 0)) / processedHistorique.reduce((a, b) => a + b.deductibleTotal, 0)) * 100).toFixed(1) + "%" : "0.0%"
+                      }</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -15075,8 +14769,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[300] flex flex-col md:flex-row bg-slate-900/60 backdrop-blur-md items-center justify-center p-4 md:p-8"
               >
-                <div className={`w-full h-full max-h-[90vh] md:max-w-6xl rounded-[32px] overflow-hidden flex flex-col md:flex-row shadow-2xl border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}>
-                  
+                <div className={`w-full h-full max-h-[90vh] md:max-w-6xl rounded-[32px] overflow-hidden flex flex-col md:flex-row shadow-2xl border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}>
+
                   {/* Left Side - Image Preview */}
                   <div className={`w-full md:w-1/2 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r ${darkMode ? "bg-zinc-900/50 border-zinc-900" : "bg-zinc-50 border-slate-200"}`}>
                     <div className="w-full flex justify-between items-center mb-6">
@@ -15085,20 +14779,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         <X size={16} />
                       </button>
                     </div>
-                    
-                    <div className="flex-1 w-full flex items-center justify-center overflow-auto rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800 bg-white dark:bg-black/50 p-2">
-                       {(editingExpense.lien || editingExpense.documentUrl) ? (
-                         (editingExpense.lien || editingExpense.documentUrl).endsWith(".pdf") ? (
-                           <iframe src={editingExpense.lien || editingExpense.documentUrl} className="w-full h-full min-h-[40vh] border-none rounded-xl" title="PDF Preview" />
-                         ) : (
-                           <img src={editingExpense.lien || editingExpense.documentUrl} alt="Reçu scan" className="max-h-[50vh] xl:max-h-[70vh] object-contain rounded-xl" />
-                         )
-                       ) : (
-                         <div className="flex flex-col items-center justify-center space-y-3 opacity-50">
-                           <FileText size={48} className="text-slate-400" />
-                           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Aucun fichier</span>
-                         </div>
-                       )}
+
+                    <div className="flex-1 w-full flex items-center justify-center overflow-auto rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800 bg-white dark:bg-transparent/50 p-2">
+                      {(editingExpense.lien || editingExpense.documentUrl) ? (
+                        (editingExpense.lien || editingExpense.documentUrl).endsWith(".pdf") ? (
+                          <iframe src={editingExpense.lien || editingExpense.documentUrl} className="w-full h-full min-h-[40vh] border-none rounded-xl" title="PDF Preview" />
+                        ) : (
+                          <img src={editingExpense.lien || editingExpense.documentUrl} alt="Reçu scan" className="max-h-[50vh] xl:max-h-[70vh] object-contain rounded-xl" />
+                        )
+                      ) : (
+                        <div className="flex flex-col items-center justify-center space-y-3 opacity-50">
+                          <FileText size={48} className="text-slate-400" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Aucun fichier</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -15118,13 +14812,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
-                          <input type="date" value={editingExpense.fecha || editingExpense.date || ""} onChange={e => setEditingExpense({...editingExpense, fecha: e.target.value})} className={`w-full p-4 rounded-[20px] text-xs font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
+                          <input type="date" value={editingExpense.fecha || editingExpense.date || ""} onChange={e => setEditingExpense({ ...editingExpense, fecha: e.target.value })} className={`w-full p-4 rounded-[20px] text-xs font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                         </div>
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Catégorie</label>
-                          <select 
-                            value={editingExpense.cat || ""} 
-                            onChange={e => setEditingExpense({...editingExpense, cat: e.target.value})} 
+                          <select
+                            value={editingExpense.cat || ""}
+                            onChange={e => setEditingExpense({ ...editingExpense, cat: e.target.value })}
                             className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
                           >
                             <option value="">Sélectionner...</option>
@@ -15143,28 +14837,28 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                       <div className="space-y-1 text-left">
                         <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Fournisseur</label>
-                        <input type="text" value={editingExpense.fournisseur || editingExpense.tiers || editingExpense.proveedor || ""} onChange={e => setEditingExpense({...editingExpense, fournisseur: e.target.value})} className={`w-full p-4 rounded-[20px] text-xs font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
+                        <input type="text" value={editingExpense.fournisseur || editingExpense.tiers || editingExpense.proveedor || ""} onChange={e => setEditingExpense({ ...editingExpense, fournisseur: e.target.value })} className={`w-full p-4 rounded-[20px] text-xs font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-zinc-900/50">
-                         <div className="space-y-1 text-left">
+                        <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Sous-total Net ($)</label>
-                          <input type="number" step="0.01" value={editingExpense.subtotal || 0} onChange={e => setEditingExpense({...editingExpense, subtotal: parseFloat(e.target.value) || 0})} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
+                          <input type="number" step="0.01" value={editingExpense.subtotal || 0} onChange={e => setEditingExpense({ ...editingExpense, subtotal: parseFloat(e.target.value) || 0 })} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                         </div>
-                         <div className="space-y-1 text-left">
+                        <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Total ($)</label>
-                          <input type="number" step="0.01" value={editingExpense.total || 0} onChange={e => setEditingExpense({...editingExpense, total: parseFloat(e.target.value) || 0})} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-emerald-50 text-emerald-900"}`} />
+                          <input type="number" step="0.01" value={editingExpense.total || 0} onChange={e => setEditingExpense({ ...editingExpense, total: parseFloat(e.target.value) || 0 })} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-emerald-50 text-emerald-900"}`} />
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-1 text-left">
+                        <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>TPS ($)</label>
-                          <input type="number" step="0.01" value={editingExpense.tps || 0} onChange={e => setEditingExpense({...editingExpense, tps: parseFloat(e.target.value) || 0})} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
+                          <input type="number" step="0.01" value={editingExpense.tps || 0} onChange={e => setEditingExpense({ ...editingExpense, tps: parseFloat(e.target.value) || 0 })} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                         </div>
-                         <div className="space-y-1 text-left">
+                        <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>TVQ ($)</label>
-                          <input type="number" step="0.01" value={editingExpense.tvq || 0} onChange={e => setEditingExpense({...editingExpense, tvq: parseFloat(e.target.value) || 0})} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
+                          <input type="number" step="0.01" value={editingExpense.tvq || 0} onChange={e => setEditingExpense({ ...editingExpense, tvq: parseFloat(e.target.value) || 0 })} className={`w-full p-4 rounded-[20px] text-xs font-mono font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                         </div>
                       </div>
 
@@ -15185,32 +14879,32 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         }
                         return null;
                       })()}
-                      
+
                       {/* Admin Toggle Concilié */}
                       {activeCompanyId === "1" && ( /* Adjust conditionally based on admin check */
-                         <div className={`p-4 rounded-2xl flex items-center justify-between border ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
-                           <div className="flex flex-col text-left">
-                             <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Concilié avec mon compte bancaire</span>
-                             <span className="text-[8px] font-bold text-slate-500">Visible pour l'administrateur</span>
-                           </div>
-                           <button 
-                             onClick={() => setEditingExpense({...editingExpense, concilied: !editingExpense.concilied})}
-                             className={`w-10 h-5 rounded-full relative transition-colors ${editingExpense.concilied ? "bg-emerald-500" : "bg-slate-300 dark:bg-zinc-700"}`}
-                           >
-                             <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${editingExpense.concilied ? "left-5.5" : "left-0.5"}`} />
-                           </button>
-                         </div>
+                        <div className={`p-4 rounded-2xl flex items-center justify-between border ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
+                          <div className="flex flex-col text-left">
+                            <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Concilié avec mon compte bancaire</span>
+                            <span className="text-[8px] font-bold text-slate-500">Visible pour l'administrateur</span>
+                          </div>
+                          <button
+                            onClick={() => setEditingExpense({ ...editingExpense, concilied: !editingExpense.concilied })}
+                            className={`w-10 h-5 rounded-full relative transition-colors ${editingExpense.concilied ? "bg-emerald-500" : "bg-slate-300 dark:bg-zinc-700"}`}
+                          >
+                            <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${editingExpense.concilied ? "left-5.5" : "left-0.5"}`} />
+                          </button>
+                        </div>
                       )}
                     </div>
 
                     <div className="mt-8">
-                       <button onClick={() => {
-                          setDepenses(prev => prev.map(d => d.id === editingExpense.id ? {...d, ...editingExpense, status: "Vérifiée"} : d));
-                          setEditingExpense(null);
-                       }} className="w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all bg-[#059669] text-white hover:bg-emerald-700 shadow-xl shadow-emerald-900/20 active:scale-95 flex items-center justify-center space-x-2">
-                           <Save size={16} />
-                           <span>Approuver & Sauvegarder</span>
-                       </button>
+                      <button onClick={() => {
+                        setDepenses(prev => prev.map(d => d.id === editingExpense.id ? { ...d, ...editingExpense, status: "Vérifiée" } : d));
+                        setEditingExpense(null);
+                      }} className="w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all bg-[#059669] text-white hover:bg-emerald-700 shadow-xl shadow-emerald-900/20 active:scale-95 flex items-center justify-center space-x-2">
+                        <Save size={16} />
+                        <span>Approuver & Sauvegarder</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -15231,7 +14925,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   initial={{ scale: 0.9, opacity: 0, y: 20 }}
                   animate={{ scale: 1, opacity: 1, y: 0 }}
                   exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                  className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-100 text-slate-900"}`}
+                  className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-100 text-slate-900"}`}
                 >
                   <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                     <div className="flex items-center space-x-2">
@@ -15299,33 +14993,33 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         <div className="grid grid-cols-2 gap-2 mt-2 max-h-56 overflow-y-auto pr-1 no-scrollbar">
                           {(activeCompanyId === "1"
                             ? (() => {
-                                const cats = [
-                                  "Location - Chambres (Triplex)",
-                                  "Location - Logement Meublé (Triplex)",
-                                  "Frais de Gestion Immobilière",
-                                ];
-                                if (showServicesHorsLoyer)
-                                  cats.push(
-                                    "Services Hors-Loyer (Stationnement/Buanderie/Lockers)",
-                                  );
-                                if (showSurchargesEntretien)
-                                  cats.push(
-                                    "Surcharges d'Entretien (Déneigement/Nettoyage)",
-                                  );
-                                if (showGestionContrats)
-                                  cats.push(
-                                    "Gestion de Contrats (Commissions)",
-                                  );
-                                if (showPretsPrivesModule)
-                                  cats.push("Intérêts de Prêts Privés");
-                                return cats;
-                              })()
+                              const cats = [
+                                "Location - Chambres (Triplex)",
+                                "Location - Logement Meublé (Triplex)",
+                                "Frais de Gestion Immobilière",
+                              ];
+                              if (showServicesHorsLoyer)
+                                cats.push(
+                                  "Services Hors-Loyer (Stationnement/Buanderie/Lockers)",
+                                );
+                              if (showSurchargesEntretien)
+                                cats.push(
+                                  "Surcharges d'Entretien (Déneigement/Nettoyage)",
+                                );
+                              if (showGestionContrats)
+                                cats.push(
+                                  "Gestion de Contrats (Commissions)",
+                                );
+                              if (showPretsPrivesModule)
+                                cats.push("Intérêts de Prêts Privés");
+                              return cats;
+                            })()
                             : [
-                                "Ventes",
-                                "Loyers résidentiels",
-                                "Ventes de services",
-                                "Ventes de biens",
-                              ]
+                              "Ventes",
+                              "Loyers résidentiels",
+                              "Ventes de services",
+                              "Ventes de biens",
+                            ]
                           ).map((catName) => {
                             const isSelected = newTxData.cat === catName;
                             const catInfo = getCategoryInfo(catName);
@@ -15337,11 +15031,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   setNewTxData({ ...newTxData, cat: catName });
                                   playNotificationSound();
                                 }}
-                                className={`p-3 rounded-2xl border flex items-center space-x-3 text-left transition-all duration-300 ${
-                                  isSelected
+                                className={`p-3 rounded-2xl border flex items-center space-x-3 text-left transition-all duration-300 ${isSelected
                                     ? "border-[#059669] bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold shadow-sm"
                                     : `${darkMode ? "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700" : "border-slate-100 bg-slate-50/60 text-slate-600 hover:border-slate-200"}`
-                                }`}
+                                  }`}
                               >
                                 <div
                                   className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${catInfo.bg} ${catInfo.text}`}
@@ -15434,7 +15127,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         />
                       </div>
                     )}
-                    
+
                     {activeCompanyId === "1" && (
                       <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900 rounded-2xl mt-4 border border-[#059669]/10">
                         <span className="text-[10px] font-black uppercase italic tracking-wide text-slate-700 dark:text-zinc-300">
@@ -15530,11 +15223,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {receiptPreviewUrl && (
             <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
               <div
-                className={`w-full max-w-lg p-6 rounded-[32px] border shadow-2xl flex flex-col justify-between animate-in zoom-in-95 duration-300 ${
-                  darkMode
-                    ? "bg-zinc-950 border-zinc-900"
+                className={`w-full max-w-lg p-6 rounded-[32px] border shadow-2xl flex flex-col justify-between animate-in zoom-in-95 duration-300 ${darkMode
+                    ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
                     : "bg-white border-slate-200"
-                }`}
+                  }`}
               >
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-4 mb-4">
@@ -15543,9 +15235,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       Aperçu Pièce Justificative
                     </span>
                     <h3
-                      className={`text-xs font-black uppercase italic tracking-tight truncate mt-0.5 ${
-                        darkMode ? "text-zinc-100" : "text-slate-900"
-                      }`}
+                      className={`text-xs font-black uppercase italic tracking-tight truncate mt-0.5 ${darkMode ? "text-zinc-100" : "text-slate-900"
+                        }`}
                     >
                       {receiptPreviewName}
                     </h3>
@@ -15556,11 +15247,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       setReceiptPreviewUrl(null);
                       setReceiptPreviewName("");
                     }}
-                    className={`p-2 rounded-full transition-all cursor-pointer shrink-0 ${
-                      darkMode
+                    className={`p-2 rounded-full transition-all cursor-pointer shrink-0 ${darkMode
                         ? "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
                         : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
+                      }`}
                     aria-label="Fermer"
                   >
                     <X size={14} />
@@ -15568,7 +15258,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </div>
 
                 {/* Image Preview Container */}
-                <div className="flex-1 overflow-auto max-h-[55vh] flex items-center justify-center rounded-2xl bg-zinc-900/5 dark:bg-black/25 p-2 mb-5 border border-slate-150 dark:border-zinc-900/40">
+                <div className="flex-1 overflow-auto max-h-[55vh] flex items-center justify-center rounded-2xl bg-zinc-900/5 dark:bg-transparent/25 p-2 mb-5 border border-slate-150 dark:border-zinc-900/40">
                   {receiptPreviewUrl.endsWith(".pdf") ? (
                     <iframe
                       src={receiptPreviewUrl}
@@ -15595,11 +15285,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setReceiptPreviewUrl(null);
                     setReceiptPreviewName("");
                   }}
-                  className={`w-full py-3.5 text-[9px] font-black uppercase tracking-widest italic rounded-[18px] transition-all cursor-pointer active:scale-95 ${
-                    darkMode
+                  className={`w-full py-3.5 text-[9px] font-black uppercase tracking-widest italic rounded-[18px] transition-all cursor-pointer active:scale-95 ${darkMode
                       ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 border border-zinc-800"
                       : "bg-slate-900 text-white hover:bg-[#111827]"
-                  }`}
+                    }`}
                 >
                   Fermer l'aperçu
                 </button>
@@ -15617,11 +15306,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "equipe")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -15674,7 +15363,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             {/* Form Card */}
             <div
-              className={`md:col-span-12 lg:col-span-5 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-sm space-y-4`}
+              className={`md:col-span-12 lg:col-span-5 p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm space-y-4`}
             >
               <div>
                 <h3
@@ -15722,45 +15411,42 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <button
                       type="button"
                       onClick={() => setInviteRole("Socio / Partenaire (Split 50%)")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${
-                        inviteRole === "Socio / Partenaire (Split 50%)"
+                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Socio / Partenaire (Split 50%)"
                           ? darkMode
                             ? "bg-sky-900/30 text-sky-400 border-sky-800/50 shadow-sm"
                             : "bg-sky-50 text-sky-600 border-sky-100 shadow-sm"
                           : darkMode
                             ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
                             : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       Partenaire
                     </button>
                     <button
                       type="button"
                       onClick={() => setInviteRole("Adjoint(e) / Assistant(e)")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${
-                        inviteRole === "Adjoint(e) / Assistant(e)"
+                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Adjoint(e) / Assistant(e)"
                           ? darkMode
                             ? "bg-teal-900/30 text-teal-400 border-teal-800/50 shadow-sm"
                             : "bg-teal-50 text-teal-600 border-teal-100 shadow-sm"
                           : darkMode
                             ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
                             : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       Adjoint(e)
                     </button>
                     <button
                       type="button"
                       onClick={() => setInviteRole("Comptable")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${
-                        inviteRole === "Comptable"
+                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Comptable"
                           ? darkMode
                             ? "bg-violet-900/30 text-violet-400 border-violet-800/50 shadow-sm"
                             : "bg-violet-50 text-violet-600 border-violet-100 shadow-sm"
                           : darkMode
                             ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
                             : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       Comptable
                     </button>
@@ -15818,11 +15504,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     setInviteName("");
                     setInviteEmail("");
                   }}
-                  className={`w-full mt-4 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest italic transition-all shadow-md duration-200 ${
-                    teamMembers.filter((m) => m.companyId === activeCompanyId).length >= (TIER_LIMITS[getEffectiveTier() as string] || 1)
+                  className={`w-full mt-4 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest italic transition-all shadow-md duration-200 ${teamMembers.filter((m) => m.companyId === activeCompanyId).length >= (TIER_LIMITS[getEffectiveTier() as string] || 1)
                       ? "bg-slate-300 dark:bg-zinc-800 text-slate-500 dark:text-zinc-600 cursor-not-allowed shadow-none"
                       : "bg-[#059669] text-white hover:bg-emerald-700 active:scale-95"
-                  }`}
+                    }`}
                 >
                   + Envoyer l'invitation
                 </button>
@@ -15831,7 +15516,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
             {/* Members List Card */}
             <div
-              className={`md:col-span-12 lg:col-span-7 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} shadow-sm space-y-4`}
+              className={`md:col-span-12 lg:col-span-7 p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm space-y-4`}
             >
               <div>
                 <h3
@@ -15931,11 +15616,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
     }
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -15966,21 +15651,19 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className={`flex p-1.5 rounded-2xl ${darkMode ? "bg-zinc-900 border border-zinc-800" : "bg-slate-200/60"}`}>
             <button
               onClick={() => setActiveKilometrageTab("calculateur")}
-              className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                activeKilometrageTab === "calculateur"
+              className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "calculateur"
                   ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
                   : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-              }`}
+                }`}
             >
               Calculateur (API)
             </button>
             <button
               onClick={() => setActiveKilometrageTab("gps")}
-              className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                activeKilometrageTab === "gps"
+              className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "gps"
                   ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
                   : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-              }`}
+                }`}
             >
               Suivi (GPS)
             </button>
@@ -15988,13 +15671,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           {activeKilometrageTab === "calculateur" && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
-              <div className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] border shadow-sm space-y-4`}>
+              <div className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] border shadow-sm space-y-4`}>
                 <div className="flex items-center justify-between mb-2">
-                   <h3 className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-400"}`}>
-                      Itinéraire à étapes
-                   </h3>
+                  <h3 className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-400"}`}>
+                    Itinéraire à étapes
+                  </h3>
                 </div>
-                
+
                 <div className="space-y-3 relative">
                   <div className={`absolute left-[22px] top-4 bottom-4 w-0.5 border-dashed border-l ${darkMode ? "border-zinc-800" : "border-slate-200"}`}></div>
                   {kilometrageAddresses.map((addr, idx) => (
@@ -16068,7 +15751,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     Calculer l'itinéraire
                   </button>
                 </div>
-                
+
                 {kilometrageComputedKm > 0 && (
                   <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/10 p-5 rounded-3xl border border-emerald-200 dark:border-emerald-900/50 mt-4 animate-in zoom-in-95 duration-300">
                     <div className="flex justify-between items-center mb-1">
@@ -16076,8 +15759,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <span className="text-xl font-black text-[#059669] dark:text-emerald-400">{kilometrageComputedKm} km</span>
                     </div>
                     <div className="flex justify-between items-center border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 mt-3">
-                       <span className="text-[7.5px] font-black uppercase italic tracking-widest text-emerald-800/60 dark:text-emerald-500/60">Montant déductible (0.70$/km)</span>
-                       <span className="text-sm font-black text-emerald-900 dark:text-emerald-300">{(kilometrageComputedKm * 0.70).toFixed(2)} $</span>
+                      <span className="text-[7.5px] font-black uppercase italic tracking-widest text-emerald-800/60 dark:text-emerald-500/60">Montant déductible (0.70$/km)</span>
+                      <span className="text-sm font-black text-emerald-900 dark:text-emerald-300">{(kilometrageComputedKm * 0.70).toFixed(2)} $</span>
                     </div>
                   </div>
                 )}
@@ -16113,12 +15796,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <span>Me localiser (Haute Précision)</span>
               </button>
 
-              <div className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-5 rounded-3xl border shadow-sm`}>
+              <div className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-5 rounded-3xl border shadow-sm`}>
                 <div className="flex items-center space-x-3 mb-2">
-                   <div className={`w-2 h-2 rounded-full ${gpsLatitude ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]' : 'bg-amber-500'}`} />
-                   <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
-                     Statut Télémétrique
-                   </p>
+                  <div className={`w-2 h-2 rounded-full ${gpsLatitude ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]' : 'bg-amber-500'}`} />
+                  <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
+                    Statut Télémétrique
+                  </p>
                 </div>
                 <p className="text-xs font-black text-slate-900 dark:text-zinc-100">{gpsStatus}</p>
                 {gpsLatitude && (
@@ -16142,7 +15825,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               {/* Dual-State Auto Tracking Button (Conserved UI) */}
               <button
                 onClick={() => setIsTrackingAuto(!isTrackingAuto)}
-                className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${isTrackingAuto ? (darkMode ? "bg-[#059669]/20 border-[#059669] text-emerald-400" : "bg-emerald-50 border-emerald-200 text-[#059669]") : darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-500" : "bg-slate-900 border-slate-800 text-white"}`}
+                className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${isTrackingAuto ? (darkMode ? "bg-[#059669]/20 border-[#059669] text-emerald-400" : "bg-emerald-50 border-emerald-200 text-[#059669]") : darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-500" : "bg-slate-900 border-slate-800 text-white"}`}
               >
                 <div className="flex items-center space-x-3">
                   <div
@@ -16223,18 +15906,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 if (typeof playNotificationSound === "function") {
                   playNotificationSound();
                 }
-                
+
                 // Cleanup current selection
                 setKilometrageComputedKm(0);
                 if (activeKilometrageTab === "gps") {
-                   setIsTrackingAuto(false);
+                  setIsTrackingAuto(false);
                 }
                 if (typeof setDispatcherSuccessToast === "function") {
-                   setDispatcherSuccessToast({
-                     text: "Synchronisation Réussie",
-                     channel: "Registre Unifié",
-                     customMessage: `Un trajet de ${kmToSave} km a été ajouté à votre livre de bord déductible.`,
-                   });
+                  setDispatcherSuccessToast({
+                    text: "Synchronisation Réussie",
+                    channel: "Registre Unifié",
+                    customMessage: `Un trajet de ${kmToSave} km a été ajouté à votre livre de bord déductible.`,
+                  });
                 }
               }}
               className="w-full bg-[#059669] text-white font-black py-5.5 rounded-[32px] flex items-center justify-center space-x-3 text-sm uppercase italic shadow-xl active:scale-95 transition-all shadow-emerald-900/20"
@@ -16245,7 +15928,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           <div
-            className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] border shadow-sm text-left space-y-5 mt-8`}
+            className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] border shadow-sm text-left space-y-5 mt-8`}
           >
             <div className="flex justify-between items-center px-1">
               <h3
@@ -16321,11 +16004,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "facturas")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 print:pl-0 relative transition-all duration-300 print:bg-white print:m-0 print:p-0 print:h-auto`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 print:pl-0 relative transition-all duration-300 print:bg-white print:m-0 print:p-0 print:h-auto`}
       >
         <WorkspaceSidebar />
         <header
-          className={`print:hidden ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm`}
+          className={`print:hidden ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -16363,7 +16046,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <main className="p-6 space-y-6 animate-in fade-in duration-500 overflow-y-auto">
             <div className="space-y-6">
               <div
-                className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
+                className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
               >
                 <div className="grid grid-cols-2 gap-3 font-sans">
                   <div className="space-y-1">
@@ -16415,7 +16098,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               {/* PROPERTY CONFIGURATION CARD (ONLY FOR PLEX / IMMOBILIER WORKSPACES AND HIDDEN FOR GPA / ACHAT DIRECT) */}
               {isImmobilierWorkspace && (
                 <div
-                  className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5 text-left`}
+                  className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5 text-left`}
                 >
                   <p className="text-[10px] font-black uppercase italic text-emerald-600 tracking-wider">
                     Structure de l'Immeuble & Parts (%)
@@ -16441,11 +16124,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             key={type}
                             type="button"
                             onClick={() => setPropertyType(type)}
-                            className={`p-3 rounded-2xl border text-center transition-all duration-300 ${
-                              isActive
+                            className={`p-3 rounded-2xl border text-center transition-all duration-300 ${isActive
                                 ? "border-[#059669] bg-emerald-50/55 text-emerald-700 font-extrabold shadow-sm"
                                 : `${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`
-                            }`}
+                              }`}
                           >
                             <span className="text-[10px] font-bold uppercase tracking-tight">
                               {type === "Quadruplex"
@@ -16582,7 +16264,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   const url = prompt("Lien de l'image pour le logo (HTTPS):");
                   if (url) setUserProfile({ ...userProfile, logo: url });
                 }}
-                className={`w-full aspect-video border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center relative group overflow-hidden shadow-sm cursor-pointer transition-all ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-800 hover:border-emerald-500" : "bg-white border-slate-200 text-slate-300 hover:border-emerald-500"}`}
+                className={`w-full aspect-video border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center relative group overflow-hidden shadow-sm cursor-pointer transition-all ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-800 hover:border-emerald-500" : "bg-white border-slate-200 text-slate-300 hover:border-emerald-500"}`}
               >
                 {userProfile.logo ? (
                   <img
@@ -16603,7 +16285,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
               <div className="space-y-4">
                 <div
-                  className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
+                  className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
                 >
                   <div className="space-y-1">
                     <label
@@ -16816,7 +16498,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             {/* Configuration de l'émetteur Collapsible */}
             <div className="p-4 pb-0">
               <div
-                className={`rounded-[32px] border shadow-sm overflow-hidden transition-all duration-300 ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                className={`rounded-[32px] border shadow-sm overflow-hidden transition-all duration-300 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
               >
                 <button
                   onClick={() => setShowProfileEditor(!showProfileEditor)}
@@ -16868,7 +16550,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 />
                               ) : (
                                 <div
-                                  className={`w-24 h-24 rounded-2xl flex items-center justify-center text-emerald-500 border border-dashed ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-emerald-50 border-emerald-100"}`}
+                                  className={`w-24 h-24 rounded-2xl flex items-center justify-center text-emerald-500 border border-dashed ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-emerald-50 border-emerald-100"}`}
                                 >
                                   <ImageIcon size={38} strokeWidth={1} />
                                 </div>
@@ -17066,7 +16748,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             {subVistaFactura === "clients" ? (
               <main className="p-4 space-y-6 animate-in slide-in-from-bottom duration-300">
                 <div
-                  className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                  className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                 >
                   <div className="flex justify-between items-center">
                     <h3 className="text-[10px] font-black uppercase italic text-emerald-600">
@@ -17090,7 +16772,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   {clientes.map((c) => (
                     <div
                       key={c.id}
-                      className={`p-5 rounded-[32px] border shadow-sm flex items-center justify-between ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                      className={`p-5 rounded-[32px] border shadow-sm flex items-center justify-between ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                     >
                       <div className="flex-1">
                         <p
@@ -17128,7 +16810,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 {historique.map((fac) => (
                   <div
                     key={fac.id}
-                    className={`print:hidden p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                    className={`print:hidden p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                   >
                     <div className="flex-1">
                       <p
@@ -17148,12 +16830,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               prev.map((f) =>
                                 f.id === fac.id
                                   ? {
-                                      ...f,
-                                      status:
-                                        f.status === "Payée"
-                                          ? "En attente"
-                                          : "Payée",
-                                    }
+                                    ...f,
+                                    status:
+                                      f.status === "Payée"
+                                        ? "En attente"
+                                        : "Payée",
+                                  }
                                   : f,
                               ),
                             );
@@ -17207,7 +16889,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   >
                     <PlusCircle size={18} className="text-emerald-400" />{" "}
                     <span>
-                      Nouveau 
+                      Nouveau
                       (
                       {tipoDoc === "Facture"
                         ? "FAC"
@@ -17253,209 +16935,209 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       </div>
                       <div className="p-6 md:p-8 flex-1 overflow-y-auto pr-2 scrollbar-thin text-[10px] print:max-h-none print:overflow-visible print:p-0">
                         <div id="invoice-content" className={`space-y-6 p-4 print:p-0 print:bg-white print:text-black print:m-0 print:w-full ${darkMode ? "bg-zinc-950 text-white" : "bg-white text-slate-900"}`}>
-                        {/* Header Facture Dynamic */}
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-2">
-                            {userProfile.logo ? (
-                              <img
-                                src={userProfile.logo}
-                                alt="Logo"
-                                className="w-16 h-16 object-contain rounded-xl shadow-sm"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-[10px] text-white font-black italic shadow-lg">
-                                LOGO
+                          {/* Header Facture Dynamic */}
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-2">
+                              {userProfile.logo ? (
+                                <img
+                                  src={userProfile.logo}
+                                  alt="Logo"
+                                  className="w-16 h-16 object-contain rounded-xl shadow-sm"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-[10px] text-white font-black italic shadow-lg">
+                                  LOGO
+                                </div>
+                              )}
+                              <div className="space-y-0.5">
+                                <p
+                                  className={`font-black uppercase text-sm leading-tight ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                                >
+                                  {userProfile.nom}
+                                </p>
+                                <p
+                                  className={`uppercase text-[7px] leading-tight font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                >
+                                  {userProfile.adresse}
+                                  <br />
+                                  {userProfile.tel && (
+                                    <span>
+                                      Tél: {userProfile.tel}
+                                      <br />
+                                    </span>
+                                  )}
+                                  {userProfile.site && (
+                                    <span>
+                                      {userProfile.site}
+                                      <br />
+                                    </span>
+                                  )}
+                                  {userProfile.neq && (
+                                    <span>NEQ: {userProfile.neq}</span>
+                                  )}
+                                </p>
                               </div>
-                            )}
-                            <div className="space-y-0.5">
-                              <p
-                                className={`font-black uppercase text-sm leading-tight ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                            </div>
+                            <div className="text-right">
+                              <h4
+                                className={`text-2xl font-black italic uppercase leading-none tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
                               >
-                                {userProfile.nom}
+                                {(selectedFac as any).tipoDoc || "Facture"}
+                              </h4>
+                              <p className="font-black text-emerald-600 mt-2 text-base leading-none">
+                                {(selectedFac as any).id}
                               </p>
                               <p
-                                className={`uppercase text-[7px] leading-tight font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                className={`mt-1 font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
                               >
-                                {userProfile.adresse}
-                                <br />
-                                {userProfile.tel && (
-                                  <span>
-                                    Tél: {userProfile.tel}
-                                    <br />
-                                  </span>
-                                )}
-                                {userProfile.site && (
-                                  <span>
-                                    {userProfile.site}
-                                    <br />
-                                  </span>
-                                )}
-                                {userProfile.neq && (
-                                  <span>NEQ: {userProfile.neq}</span>
-                                )}
+                                Émise le: {(selectedFac as any).fecha}
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <h4
-                              className={`text-2xl font-black italic uppercase leading-none tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                            >
-                              {(selectedFac as any).tipoDoc || "Facture"}
-                            </h4>
-                            <p className="font-black text-emerald-600 mt-2 text-base leading-none">
-                              {(selectedFac as any).id}
-                            </p>
-                            <p
-                              className={`mt-1 font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                            >
-                              Émise le: {(selectedFac as any).fecha}
-                            </p>
-                          </div>
-                        </div>
 
-                        {/* Client Expanded Display */}
-                        <div
-                          className={`p-4 rounded-2xl ${darkMode ? "bg-zinc-900" : "bg-slate-50"}`}
-                        >
-                          <p
-                            className={`text-[7px] font-black uppercase mb-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                          >
-                            Facturé à:
-                          </p>
-                          {(() => {
-                            const clientInfo =
-                              clientes.find(
-                                (c) => c.nom === (selectedFac as any).cliente,
-                              ) || (selectedFac as any);
-                            return (
-                              <div className="space-y-0.5">
-                                <p
-                                  className={`font-black text-sm italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                                >
-                                  {clientInfo.nom || clientInfo.cliente}
-                                </p>
-                                {clientInfo.adresse && (
-                                  <p
-                                    className={`text-[8px] font-bold uppercase leading-tight ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                                  >
-                                    {clientInfo.adresse}
-                                  </p>
-                                )}
-                                {(clientInfo.email ||
-                                  (selectedFac as any).email) && (
-                                  <p
-                                    className={`text-[8px] font-bold lowercase opacity-70 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                                  >
-                                    {clientInfo.email ||
-                                      (selectedFac as any).email}
-                                  </p>
-                                )}
-                                {clientInfo.neq && (
-                                  <p
-                                    className={`text-[7px] font-bold uppercase mt-1 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}
-                                  >
-                                    NEQ (Client): {clientInfo.neq}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Table simple pour l'aperçu */}
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr
-                              className={`border-b text-[7px] font-black uppercase ${darkMode ? "border-zinc-900 text-zinc-700" : "text-slate-300"}`}
-                            >
-                              <th className="pb-2 font-black">Description</th>
-                              <th className="text-center pb-2 font-black">
-                                Qté
-                              </th>
-                              <th className="text-right pb-2 font-black">
-                                Total
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(
-                              (selectedFac as any).items || [
-                                {
-                                  descripcion: "Services Professionnels",
-                                  cantidad: 1,
-                                  precioUnitario: (selectedFac as any).subtotal,
-                                },
-                              ]
-                            ).map((item: any, idx: number) => (
-                              <tr
-                                key={idx}
-                                className={`border-b ${darkMode ? "border-zinc-900/50 text-zinc-300" : "border-slate-50 text-slate-900"}`}
-                              >
-                                <td className="py-2.5 font-bold leading-tight pr-4">
-                                  {item.descripcion}
-                                </td>
-                                <td className="py-2.5 text-center font-bold">
-                                  {item.cantidad}
-                                </td>
-                                <td
-                                  className={`py-2.5 text-right font-black italic ${darkMode ? "text-zinc-100" : ""}`}
-                                >
-                                  {(
-                                    item.cantidad * item.precioUnitario
-                                  ).toFixed(2)}
-                                  $
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-
-                        {/* Totaux */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span
-                              className={`${darkMode ? "text-zinc-500" : ""}`}
-                            >
-                              Sous-total
-                            </span>
-                            <span
-                              className={`font-bold ${darkMode ? "text-zinc-100" : ""}`}
-                            >
-                              {(selectedFac as any).subtotal.toFixed(2)}$
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-emerald-600">
-                            <span>TPS ({userProfile.tpsRate}%)</span>
-                            <span className="font-bold">
-                              {(selectedFac as any).tps.toFixed(2)}$
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-blue-600">
-                            <span>TVQ ({userProfile.tvqRate}%)</span>
-                            <span className="font-bold">
-                              {(selectedFac as any).tvq.toFixed(2)}$
-                            </span>
-                          </div>
+                          {/* Client Expanded Display */}
                           <div
-                            className={`flex justify-between text-lg font-black italic border-t pt-2 ${darkMode ? "border-zinc-900 text-zinc-100" : "text-slate-900"}`}
+                            className={`p-4 rounded-2xl ${darkMode ? "bg-zinc-900" : "bg-slate-50"}`}
                           >
-                            <span>TOTAL</span>
-                            <span>
-                              {(selectedFac as any).total.toFixed(2)}$
-                            </span>
+                            <p
+                              className={`text-[7px] font-black uppercase mb-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
+                            >
+                              Facturé à:
+                            </p>
+                            {(() => {
+                              const clientInfo =
+                                clientes.find(
+                                  (c) => c.nom === (selectedFac as any).cliente,
+                                ) || (selectedFac as any);
+                              return (
+                                <div className="space-y-0.5">
+                                  <p
+                                    className={`font-black text-sm italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                                  >
+                                    {clientInfo.nom || clientInfo.cliente}
+                                  </p>
+                                  {clientInfo.adresse && (
+                                    <p
+                                      className={`text-[8px] font-bold uppercase leading-tight ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                    >
+                                      {clientInfo.adresse}
+                                    </p>
+                                  )}
+                                  {(clientInfo.email ||
+                                    (selectedFac as any).email) && (
+                                      <p
+                                        className={`text-[8px] font-bold lowercase opacity-70 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                      >
+                                        {clientInfo.email ||
+                                          (selectedFac as any).email}
+                                      </p>
+                                    )}
+                                  {clientInfo.neq && (
+                                    <p
+                                      className={`text-[7px] font-bold uppercase mt-1 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}
+                                    >
+                                      NEQ (Client): {clientInfo.neq}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
-                        </div>
 
-                        {/* Fiscal Infos */}
-                        <div
-                          className={`pt-4 text-[7px] font-bold uppercase leading-relaxed border-t ${darkMode ? "border-zinc-900 text-zinc-600" : "text-slate-400"}`}
-                        >
-                          <p>TPS: {userProfile.tps}</p>
-                          <p>TVQ: {userProfile.tvq}</p>
-                          <div className="mt-4 italic whitespace-pre-line">
-                            {userProfile.pago}
+                          {/* Table simple pour l'aperçu */}
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr
+                                className={`border-b text-[7px] font-black uppercase ${darkMode ? "border-zinc-900 text-zinc-700" : "text-slate-300"}`}
+                              >
+                                <th className="pb-2 font-black">Description</th>
+                                <th className="text-center pb-2 font-black">
+                                  Qté
+                                </th>
+                                <th className="text-right pb-2 font-black">
+                                  Total
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(
+                                (selectedFac as any).items || [
+                                  {
+                                    descripcion: "Services Professionnels",
+                                    cantidad: 1,
+                                    precioUnitario: (selectedFac as any).subtotal,
+                                  },
+                                ]
+                              ).map((item: any, idx: number) => (
+                                <tr
+                                  key={idx}
+                                  className={`border-b ${darkMode ? "border-zinc-900/50 text-zinc-300" : "border-slate-50 text-slate-900"}`}
+                                >
+                                  <td className="py-2.5 font-bold leading-tight pr-4">
+                                    {item.descripcion}
+                                  </td>
+                                  <td className="py-2.5 text-center font-bold">
+                                    {item.cantidad}
+                                  </td>
+                                  <td
+                                    className={`py-2.5 text-right font-black italic ${darkMode ? "text-zinc-100" : ""}`}
+                                  >
+                                    {(
+                                      item.cantidad * item.precioUnitario
+                                    ).toFixed(2)}
+                                    $
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+
+                          {/* Totaux */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span
+                                className={`${darkMode ? "text-zinc-500" : ""}`}
+                              >
+                                Sous-total
+                              </span>
+                              <span
+                                className={`font-bold ${darkMode ? "text-zinc-100" : ""}`}
+                              >
+                                {(selectedFac as any).subtotal.toFixed(2)}$
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-emerald-600">
+                              <span>TPS ({userProfile.tpsRate}%)</span>
+                              <span className="font-bold">
+                                {(selectedFac as any).tps.toFixed(2)}$
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-blue-600">
+                              <span>TVQ ({userProfile.tvqRate}%)</span>
+                              <span className="font-bold">
+                                {(selectedFac as any).tvq.toFixed(2)}$
+                              </span>
+                            </div>
+                            <div
+                              className={`flex justify-between text-lg font-black italic border-t pt-2 ${darkMode ? "border-zinc-900 text-zinc-100" : "text-slate-900"}`}
+                            >
+                              <span>TOTAL</span>
+                              <span>
+                                {(selectedFac as any).total.toFixed(2)}$
+                              </span>
+                            </div>
                           </div>
-                        </div>
+
+                          {/* Fiscal Infos */}
+                          <div
+                            className={`pt-4 text-[7px] font-bold uppercase leading-relaxed border-t ${darkMode ? "border-zinc-900 text-zinc-600" : "text-slate-400"}`}
+                          >
+                            <p>TPS: {userProfile.tps}</p>
+                            <p>TVQ: {userProfile.tvq}</p>
+                            <div className="mt-4 italic whitespace-pre-line">
+                              {userProfile.pago}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="shrink-0 p-6 bg-slate-900 flex flex-col space-y-3 print:hidden">
@@ -17493,7 +17175,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   document.body.appendChild(script);
                                 });
                               }
-                              
+
                               const element = document.getElementById("invoice-content");
                               if (!element) throw new Error("Invoice content not found");
 
@@ -17583,7 +17265,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <div className="space-y-4 text-left">
                     {/* Client Selection */}
                     <div
-                      className={`p-6 rounded-[32px] border shadow-sm space-y-3 relative ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                      className={`p-6 rounded-[32px] border shadow-sm space-y-3 relative ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                     >
                       <div className="flex items-end space-x-3">
                         <div className="flex-1 space-y-1">
@@ -17718,7 +17400,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       {items.map((item, idx) => (
                         <div
                           key={idx}
-                          className={`p-6 rounded-[32px] border shadow-sm space-y-4 animate-in fade-in duration-300 ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                          className={`p-6 rounded-[32px] border shadow-sm space-y-4 animate-in fade-in duration-300 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                         >
                           <div className="flex justify-between items-start">
                             <span
@@ -17819,9 +17501,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         (acc, curr) =>
                           curr.taxable
                             ? acc +
-                              curr.cantidad *
-                                curr.precioUnitario *
-                                (userProfile.tpsRate / 100)
+                            curr.cantidad *
+                            curr.precioUnitario *
+                            (userProfile.tpsRate / 100)
                             : acc,
                         0,
                       );
@@ -17829,9 +17511,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         (acc, curr) =>
                           curr.taxable
                             ? acc +
-                              curr.cantidad *
-                                curr.precioUnitario *
-                                (userProfile.tvqRate / 100)
+                            curr.cantidad *
+                            curr.precioUnitario *
+                            (userProfile.tvqRate / 100)
                             : acc,
                         0,
                       );
@@ -17973,7 +17655,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   className={`w-full max-w-sm rounded-[40px] p-10 space-y-8 animate-in zoom-in-95 duration-300 text-left ${darkMode ? "bg-zinc-950 text-zinc-100 border border-zinc-900 shadow-emerald-900/10" : "bg-white text-slate-900 border border-slate-100 shadow-3xl"}`}
                 >
                   <div
-                    className={`flex justify-between items-center -m-10 p-10 mb-2 border-b ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}
+                    className={`flex justify-between items-center -m-10 p-10 mb-2 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"}`}
                   >
                     <button
                       onClick={() => setShowAddClientModal(false)}
@@ -18103,7 +17785,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "dossiers" || vista === "documents" || vista === "drive") {
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <DossierFiscauxView
@@ -18130,9 +17812,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "meuble") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center gap-3 shadow-sm sticky top-0 z-50`}
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center gap-3 shadow-sm sticky top-0 z-50`}
           style={{ borderTop: '3px solid #f43f5e' }}>
           <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}>
             <ArrowLeft size={20} />
@@ -18171,9 +17853,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "plex") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center space-x-3 text-left shadow-sm`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center space-x-3 text-left shadow-sm`}>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors md:hidden mr-1">
             <Menu size={18} />
           </button>
@@ -18207,7 +17889,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </a>
           </div>
 
-          <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}>
+          <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}>
             <div className="flex items-center space-x-3 mb-6">
               <div className={`p-3 rounded-2xl ${darkMode ? "bg-emerald-900/20 text-emerald-500" : "bg-emerald-100 text-emerald-700"}`}>
                 <Building2 size={24} />
@@ -18233,17 +17915,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         onClick={() => {
                           const typeLocation = model.id;
                           setPlexManagementForm({
-                            ...plexManagementForm, 
+                            ...plexManagementForm,
                             typeLocation,
                             isContainer: typeLocation === "Chambres individuelles (Colocation)",
-                            chambres: typeLocation === "Chambres individuelles (Colocation)" ? (plexManagementForm.chambres || [ { id: Date.now()+1, identifiantChambre: "Habitation 1", montant: "", locataire: "", status: "Actif", vacanceMois: 0 } ]) : undefined
+                            chambres: typeLocation === "Chambres individuelles (Colocation)" ? (plexManagementForm.chambres || [{ id: Date.now() + 1, identifiantChambre: "Habitation 1", montant: "", locataire: "", status: "Actif", vacanceMois: 0 }]) : undefined
                           });
                         }}
-                        className={`flex-1 py-2.5 px-3 text-[10px] sm:text-[11px] font-black uppercase tracking-widest rounded-xl sm:rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${
-                          isSelected 
+                        className={`flex-1 py-2.5 px-3 text-[10px] sm:text-[11px] font-black uppercase tracking-widest rounded-xl sm:rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${isSelected
                             ? (darkMode ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm" : "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm")
                             : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
-                        }`}
+                          }`}
                       >
                         {isSelected && <CheckCircle2 size={12} className="mr-1" />}
                         <span>{model.label}</span>
@@ -18257,14 +17938,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <>
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Adresse complète</label>
-                    <input type="text" value={plexManagementForm.adresse || ""} onChange={(e) => setPlexManagementForm({...plexManagementForm, adresse: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="123 Rue Principale" />
+                    <input type="text" value={plexManagementForm.adresse || ""} onChange={(e) => setPlexManagementForm({ ...plexManagementForm, adresse: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="123 Rue Principale" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Grandeur de l'appartement</label>
-                      <select 
-                        value={plexManagementForm.nombrePieces || ""} 
-                        onChange={(e) => setPlexManagementForm({...plexManagementForm, nombrePieces: e.target.value})} 
+                      <select
+                        value={plexManagementForm.nombrePieces || ""}
+                        onChange={(e) => setPlexManagementForm({ ...plexManagementForm, nombrePieces: e.target.value })}
                         className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all appearance-none outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                       >
                         <option value="" disabled>Sélectionner la grandeur</option>
@@ -18280,12 +17961,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant mensuel</label>
                       <div className="relative">
-                        <input type="number" value={plexManagementForm.montant || ""} onChange={(e) => setPlexManagementForm({...plexManagementForm, montant: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="1200" />
+                        <input type="number" value={plexManagementForm.montant || ""} onChange={(e) => setPlexManagementForm({ ...plexManagementForm, montant: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="1200" />
                         <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-black ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>$</span>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Aménagement (Fiscalité)</label>
@@ -18299,12 +17980,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             <button
                               key={model.id ? "oui" : "non"}
                               type="button"
-                              onClick={() => setPlexManagementForm({...plexManagementForm, estMeuble: model.id})}
-                              className={`flex-1 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${
-                                isSelected 
+                              onClick={() => setPlexManagementForm({ ...plexManagementForm, estMeuble: model.id })}
+                              className={`flex-1 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${isSelected
                                   ? (darkMode ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm" : "bg-indigo-50 text-indigo-600 border-indigo-200 shadow-sm")
                                   : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
-                              }`}
+                                }`}
                             >
                               {isSelected && <CheckCircle2 size={12} className="mr-1" />}
                               <span>{model.label}</span>
@@ -18318,36 +17998,35 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
-                      <input type="text" value={plexManagementForm.locataire || ""} onChange={(e) => setPlexManagementForm({...plexManagementForm, locataire: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Ex: Jean Tremblay" />
+                      <input type="text" value={plexManagementForm.locataire || ""} onChange={(e) => setPlexManagementForm({ ...plexManagementForm, locataire: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Ex: Jean Tremblay" />
                     </div>
                     <div>
-                        <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Statut de la porte</label>
-                        <div className={`flex p-1 rounded-full w-full gap-1 border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}>
-                          {[
-                            { id: "Actif", label: "Loué (Actif)" },
-                            { id: "Vacant", label: "Vacant" }
-                          ].map((model) => {
-                            const isSelected = plexManagementForm.status === model.id;
-                            const isActif = model.id === "Actif";
-                            return (
-                              <button
-                                key={model.id}
-                                type="button"
-                                onClick={() => setPlexManagementForm({...plexManagementForm, status: model.id})}
-                                className={`flex-1 py-2.5 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${
-                                  isSelected 
-                                    ? (isActif 
-                                        ? (darkMode ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm" : "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm")
-                                        : (darkMode ? "bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm" : "bg-amber-50 text-amber-600 border-amber-200 shadow-sm"))
-                                    : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
+                      <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Statut de la porte</label>
+                      <div className={`flex p-1 rounded-full w-full gap-1 border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}>
+                        {[
+                          { id: "Actif", label: "Loué (Actif)" },
+                          { id: "Vacant", label: "Vacant" }
+                        ].map((model) => {
+                          const isSelected = plexManagementForm.status === model.id;
+                          const isActif = model.id === "Actif";
+                          return (
+                            <button
+                              key={model.id}
+                              type="button"
+                              onClick={() => setPlexManagementForm({ ...plexManagementForm, status: model.id })}
+                              className={`flex-1 py-2.5 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${isSelected
+                                  ? (isActif
+                                    ? (darkMode ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm" : "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm")
+                                    : (darkMode ? "bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm" : "bg-amber-50 text-amber-600 border-amber-200 shadow-sm"))
+                                  : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
                                 }`}
-                              >
-                                {isSelected && <CheckCircle2 size={12} className="mr-1" />}
-                                <span>{model.label}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
+                            >
+                              {isSelected && <CheckCircle2 size={12} className="mr-1" />}
+                              <span>{model.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 </>
@@ -18356,31 +18035,31 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="sm:col-span-2">
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Adresse de la propriété mère</label>
-                      <input type="text" value={plexManagementForm.adresse || ""} onChange={(e) => setPlexManagementForm({...plexManagementForm, adresse: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Propriété Mère, ex: 123 Rue Principale" />
+                      <input type="text" value={plexManagementForm.adresse || ""} onChange={(e) => setPlexManagementForm({ ...plexManagementForm, adresse: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Propriété Mère, ex: 123 Rue Principale" />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nombre de chambres à louer</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="1"
-                        value={plexManagementForm.nombreChambres || 1} 
+                        value={plexManagementForm.nombreChambres || 1}
                         onChange={(e) => {
                           const nb = parseInt(e.target.value) || 1;
                           let newChambres = [...(plexManagementForm.chambres || [])];
                           if (nb > newChambres.length) {
-                             newChambres = [...newChambres, ...Array(nb - newChambres.length).fill(null).map((_, i) => ({
-                               id: Date.now() + i, identifiantChambre: `Habitation ${newChambres.length + i + 1}`, montant: "", locataire: "", status: "Actif", vacanceMois: 0
-                             }))];
+                            newChambres = [...newChambres, ...Array(nb - newChambres.length).fill(null).map((_, i) => ({
+                              id: Date.now() + i, identifiantChambre: `Habitation ${newChambres.length + i + 1}`, montant: "", locataire: "", status: "Actif", vacanceMois: 0
+                            }))];
                           } else if (nb < newChambres.length) {
-                             newChambres = newChambres.slice(0, nb);
+                            newChambres = newChambres.slice(0, nb);
                           }
-                          setPlexManagementForm({...plexManagementForm, nombreChambres: nb, chambres: newChambres});
-                        }} 
-                        className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                          setPlexManagementForm({ ...plexManagementForm, nombreChambres: nb, chambres: newChambres });
+                        }}
+                        className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                       />
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Aménagement (Fiscalité)</label>
@@ -18394,12 +18073,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             <button
                               key={model.id ? "oui" : "non"}
                               type="button"
-                              onClick={() => setPlexManagementForm({...plexManagementForm, estMeuble: model.id})}
-                              className={`flex-1 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${
-                                isSelected 
+                              onClick={() => setPlexManagementForm({ ...plexManagementForm, estMeuble: model.id })}
+                              className={`flex-1 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${isSelected
                                   ? (darkMode ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm" : "bg-indigo-50 text-indigo-600 border-indigo-200 shadow-sm")
                                   : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
-                              }`}
+                                }`}
                             >
                               {isSelected && <CheckCircle2 size={12} className="mr-1" />}
                               <span>{model.label}</span>
@@ -18414,7 +18092,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-zinc-800">
                       <h4 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Configuration des Habitats ({plexManagementForm.nombreChambres || 1})</h4>
                       <p className={`text-[10px] font-black uppercase ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
-                         Total par mois pour {plexManagementForm.adresse || "cette adresse"}: {(plexManagementForm.chambres || []).reduce((s: number, r: any) => s + (r.status === 'Actif' ? parseFloat(r.montant || 0) : 0), 0)} $
+                        Total par mois pour {plexManagementForm.adresse || "cette adresse"}: {(plexManagementForm.chambres || []).reduce((s: number, r: any) => s + (r.status === 'Actif' ? parseFloat(r.montant || 0) : 0), 0)} $
                       </p>
                     </div>
 
@@ -18423,50 +18101,50 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-zinc-800">
                           <h5 className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Chambre {idx + 1}</h5>
                           <label className="flex items-center cursor-pointer space-x-2">
-                             <span className={`text-[8px] font-black uppercase tracking-widest ${chambre.status === "Actif" ? "text-emerald-500" : "text-slate-500"}`}>{chambre.status === "Actif" ? "Loué" : "Vacant"}</span>
-                             <div className="relative">
-                               <input type="checkbox" className="sr-only" checked={chambre.status === "Actif"} onChange={() => {
-                                  const newC = [...plexManagementForm.chambres];
-                                  newC[idx].status = chambre.status === "Actif" ? "Vacant" : "Actif";
-                                  if (newC[idx].status === "Vacant") {
-                                     newC[idx].locataire = "";
-                                     newC[idx].montant = "0";
-                                  }
-                                  setPlexManagementForm({...plexManagementForm, chambres: newC});
-                               }} />
-                               <div className={`block w-8 h-4 rounded-full transition-colors ${chambre.status === "Actif" ? "bg-emerald-500" : "bg-slate-400"}`}></div>
-                               <div className={`dot absolute left-1 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${chambre.status === "Actif" ? "transform translate-x-4" : ""}`}></div>
-                             </div>
-                           </label>
+                            <span className={`text-[8px] font-black uppercase tracking-widest ${chambre.status === "Actif" ? "text-emerald-500" : "text-slate-500"}`}>{chambre.status === "Actif" ? "Loué" : "Vacant"}</span>
+                            <div className="relative">
+                              <input type="checkbox" className="sr-only" checked={chambre.status === "Actif"} onChange={() => {
+                                const newC = [...plexManagementForm.chambres];
+                                newC[idx].status = chambre.status === "Actif" ? "Vacant" : "Actif";
+                                if (newC[idx].status === "Vacant") {
+                                  newC[idx].locataire = "";
+                                  newC[idx].montant = "0";
+                                }
+                                setPlexManagementForm({ ...plexManagementForm, chambres: newC });
+                              }} />
+                              <div className={`block w-8 h-4 rounded-full transition-colors ${chambre.status === "Actif" ? "bg-emerald-500" : "bg-slate-400"}`}></div>
+                              <div className={`dot absolute left-1 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${chambre.status === "Actif" ? "transform translate-x-4" : ""}`}></div>
+                            </div>
+                          </label>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="w-full">
                             <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Identifiant (Ex: Ch 1)</label>
                             <input type="text" value={chambre.identifiantChambre || ""} onChange={(e) => {
-                               const newC = [...plexManagementForm.chambres];
-                               newC[idx].identifiantChambre = e.target.value;
-                               setPlexManagementForm({...plexManagementForm, chambres: newC});
+                              const newC = [...plexManagementForm.chambres];
+                              newC[idx].identifiantChambre = e.target.value;
+                              setPlexManagementForm({ ...plexManagementForm, chambres: newC });
                             }} className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
                           </div>
                           <div className="w-full">
-                             <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
-                             <input type="text" placeholder="Vacant ou Nom" value={chambre.locataire || ""} onChange={(e) => {
-                               const newC = [...plexManagementForm.chambres];
-                               newC[idx].locataire = e.target.value;
-                               setPlexManagementForm({...plexManagementForm, chambres: newC});
-                             }} className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} disabled={chambre.status === "Vacant"} />
+                            <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
+                            <input type="text" placeholder="Vacant ou Nom" value={chambre.locataire || ""} onChange={(e) => {
+                              const newC = [...plexManagementForm.chambres];
+                              newC[idx].locataire = e.target.value;
+                              setPlexManagementForm({ ...plexManagementForm, chambres: newC });
+                            }} className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} disabled={chambre.status === "Vacant"} />
                           </div>
                           <div className="w-full relative">
-                             <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant mensuel</label>
-                             <div className="relative">
-                               <input type="number" placeholder="0" value={chambre.montant || ""} onChange={(e) => {
-                                 const newC = [...plexManagementForm.chambres];
-                                 newC[idx].montant = e.target.value;
-                                 setPlexManagementForm({...plexManagementForm, chambres: newC});
-                               }} className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} disabled={chambre.status === "Vacant"} />
-                               <span className={`absolute right-3 top-1/2 -translate-y-1/2 font-black text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>$</span>
-                             </div>
+                            <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant mensuel</label>
+                            <div className="relative">
+                              <input type="number" placeholder="0" value={chambre.montant || ""} onChange={(e) => {
+                                const newC = [...plexManagementForm.chambres];
+                                newC[idx].montant = e.target.value;
+                                setPlexManagementForm({ ...plexManagementForm, chambres: newC });
+                              }} className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} disabled={chambre.status === "Vacant"} />
+                              <span className={`absolute right-3 top-1/2 -translate-y-1/2 font-black text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>$</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -18476,7 +18154,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               )}
 
               <div className="mt-6 flex justify-end">
-                <button 
+                <button
                   onClick={() => {
                     const totalUsedDoors = plexManagementProperties.reduce((sum, p) => {
                       if (p.typeLocation === "Chambres individuelles (Colocation)" || p.typeLocation === "Habitation/Chambre") {
@@ -18486,8 +18164,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     }, 0);
 
                     const doorsToAdd = plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" || plexManagementForm.typeLocation === "Habitation/Chambre"
-                                       ? (parseInt(plexManagementForm.nombreChambres) || 1)
-                                       : 1;
+                      ? (parseInt(plexManagementForm.nombreChambres) || 1)
+                      : 1;
 
                     if (totalUsedDoors + doorsToAdd > nombrePortes) {
                       setShowLimitModal(true);
@@ -18498,31 +18176,31 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     let allRoomsValid = true;
                     if (plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" || plexManagementForm.typeLocation === "Habitation/Chambre") {
                       for (const c of (plexManagementForm.chambres || [])) {
-                         if (c.status === "Actif" && (!c.locataire || !c.montant)) {
-                            allRoomsValid = false;
-                         }
+                        if (c.status === "Actif" && (!c.locataire || !c.montant)) {
+                          allRoomsValid = false;
+                        }
                       }
                     }
 
                     if (!allRoomsValid) {
-                       alert("Veuillez remplir le nom et le loyer pour toutes les chambres louées (Actif).");
-                       return;
+                      alert("Veuillez remplir le nom et le loyer pour toutes les chambres louées (Actif).");
+                      return;
                     }
 
                     const newId = Date.now();
                     setPlexManagementProperties([...plexManagementProperties, { ...plexManagementForm, id: newId }]);
-                    setPlexManagementForm({ 
-                      typeLocation: "Logement entier", 
-                      nombrePieces: "", 
-                      adresse: "", 
-                      montant: "", 
-                      locataire: "", 
+                    setPlexManagementForm({
+                      typeLocation: "Logement entier",
+                      nombrePieces: "",
+                      adresse: "",
+                      montant: "",
+                      locataire: "",
                       nomBail: "",
                       status: "Actif",
                       nombreChambres: 1,
                       estMeuble: false,
                       isContainer: false,
-                      chambres: [ { id: Date.now()+1, identifiantChambre: "Habitation 1", montant: "", locataire: "", status: "Actif", vacanceMois: 0 } ]
+                      chambres: [{ id: Date.now() + 1, identifiantChambre: "Habitation 1", montant: "", locataire: "", status: "Actif", vacanceMois: 0 }]
                     });
                     if (typeof window !== "undefined" && typeof (window as any).playNotificationSound !== "undefined") {
                       (window as any).playNotificationSound();
@@ -18538,8 +18216,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           {plexManagementProperties.length > 0 && (
-            <div className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}>
-                            <div className="flex justify-between items-center mb-4">
+            <div className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}>
+              <div className="flex justify-between items-center mb-4">
                 <h4 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Unités enregistrées</h4>
                 <div className="flex space-x-3 text-[10px] font-black uppercase tracking-widest">
                   <span className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md">{plexManagementProperties.filter(p => p.status === 'Actif').length} Unités Actives</span>
@@ -18551,87 +18229,87 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 {plexManagementProperties.map(p => {
                   const isContainer = p.isContainer;
                   const doorIsExpanded = expandedDoors[p.id];
-                  
+
                   // Calculate container totals
                   let containerTotal = 0;
                   let containerTotalVacantMonths = 0;
                   let containerTotalOpenMonths = 0;
                   if (isContainer && p.chambres) {
-                     containerTotal = p.chambres.reduce((sum: number, c: any) => sum + (c.status === "Actif" ? parseFloat(c.montant || 0) : 0), 0);
-                     containerTotalVacantMonths = p.chambres.reduce((sum: number, c: any) => sum + (c.vacanceMois || 0), 0);
-                     containerTotalOpenMonths = p.chambres.length * 12;
+                    containerTotal = p.chambres.reduce((sum: number, c: any) => sum + (c.status === "Actif" ? parseFloat(c.montant || 0) : 0), 0);
+                    containerTotalVacantMonths = p.chambres.reduce((sum: number, c: any) => sum + (c.vacanceMois || 0), 0);
+                    containerTotalOpenMonths = p.chambres.length * 12;
                   }
                   const totalVacantMonths = isContainer ? containerTotalVacantMonths : (p.vacanceMois || 0);
                   const totalOpenMonths = isContainer ? containerTotalOpenMonths : 12;
                   const occupRate = 100 - ((totalVacantMonths / totalOpenMonths) * 100);
 
                   return (
-                  <div key={p.id} className={`p-4 rounded-3xl border flex flex-col space-y-2 ${darkMode ? "border-zinc-800 bg-zinc-950 shadow-[0_8px_30px_rgb(0,0,0,0.12)]" : "border-slate-200 bg-white shadow-xl shadow-slate-200/50"}`}>
-                    <div className="flex justify-between items-start mb-2">
-                       <div className="flex flex-col space-y-2">
+                    <div key={p.id} className={`p-4 rounded-3xl border flex flex-col space-y-2 ${darkMode ? "border-zinc-800 bg-zinc-950 shadow-[0_8px_30px_rgb(0,0,0,0.12)]" : "border-slate-200 bg-white shadow-xl shadow-slate-200/50"}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col space-y-2">
                           <div className="flex items-center space-x-2">
                             <span className={`text-[10px] px-2 py-1 rounded-md font-black uppercase tracking-widest text-white ${p.status === "Vacant" ? "bg-slate-500" : p.status === "Entretien" ? "bg-rose-500" : "bg-emerald-500"}`}>{isContainer ? "Habitations" : (p.status || "Actif")}</span>
                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">{p.typeLocation}</span>
                           </div>
                           <p className={`font-bold text-lg ${darkMode ? "text-white" : "text-slate-900"}`}>{p.adresse} {p.nombrePieces ? "- " + p.nombrePieces + " pièces" : ""}</p>
-                       </div>
-                       <div className="flex flex-col items-end space-y-2">
-                           <div className="flex items-center space-x-3">
-                             <button onClick={() => setPlexManagementProperties(plexManagementProperties.filter(x => x.id !== p.id))} className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 dark:bg-rose-950/20 rounded-xl">
-                               <Trash2 size={16} />
-                             </button>
-                             {isContainer && (
-                               <button onClick={() => setExpandedDoors({...expandedDoors, [p.id]: !doorIsExpanded})} className={`p-2 transition-colors rounded-xl ${darkMode ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-slate-100 text-slate-800 hover:bg-slate-200"}`}>
-                                 {doorIsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                               </button>
-                             )}
-                           </div>
-                           <div className={`px-3 py-1.5 rounded-xl border ${occupRate < 90 ? (darkMode ? "bg-slate-900/50 border-slate-700" : "bg-slate-100 border-slate-300") : (darkMode ? "bg-emerald-950/20 border-emerald-900/50" : "bg-emerald-50 border-emerald-200")}`}>
-                              <p className={`text-[9px] font-black uppercase tracking-widest ${occupRate < 90 ? "text-emerald-600" : "text-emerald-600"}`}>Ocup. {occupRate.toFixed(1)}%</p>
-                              <p className={`text-[7px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>{totalVacantMonths} / {totalOpenMonths} mois vacants</p>
-                           </div>
-                       </div>
-                    </div>
-                    
-                    {!isContainer && (
-                      <>
-                        <div className="flex flex-col space-y-1">
-                          <p className={`text-xs font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Locataire: {p.locataire}</p>
-                          <p className={`text-[9px] font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-1 rounded w-fit`}>
-                            ID Conciliation: PROP-{p.id}-{p.identifiantChambre || p.nombrePieces || "UNT"}-{p.adresse?.split(' ')[0] || "ADR"}
-                          </p>
                         </div>
-                        <p className={`text-lg font-black mt-2 ${darkMode ? "text-zinc-200" : "text-slate-800"}`}>{p.montant} $ <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">/ Mois</span></p>
-                      </>
-                    )}
-
-                    {isContainer && (
-                      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800 text-right">
-                         <p className={`text-[10px] uppercase font-black tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Total par Mois pour {p.adresse || "cette adresse"}</p>
-                         <p className={`text-2xl font-black ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>{containerTotal} $ <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">/ Mois</span></p>
+                        <div className="flex flex-col items-end space-y-2">
+                          <div className="flex items-center space-x-3">
+                            <button onClick={() => setPlexManagementProperties(plexManagementProperties.filter(x => x.id !== p.id))} className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 dark:bg-rose-950/20 rounded-xl">
+                              <Trash2 size={16} />
+                            </button>
+                            {isContainer && (
+                              <button onClick={() => setExpandedDoors({ ...expandedDoors, [p.id]: !doorIsExpanded })} className={`p-2 transition-colors rounded-xl ${darkMode ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-slate-100 text-slate-800 hover:bg-slate-200"}`}>
+                                {doorIsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              </button>
+                            )}
+                          </div>
+                          <div className={`px-3 py-1.5 rounded-xl border ${occupRate < 90 ? (darkMode ? "bg-slate-900/50 border-slate-700" : "bg-slate-100 border-slate-300") : (darkMode ? "bg-emerald-950/20 border-emerald-900/50" : "bg-emerald-50 border-emerald-200")}`}>
+                            <p className={`text-[9px] font-black uppercase tracking-widest ${occupRate < 90 ? "text-emerald-600" : "text-emerald-600"}`}>Ocup. {occupRate.toFixed(1)}%</p>
+                            <p className={`text-[7px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>{totalVacantMonths} / {totalOpenMonths} mois vacants</p>
+                          </div>
+                        </div>
                       </div>
-                    )}
 
-                    {isContainer && doorIsExpanded && p.chambres && (
-                       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {!isContainer && (
+                        <>
+                          <div className="flex flex-col space-y-1">
+                            <p className={`text-xs font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Locataire: {p.locataire}</p>
+                            <p className={`text-[9px] font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-1 rounded w-fit`}>
+                              ID Conciliation: PROP-{p.id}-{p.identifiantChambre || p.nombrePieces || "UNT"}-{p.adresse?.split(' ')[0] || "ADR"}
+                            </p>
+                          </div>
+                          <p className={`text-lg font-black mt-2 ${darkMode ? "text-zinc-200" : "text-slate-800"}`}>{p.montant} $ <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">/ Mois</span></p>
+                        </>
+                      )}
+
+                      {isContainer && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800 text-right">
+                          <p className={`text-[10px] uppercase font-black tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Total par Mois pour {p.adresse || "cette adresse"}</p>
+                          <p className={`text-2xl font-black ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>{containerTotal} $ <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">/ Mois</span></p>
+                        </div>
+                      )}
+
+                      {isContainer && doorIsExpanded && p.chambres && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {p.chambres.map((c: any) => (
-                             <div key={c.id} className={`p-4 rounded-2xl flex flex-col justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"} border shadow-sm`}>
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <p className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{c.identifiantChambre}</p>
-                                    <p className={`text-[9px] font-bold mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Locataire: {c.locataire}</p>
-                                  </div>
-                                  <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md text-white ${c.status === "Vacant" ? "bg-slate-400" : "bg-emerald-500"}`}>{c.status}</span>
+                            <div key={c.id} className={`p-4 rounded-2xl flex flex-col justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"} border shadow-sm`}>
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{c.identifiantChambre}</p>
+                                  <p className={`text-[9px] font-bold mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>Locataire: {c.locataire}</p>
                                 </div>
-                                <div className="flex justify-between items-end mt-3">
-                                   <p className={`text-[8px] font-mono font-black uppercase px-2 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400`}>PROP-{c.id}</p>
-                                   <p className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{c.montant} $</p>
-                                </div>
-                             </div>
+                                <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md text-white ${c.status === "Vacant" ? "bg-slate-400" : "bg-emerald-500"}`}>{c.status}</span>
+                              </div>
+                              <div className="flex justify-between items-end mt-3">
+                                <p className={`text-[8px] font-mono font-black uppercase px-2 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400`}>PROP-{c.id}</p>
+                                <p className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{c.montant} $</p>
+                              </div>
+                            </div>
                           ))}
-                       </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -18698,10 +18376,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <WorkspaceSidebar />
         <main className="flex-1 p-4 md:p-6 w-full animate-in fade-in duration-300">
           <div className="flex items-center justify-between mb-8">
-             <div className="text-left">
-               <h2 className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Incidents & Maintenance</h2>
-               <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Suivi des travaux de la copropriété</p>
-             </div>
+            <div className="text-left">
+              <h2 className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Incidents & Maintenance</h2>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Suivi des travaux de la copropriété</p>
+            </div>
           </div>
           <div className={`p-12 mt-10 rounded-[32px] border border-dashed flex flex-col items-center justify-center text-center ${darkMode ? "border-zinc-800 bg-zinc-950/20" : "border-slate-200 bg-white"}`}>
             <div className={`p-4 rounded-full mb-4 ${darkMode ? "bg-zinc-900 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
@@ -18723,10 +18401,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
       .reduce((a, b) => a + (b.total || 0), 0);
 
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-right text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-right text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center space-x-3 text-left shadow-sm`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center space-x-3 text-left shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -18869,7 +18547,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               return (
                 <div
                   key={item.cat}
-                  className={`p-6 rounded-[32px] border shadow-sm flex flex-col justify-between space-y-4 hover:shadow-xl transition-all text-left ${darkMode ? "bg-zinc-950 border-zinc-900 text-zinc-100" : "bg-white border-slate-100"}`}
+                  className={`p-6 rounded-[32px] border shadow-sm flex flex-col justify-between space-y-4 hover:shadow-xl transition-all text-left ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-100"}`}
                 >
                   <div className="flex-1 space-y-4">
                     <div className="flex items-center justify-between">
@@ -18885,13 +18563,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           const el = document.getElementById(`file-upload-${item.key}`);
                           if (el) el.click();
                         }}
-                        className={`w-9 h-9 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer ${
-                          hasFile
+                        className={`w-9 h-9 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer ${hasFile
                             ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                             : darkMode
-                            ? "bg-zinc-900 text-slate-400 border-zinc-800 hover:text-white"
-                            : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
-                        }`}
+                              ? "bg-zinc-900 text-slate-400 border-zinc-800 hover:text-white"
+                              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                          }`}
                         title="Joindre un reçu (+)"
                       >
                         {hasFile ? <FileCheck size={18} /> : <Plus size={18} />}
@@ -18909,7 +18586,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             const fileUrl = URL.createObjectURL(file);
                             // Simule la lecture du reçu et remplit le champ avec un montant aléatoire logique
                             const simulatedAmount = parseFloat((Math.random() * 120 + 40).toFixed(2));
-                            
+
                             setHomeOfficeFiles(prev => ({
                               ...prev,
                               [fileKey]: fileUrl,
@@ -19154,9 +18831,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         </p>
                       </div>
                       {expense.lien && (
-                        <a 
-                          href={expense.lien} 
-                          target="_blank" 
+                        <a
+                          href={expense.lien}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-slate-100 dark:bg-zinc-800 rounded-full text-slate-400 border border-slate-200 dark:border-zinc-700 hover:text-emerald-500 hover:border-emerald-500 transition-colors"
                           title="Voir le reçu"
@@ -19232,7 +18909,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   onClick={() => {
                     const tv = parseFloat(hoConfigForm.aireTotale) || 1;
                     const bv = parseFloat(hoConfigForm.aireBureau) || 0;
-                    
+
                     setPartnerData((prev: any) => {
                       const baseObj = prev[activeUser] || {};
                       return {
@@ -19248,7 +18925,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         }
                       };
                     });
-                    
+
                     setShowHomeOfficeConfig(false);
                   }}
                   className="w-full mt-6 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2"
@@ -19266,11 +18943,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "taxes_assurances") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
         <WorkspaceSidebar />
         <main className="flex-1 overflow-hidden flex flex-col pt-4 px-4 sm:px-6 w-full">
-          <TaxesAssurancesView 
-            darkMode={darkMode} 
+          <TaxesAssurancesView
+            darkMode={darkMode}
             setVista={setVista}
             setDepenses={setDepenses}
             companyId={activeCompanyId}
@@ -19297,11 +18974,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-right text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-right text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -19382,7 +19059,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             ].map((line, i) => (
               <div
                 key={i}
-                className={`p-5 rounded-[28px] border flex justify-between items-center text-left hover:border-[#059669] transition-all shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+                className={`p-5 rounded-[28px] border flex justify-between items-center text-left hover:border-[#059669] transition-all shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
               >
                 <span
                   className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -19397,7 +19074,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           <div
-            className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-6 rounded-[32px] border space-y-3 shadow-sm`}
+            className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-6 rounded-[32px] border space-y-3 shadow-sm`}
           >
             <div
               className={`flex justify-between items-center text-[10px] font-black uppercase italic px-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -19468,7 +19145,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}
+                className={`w-full max-w-sm rounded-[40px] shadow-2xl overflow-y-auto max-h-[92vh] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"}`}
               >
                 <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                   <div className="flex items-center space-x-2">
@@ -19605,9 +19282,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
     const periodFilteredInvoices = filterBySelectedPeriod(compFilteredInvoices);
     const periodFilteredExpenses = filterBySelectedPeriod(compFilteredExpenses);
-    
+
     const periodFilteredBankTxn = filterBySelectedPeriod(bankTransactions.filter(t => t.companyId === activeCompanyId));
-    
+
     // Data Fidelity Protection: sum of 'Contabilisé' entries ONLY
     const totalRevenus = periodFilteredBankTxn.reduce((acc, txn) => {
       const v = validateDeposit(txn);
@@ -19702,52 +19379,52 @@ Ceci est un message automatisé généré par AutoCompt.`;
       sortedRows.length > 0
         ? sortedRows
         : [
-            {
-              id: "m1",
-              date: "2026-05-15",
-              tiers: currentCompany?.nombre || "Solutions GPA Inc.",
-              compte: "Services Conseil",
-              partenaire: "Fabiola",
-              net: 1500.0,
-              tps: 75.0,
-              tvq: 149.63,
-              total: 1724.63,
-              type: "revenu",
-              lien: null,
-              status: "Payée",
-              original: null,
-            },
-            {
-              id: "m2",
-              date: "2026-05-12",
-              tiers: "Hydro-Québec",
-              compte: "Électricité / Chauffage",
-              partenaire: "Fabiola",
-              net: 180.0,
-              tps: 9.0,
-              tvq: 17.96,
-              total: 206.96,
-              type: "depense",
-              lien: null,
-              status: "Payée",
-              original: null,
-            },
-            {
-              id: "m3",
-              date: "2026-05-08",
-              tiers: "Videotron",
-              compte: "Internet / Télécom",
-              partenaire: "Natalia",
-              net: 85.0,
-              tps: 4.25,
-              tvq: 8.48,
-              total: 97.73,
-              type: "depense",
-              lien: null,
-              status: "Payée",
-              original: null,
-            },
-          ];
+          {
+            id: "m1",
+            date: "2026-05-15",
+            tiers: currentCompany?.nombre || "Solutions GPA Inc.",
+            compte: "Services Conseil",
+            partenaire: "Fabiola",
+            net: 1500.0,
+            tps: 75.0,
+            tvq: 149.63,
+            total: 1724.63,
+            type: "revenu",
+            lien: null,
+            status: "Payée",
+            original: null,
+          },
+          {
+            id: "m2",
+            date: "2026-05-12",
+            tiers: "Hydro-Québec",
+            compte: "Électricité / Chauffage",
+            partenaire: "Fabiola",
+            net: 180.0,
+            tps: 9.0,
+            tvq: 17.96,
+            total: 206.96,
+            type: "depense",
+            lien: null,
+            status: "Payée",
+            original: null,
+          },
+          {
+            id: "m3",
+            date: "2026-05-08",
+            tiers: "Videotron",
+            compte: "Internet / Télécom",
+            partenaire: "Natalia",
+            net: 85.0,
+            tps: 4.25,
+            tvq: 8.48,
+            total: 97.73,
+            type: "depense",
+            lien: null,
+            status: "Payée",
+            original: null,
+          },
+        ];
 
     return (
       <div
@@ -20186,7 +19863,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           <div className="flex flex-col items-end">
                             <span>{row.total.toFixed(2)} $</span>
                             {row.status === "En attente" && (
-                              <span 
+                              <span
                                 onClick={() => {
                                   if (row.type === "depense" && row.lien) {
                                     setEditingExpense(row.original);
@@ -20310,11 +19987,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Type de bail</label>
                     <div className="flex flex-col space-y-3">
                       <label className={`flex items-center space-x-3 p-3 rounded-2xl border ${loyerForm.typeBail === "Logement complet" ? (darkMode ? "border-orange-500/50 bg-orange-500/10" : "border-orange-500 bg-orange-50") : (darkMode ? "border-zinc-800 bg-zinc-900" : "border-slate-200 bg-slate-50")} transition-all cursor-pointer`}>
-                        <input type="radio" value="Logement complet" checked={loyerForm.typeBail === "Logement complet"} onChange={(e) => setLoyerForm({...loyerForm, typeBail: e.target.value})} className="accent-orange-500 w-4 h-4" />
+                        <input type="radio" value="Logement complet" checked={loyerForm.typeBail === "Logement complet"} onChange={(e) => setLoyerForm({ ...loyerForm, typeBail: e.target.value })} className="accent-orange-500 w-4 h-4" />
                         <span className={`text-sm font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Logement complet</span>
                       </label>
                       <label className={`flex items-center space-x-3 p-3 rounded-2xl border ${loyerForm.typeBail === "Habitation" ? (darkMode ? "border-orange-500/50 bg-orange-500/10" : "border-orange-500 bg-orange-50") : (darkMode ? "border-zinc-800 bg-zinc-900" : "border-slate-200 bg-slate-50")} transition-all cursor-pointer`}>
-                        <input type="radio" value="Habitation" checked={loyerForm.typeBail === "Habitation"} onChange={(e) => setLoyerForm({...loyerForm, typeBail: e.target.value})} className="accent-orange-500 w-4 h-4" />
+                        <input type="radio" value="Habitation" checked={loyerForm.typeBail === "Habitation"} onChange={(e) => setLoyerForm({ ...loyerForm, typeBail: e.target.value })} className="accent-orange-500 w-4 h-4" />
                         <span className={`text-sm font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Habitation (Chambre)</span>
                       </label>
                     </div>
@@ -20322,33 +19999,33 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Unité / Appartement</label>
-                      <input type="text" value={loyerForm.unite} onChange={(e) => setLoyerForm({...loyerForm, unite: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Apt 1" />
+                      <input type="text" value={loyerForm.unite} onChange={(e) => setLoyerForm({ ...loyerForm, unite: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Apt 1" />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant du loyer</label>
                       <div className="relative">
                         <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>$</span>
-                        <input type="text" value={loyerForm.montant} onChange={(e) => setLoyerForm({...loyerForm, montant: e.target.value})} className={`w-full pl-8 pr-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="1200.00" />
+                        <input type="text" value={loyerForm.montant} onChange={(e) => setLoyerForm({ ...loyerForm, montant: e.target.value })} className={`w-full pl-8 pr-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="1200.00" />
                       </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Date de réception</label>
-                      <input type="date" value={loyerForm.date} onChange={(e) => setLoyerForm({...loyerForm, date: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
+                      <input type="date" value={loyerForm.date} onChange={(e) => setLoyerForm({ ...loyerForm, date: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
-                      <input type="text" value={loyerForm.locataire} onChange={(e) => setLoyerForm({...loyerForm, locataire: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Jean Tremblay" />
+                      <input type="text" value={loyerForm.locataire} onChange={(e) => setLoyerForm({ ...loyerForm, locataire: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Jean Tremblay" />
                     </div>
                   </div>
                 </div>
                 <div className={`p-4 border-t flex justify-end gap-2 ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-100 bg-slate-50"}`}>
                   {loyerEditingId && (
                     <button onClick={() => {
-                        setPlexLoyers(plexLoyers.filter(l => l.id !== loyerEditingId));
-                        setShowLoyerModal(false);
-                      }} 
+                      setPlexLoyers(plexLoyers.filter(l => l.id !== loyerEditingId));
+                      setShowLoyerModal(false);
+                    }}
                       className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider text-orange-500 hover:bg-gradient-to-r from-orange-500 to-amber-600 text-white border-0/10 transition-colors mr-auto flex items-center space-x-2`}>
                       <Trash2 size={14} />
                       <span>Supprimer</span>
@@ -20395,7 +20072,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <div className="p-6 space-y-4">
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Adresse de l'immeuble</label>
-                    <input type="text" value={plexExpenseForm.adresse} onChange={(e) => setPlexExpenseForm({...plexExpenseForm, adresse: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="123 Rue Principale" />
+                    <input type="text" value={plexExpenseForm.adresse} onChange={(e) => setPlexExpenseForm({ ...plexExpenseForm, adresse: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="123 Rue Principale" />
                   </div>
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Catégorie de dépense</label>
@@ -20412,16 +20089,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           <button
                             key={model.id}
                             type="button"
-                            onClick={() => setPlexExpenseForm({...plexExpenseForm, categorie: model.id})}
-                            className={`flex flex-col items-center justify-center py-2 px-1 text-[10px] font-bold rounded-lg transition-all duration-200 ease-in-out border border-transparent ${
-                              isSelected 
-                                ? "bg-teal-500 text-white shadow-sm border-teal-400 scale-[1.02]" 
+                            onClick={() => setPlexExpenseForm({ ...plexExpenseForm, categorie: model.id })}
+                            className={`flex flex-col items-center justify-center py-2 px-1 text-[10px] font-bold rounded-lg transition-all duration-200 ease-in-out border border-transparent ${isSelected
+                                ? "bg-teal-500 text-white shadow-sm border-teal-400 scale-[1.02]"
                                 : "bg-transparent text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center justify-center space-x-1">
-                               {isSelected && <CheckCircle2 size={12} />}
-                               <span>{model.label}</span>
+                              {isSelected && <CheckCircle2 size={12} />}
+                              <span>{model.label}</span>
                             </div>
                           </button>
                         )
@@ -20431,7 +20107,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   {plexExpenseForm.categorie === "Sous-traitance" && (
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du professionnel / Compagnie *</label>
-                      <input type="text" required value={plexExpenseForm.professionnel || ""} onChange={(e) => setPlexExpenseForm({...plexExpenseForm, professionnel: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Nom de l'entreprise ou du travailleur..." />
+                      <input type="text" required value={plexExpenseForm.professionnel || ""} onChange={(e) => setPlexExpenseForm({ ...plexExpenseForm, professionnel: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Nom de l'entreprise ou du travailleur..." />
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -20439,21 +20115,21 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant (TTC)</label>
                       <div className="relative">
                         <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>$</span>
-                        <input type="text" value={plexExpenseForm.montant} onChange={(e) => setPlexExpenseForm({...plexExpenseForm, montant: e.target.value})} className={`w-full pl-8 pr-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
+                        <input type="text" value={plexExpenseForm.montant} onChange={(e) => setPlexExpenseForm({ ...plexExpenseForm, montant: e.target.value })} className={`w-full pl-8 pr-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
                       </div>
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Date de la facture</label>
-                      <input type="date" value={plexExpenseForm.date} onChange={(e) => setPlexExpenseForm({...plexExpenseForm, date: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
+                      <input type="date" value={plexExpenseForm.date} onChange={(e) => setPlexExpenseForm({ ...plexExpenseForm, date: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
                     </div>
                   </div>
                 </div>
                 <div className={`p-4 border-t flex justify-end gap-2 ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-100 bg-slate-50"}`}>
                   {plexExpenseEditingId && (
                     <button onClick={() => {
-                        setPlexDepenses(plexDepenses.filter(d => d.id !== plexExpenseEditingId));
-                        setShowPlexExpenseModal(false);
-                      }} 
+                      setPlexDepenses(plexDepenses.filter(d => d.id !== plexExpenseEditingId));
+                      setShowPlexExpenseModal(false);
+                    }}
                       className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider text-orange-500 hover:bg-gradient-to-r from-orange-500 to-amber-600 text-white border-0/10 transition-colors mr-auto flex items-center space-x-2`}>
                       <Trash2 size={14} />
                       <span>Supprimer</span>
@@ -20477,7 +20153,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className={`w-full max-w-sm rounded-[36px] overflow-hidden border shadow-2xl relative ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} text-left`}
+                className={`w-full max-w-sm rounded-[36px] overflow-hidden border shadow-2xl relative ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} text-left`}
               >
                 <div className={`p-6 border-b ${darkMode ? "border-zinc-900" : "border-slate-100"} flex items-center justify-between`}>
                   <div className="flex items-center space-x-3 text-left">
@@ -20493,36 +20169,36 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <X size={18} />
                   </button>
                 </div>
-                
+
                 <div className={`p-6 space-y-4 ${darkMode ? "bg-zinc-950/50" : "bg-slate-50/50"}`}>
                   <div className="space-y-1.5 text-left">
                     <label className={`text-[9.5px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Montant ($)</label>
-                    <input 
+                    <input
                       type="number"
                       placeholder="0.00"
                       value={manualExpenseForm.montant}
-                      onChange={e => setManualExpenseForm({...manualExpenseForm, montant: e.target.value})}
+                      onChange={e => setManualExpenseForm({ ...manualExpenseForm, montant: e.target.value })}
                       className={`w-full p-3.5 rounded-2xl text-[11px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
                     />
                   </div>
-                  
+
                   <div className="space-y-1.5 text-left">
                     <label className={`text-[9.5px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Description</label>
-                    <input 
+                    <input
                       type="text"
                       placeholder="Identifiant ou description du fournisseur"
                       value={manualExpenseForm.description}
-                      onChange={e => setManualExpenseForm({...manualExpenseForm, description: e.target.value})}
+                      onChange={e => setManualExpenseForm({ ...manualExpenseForm, description: e.target.value })}
                       className={`w-full p-3.5 rounded-2xl text-[11px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
                     />
                   </div>
 
                   <div className="space-y-1.5 text-left">
                     <label className={`text-[9.5px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
-                    <input 
+                    <input
                       type="date"
                       value={manualExpenseForm.date}
-                      onChange={e => setManualExpenseForm({...manualExpenseForm, date: e.target.value})}
+                      onChange={e => setManualExpenseForm({ ...manualExpenseForm, date: e.target.value })}
                       className={`w-full p-3.5 rounded-2xl text-[11px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
                     />
                   </div>
@@ -20530,11 +20206,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <div className="mt-4 pt-4 border-t border-rose-500/20 text-left">
                     <label className="flex items-start space-x-3 cursor-pointer group">
                       <div className="relative flex items-center justify-center mt-0.5">
-                        <input 
+                        <input
                           type="checkbox"
                           checked={manualExpenseForm.confirmed}
-                          onChange={(e) => setManualExpenseForm({...manualExpenseForm, confirmed: e.target.checked})}
-                          className={`appearance-none w-5 h-5 rounded-md border-2 border-rose-500 outline-none cursor-pointer transition-all ${manualExpenseForm.confirmed ? "bg-rose-500" : "bg-transparent group-hover:bg-rose-500/10"}`} 
+                          onChange={(e) => setManualExpenseForm({ ...manualExpenseForm, confirmed: e.target.checked })}
+                          className={`appearance-none w-5 h-5 rounded-md border-2 border-rose-500 outline-none cursor-pointer transition-all ${manualExpenseForm.confirmed ? "bg-rose-500" : "bg-transparent group-hover:bg-rose-500/10"}`}
                         />
                         {manualExpenseForm.confirmed && <CheckCircle2 size={12} className="text-white absolute pointer-events-none" />}
                       </div>
@@ -20546,41 +20222,41 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </div>
 
                 <div className={`p-6 border-t font-sans ${darkMode ? "border-zinc-900 bg-zinc-950" : "border-slate-100 bg-white"}`}>
-                   <button 
-                     onClick={() => {
-                       if (!manualExpenseForm.montant || !manualExpenseForm.description || !manualExpenseForm.date) {
-                         alert("Veuillez remplir tous les champs.");
-                         return;
-                       }
-                       if (!manualExpenseForm.confirmed) {
-                         alert("Vous devez accepter la clause de responsabilité.");
-                         return;
-                       }
+                  <button
+                    onClick={() => {
+                      if (!manualExpenseForm.montant || !manualExpenseForm.description || !manualExpenseForm.date) {
+                        alert("Veuillez remplir tous les champs.");
+                        return;
+                      }
+                      if (!manualExpenseForm.confirmed) {
+                        alert("Vous devez accepter la clause de responsabilité.");
+                        return;
+                      }
 
-                       const newExpense = {
-                         id: Date.now(),
-                         companyId: activeCompanyId,
-                         fecha: manualExpenseForm.date,
-                         fournisseur: manualExpenseForm.description,
-                         cat: "À classer", // Catégorie générique à reclasser plus tard
-                         subtotal: parseFloat(manualExpenseForm.montant),
-                         tps: 0,
-                         tvq: 0,
-                         total: parseFloat(manualExpenseForm.montant),
-                         lien: null,
-                         partnerTag: activeUser,
-                         isManual: true
-                       };
-                       setDepenses(prev => [newExpense, ...prev]);
-                       setManualExpenseForm({ montant: "", description: "", date: new Date().toISOString().split("T")[0], confirmed: false });
-                       setShowManualExpenseModal(false);
-                       playNotificationSound();
-                     }}
-                     className={`w-full py-4 text-[10px] font-black uppercase italic tracking-widest rounded-2xl transition-all border ${!manualExpenseForm.confirmed ? "opacity-50 cursor-not-allowed " + (darkMode ? "bg-zinc-800 text-zinc-500 border-zinc-700" : "bg-slate-100 text-slate-400 border-slate-200") : "bg-rose-600 text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] hover:scale-[1.02] border-rose-500"}`}
-                     disabled={!manualExpenseForm.confirmed}
-                   >
-                     + Enregistrer
-                   </button>
+                      const newExpense = {
+                        id: Date.now(),
+                        companyId: activeCompanyId,
+                        fecha: manualExpenseForm.date,
+                        fournisseur: manualExpenseForm.description,
+                        cat: "À classer", // Catégorie générique à reclasser plus tard
+                        subtotal: parseFloat(manualExpenseForm.montant),
+                        tps: 0,
+                        tvq: 0,
+                        total: parseFloat(manualExpenseForm.montant),
+                        lien: null,
+                        partnerTag: activeUser,
+                        isManual: true
+                      };
+                      setDepenses(prev => [newExpense, ...prev]);
+                      setManualExpenseForm({ montant: "", description: "", date: new Date().toISOString().split("T")[0], confirmed: false });
+                      setShowManualExpenseModal(false);
+                      playNotificationSound();
+                    }}
+                    className={`w-full py-4 text-[10px] font-black uppercase italic tracking-widest rounded-2xl transition-all border ${!manualExpenseForm.confirmed ? "opacity-50 cursor-not-allowed " + (darkMode ? "bg-zinc-800 text-zinc-500 border-zinc-700" : "bg-slate-100 text-slate-400 border-slate-200") : "bg-rose-600 text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] hover:scale-[1.02] border-rose-500"}`}
+                    disabled={!manualExpenseForm.confirmed}
+                  >
+                    + Enregistrer
+                  </button>
                 </div>
               </motion.div>
             </div>
@@ -20594,7 +20270,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className={`w-full max-w-sm rounded-[36px] overflow-hidden border shadow-2xl relative ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} text-left`}
+                className={`w-full max-w-sm rounded-[36px] overflow-hidden border shadow-2xl relative ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} text-left`}
               >
                 <div className={`p-6 border-b flex justify-between items-center ${darkMode ? "border-zinc-800" : "border-slate-100"}`}>
                   <div className="flex items-center space-x-3">
@@ -20613,7 +20289,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <div className="p-6 space-y-4">
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Catégorie de dépense</label>
-                    <select value={autonomeExpenseForm.categorie} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, categorie: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}>
+                    <select value={autonomeExpenseForm.categorie} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, categorie: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}>
                       <option value="Réparations et entretien">Réparations et entretien</option>
                       <option value="Assurances">Assurances</option>
                       <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
@@ -20628,40 +20304,40 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   {autonomeExpenseForm.categorie === "Honoraires professionnels" && (
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du professionnel / Compagnie *</label>
-                      <input type="text" required value={autonomeExpenseForm.professionnel || ""} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, professionnel: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Nom de l'entreprise ou du travailleur..." />
+                      <input type="text" required value={autonomeExpenseForm.professionnel || ""} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, professionnel: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Nom de l'entreprise ou du travailleur..." />
                     </div>
                   )}
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Net ($)</label>
-                      <input type="text" value={autonomeExpenseForm.net} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, net: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
+                      <input type="text" value={autonomeExpenseForm.net} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, net: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>TPS ($)</label>
-                      <input type="text" value={autonomeExpenseForm.tps} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, tps: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
+                      <input type="text" value={autonomeExpenseForm.tps} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, tps: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>TVQ ($)</label>
-                      <input type="text" value={autonomeExpenseForm.tvq} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, tvq: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
+                      <input type="text" value={autonomeExpenseForm.tvq} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, tvq: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="0.00" />
                     </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Total ($)</label>
-                      <input type="text" value={autonomeExpenseForm.total} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, total: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#059669]/50 outline-none transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 focus:border-zinc-700 text-zinc-100" : "bg-slate-50 border-slate-200 focus:border-slate-300 text-slate-900"}`} placeholder="0.00" />
+                      <input type="text" value={autonomeExpenseForm.total} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, total: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#059669]/50 outline-none transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 focus:border-zinc-700 text-zinc-100" : "bg-slate-50 border-slate-200 focus:border-slate-300 text-slate-900"}`} placeholder="0.00" />
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <button type="button" onClick={() => {
-                      const n = parseFloat(autonomeExpenseForm.net.replace(/[^0-9.-]+/g,"")) || 0;
-                      const tps = parseFloat(autonomeExpenseForm.tps.replace(/[^0-9.-]+/g,"")) || 0;
-                      const tvq = parseFloat(autonomeExpenseForm.tvq.replace(/[^0-9.-]+/g,"")) || 0;
+                      const n = parseFloat(autonomeExpenseForm.net.replace(/[^0-9.-]+/g, "")) || 0;
+                      const tps = parseFloat(autonomeExpenseForm.tps.replace(/[^0-9.-]+/g, "")) || 0;
+                      const tvq = parseFloat(autonomeExpenseForm.tvq.replace(/[^0-9.-]+/g, "")) || 0;
                       const sum = n + tps + tvq;
-                      const t = parseFloat(autonomeExpenseForm.total.replace(/[^0-9.-]+/g,"")) || 0;
+                      const t = parseFloat(autonomeExpenseForm.total.replace(/[^0-9.-]+/g, "")) || 0;
                       if (Math.abs(sum - t) > 0.02) {
-                        setAutonomeExpenseForm({...autonomeExpenseForm, warning: "Attention: Le total ne correspond pas à la somme."});
+                        setAutonomeExpenseForm({ ...autonomeExpenseForm, warning: "Attention: Le total ne correspond pas à la somme." });
                       } else {
-                        setAutonomeExpenseForm({...autonomeExpenseForm, warning: ""});
+                        setAutonomeExpenseForm({ ...autonomeExpenseForm, warning: "" });
                       }
                     }} className="text-[10px] font-black uppercase tracking-widest text-[#059669] hover:underline">
                       Auto-calcul
@@ -20673,7 +20349,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Date de la facture</label>
-                    <input type="date" value={autonomeExpenseForm.date} onChange={(e) => setAutonomeExpenseForm({...autonomeExpenseForm, date: e.target.value})} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#059669]/50 outline-none transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 focus:border-zinc-700 text-zinc-100" : "bg-slate-50 border-slate-200 focus:border-slate-300 text-slate-900"}`} />
+                    <input type="date" value={autonomeExpenseForm.date} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, date: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#059669]/50 outline-none transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 focus:border-zinc-700 text-zinc-100" : "bg-slate-50 border-slate-200 focus:border-slate-300 text-slate-900"}`} />
                   </div>
 
                   <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50">
@@ -20713,7 +20389,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className={`w-full max-w-lg p-6 rounded-[36px] border ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-150 text-slate-905"} shadow-2xl relative text-left`}
+                className={`w-full max-w-lg p-6 rounded-[36px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-150 text-slate-905"} shadow-2xl relative text-left`}
               >
                 <button
                   onClick={() => setShowComptableModal(false)}
@@ -20872,11 +20548,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 initial={{ opacity: 0, scale: 0.93, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.93, y: 15 }}
-                className={`w-full max-w-sm rounded-[36px] border ${
-                  darkMode
-                    ? "bg-zinc-950 border-zinc-900 text-zinc-100"
+                className={`w-full max-w-sm rounded-[36px] border ${darkMode
+                    ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100"
                     : "bg-white border-slate-150 text-slate-905"
-                } shadow-2xl relative overflow-hidden`}
+                  } shadow-2xl relative overflow-hidden`}
               >
                 {/* Close Button */}
                 <button
@@ -20958,11 +20633,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             playNotificationSound();
                           }, 1400);
                         }}
-                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${
-                          darkMode
+                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${darkMode
                             ? "bg-zinc-900/50 border-zinc-850 hover:border-emerald-500/40 hover:bg-zinc-900 text-zinc-100"
                             : "bg-slate-50/50 border-slate-105 hover:border-[#059669]/30 hover:bg-slate-100/40 text-slate-800"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center space-x-3.5">
                           <div className="p-3 bg-red-500/10 text-red-500 rounded-xl group-hover:scale-110 transition-transform">
@@ -21004,11 +20678,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             );
                           }, 1200);
                         }}
-                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${
-                          darkMode
+                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${darkMode
                             ? "bg-zinc-900/50 border-zinc-850 hover:border-emerald-500/40 hover:bg-zinc-900 text-zinc-100"
                             : "bg-slate-50/50 border-slate-105 hover:border-emerald-500/30 hover:bg-slate-100/40 text-slate-800"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center space-x-3.5">
                           <div className="p-3 bg-emerald-500/10 text-[#059669] dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform">
@@ -21056,11 +20729,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             window.open(driveUrl, "_blank");
                           }, 1200);
                         }}
-                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${
-                          darkMode
+                        className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${darkMode
                             ? "bg-zinc-900/50 border-zinc-850 hover:border-teal-500/40 hover:bg-zinc-900 text-zinc-100"
                             : "bg-slate-50/50 border-slate-105 hover:border-teal-500/30 hover:bg-slate-100/40 text-slate-800"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center space-x-3.5">
                           <div className="p-3 bg-teal-500/10 text-teal-500 rounded-xl group-hover:scale-110 transition-transform">
@@ -21098,11 +20770,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
               className="fixed bottom-6 right-6 z-[200] max-w-sm"
             >
               <div
-                className={`p-4 rounded-[22px] border shadow-2xl flex items-center space-x-3.5 ${
-                  darkMode
+                className={`p-4 rounded-[22px] border shadow-2xl flex items-center space-x-3.5 ${darkMode
                     ? "bg-zinc-950 border-emerald-950/45 text-white shadow-emerald-950/25"
                     : "bg-[#FAF9F6] border-emerald-200 text-slate-805 shadow-emerald-950/10"
-                }`}
+                  }`}
               >
                 <div className="p-2.5 bg-emerald-500/15 rounded-xl text-emerald-500 shrink-0">
                   {dispatcherSuccessToast.channel === "Par Email" ? (
@@ -21164,11 +20835,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "banque")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-bottom text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-bottom text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -21212,7 +20883,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           {/* State Toggle */}
           <div
-            className={`p-2 rounded-[28px] border flex space-x-1 shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"}`}
+            className={`p-2 rounded-[28px] border flex space-x-1 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
           >
             <button className="flex-1 py-3 bg-[#059669] text-white rounded-[22px] text-[9px] font-black uppercase italic shadow-lg">
               Vues Transactions
@@ -21226,7 +20897,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           <div
-            className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border`}
+            className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border`}
           >
             <div className="flex justify-between items-center mb-6">
               <h3
@@ -21388,7 +21059,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     matchedInvoice = filteredHistorique.find(
                       (h) => Math.abs(parseFloat(h.total || 0) - Math.abs(txn.amt)) < 0.01,
                     );
-                    
+
                     const entryFound = matchedExpense || matchedInvoice;
                     const hasLien = (matchedExpense && matchedExpense.lien) || matchedInvoice;
                     const isManual = matchedExpense && matchedExpense.isManual;
@@ -21410,19 +21081,19 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                   const cardStyles = darkMode
                     ? {
-                        conciliated: "bg-zinc-950 border-zinc-900 shadow-sm opacity-90",
-                        need_receipt: "bg-zinc-950 border-amber-900 shadow-xl shadow-amber-900/20 ring-1 ring-amber-900",
-                        missing: "bg-zinc-950 border-rose-900 shadow-2xl shadow-rose-900/40 ring-1 ring-rose-900",
-                        potencial_match: "bg-zinc-950 border-indigo-900 shadow-xl shadow-indigo-900/20 ring-1 ring-indigo-900",
-                        erreur_rejet: "bg-zinc-950 border-red-900 shadow-2xl shadow-red-900/40 ring-1 ring-red-900",
-                      }
+                      conciliated: "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md shadow-sm opacity-90",
+                      need_receipt: "bg-zinc-950 border-amber-900 shadow-xl shadow-amber-900/20 ring-1 ring-amber-900",
+                      missing: "bg-zinc-950 border-rose-900 shadow-2xl shadow-rose-900/40 ring-1 ring-rose-900",
+                      potencial_match: "bg-zinc-950 border-indigo-900 shadow-xl shadow-indigo-900/20 ring-1 ring-indigo-900",
+                      erreur_rejet: "bg-zinc-950 border-red-900 shadow-2xl shadow-red-900/40 ring-1 ring-red-900",
+                    }
                     : {
-                        conciliated: "bg-white border-emerald-100 shadow-sm opacity-90",
-                        need_receipt: "bg-white border-amber-300 shadow-xl shadow-amber-100/50 ring-1 ring-amber-100 bg-amber-50/20",
-                        missing: "bg-white border-rose-300 shadow-2xl shadow-rose-200/40 ring-1 ring-rose-100",
-                        potencial_match: "bg-indigo-50/30 border-indigo-200 shadow-xl shadow-indigo-100/50 ring-1 ring-indigo-200",
-                        erreur_rejet: "bg-red-50/30 border-red-300 shadow-2xl shadow-red-200/40 ring-1 ring-red-300",
-                      };
+                      conciliated: "bg-white border-emerald-100 shadow-sm opacity-90",
+                      need_receipt: "bg-white border-amber-300 shadow-xl shadow-amber-100/50 ring-1 ring-amber-100 bg-amber-50/20",
+                      missing: "bg-white border-rose-300 shadow-2xl shadow-rose-200/40 ring-1 ring-rose-100",
+                      potencial_match: "bg-indigo-50/30 border-indigo-200 shadow-xl shadow-indigo-100/50 ring-1 ring-indigo-200",
+                      erreur_rejet: "bg-red-50/30 border-red-300 shadow-2xl shadow-red-200/40 ring-1 ring-red-300",
+                    };
 
                   return (
                     <div
@@ -21504,9 +21175,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             >
                               {matchedExpense
                                 ? `Récépissé: ${matchedExpense.fournisseur}`
-                                : matchedInvoice 
-                                ? `Facture client: ${matchedInvoice?.cliente}`
-                                : depValidation?.match?.locataire ? `Dépôt réconcilié (Locataire: ${depValidation.match.locataire})` : `Dépôt réconcilié (Revenu Confirmé)`}
+                                : matchedInvoice
+                                  ? `Facture client: ${matchedInvoice?.cliente}`
+                                  : depValidation?.match?.locataire ? `Dépôt réconcilié (Locataire: ${depValidation.match.locataire})` : `Dépôt réconcilié (Revenu Confirmé)`}
                             </p>
                           </div>
                           <button
@@ -21520,55 +21191,55 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           className={`flex justify-between items-center space-x-3 p-4 rounded-2xl border ${darkMode ? "bg-indigo-950/10 border-indigo-900 text-indigo-400" : "bg-indigo-50/50 border-indigo-100 text-indigo-500"}`}
                         >
                           <div className="flex-1">
-                             <p className="text-[10px] font-black italic uppercase leading-none mb-1">
-                                Validation Manuelle Requise
-                             </p>
-                             <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-indigo-500/70" : "text-indigo-600/70"}`}>
-                                {depValidation?.reason || "Correspondance partielle trouvée"}
-                             </p>
+                            <p className="text-[10px] font-black italic uppercase leading-none mb-1">
+                              Validation Manuelle Requise
+                            </p>
+                            <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-indigo-500/70" : "text-indigo-600/70"}`}>
+                              {depValidation?.reason || "Correspondance partielle trouvée"}
+                            </p>
                           </div>
                           {depValidation?.match?.locataire && (
                             <button className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow">
-                               Confirmer que ceci est le loyer de {depValidation.match.locataire}
+                              Confirmer que ceci est le loyer de {depValidation.match.locataire}
                             </button>
                           )}
                           {!depValidation?.match?.locataire && (
                             <button className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow">
-                               Valider manuellement
+                              Valider manuellement
                             </button>
                           )}
                         </div>
                       ) : recoState === "erreur_rejet" ? (
-                         <div
+                        <div
                           className={`flex flex-col space-y-3 p-4 rounded-2xl border ${darkMode ? "bg-red-950/10 border-red-900 text-red-400" : "bg-red-50/50 border-red-100 text-red-600"}`}
-                         >
-                           <div className="flex justify-between items-center">
-                             <div className="flex-1">
-                               <p className="text-[10px] font-black italic uppercase leading-none mb-1 text-red-600">
-                                  Erreur de Montant / Rejeté
-                               </p>
-                               <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-red-500/70" : "text-red-600/70"}`}>
-                                  Aucun dépôt programmé équivalent. Vérifiez la transaction.
-                               </p>
-                             </div>
-                           </div>
-                           <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-red-200 dark:border-red-900/50">
-                             <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">Assigner manuellement :</p>
-                             <select className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}>
-                               <option value="">Sélectionner la porte...</option>
-                               {plexManagementProperties.map(door => (
-                                 <optgroup key={door.id} label={`Puerta: ${door.adresse}`}>
-                                   {door.isContainer && door.chambres ? door.chambres.map((c: any) => (
-                                      <option key={c.id} value={c.id}>{c.identifiantChambre} - {c.locataire}</option>
-                                   )) : (
-                                      <option value={door.id}>{door.adresse} - {door.locataire}</option>
-                                   )}
-                                 </optgroup>
-                               ))}
-                             </select>
-                             <button className="bg-red-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic shadow">Auto-Lier</button>
-                           </div>
-                         </div>
+                        >
+                          <div className="flex justify-between items-center">
+                            <div className="flex-1">
+                              <p className="text-[10px] font-black italic uppercase leading-none mb-1 text-red-600">
+                                Erreur de Montant / Rejeté
+                              </p>
+                              <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-red-500/70" : "text-red-600/70"}`}>
+                                Aucun dépôt programmé équivalent. Vérifiez la transaction.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-red-200 dark:border-red-900/50">
+                            <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">Assigner manuellement :</p>
+                            <select className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}>
+                              <option value="">Sélectionner la porte...</option>
+                              {plexManagementProperties.map(door => (
+                                <optgroup key={door.id} label={`Puerta: ${door.adresse}`}>
+                                  {door.isContainer && door.chambres ? door.chambres.map((c: any) => (
+                                    <option key={c.id} value={c.id}>{c.identifiantChambre} - {c.locataire}</option>
+                                  )) : (
+                                    <option value={door.id}>{door.adresse} - {door.locataire}</option>
+                                  )}
+                                </optgroup>
+                              ))}
+                            </select>
+                            <button className="bg-red-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic shadow">Auto-Lier</button>
+                          </div>
+                        </div>
                       ) : recoState === "need_receipt" ? (
                         <div
                           className={`flex items-center justify-between p-4 rounded-2xl border border-dashed ${darkMode ? "bg-amber-950/10 border-amber-900 text-amber-50" : "bg-amber-50/50 border-amber-200 text-amber-700"}`}
@@ -21821,11 +21492,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "sous-traitance")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left animate-in zoom-in-95 max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left animate-in zoom-in-95 max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         <header
-          className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left`}
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left`}
           style={{
             borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
           }}
@@ -21859,7 +21530,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* FORMULAIRE DE SAISIE RAPIDE (Left Column - 5 cols equivalent on wide screen) */}
             <div
-              className={`lg:col-span-5 p-6 rounded-[36px] border shadow-xl flex flex-col space-y-4 text-left ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}
+              className={`lg:col-span-5 p-6 rounded-[36px] border shadow-xl flex flex-col space-y-4 text-left ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"}`}
             >
               <div className="space-y-1">
                 <span className="text-[8px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400">
@@ -22075,11 +21746,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           </span>
                         </label>
                         <div
-                          className={`relative border border-dashed rounded-xl p-3.5 flex flex-col items-center justify-center text-center transition-all ${
-                            isRequired && !subfAttachmentName
+                          className={`relative border border-dashed rounded-xl p-3.5 flex flex-col items-center justify-center text-center transition-all ${isRequired && !subfAttachmentName
                               ? "border-rose-500/40 bg-rose-500/5"
                               : "border-slate-200 dark:border-zinc-850 bg-slate-500/5 hover:border-[#059669]"
-                          }`}
+                            }`}
                         >
                           {subfAttachmentName ? (
                             <div className="flex items-center space-x-2">
@@ -22186,7 +21856,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <span className="text-emerald-500">Total estimé :</span>
                       <span className="text-emerald-500">
                         {subfTypePaiement === "Facture Officielle" &&
-                        subfIsTaxable
+                          subfIsTaxable
                           ? (parseFloat(subfSubtotal) * 1.14975).toFixed(2)
                           : parseFloat(subfSubtotal).toFixed(2)}
                         $
@@ -22306,11 +21976,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         );
                       }}
                       disabled={isBlocked}
-                      className={`w-full py-3 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-lg active:scale-95 ${
-                        isBlocked
+                      className={`w-full py-3 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-lg active:scale-95 ${isBlocked
                           ? "bg-zinc-700/50 cursor-not-allowed opacity-50 shadow-none"
                           : "bg-[#059669] hover:bg-emerald-700 shadow-emerald-500/10 cursor-pointer"
-                      }`}
+                        }`}
                     >
                       Enregistrer le paiement
                     </button>
@@ -22345,7 +22014,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                 return (
                   <div
-                    className={`p-6 rounded-[36px] border text-left relative overflow-hidden ${darkMode ? "bg-zinc-950 border-zinc-900 shadow-[0_15px_30px_rgba(0,0,0,0.4)]" : "bg-slate-900 shadow-[0_15px_30px_rgba(51,65,85,0.08)]"}`}
+                    className={`p-6 rounded-[36px] border text-left relative overflow-hidden ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md shadow-[0_15px_30px_rgba(0,0,0,0.4)]" : "bg-slate-900 shadow-[0_15px_30px_rgba(51,65,85,0.08)]"}`}
                   >
                     <div className="relative z-10 space-y-2 text-left">
                       <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400">
@@ -22408,7 +22077,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
               {/* List Table Container */}
               <div
-                className={`p-6 rounded-[36px] border ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} text-left`}
+                className={`p-6 rounded-[36px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} text-left`}
               >
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-[8.5px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400">
@@ -22540,9 +22209,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "heures-paie") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -22578,7 +22247,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "settings") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -22587,44 +22256,44 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
         )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                  <span>AutoCompt</span>
-                  <span>/</span>
-                  <span>Tableau de Bord</span>
-                  <span className="text-slate-550 font-bold">/ Paramètres</span>
-                </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Paramètres</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span className="text-slate-550 font-bold">/ Paramètres</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Paramètres</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-slate-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-slate-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-slate-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-slate-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
-        
+
         <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
           {/* Section: Profile Config */}
           <div className={`p-8 rounded-[32px] border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-white shadow-xl shadow-slate-200/40 border-slate-200"}`}>
@@ -22632,72 +22301,72 @@ Ceci est un message automatisé généré par AutoCompt.`;
               <User size={18} className="text-emerald-500" />
               <span>Profil de l'Administrateur</span>
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Nom Complet</label>
-                <input 
-                  type="text" 
-                  value={adminName} 
+                <input
+                  type="text"
+                  value={adminName}
                   onChange={(e) => {
                     setAdminName(e.target.value);
                     localStorage.setItem("autocompt_admin_name", e.target.value);
                   }}
-                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                 />
               </div>
 
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Rôle / Titre</label>
-                <input 
-                  type="text" 
-                  value={adminRole} 
+                <input
+                  type="text"
+                  value={adminRole}
                   onChange={(e) => {
                     setAdminRole(e.target.value);
                     localStorage.setItem("autocompt_admin_role", e.target.value);
                   }}
-                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                 />
               </div>
 
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Numéro de Téléphone</label>
-                <input 
-                  type="text" 
-                  value={adminPhone} 
+                <input
+                  type="text"
+                  value={adminPhone}
                   onChange={(e) => {
                     setAdminPhone(e.target.value);
                     localStorage.setItem("autocompt_admin_phone", e.target.value);
                   }}
-                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                 />
               </div>
 
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Courriel de Contact</label>
-                <input 
-                  type="email" 
-                  value={adminEmail} 
+                <input
+                  type="email"
+                  value={adminEmail}
                   onChange={(e) => {
                     setAdminEmail(e.target.value);
                     localStorage.setItem("autocompt_admin_email", e.target.value);
                   }}
-                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                 />
               </div>
-              
+
               <div className="space-y-1 text-left md:col-span-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">URL de la Photo de Profil</label>
                 <div className="flex gap-4 items-center">
                   <img src={adminPhoto} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-violet-500/20 shadow-md shrink-0" />
-                  <input 
-                    type="text" 
-                    value={adminPhoto} 
+                  <input
+                    type="text"
+                    value={adminPhoto}
                     onChange={(e) => {
                       setAdminPhoto(e.target.value);
                       localStorage.setItem("autocompt_admin_photo", e.target.value);
                     }}
-                    className={`flex-1 p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} 
+                    className={`flex-1 p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                   />
                 </div>
               </div>
@@ -22709,7 +22378,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               <Palette size={18} className="text-indigo-500" />
               <span>Expérience Utilisateur (UX)</span>
             </h2>
-            
+
             <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-950/50 rounded-2xl border border-slate-100 dark:border-zinc-800">
               <div className="flex items-center space-x-4">
                 <div className={`p-3 rounded-xl ${soundEnabled ? "bg-indigo-500/10 text-indigo-500" : "bg-slate-500/10 text-slate-500"}`}>
@@ -22720,7 +22389,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Sons de clics, notifications et alertes</p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => {
                   setSoundEnabled(!soundEnabled);
@@ -22740,7 +22409,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         oscillator.start();
                         oscillator.stop(audioCtx.currentTime + 0.1);
                       }
-                    } catch(e) {}
+                    } catch (e) { }
                   }
                 }}
                 className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${darkMode ? "focus:ring-offset-black" : "focus:ring-offset-white"} ${soundEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-zinc-700'}`}
@@ -22750,7 +22419,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 />
               </button>
             </div>
-            
+
             <div className="mt-4 flex items-center justify-between p-4 bg-slate-50/50 dark:bg-zinc-950/50 rounded-2xl border border-slate-100 dark:border-zinc-800">
               <div className="flex items-center space-x-4">
                 <div className={`p-3 rounded-xl ${darkMode ? "bg-amber-500/10 text-amber-500" : "bg-slate-500/10 text-slate-500"}`}>
@@ -22761,7 +22430,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Inverser les couleurs de l'interface</p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${darkMode ? "focus:ring-offset-black bg-emerald-500" : "focus:ring-offset-white bg-slate-300"}`}
@@ -22790,8 +22459,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "admin_legacy_unused") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300`}>
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setVista("dashboard")}
@@ -22899,7 +22568,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "contrats") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -22909,42 +22578,42 @@ Ceci est un message automatisé généré par AutoCompt.`;
         )}
 
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                  <span>AutoCompt</span>
-                  <span>/</span>
-                  <span>Tableau de Bord</span>
-                  <span>/</span>
-                  <span className="text-teal-500 font-bold">Contrats & Résolutions (DocuLegal)</span>
-                </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions (DocuLegal)</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-teal-500 font-bold">Contrats & Résolutions (DocuLegal)</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions (DocuLegal)</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-teal-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-teal-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -22962,7 +22631,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "transparence") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -22971,46 +22640,46 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
         )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                  <span>AutoCompt</span>
-                  <span>/</span>
-                  <span>Tableau de Bord</span>
-                  <span>/</span>
-                  <span className="text-blue-500 font-bold">Tableau de Transparence</span>
-                </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Tableau de Transparence</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-blue-500 font-bold">Tableau de Transparence</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Tableau de Transparence</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-blue-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-blue-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-blue-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-blue-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
+        <main className="flex-1 w-full bg-slate-50 dark:bg-transparent p-4 sm:p-6">
           <SyndicTransparencyDashboard depenses={depenses} activeCompanyId={activeCompanyId} />
         </main>
       </div>
@@ -23019,7 +22688,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "cotisations") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -23028,46 +22697,46 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
         )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                  <span>AutoCompt</span>
-                  <span>/</span>
-                  <span>Tableau de Bord</span>
-                  <span>/</span>
-                  <span className="text-amber-500 font-bold">Gestion des Cotisations</span>
-                </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Gestion des Cotisations</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-amber-500 font-bold">Gestion des Cotisations</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Gestion des Cotisations</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-amber-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-amber-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-amber-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-amber-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
+        <main className="flex-1 w-full bg-slate-50 dark:bg-transparent p-4 sm:p-6">
           <SyndicatCotisations setVista={setVista} darkMode={darkMode} />
         </main>
       </div>
@@ -23076,7 +22745,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "muro") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -23085,87 +22754,87 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
         )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-                <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                  <span>AutoCompt</span>
-                  <span>/</span>
-                  <span>Tableau de Bord</span>
-                  <span>/</span>
-                  <span className="text-rose-500 font-bold">Mur de Communication</span>
-                </div>
-                <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Mur de Communication</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-rose-500 font-bold">Mur de Communication</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Mur de Communication</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-rose-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-rose-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-rose-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-rose-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
 
         <main className="flex-1 max-w-3xl w-full p-4 sm:p-6 mx-auto space-y-6">
           <div className={`rounded-[32px] p-6 shadow-sm border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"}`}>
-             <div className="flex gap-4">
-               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shrink-0">A</div>
-               <div className="flex-1">
-                 <textarea className={`w-full p-4 rounded-2xl border outline-none resize-none ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`} rows={3} placeholder="Publier une annonce, un avis technique ou un incident..."></textarea>
-                 <div className="flex justify-end mt-3">
-                   <button className="px-6 py-2 bg-[#059669] text-white rounded-xl font-black uppercase tracking-wider text-[10px] flex items-center gap-2">
-                     <Send size={14} /> Publier l'Avis
-                   </button>
-                 </div>
-               </div>
-             </div>
+            <div className="flex gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shrink-0">A</div>
+              <div className="flex-1">
+                <textarea className={`w-full p-4 rounded-2xl border outline-none resize-none ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`} rows={3} placeholder="Publier une annonce, un avis technique ou un incident..."></textarea>
+                <div className="flex justify-end mt-3">
+                  <button className="px-6 py-2 bg-[#059669] text-white rounded-xl font-black uppercase tracking-wider text-[10px] flex items-center gap-2">
+                    <Send size={14} /> Publier l'Avis
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4">
             {/* Post 1 */}
             <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-slate-200"}`}>
-               <div className="flex items-center gap-3 mb-4">
-                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold">C</div>
-                 <div>
-                   <p className="font-bold text-sm leading-tight">Conseil d'Administration</p>
-                   <p className="text-[10px] uppercase font-black text-emerald-500 tracking-wider">Annonce Officielle • Il y a 2 jours</p>
-                 </div>
-               </div>
-               <p className="text-sm">Rappel: Les travaux de réparation du portail principal auront lieu ce jeudi de 9h à 15h. Merci de prévoir vos déplacements.</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold">C</div>
+                <div>
+                  <p className="font-bold text-sm leading-tight">Conseil d'Administration</p>
+                  <p className="text-[10px] uppercase font-black text-emerald-500 tracking-wider">Annonce Officielle • Il y a 2 jours</p>
+                </div>
+              </div>
+              <p className="text-sm">Rappel: Les travaux de réparation du portail principal auront lieu ce jeudi de 9h à 15h. Merci de prévoir vos déplacements.</p>
             </div>
 
             {/* Post 2 */}
             <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-slate-200"}`}>
-               <div className="flex items-center gap-3 mb-4">
-                 <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold">U</div>
-                 <div>
-                   <p className="font-bold text-sm leading-tight">Unité 302</p>
-                   <p className="text-[10px] uppercase font-black text-rose-500 tracking-wider">Signalement d'Incident • Il y a 4 jours</p>
-                 </div>
-               </div>
-               <p className="text-sm">Il y a une légère fuite d'eau dans le garage au niveau de la place #12.</p>
-               <div className="mt-4 p-3 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-100 dark:border-zinc-800 text-xs flex gap-2">
-                 <div className="font-bold text-emerald-600">Admin:</div>
-                 <p>Problème pris en charge. Le plombier passe demain matin.</p>
-               </div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold">U</div>
+                <div>
+                  <p className="font-bold text-sm leading-tight">Unité 302</p>
+                  <p className="text-[10px] uppercase font-black text-rose-500 tracking-wider">Signalement d'Incident • Il y a 4 jours</p>
+                </div>
+              </div>
+              <p className="text-sm">Il y a une légère fuite d'eau dans le garage au niveau de la place #12.</p>
+              <div className="mt-4 p-3 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-100 dark:border-zinc-800 text-xs flex gap-2">
+                <div className="font-bold text-emerald-600">Admin:</div>
+                <p>Problème pris en charge. Le plombier passe demain matin.</p>
+              </div>
             </div>
           </div>
         </main>
@@ -23175,50 +22844,50 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "loi16") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
-             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-               <ArrowLeft size={20} />
-             </button>
-             <div className="text-left">
-               <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                 <span>AutoCompt</span>
-                 <span>/</span>
-                 <span>Tableau de Bord</span>
-                 <span>/</span>
-                 <span className="text-violet-500 font-bold">Conformité Loi 16</span>
-               </div>
-               <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Conformité Loi 16 - Carnet d'entretien</h1>
-             </div>
+            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+                <span>AutoCompt</span>
+                <span>/</span>
+                <span>Tableau de Bord</span>
+                <span>/</span>
+                <span className="text-violet-500 font-bold">Conformité Loi 16</span>
+              </div>
+              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Conformité Loi 16 - Carnet d'entretien</h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
-             {/* Bell notification button */}
-             <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-                <Bell size={14} />
-             </button>
-             
-             {/* Administrator Profile Widget */}
-             <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-violet-500/30 transition-all cursor-pointer">
-                <img 
-                  src={adminPhoto} 
-                  alt={adminName} 
-                  className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-violet-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            {/* Bell notification button */}
+            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
+              <Bell size={14} />
+            </button>
+
+            {/* Administrator Profile Widget */}
+            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-violet-500/30 transition-all cursor-pointer">
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
-             </div>
+                <p className="text-[7px] font-bold uppercase text-violet-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+              </div>
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 w-full bg-slate-50 dark:bg-black p-4 sm:p-6">
+        <main className="flex-1 w-full bg-slate-50 dark:bg-transparent p-4 sm:p-6">
           <SyndicLoi16View darkMode={darkMode} userRole={userRole} activeCompanyId={activeCompanyId} />
         </main>
       </div>
@@ -23227,7 +22896,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "rapport-ia") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-black text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
+      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
             <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-purple-600/10 blur-[100px]" />
@@ -23235,7 +22904,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
         )}
         <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
+        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
           <div className="flex items-center space-x-3">
             <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
               <ArrowLeft size={20} />

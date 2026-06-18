@@ -115,13 +115,12 @@ export default function WorkspaceDriveSettings({
           </p>
         </div>
         {/* Status badge */}
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider ${
-          isConnected
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider ${isConnected
             ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
             : tokenExpired && hasMetadata
-            ? 'bg-amber-50 border-amber-200 text-amber-700'
-            : 'bg-slate-50 border-slate-200 text-slate-500'
-        }`}>
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-slate-50 border-slate-200 text-slate-500'
+          }`}>
           {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
           {isConnected ? 'Connecté' : tokenExpired && hasMetadata ? 'Session expirée' : 'Non connecté'}
         </div>

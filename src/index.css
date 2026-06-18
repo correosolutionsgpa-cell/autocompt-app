@@ -57,6 +57,19 @@
   --accent-soft: #F0FDF4; /* Green 50 */
 }
 
+/**
+ * ─── GLOBAL DARK MODE CANVAS ─────────────────────────────────────────
+ * design_system_rules.md §1 — "Living Light" Cyber-Glass Dark Mode
+ * bg-slate-950 = #0F172A (deep bluish-grey, NEVER pure black)
+ * Applied at the html element level so every view inherits it
+ * without needing per-view bg-* classes.
+ */
+html.dark,
+html.dark body {
+  background-color: #0b1120; /* ≈ bg-slate-950 + blue bias */
+  color: #f4f4f5; /* zinc-100 */
+}
+
 body {
   background-color: var(--bg);
   color: var(--ink);
@@ -88,3 +101,33 @@ body {
 .data-value {
   font-family: var(--font-mono);
 }
+
+/**
+ * ─── LIVING PULSE ANIMATION ───────────────────────────────────────
+ * design_system_rules.md §6 — Selective Breathing Pulse
+ * ONLY allowed on: Primary AI hero, Sofi avatar, main CTA badges
+ * Set --pulse-rgb as an inline style on the element.
+ */
+@keyframes livingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(var(--pulse-rgb), 0.15);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.012);
+    box-shadow: 0 0 40px rgba(var(--pulse-rgb), 0.30);
+  }
+}
+.animate-living-pulse {
+  animation: livingPulse 4s ease-in-out infinite;
+}
+
+/**
+ * ─── SCROLLBAR ───────────────────────────────────────────────
+ */
+.custom-scrollbar::-webkit-scrollbar        { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track  { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.12); border-radius: 99px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }

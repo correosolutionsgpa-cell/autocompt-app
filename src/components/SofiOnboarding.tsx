@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, Globe, FileSearch, Building, Hammer, Briefcase, Users, Volume2, VolumeX, Sun, Moon } from "lucide-react";
+import GlassRoleButton from "./GlassRoleButton";
 
 interface SofiOnboardingProps {
   darkMode: boolean;
@@ -8,48 +9,7 @@ interface SofiOnboardingProps {
   playNotificationSound?: () => void;
 }
 
-const PROFILE_STYLES = {
-  prospecteur: {
-    accentColor: "#06B6D4",
-    borderHover: "hover:border-cyan-500/50 focus:ring-cyan-500/30",
-    textHover: "group-hover:text-cyan-500 dark:group-hover:text-cyan-400",
-    iconBox: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:border-cyan-500/30",
-    glowShadow: "hover:shadow-[0_0_15px_rgba(6,182,212,0.25)]",
-    arrowGlow: "text-cyan-500 group-hover:shadow-[0_0_8px_rgba(6,182,212,0.3)]",
-  },
-  investisseur: {
-    accentColor: "#059669",
-    borderHover: "hover:border-emerald-500/50 focus:ring-emerald-500/30",
-    textHover: "group-hover:text-emerald-500 dark:group-hover:text-emerald-400",
-    iconBox: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:border-emerald-500/30",
-    glowShadow: "hover:shadow-[0_0_15px_rgba(16,185,129,0.25)]",
-    arrowGlow: "text-emerald-500 group-hover:shadow-[0_0_8px_rgba(16,185,129,0.3)]",
-  },
-  flippeur: {
-    accentColor: "#F59E0B",
-    borderHover: "hover:border-amber-500/50 focus:ring-amber-500/30",
-    textHover: "group-hover:text-amber-500 dark:group-hover:text-amber-400",
-    iconBox: "bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:border-amber-500/30",
-    glowShadow: "hover:shadow-[0_0_15px_rgba(245,158,11,0.25)]",
-    arrowGlow: "text-amber-500 group-hover:shadow-[0_0_8px_rgba(245,158,11,0.3)]",
-  },
-  gestionnaire: {
-    accentColor: "#6366F1",
-    borderHover: "hover:border-indigo-500/50 focus:ring-indigo-500/30",
-    textHover: "group-hover:text-indigo-500 dark:group-hover:text-indigo-400",
-    iconBox: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:border-indigo-500/30",
-    glowShadow: "hover:shadow-[0_0_15px_rgba(99,102,241,0.25)]",
-    arrowGlow: "text-indigo-500 group-hover:shadow-[0_0_8px_rgba(99,102,241,0.3)]",
-  },
-  syndicat: {
-    accentColor: "#8B5CF6",
-    borderHover: "hover:border-purple-500/50 focus:ring-purple-500/30",
-    textHover: "group-hover:text-purple-500 dark:group-hover:text-purple-400",
-    iconBox: "bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:border-purple-500/30",
-    glowShadow: "hover:shadow-[0_0_15px_rgba(139,92,246,0.25)]",
-    arrowGlow: "text-purple-500 group-hover:shadow-[0_0_8px_rgba(139,92,246,0.3)]",
-  },
-} as const;
+// PROFILE_STYLES removed — styling is now encapsulated in GlassRoleButton via colorTheme prop
 
 export default function SofiOnboarding({ darkMode, setDarkMode, onComplete, playNotificationSound }: SofiOnboardingProps) {
   const [lang, setLang] = useState<"FR" | "EN" | "ES">("FR");
@@ -494,65 +454,49 @@ export default function SofiOnboarding({ darkMode, setDarkMode, onComplete, play
               ROLES DISPONIBLES
             </label>
 
-            {/* Scrollable list on small devices, nice grid/flex on desktop */}
+            {/* Role buttons — GlassRoleButton (design_system_rules.md §2) */}
             <div className="flex flex-col gap-2.5 w-full max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-              {(["prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat"] as const).map((prof) => {
-                const item = content[lang].profiles[prof];
-                const styles = PROFILE_STYLES[prof];
-                return (
-                  <button
-                    key={prof}
-                    onClick={() => handleProfileSelect(prof)}
-                    className={`group w-full px-4 py-3 rounded-full border text-left transition-all duration-500 flex items-center space-x-3 cursor-pointer relative overflow-hidden active:scale-[0.98] ${
-                      darkMode 
-                        ? "bg-white/[0.01] border-white/5 text-zinc-200" 
-                        : "bg-white/40 border-slate-200/80 text-slate-800"
-                    } ${styles.borderHover} ${styles.glowShadow}`}
-                    style={{
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.01)"
-                    }}
-                  >
-                    {/* Hover Glow Highlight Overlay using profile's unique accent color */}
-                    <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500"
-                      style={{
-                        background: `linear-gradient(90deg, ${styles.accentColor} 0%, transparent 100%)`
-                      }}
-                    />
-                    
-                    {/* Circle icon frame with highly transparent, glowing glassmorphism styling using unique accent */}
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition-all duration-500 group-hover:scale-105 group-hover:rotate-[360deg] ${
-                      darkMode 
-                        ? "bg-black/60 border-white/10 shadow-[0_0_8px_rgba(255,255,255,0.02)]" 
-                        : "bg-white/90 border-slate-200"
-                    } ${styles.iconBox}`}
-                    style={{
-                      borderColor: `rgba(255, 255, 255, 0.1)`
-                    }}>
-                      {item.icon}
-                    </div>
 
-                    {/* Text block */}
-                    <div className="flex-grow select-none pr-2">
-                      <p className={`text-[11px] font-black uppercase tracking-widest transition-colors duration-300 ${styles.textHover}`}>
-                        {item.label}
-                      </p>
-                      <p className={`text-[9.5px] font-normal leading-snug mt-0.5 ${
-                        darkMode ? "text-zinc-400 group-hover:text-zinc-300" : "text-slate-500 group-hover:text-slate-700"
-                      }`}>
-                        {item.desc}
-                      </p>
-                    </div>
+              <GlassRoleButton
+                colorTheme="cyan"
+                label={content[lang].profiles.prospecteur.label}
+                description={content[lang].profiles.prospecteur.desc}
+                icon={content[lang].profiles.prospecteur.icon}
+                onClick={() => handleProfileSelect("prospecteur")}
+              />
 
-                    {/* Right Arrow indicator with profile unique glowing color */}
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all duration-300 group-hover:translate-x-1 opacity-0 group-hover:opacity-100 ${styles.arrowGlow}`}>
-                      <svg className="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
-                );
-              })}
+              <GlassRoleButton
+                colorTheme="emerald"
+                label={content[lang].profiles.investisseur.label}
+                description={content[lang].profiles.investisseur.desc}
+                icon={content[lang].profiles.investisseur.icon}
+                onClick={() => handleProfileSelect("investisseur")}
+              />
+
+              <GlassRoleButton
+                colorTheme="amber"
+                label={content[lang].profiles.flippeur.label}
+                description={content[lang].profiles.flippeur.desc}
+                icon={content[lang].profiles.flippeur.icon}
+                onClick={() => handleProfileSelect("flippeur")}
+              />
+
+              <GlassRoleButton
+                colorTheme="indigo"
+                label={content[lang].profiles.gestionnaire.label}
+                description={content[lang].profiles.gestionnaire.desc}
+                icon={content[lang].profiles.gestionnaire.icon}
+                onClick={() => handleProfileSelect("gestionnaire")}
+              />
+
+              <GlassRoleButton
+                colorTheme="purple"
+                label={content[lang].profiles.syndicat.label}
+                description={content[lang].profiles.syndicat.desc}
+                icon={content[lang].profiles.syndicat.icon}
+                onClick={() => handleProfileSelect("syndicat")}
+              />
+
             </div>
           </div>
 
