@@ -1,0 +1,4 @@
+# Rama Gestionnaires — Directorio reservado para módulos de Gestionnaire e Investisseur
+# Este directorio albergará las vistas extraídas del monolito App.tsx pertenecientes
+# a los perfiles: Gestionnaire Immobilier e Investisseur Immobilier.
+# Fase 1: Estructura creada. Extracción de componentes pendiente.
