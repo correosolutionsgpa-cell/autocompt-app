@@ -13,23 +13,50 @@
  *  gestionnaire — Gestionnaire Immobilier
  *  syndicat     — Syndicat de Copropriété
  *
- * Modules (canonical IDs)
+ * Plex Module IDs (cards in PlexModuleGrid)
  * ─────────────────────────────────────────────────────
- *  1  scanner_ia          Scanner IA (OCR + extraction TPS/TVQ)
- *  2  repartition         Répartition par catégorie
- *  3  cotisations         Gestion des cotisations
- *  4  contrats            Contrats & Résolutions
- *  5  transparence        Tableau de transparence
- *  6  loi16               Loi 16 & Carnet d'entretien
- *  7  mur_communication   Mur de communication
- *  8  parametres_syndicat Paramètres Syndicat
- *  9  rapport_ia          Rapport IA
+ *  facturation         Facturation (invoicing)
+ *  tenue_livres        Tenue de Livres (bookkeeping / reports)
+ *  bureau_domicile     Bureau à domicile (home office deduction)
+ *  tps_tvq             Déclaration TPS/TVQ
+ *  doculegal           Contrats & Résolutions (DocuLegal)
+ *  dossiers_fiscaux    Dossiers Fiscaux (universal — all profiles)
+ *  heures_paie         Heures & Paie
+ *  conciliation        Conciliation Bancaire
+ *  gestion_immo        Gestion Immobilière (Plex management)
+ *  taxes_assurances    Taxes & Assurances
+ *  assistant_ia        Assistant IA / Sofi (universal — all profiles)
+ *
+ * Syndicat Module IDs (cards in SyndicModuleGrid)
+ * ─────────────────────────────────────────────────────
+ *  cotisations         Gestion des cotisations
+ *  contrats            Contrats & Résolutions (Syndicat)
+ *  transparence        Tableau de transparence
+ *  loi16               Loi 16 & Carnet d'entretien
+ *  mur_communication   Mur de communication
+ *  parametres_syndicat Paramètres Syndicat
+ *  rapport_ia          Rapport IA (SyndicAI)
+ *
+ * Source of truth: .cursorrules §2 PROFILE ACCESS MATRIX
+ * Golden Rule: Universal modules (dossiers_fiscaux, assistant_ia) are granted
+ * to ALL profiles per .cursorrules §1 Rule 3.
  */
 
 // ─── Module ID union type ───────────────────────────────────────────────────
 export type ModuleId =
-  | "scanner_ia"
-  | "repartition"
+  // ── Plex modules ──
+  | "facturation"
+  | "tenue_livres"
+  | "bureau_domicile"
+  | "tps_tvq"
+  | "doculegal"
+  | "dossiers_fiscaux"    // Universal (all Plex profiles)
+  | "heures_paie"
+  | "conciliation"
+  | "gestion_immo"
+  | "taxes_assurances"
+  | "assistant_ia"        // Universal (all Plex profiles)
+  // ── Syndicat modules ──
   | "cotisations"
   | "contrats"
   | "transparence"
@@ -49,66 +76,122 @@ export type ProfileId =
 // ─── Module metadata ────────────────────────────────────────────────────────
 export interface ModuleDefinition {
   id: ModuleId;
-  /** Sequential module number as referenced in the product spec */
-  number: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   label: string;
   description: string;
+  /** Which dashboard this module belongs to */
+  dashboard: "Plex" | "Syndic";
 }
 
 export const MODULES: Record<ModuleId, ModuleDefinition> = {
-  scanner_ia: {
-    id: "scanner_ia",
-    number: 1,
-    label: "Scanner IA",
-    description: "Extraction automatique TPS/TVQ, OCR de factures et reçus",
+  // ── Plex modules ──────────────────────────────────────────────────────────
+  facturation: {
+    id: "facturation",
+    label: "Facturation",
+    description: "Création et envoi de factures clients",
+    dashboard: "Plex",
   },
-  repartition: {
-    id: "repartition",
-    number: 2,
-    label: "Répartition par catégorie",
-    description: "Analyse et visualisation des dépenses par catégorie fiscale",
+  tenue_livres: {
+    id: "tenue_livres",
+    label: "Tenue de Livres",
+    description: "Rapports de dépenses, revenus et rentabilité",
+    dashboard: "Plex",
   },
+  bureau_domicile: {
+    id: "bureau_domicile",
+    label: "Bureau à domicile",
+    description: "Calcul de la déduction pour bureau à domicile",
+    dashboard: "Plex",
+  },
+  tps_tvq: {
+    id: "tps_tvq",
+    label: "Déclaration TPS/TVQ",
+    description: "Suivi et déclaration des taxes à la consommation",
+    dashboard: "Plex",
+  },
+  doculegal: {
+    id: "doculegal",
+    label: "DocuLegal",
+    description: "Contrats, résolutions et signatures numériques",
+    dashboard: "Plex",
+  },
+  dossiers_fiscaux: {
+    id: "dossiers_fiscaux",
+    label: "Dossiers Fiscaux",
+    description: "Classement et archivage des dossiers fiscaux annuels",
+    dashboard: "Plex",
+  },
+  heures_paie: {
+    id: "heures_paie",
+    label: "Heures & Paie",
+    description: "Suivi des heures et paie simplifiée",
+    dashboard: "Plex",
+  },
+  conciliation: {
+    id: "conciliation",
+    label: "Conciliation Bancaire",
+    description: "Rapprochement des transactions bancaires",
+    dashboard: "Plex",
+  },
+  gestion_immo: {
+    id: "gestion_immo",
+    label: "Gestion Immobilière",
+    description: "Gestion des unités, locataires et loyers",
+    dashboard: "Plex",
+  },
+  taxes_assurances: {
+    id: "taxes_assurances",
+    label: "Taxes & Assurances",
+    description: "Suivi des taxes municipales et polices d'assurance",
+    dashboard: "Plex",
+  },
+  assistant_ia: {
+    id: "assistant_ia",
+    label: "Assistant IA",
+    description: "Assistant fiscal Sofi — questions et analyses en temps réel",
+    dashboard: "Plex",
+  },
+  // ── Syndicat modules ──────────────────────────────────────────────────────
   cotisations: {
     id: "cotisations",
-    number: 3,
     label: "Gestion des cotisations",
     description: "Suivi et collecte des cotisations des copropriétaires",
+    dashboard: "Syndic",
   },
   contrats: {
     id: "contrats",
-    number: 4,
     label: "Contrats & Résolutions",
     description: "Bibliothèque de contrats, résolutions officielles et signatures",
+    dashboard: "Syndic",
   },
   transparence: {
     id: "transparence",
-    number: 5,
     label: "Tableau de transparence",
     description: "Portail de transparence financière pour les copropriétaires",
+    dashboard: "Syndic",
   },
   loi16: {
     id: "loi16",
-    number: 6,
     label: "Loi 16 & Carnet d'entretien",
     description: "Conformité Loi 16 Québec et carnet d'entretien immeuble",
+    dashboard: "Syndic",
   },
   mur_communication: {
     id: "mur_communication",
-    number: 7,
     label: "Mur de communication",
     description: "Messagerie et annonces interne au syndicat",
+    dashboard: "Syndic",
   },
   parametres_syndicat: {
     id: "parametres_syndicat",
-    number: 8,
     label: "Paramètres Syndicat",
     description: "Configuration du syndicat, unités, administrateurs",
+    dashboard: "Syndic",
   },
   rapport_ia: {
     id: "rapport_ia",
-    number: 9,
     label: "Rapport IA",
-    description: "Génération de rapports financiers et analyses IA",
+    description: "Génération de rapports financiers et analyses IA (SyndicAI)",
+    dashboard: "Syndic",
   },
 };
 
@@ -116,18 +199,98 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
 /**
  * The canonical permission matrix.
  *
- * Access rules (v1.0):
- *  • prospecteur, investisseur, flippeur, gestionnaire → modules 1–2 (Plex tools)
- *  • syndicat → modules 3–9 (Syndicat tools)
+ * Source: .cursorrules §2 PROFILE ACCESS MATRIX
+ *
+ * Universal modules (Golden Rule §1-3): dossiers_fiscaux, assistant_ia
+ * are included in every Plex profile.
  *
  * To extend: add new moduleIds to any profile's array.
- * The UI gating layer (not in this file) reads from `hasAccess()`.
+ * The UI gating layer (PlexModuleGrid) reads from `hasAccess()`.
  */
 export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
-  prospecteur:  ["scanner_ia", "repartition"],
-  investisseur: ["scanner_ia", "repartition"],
-  flippeur:     ["scanner_ia", "repartition"],
-  gestionnaire: ["scanner_ia", "repartition"],
+  /**
+   * A. Prospecteur Immobilier
+   * Focus: Speed, street mobility, fast invoicing.
+   * Modules per .cursorrules: Scanner IA (handled by parent), Kilométrage GPS (handled by parent),
+   * Facturation, Bureau à domicile, Contrats & Résolutions (DocuLegal — Promesse d'achat/Cession limited),
+   * Sous-traitants (handled by parent), Déclaration TPS/TVQ, Conciliation bancaire,
+   * Taxes & Assurances, Tenue de livres.
+   * + Universal: Dossiers Fiscaux, Assistant IA.
+   */
+  prospecteur: [
+    "facturation",
+    "tenue_livres",
+    "bureau_domicile",
+    "tps_tvq",
+    "doculegal",
+    "dossiers_fiscaux",   // Universal
+    "conciliation",
+    "taxes_assurances",
+    "assistant_ia",       // Universal
+  ],
+
+  /**
+   * B. Investisseur Immobilier
+   * Focus: Asset tracking and multi-tenant transparency.
+   * Modules per .cursorrules: Tenue de livres/Rentabilité, Gestion Immobilière (Plex units),
+   * Conciliation bancaire, Taxes & Assurances.
+   * + Universal: Dossiers Fiscaux, Assistant IA.
+   * (Onboarding-mode subsets handled inside MeubleFinancialModule / dedicated logic)
+   */
+  investisseur: [
+    "tenue_livres",
+    "dossiers_fiscaux",   // Universal
+    "conciliation",
+    "gestion_immo",
+    "taxes_assurances",
+    "assistant_ia",       // Universal
+  ],
+
+  /**
+   * C. Flippeur Immobilier
+   * Focus: Budget control, contractors, fast flips.
+   * Modules per .cursorrules: Scanner IA (parent), Kilométrage GPS (parent),
+   * Facturation, Tenue de livres & Répartition, Bureau à domicile,
+   * Déclaration TPS/TVQ, DocuLegal, Dossiers Fiscaux (Universal),
+   * Conciliation bancaire, Taxes & Assurances, Heures & Paie.
+   * + Universal: Assistant IA.
+   */
+  flippeur: [
+    "facturation",
+    "tenue_livres",
+    "bureau_domicile",
+    "tps_tvq",
+    "doculegal",
+    "dossiers_fiscaux",   // Universal
+    "heures_paie",
+    "conciliation",
+    "taxes_assurances",
+    "assistant_ia",       // Universal
+  ],
+
+  /**
+   * D. Gestionnaire Immobilier
+   * Focus: Multi-tenant architecture and property administration.
+   * Modules per .cursorrules: Multi-tenant Tenue de livres (1-click sharing),
+   * Gestion Immobilière, Conciliation bancaire, Taxes & Assurances.
+   * + Universal: Dossiers Fiscaux, Assistant IA.
+   */
+  gestionnaire: [
+    "tenue_livres",
+    "dossiers_fiscaux",   // Universal
+    "conciliation",
+    "gestion_immo",
+    "taxes_assurances",
+    "assistant_ia",       // Universal
+  ],
+
+  /**
+   * E. Syndicat de Copropriété
+   * Focus: Co-owner transparency and compliance.
+   * Modules per .cursorrules: Gestion des Cotisations, Contrats & Résolutions,
+   * Tableau de Transparence, Loi 16 & Carnet d'entretien, Mur de communication,
+   * Paramètres Syndicat, Rapport IA (SyndicAI).
+   */
   syndicat: [
     "cotisations",
     "contrats",
@@ -145,25 +308,30 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
  * Returns true if the given profile has access to the given module.
  *
  * @example
- *   hasAccess("syndicat", "cotisations")  // → true
+ *   hasAccess("syndicat", "cotisations")   // → true
  *   hasAccess("investisseur", "cotisations") // → false
+ *   hasAccess("flippeur", "heures_paie")   // → true
+ *   hasAccess("prospecteur", "heures_paie") // → false
  */
 export function hasAccess(profile: ProfileId, moduleId: ModuleId): boolean {
   return RBAC_MATRIX[profile]?.includes(moduleId) ?? false;
 }
 
 /**
- * Returns the full list of ModuleDefinition objects accessible to a profile.
- * Ordered by module number ascending.
+ * Returns the full list of ModuleDefinition objects accessible to a profile,
+ * filtered to a specific dashboard, ordered by their position in RBAC_MATRIX.
  *
  * @example
- *   getAccessibleModules("syndicat")
- *   // → [cotisations (3), contrats (4), transparence (5), ...]
+ *   getAccessibleModules("flippeur", "Plex")
+ *   // → [facturation, tenue_livres, bureau_domicile, ...]
  */
-export function getAccessibleModules(profile: ProfileId): ModuleDefinition[] {
+export function getAccessibleModules(
+  profile: ProfileId,
+  dashboard?: "Plex" | "Syndic"
+): ModuleDefinition[] {
   return RBAC_MATRIX[profile]
     .map((id) => MODULES[id])
-    .sort((a, b) => a.number - b.number);
+    .filter((m) => (dashboard ? m.dashboard === dashboard : true));
 }
 
 /**

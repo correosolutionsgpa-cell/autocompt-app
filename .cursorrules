@@ -1,0 +1,34 @@
+# AutoCompt - Core Architecture & RBAC Rules
+
+## 1. GOLDEN RULES (NEVER BREAK THESE)
+- Rule 1: Never delete existing UI modules. Hide them using conditional rendering based on the active profile, but never remove the underlying code (e.g., never delete Syndicat modules when working on Prospecteur).
+- Rule 2: Google Drive is the core DB for files. All modules rely on the existing Google Drive workspace integration. Data is separated by Company/Building.
+- Rule 3: Universal Modules. The following exist for ALL profiles: Scanner IA (Factures), Dossiers Fiscaux, Sofi AI Assistant, and the Settings Gear (Tuerca).
+
+## 2. PROFILE ACCESS MATRIX
+
+### A. Prospecteur Immobilier
+- Focus: Speed, street mobility, fast invoicing.
+- Modules: Scanner IA, Kilométrage GPS, Facturation, Bureau à domicile, Contrats & Résolutions (DocuLegal limited to Promesse d'achat/Cession), Sous-traitants (max $500 limits), Déclaration TPS/TVQ, Conciliation bancaire, Taxes & Assurances, Tenue de livres.
+- Logic: TPS/TVQ module must include a visual tracker alerting the user at 27,000 and locking compliance at 30,000.
+
+### B. Investisseur Immobilier
+- Focus: Asset tracking and multi-tenant transparency.
+- Onboarding Filter: If "Gestion déléguée" is selected -> Oversight Mode (Scanner IA, Tableau de rentabilité, Coffre-fort, Répartition entre copropriétaires).
+- Onboarding Filter: If "Autogestion" is selected -> Scanner IA, Tenue de livres/Rentabilité, Bouton de Partage (1-click export for banks/accountants), Tableau de Transparence (read-only for co-owners), Répartition Fiscale (strictly adding up to 100%).
+
+### C. Flippeur Immobilier
+- Focus: Budget control, contractors, fast flips.
+- Modules: Scanner IA, Kilométrage GPS, Facturation, Tenue de livres & Répartition (Donut chart), Bureau à domicile, Déclaration TPS/TVQ, DocuLegal, Dossiers Fiscaux, Conciliation bancaire, Taxes & Assurances, Heures & Paie (simplified manual entry only).
+
+### D. Gestionnaire Immobilier
+- Focus: Multi-tenant architecture and property administration.
+- Architecture: Folder structure must support Client -> Sub-folder Property 1 -> Tenue de livres.
+- Modules: Uses the same underlying multi-tenant code as Syndicat. Needs 1-click sharing to send Tenue de livres to clients.
+
+### E. Syndicat de Copropriété
+- Focus: Co-owner transparency and compliance.
+- Modules: Gestion des Cotisations, Contrats & Résolutions, Tableau de Transparence, Loi 16 & Carnet d'entretien, Mur de communication, Paramètres Syndicat, Rapport IA (SyndicAI).
+
+## 3. SUPER ADMIN PANEL
+- Metrics Required: Real-time API Token usage per profile, Client Directory (Email, Phone, Profile), Legal Documents generated, Beta Phase tracking (free month status, survey completion, suggested pricing).

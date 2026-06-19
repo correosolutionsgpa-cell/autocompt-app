@@ -6891,8 +6891,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         playNotificationSound={playNotificationSound}
-        onComplete={(profile, lang) => {
+        onComplete={(profile, lang, answers) => {
           localStorage.setItem("autocompt_selected_profile", profile);
+          if (answers) {
+            localStorage.setItem("autocompt_onboarding_answers", JSON.stringify(answers));
+          }
           setSelectedProfile(profile);
           setActiveLang(lang);
 
@@ -10027,6 +10030,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           ) : (
             <PlexModuleGrid
               darkMode={darkMode}
+              activeProfile={activeProfile}
               setVista={setVista}
               getEffectiveTier={getEffectiveTier}
               plexManagementProperties={plexManagementProperties}

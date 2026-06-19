@@ -99,8 +99,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             <div style="color:#ffffff;font-size:24px;font-weight:900;margin-top:16px;line-height:1.2">✅ Document Signé</div>
             <div style="color:rgba(255,255,255,0.85);font-size:14px;margin-top:6px">
               ${recipientType === 'admin'
-                ? `<strong>${clientName}</strong> a signé le document le <strong>${dateStr}</strong>.`
-                : `Votre signature a été enregistrée le <strong>${dateStr}</strong>.`}
+        ? `<strong>${clientName}</strong> a signé le document le <strong>${dateStr}</strong>.`
+        : `Votre signature a été enregistrée le <strong>${dateStr}</strong>.`}
             </div>
           </div>
 
