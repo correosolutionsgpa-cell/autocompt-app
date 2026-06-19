@@ -88,6 +88,7 @@ import {
   RefreshCw,
   Lightbulb,
   Wrench,
+  Hash,
 } from "lucide-react";
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
@@ -106,6 +107,7 @@ import SuperAdminPanel from "./components/SuperAdminPanel";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
+import { SofiAvatarSVG } from "./components/SofiAvatarSVG";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -127,10 +129,10 @@ const CHARTS_COLORS = [
 ];
 
 // --- CONFIGURATION SÉCURISÉE DES CLÉS GOOGLE API ---
-const GOOGLE_API_KEY = "AIzaSyCcBC28kAjjTNbAt0MO0z8ebQP9ykHqWng";
-const GOOGLE_CLIENT_ID =
-  "612443195663-niarl3g2rtn43i23dvknre7v77jr1fn1.apps.googleusercontent.com";
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string;
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GEMINI_API_KEY: string = "";
+
 
 /* 
 // --- FIREBASE PLACEHOLDER CONFIGURATION ---
@@ -703,6 +705,14 @@ const App = () => {
   const [userRole, setUserRole] = useState("admin");
   const [onboardingStatus, setOnboardingStatus] = useState("welcome");
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  // ── Phase 4: Post-onboarding guided tour state ─────────────────────────────
+  // showSettingsTour is set to true the moment the user completes the Sofi
+  // onboarding and lands on the dashboard for the very first time.
+  // It is dismissed when the user clicks the bubble or navigates to Settings.
+  const [showSettingsTour, setShowSettingsTour] = useState<boolean>(() => {
+    // Persist dismissal across page reloads so tour shows only once.
+    return localStorage.getItem("autocompt_settings_tour_shown") !== "true";
+  });
   // ── RBAC: typed profile derived from selectedProfile ──────────────────────────
   // Defined here at App scope so it is available in both the sidebar inner
   // component (which captures it via closure) and in every vista renderer.
@@ -1581,7 +1591,7 @@ const App = () => {
       { id: "doculegal", label: "DocuLegal", icon: <FileSignature size={18} /> },
       { id: "equipe", label: "Notre Équipe", icon: <UserPlus size={18} /> },
       { id: "heures-paie", label: "Heures & Paie", icon: <Timer size={18} /> },
-      { id: "settings", label: "Paramètres", icon: <Settings size={18} /> },
+      // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
     // ── RBAC module-id → vista-id mapping for syndicNavItems filtering ──────
@@ -1605,7 +1615,7 @@ const App = () => {
       { id: "loi16",        label: "Loi 16 & Carnet Entretien",           icon: <Wrench size={18} />,        bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       { id: "rapport-ia",   label: "Rapport IA (SyndicAI)",               icon: <Sparkles size={18} />,      bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
       { id: "muro",         label: "Mur de Communication",                icon: <Bell size={18} />,          bgClass: "bg-rose-100 dark:bg-rose-500/20",    textClass: "text-rose-600 dark:text-rose-400" },
-      { id: "settings",     label: "Paramètres",                          icon: <Settings size={18} />,      bgClass: "bg-slate-100 dark:bg-slate-800",      textClass: "text-slate-600 dark:text-slate-400" },
+      // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
     // RBAC filter: keep items whose mapped moduleId is granted, or null (always-on items)
@@ -1626,7 +1636,7 @@ const App = () => {
     const coproprietaireNavItems = [
       { id: "dashboard", label: "Espace Copropriétaire", icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
       { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
-      { id: "settings", label: "Paramètres", icon: <Settings size={18} />, bgClass: "bg-slate-100 dark:bg-slate-800", textClass: "text-slate-600 dark:text-slate-400" },
+      // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
     const navItems = [...baseNavItems, ...plexNavItems];
@@ -2048,6 +2058,7 @@ const App = () => {
                         ) : (
                           navItems.map((item) => {
                             const isActive = vista === item.id;
+                            const isSettingsTourTarget = item.id === "settings" && showSettingsTour;
                             return (
                               <button
                                 key={item.id}
@@ -2069,18 +2080,30 @@ const App = () => {
                                       return;
                                     }
                                   }
+                                  if (item.id === "settings") {
+                                    setShowSettingsTour(false);
+                                    localStorage.setItem("autocompt_settings_tour_shown", "true");
+                                  }
                                   setVista(item.id);
                                   setIsSidebarOpen(false);
                                   playNotificationSound();
                                 }}
-                                className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? getActiveNavClass(item.id) : darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"}`}
+                                className={`relative w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${isActive ? getActiveNavClass(item.id) : darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"}`}
                               >
+                                {/* Phase 4: pulsing ring on Settings gear when tour is active */}
+                                {isSettingsTourTarget && (
+                                  <span className="absolute inset-0 rounded-2xl pointer-events-none animate-ping opacity-30 bg-cyan-500" />
+                                )}
                                 <span
-                                  className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"}`}
+                                  className={`relative transition-transform duration-200 group-hover:scale-110 ${
+                                    isSettingsTourTarget
+                                      ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]"
+                                      : isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
+                                  }`}
                                 >
                                   {item.icon}
                                 </span>
-                                <span>
+                                <span className={isSettingsTourTarget ? "text-cyan-400 font-black" : ""}>
                                   {item.label}{" "}
                                   {item.id === "doculegal" &&
                                     (getEffectiveTier() === "gratuit" ||
@@ -2095,6 +2118,52 @@ const App = () => {
                     );
                   })()}
                 </nav>
+              </div>
+
+              {/* ── Phase 4: Pinned Settings Button ───────────────────────────
+                  Always visible at the bottom of the nav rail, above the Drive
+                  footer. Glows cyan when showSettingsTour is active.
+              ─────────────────────────────────────────────────── */}
+              <div className={`mx-4 mb-2 border-t pt-3 ${darkMode ? "border-zinc-900/60" : "border-slate-100"}`}>
+                <button
+                  id="nav-settings-pinned"
+                  onClick={() => {
+                    setVista("settings");
+                    setIsSidebarOpen(false);
+                    if (showSettingsTour) {
+                      setShowSettingsTour(false);
+                      localStorage.setItem("autocompt_settings_tour_shown", "true");
+                    }
+                    playNotificationSound();
+                  }}
+                  className={`relative w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${
+                    vista === "settings"
+                      ? darkMode
+                        ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa]"
+                        : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155]"
+                      : showSettingsTour
+                        ? darkMode ? "border border-cyan-500/50 bg-cyan-950/20 text-cyan-300" : "border border-cyan-400/50 bg-cyan-50/60 text-cyan-700"
+                        : darkMode ? "border border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "border border-transparent text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"
+                  }`}
+                >
+                  {/* Tour pulse ring */}
+                  {showSettingsTour && (
+                    <span className="absolute inset-0 rounded-2xl pointer-events-none animate-ping opacity-20 bg-cyan-400" />
+                  )}
+                  <span className={`relative transition-transform duration-200 group-hover:scale-110 ${
+                    showSettingsTour
+                      ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.9)]"
+                      : vista === "settings" ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
+                  }`}>
+                    <Settings size={18} />
+                  </span>
+                  <span className={showSettingsTour ? "text-cyan-400 font-black" : ""}>Paramètres</span>
+                  {showSettingsTour && (
+                    <span className="ml-auto text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 whitespace-nowrap animate-pulse">
+                      ➡ ici
+                    </span>
+                  )}
+                </button>
               </div>
 
               {/* BOTTOM FIXED GOOGLE DRIVE API STATUS PANEL */}
@@ -6923,6 +6992,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           setDashboardMode(mode);
           setUserLevel(level);
           setSetupComplet(true);
+          // Phase 4 / Bug Fix #3: Always trigger tour when onboarding completes.
+          // Remove stale key so the tour shows even after dev resets / repeat testing.
+          localStorage.removeItem("autocompt_settings_tour_shown");
+          setShowSettingsTour(true);
           setVista("dashboard");
         }}
       />
@@ -9228,6 +9301,53 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </div>
               </div>
             )}
+
+            {/* ── Phase 4: Permanently pinned Settings gear in dashboard header ───
+                Always visible. Glows cyan + badge when tour is active.
+                Clicking it navigates to settings and dismisses the tour.
+            ──────────────────────────────────────────────────── */}
+            <div className="relative">
+              <motion.button
+                id="header-settings-gear"
+                whileTap={{ scale: 0.88 }}
+                whileHover={{ scale: 1.06 }}
+                onClick={() => {
+                  setVista("settings");
+                  if (showSettingsTour) {
+                    setShowSettingsTour(false);
+                    localStorage.setItem("autocompt_settings_tour_shown", "true");
+                  }
+                  playNotificationSound();
+                }}
+                className={`relative p-2.5 rounded-xl transition-all ${
+                  showSettingsTour
+                    ? darkMode
+                      ? "bg-cyan-950/40 border border-cyan-500/50 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.4)]"
+                      : "bg-cyan-50 border border-cyan-400/50 text-cyan-600 shadow-[0_0_16px_rgba(6,182,212,0.25)]"
+                    : darkMode
+                      ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700"
+                      : "bg-white border border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm hover:shadow-md"
+                }`}
+              >
+                {/* Continuous pulse ring when tour is active */}
+                {showSettingsTour && (
+                  <span className="absolute inset-0 rounded-xl pointer-events-none animate-ping opacity-40 bg-cyan-400" />
+                )}
+                <motion.span
+                  animate={showSettingsTour ? { rotate: [0, 15, -15, 0] } : { rotate: 0 }}
+                  transition={showSettingsTour ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : {}}
+                  className="block"
+                >
+                  <Settings size={16} className={showSettingsTour ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.9)]" : ""} />
+                </motion.span>
+              </motion.button>
+              {/* "Setup" badge */}
+              {showSettingsTour && (
+                <span className="absolute -top-1.5 -right-1.5 bg-cyan-500 text-white text-[6px] font-black px-1 py-0.5 rounded-full border-2 border-inherit animate-bounce whitespace-nowrap shadow-lg shadow-cyan-500/30">
+                  Setup !
+                </span>
+              )}
+            </div>
           </div>
         </header>
 
@@ -10022,6 +10142,103 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
 
+          {/* ── Phase 5: Sofi Floating Guide ───────────────────────────────────
+              Fixed bottom-right overlay. motion hover float animation.
+              Exact Quebec-French copy per Phase 5 spec. z-[90] (above content,
+              below modals at z-[100]).
+          ─────────────────────────────────────────────────────────────── */}
+          <AnimatePresence>
+            {showSettingsTour && (
+              <motion.div
+                id="sofi-floating-guide"
+                key="sofi-floating-guide"
+                initial={{ opacity: 0, y: 40, scale: 0.92 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 24, scale: 0.94 }}
+                transition={{ type: "spring", damping: 22, stiffness: 180 }}
+                className="fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-3 select-none"
+                style={{ maxWidth: 340 }}
+              >
+                {/* ── Speech bubble ────────────────────────────── */}
+                <div className={`relative rounded-[24px] border p-4 shadow-2xl overflow-hidden ${
+                  darkMode
+                    ? "bg-[#060C1D]/85 border-cyan-500/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(6,182,212,0.12)] backdrop-blur-2xl"
+                    : "bg-white/90 border-cyan-400/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_8px_40px_rgba(6,182,212,0.10)] backdrop-blur-xl"
+                }`}>
+                  {/* Specular top edge */}
+                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-400/90 via-emerald-400/60 to-transparent pointer-events-none" />
+                  {/* Bubble tail pointing down-right toward the avatar */}
+                  <div className={`absolute -bottom-[9px] right-10 w-4 h-4 rotate-45 border-b border-r ${
+                    darkMode ? "bg-[#060C1D]/85 border-cyan-500/30" : "bg-white/90 border-cyan-400/40"
+                  }`} />
+
+                  {/* Label */}
+                  <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${
+                    darkMode ? "text-cyan-400" : "text-cyan-600"
+                  }`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse inline-block" />
+                    Sofi — Assistante IA
+                  </p>
+
+                  {/* Exact Phase 5 Quebec-FR text */}
+                  <p className={`text-[11.5px] font-medium leading-relaxed mb-3 ${
+                    darkMode ? "text-zinc-100" : "text-slate-800"
+                  }`}>
+                    Parfait, voici votre espace de travail ! Maintenant, terminons votre configuration pour que votre comptabilité soit automatisée à 100 %. Venez, cliquez sur la roue dentée (​Paramètres​) pour compléter vos informations fiscales.
+                  </p>
+
+                  {/* CTA row */}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => {
+                        setShowSettingsTour(false);
+                        localStorage.setItem("autocompt_settings_tour_shown", "true");
+                        setVista("settings");
+                        playNotificationSound();
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-cyan-500/20 to-emerald-500/10 border-cyan-500/50 text-cyan-600 dark:text-cyan-300 hover:from-cyan-500/30 hover:to-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)] whitespace-nowrap"
+                    >
+                      <Settings size={10} />
+                      Aller aux paramètres
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowSettingsTour(false);
+                        localStorage.setItem("autocompt_settings_tour_shown", "true");
+                      }}
+                      className={`text-[8px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                        darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-slate-300 hover:text-slate-500"
+                      }`}
+                    >
+                      Plus tard
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Floating Sofi avatar with hover float animation ──────── */}
+                <motion.div
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                  className="self-end"
+                >
+                  {/* — Canonical Sofi avatar — full body with equalizer chest panel */}
+                  <div className="relative cursor-pointer" onClick={() => {
+                    setShowSettingsTour(false);
+                    localStorage.setItem("autocompt_settings_tour_shown", "true");
+                    setVista("settings");
+                    playNotificationSound();
+                  }}>
+                    {/* Outer glow ring */}
+                    <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-xl animate-pulse" />
+                    <SofiAvatarSVG size={80} showShadow="cyan" className="relative z-10" />
+                    {/* Cyan online indicator */}
+                    <span className="absolute bottom-1 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {dashboardMode === "Syndic" ? (
             <SyndicModuleGrid
               darkMode={darkMode}
@@ -10762,57 +10979,63 @@ Ceci est un message automatisé généré par AutoCompt.`;
       );
     }
 
-    const ind = currentCompany?.industry || "";
+    // ── DocuLegal RBAC: folder list is authoritative per activeProfile ────────
+    // Source: .cursorrules §2 PROFILE ACCESS MATRIX
+    // Golden Rule §1: Never show Baux / Contrats de Gestion / Études de Rendement
+    // to profiles that have no mandate over those documents.
     let folders: string[] = [];
-    if (ind.toLowerCase().includes("plex")) {
-      folders = [
-        "Baux Résidentiels",
-        "Promesses d'Achat (PA)",
-        "Avis d'Augmentation",
-        "Relevés 31",
-        "Règlements d'Immeuble",
-      ];
-    } else if (
-      ind.toLowerCase().includes("prospector") ||
-      ind.toLowerCase().includes("flip") ||
-      ind.toLowerCase().includes("achat")
-    ) {
-      folders = [
-        "Promesses d'Achat (PA)",
-        "Ententes de Confidentialité",
-        "Analyses de Marché",
-        "Contrats OACIQ",
-      ];
-    } else if (
-      ind.toLowerCase().includes("gestion") ||
-      ind.toLowerCase().includes("gpa")
-    ) {
-      folders = [
-        "Contrats de Gestion",
-        "Promesses d'Achat (PA)",
-        "Baux de Clients",
-        "Documents Corporatifs",
-        "Études de Rendement",
-      ];
-    } else if (
-      ind.toLowerCase().includes("construction") ||
-      ind.toLowerCase().includes("rénovation")
-    ) {
-      folders = [
-        "Permis RBQ & Assurances",
-        "Contrats de Sous-traitance",
-        "Promesses d'Achat (PA)",
-        "Soumissions de Projet",
-        "Fiches Techniques",
-      ];
-    } else {
-      folders = [
-        "Contrats Généraux",
-        "Promesses d'Achat (PA)",
-        "Baux Locatifs",
-        "Documents Juridiques",
-        "Conformité Fiscale",
-      ];
+    switch (activeProfile) {
+      case "prospecteur":
+        // .cursorrules §2A: ONLY Promesse d'achat, Cession de promesse d'achat,
+        // Contrat de sous-traitance (max $500). NO Baux, NO gestion contracts.
+        folders = [
+          "Promesses d'Achat",
+          "Cessions de Promesse d'Achat",
+          "Contrats de Sous-traitance",
+        ];
+        break;
+      case "flippeur":
+        // .cursorrules §2C: DocuLegal access includes full construction docs
+        folders = [
+          "Promesses d'Achat",
+          "Contrats de Sous-traitance",
+          "Permis RBQ & Assurances",
+          "Soumissions de Projet",
+          "Documents Légaux",
+        ];
+        break;
+      case "gestionnaire":
+        // .cursorrules §2D: Multi-tenant admin — full mandate docs
+        folders = [
+          "Contrats de Gestion",
+          "Promesses d'Achat",
+          "Baux de Clients",
+          "Documents Corporatifs",
+        ];
+        break;
+      case "investisseur":
+        // .cursorrules §2B: Asset tracking — purchase and partnership docs
+        folders = [
+          "Promesses d'Achat",
+          "Ententes de Confidentialité",
+          "Contrats de Partenariat",
+          "Documents Notariés",
+        ];
+        break;
+      case "syndicat":
+        // .cursorrules §2E: Syndicat uses SyndicatDocuLegal component, not this vista
+        // Fallback in case routing lands here anyway
+        folders = [
+          "Contrats & Résolutions",
+          "Documents Syndicat",
+        ];
+        break;
+      default:
+        folders = [
+          "Promesses d'Achat",
+          "Documents Juridiques",
+          "Conformité Fiscale",
+        ];
     }
 
     const getSignerColorClasses = (colorName: string) => {
@@ -10926,9 +11149,69 @@ Ceci est un message automatisé généré par AutoCompt.`;
       (d) => d.companyId === activeCompanyId,
     );
 
+    // ── RBAC: Document category whitelist per profile (.cursorrules §2) ──────
+    // Defines which document categories are VISIBLE in the DocuLegal module.
+    // Any cat NOT in this set is hidden — the underlying data is never deleted.
+    const DOCULEGAL_ALLOWED_CATS: Record<typeof activeProfile, string[]> = {
+      prospecteur: [
+        "Promesses d'Achat",
+        "Cessions de Promesse d'Achat",
+        "Contrats de Sous-traitance",
+      ],
+      flippeur: [
+        "Promesses d'Achat",
+        "Contrats de Sous-traitance",
+        "Permis RBQ & Assurances",
+        "Soumissions de Projet",
+        "Documents Légaux",
+      ],
+      gestionnaire: [
+        "Contrats de Gestion",
+        "Promesses d'Achat",
+        "Baux de Clients",
+        "Documents Corporatifs",
+      ],
+      investisseur: [
+        "Promesses d'Achat",
+        "Ententes de Confidentialité",
+        "Contrats de Partenariat",
+        "Documents Notariés",
+      ],
+      syndicat: [
+        "Contrats & Résolutions",
+        "Documents Syndicat",
+      ],
+    };
+    const allowedCats = DOCULEGAL_ALLOWED_CATS[activeProfile] ?? [];
+
+    // ── RBAC: Smart template whitelist per profile ────────────────────────────
+    // "Bail Résidentiel" and "NDA" are NOT in the Prospecteur allowed set.
+    const DOCULEGAL_TEMPLATE_KEYWORDS: Record<typeof activeProfile, string[]> = {
+      prospecteur:  ["promesse", "cession", "sous-traitance", "cessionnaire"],
+      flippeur:     ["promesse", "cession", "sous-traitance", "cessionnaire", "permis", "soumission"],
+      gestionnaire: ["promesse", "gestion", "bail", "corporatif", "nda", "confidentialité"],
+      investisseur: ["promesse", "cession", "entente", "confidentialité", "nda", "partenariat"],
+      syndicat:     ["résolution", "contrat", "syndicat"],
+    };
+    const templateKeywords = DOCULEGAL_TEMPLATE_KEYWORDS[activeProfile] ?? [];
+    const profileSmartTemplates = smartTemplates.filter((t) => {
+      const nameLower = t.name.toLowerCase();
+      return templateKeywords.some((kw) => nameLower.includes(kw));
+    });
+
+    // ── RBAC: Apply category filter to company documents ─────────────────────
+    const rbacCompanyDocs = companyDocs.filter((d) => {
+      if (allowedCats.length === 0) return true;
+      // Match by exact cat name OR by keyword inclusion for legacy entries
+      return allowedCats.some((cat) =>
+        d.cat?.toLowerCase().includes(cat.toLowerCase().split(" ")[0]) ||
+        cat.toLowerCase().includes((d.cat ?? "").toLowerCase().split(" ")[0])
+      );
+    });
+
     // Filter of folder specific doc lists
     const docsInFolder = selectedDocuFolder
-      ? companyDocs.filter((d) => d.cat === selectedDocuFolder)
+      ? rbacCompanyDocs.filter((d) => d.cat === selectedDocuFolder)
       : [];
 
     // Helper for loading template based on folder
@@ -22299,6 +22582,334 @@ Ceci est un message automatisé généré par AutoCompt.`;
         </header>
 
         <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+
+          {/* ══════════════════════════════════════════════════════════════════
+              Phase 4: Section — Profil d'Entreprise Québec
+              Required for invoice conformity: logo, NEQ, TPS/TVQ, address.
+              design_system_rules.md §2: 3D glass card anatomy.
+          ══════════════════════════════════════════════════════════════════ */}
+          <div className={`relative p-8 rounded-[32px] border overflow-hidden ${
+            darkMode
+              ? "bg-[#090D1A]/60 border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+              : "bg-white border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_30px_rgba(16,185,129,0.05)]"
+          }`}>
+            {/* Specular top highlight line (design_system_rules §2) */}
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/70 via-cyan-500/40 to-transparent rounded-full pointer-events-none" />
+
+            {/* Section heading */}
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-zinc-800/60">
+              <h2 className="text-sm font-black uppercase tracking-widest flex items-center space-x-2">
+                <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <Building2 size={18} />
+                </span>
+                <span>Profil d&apos;Entreprise — Québec</span>
+              </h2>
+              {/* Compliance badge */}
+              <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                Facturation conforme ✓
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* ── Logo Upload ─────────────────────────────────────────── */}
+              <div className="md:col-span-2 space-y-2 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <ImageIcon size={11} className="text-emerald-500" />
+                  Upload de Logo
+                </label>
+                <div className={`flex items-start gap-4 p-4 rounded-2xl border ${
+                  darkMode ? "bg-zinc-950/50 border-zinc-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                  {/* Preview */}
+                  <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center shrink-0 overflow-hidden ${
+                    darkMode ? "border-zinc-700 bg-zinc-900" : "border-slate-200 bg-white"
+                  }`}>
+                    {userProfile.logo ? (
+                      <img src={userProfile.logo} alt="Logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <Building2 size={22} className="text-slate-300 dark:text-zinc-700" />
+                    )}
+                  </div>
+
+                  {/* Upload controls */}
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="settings-logo-upload"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string;
+                          setUserProfile((prev: any) => ({ ...prev, logo: dataUrl }));
+                          playNotificationSound();
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <label
+                      htmlFor="settings-logo-upload"
+                      className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]"
+                    >
+                      <Upload size={11} />
+                      Choisir un fichier (PNG, JPG, SVG)
+                    </label>
+                    {userProfile.logo && (
+                      <button
+                        onClick={() => setUserProfile((prev: any) => ({ ...prev, logo: null }))}
+                        className="text-[9px] font-bold text-rose-400 hover:text-rose-600 transition-colors uppercase tracking-wider cursor-pointer"
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+
+                  {/* ── Phase 5: Sofi Logo-Assistant sticker + permanent tooltip ──────────────
+                      Sits beside the upload control. Always visible (no hover required).
+                      Exact Quebec-FR spec text per Phase 5 requirement.
+                  ─────────────────────────────────────────────────────────────────────────── */}
+                  <div className="shrink-0 flex flex-col items-center gap-2">
+                    {/* Sofi mini sticker face */}
+                    <motion.div
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                      className="relative w-11 h-11"
+                    >
+                      <div className="absolute inset-0 rounded-full bg-cyan-400/15 blur-md animate-pulse" />
+                      <svg viewBox="0 0 160 160" className="relative z-10 w-full h-full drop-shadow-[0_4px_12px_rgba(6,182,212,0.3)]">
+                        <defs>
+                          <linearGradient id="sofiStickerBody" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#FFFFFF" />
+                            <stop offset="100%" stopColor="#D4D4D8" />
+                          </linearGradient>
+                          <linearGradient id="sofiStickerScreen" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#0A0A12" />
+                            <stop offset="100%" stopColor="#0D1525" />
+                          </linearGradient>
+                          <filter id="sofiStickerGlow">
+                            <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
+                            <feMerge>
+                              <feMergeNode in="coloredBlur" />
+                              <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                          </filter>
+                        </defs>
+                        {/* Head only (face sticker) */}
+                        <rect x="20" y="8" width="120" height="120" rx="44" ry="44" fill="url(#sofiStickerBody)" stroke="#D4D4D8" strokeWidth="0.8" />
+                        {/* Screen */}
+                        <rect x="34" y="22" width="92" height="82" rx="26" ry="26" fill="url(#sofiStickerScreen)" stroke="#1E293B" strokeWidth="1.4" />
+                        {/* Eyes */}
+                        <rect x="51" y="40" width="12" height="28" rx="6" fill="#10B981" filter="url(#sofiStickerGlow)" />
+                        <rect x="97" y="40" width="12" height="28" rx="6" fill="#10B981" filter="url(#sofiStickerGlow)" />
+                        {/* Smile */}
+                        <path d="M63 83 Q80 96 97 83" fill="none" stroke="#10B981" strokeWidth="3.2" strokeLinecap="round" filter="url(#sofiStickerGlow)" />
+                      </svg>
+                      {/* Cyan online dot */}
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_5px_rgba(6,182,212,0.9)]" />
+                    </motion.div>
+
+                    {/* Permanent logo-spec speech bubble */}
+                    <div className={`relative rounded-[14px] border p-2.5 max-w-[178px] shadow-lg overflow-hidden ${
+                      darkMode
+                        ? "bg-[#060C1D]/80 border-cyan-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl"
+                        : "bg-white/90 border-cyan-400/35 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-sm"
+                    }`}>
+                      {/* Specular line */}
+                      <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-cyan-400/80 to-transparent pointer-events-none rounded-full" />
+                      {/* Bubble tail up toward sticker */}
+                      <div className={`absolute -top-[7px] left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border-t border-l ${
+                        darkMode ? "bg-[#060C1D]/80 border-cyan-500/25" : "bg-white/90 border-cyan-400/35"
+                      }`} />
+                      <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${
+                        darkMode ? "text-cyan-400" : "text-cyan-600"
+                      }`}>
+                        💡 Sofi conseil
+                      </p>
+                      <p className={`text-[9.5px] font-medium leading-snug ${
+                        darkMode ? "text-zinc-200" : "text-slate-700"
+                      }`}>
+                        N&apos;oubliez pas d&apos;ajouter votre logo&nbsp;! Pour un résultat parfait sur vos factures, utilisez une image carrée (ex&nbsp;: 500×500 pixels) d&apos;un maximum de 2&nbsp;Mo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Nom de l'entreprise ─────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Building2 size={11} className="text-emerald-500" />
+                  Nom de l&apos;entreprise
+                </label>
+                <input
+                  id="settings-company-name"
+                  type="text"
+                  value={userProfile.nom || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, nom: e.target.value }));
+                    localStorage.setItem("autocompt_company_nom", e.target.value);
+                  }}
+                  placeholder="Ex: Solutions GPA Inc."
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-emerald-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── NEQ ─────────────────────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Hash size={11} className="text-cyan-500" />
+                  NEQ — Numéro d&apos;entreprise du Québec
+                </label>
+                <input
+                  id="settings-neq"
+                  type="text"
+                  value={userProfile.neq || ""}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+                    setUserProfile((prev: any) => ({ ...prev, neq: val }));
+                    localStorage.setItem("autocompt_company_neq", val);
+                  }}
+                  placeholder="10 chiffres — ex: 1170000000"
+                  maxLength={10}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-cyan-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── Numéro TPS ──────────────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Percent size={11} className="text-rose-500" />
+                  Numéro de TPS (Gouvernement du Canada)
+                </label>
+                <input
+                  id="settings-tps-number"
+                  type="text"
+                  value={userProfile.tps || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, tps: e.target.value }));
+                    localStorage.setItem("autocompt_company_tps", e.target.value);
+                  }}
+                  placeholder="Ex: 123456789 RT0001"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-rose-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── Numéro TVQ ──────────────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Percent size={11} className="text-rose-400" />
+                  Numéro de TVQ (Revenu Québec)
+                </label>
+                <input
+                  id="settings-tvq-number"
+                  type="text"
+                  value={userProfile.tvq || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, tvq: e.target.value }));
+                    localStorage.setItem("autocompt_company_tvq", e.target.value);
+                  }}
+                  placeholder="Ex: 1234567890 TQ0001"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-rose-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── Adresse professionnelle ─────────────────────────────── */}
+              <div className="md:col-span-2 space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <MapPin size={11} className="text-indigo-400" />
+                  Adresse professionnelle
+                </label>
+                <input
+                  id="settings-address"
+                  type="text"
+                  value={userProfile.adresse || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, adresse: e.target.value }));
+                    localStorage.setItem("autocompt_company_adresse", e.target.value);
+                  }}
+                  placeholder="Ex: 1210 rue Maurice Cullen, Blainville, QC  J7C 0C1"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-indigo-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── Numéro de téléphone ──────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Phone size={11} className="text-sky-500" />
+                  Numéro de téléphone
+                </label>
+                <input
+                  id="settings-phone"
+                  type="tel"
+                  value={userProfile.tel || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, tel: e.target.value }));
+                    localStorage.setItem("autocompt_company_tel", e.target.value);
+                  }}
+                  placeholder="Ex: (450) 123-4567"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-sky-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+              {/* ── Courriel ─────────────────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Mail size={11} className="text-violet-500" />
+                  Courriel de facturation
+                </label>
+                <input
+                  id="settings-email"
+                  type="email"
+                  value={userProfile.pago || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, pago: e.target.value }));
+                    localStorage.setItem("autocompt_company_email", e.target.value);
+                  }}
+                  placeholder="Ex: info@entreprise.com"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-violet-500/30 ${
+                    darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+                />
+              </div>
+
+            </div>{/* /.grid */}
+
+            {/* Save CTA */}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  playNotificationSound();
+                  // Persist all fields — already saved field-by-field above,
+                  // this button provides an explicit user confirmation moment.
+                  if (showSettingsTour) {
+                    setShowSettingsTour(false);
+                    localStorage.setItem("autocompt_settings_tour_shown", "true");
+                  }
+                }}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-emerald-600/25 to-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:from-emerald-600/35 hover:to-emerald-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0_20px_rgba(16,185,129,0.08)]"
+              >
+                <CheckCircle2 size={14} />
+                Sauvegarder le profil
+              </button>
+            </div>
+          </div>
+
           {/* Section: Profile Config */}
           <div className={`p-8 rounded-[32px] border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-white shadow-xl shadow-slate-200/40 border-slate-200"}`}>
             <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center space-x-2 border-b pb-4 border-slate-100 dark:border-zinc-800">
