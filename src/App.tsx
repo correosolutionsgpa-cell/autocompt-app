@@ -121,6 +121,7 @@ import RapportTaxes from "./ramas-flujo/Rama_Gestionnaires/RapportTaxes";
 import RapportComptable from "./ramas-flujo/Rama_Gestionnaires/RapportComptable";
 import BanqueSyncView from "./ramas-flujo/Rama_Gestionnaires/BanqueSyncView";
 import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceView";
+import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
@@ -18044,41 +18045,21 @@ Ceci est un message automatisé généré par AutoCompt.`;
       />
     );
 
+  // HeuresPaieShell → extraído a src/ramas-flujo/Rama_Gestionnaires/HeuresPaieShell.tsx (Fase 10)
   if (vista === "heures-paie") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
-        <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors md:hidden mr-1"
-            >
-              <Menu size={22} />
-            </button>
-            <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl">
-              <Timer size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-black italic tracking-tighter uppercase">{activeLang === "FR" ? "Suivi Heures & Paie" : activeLang === "ES" ? "Control de Horas y Nóminas" : "Hours & Payroll"}</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeLang === "FR" ? "Masse salariale & heures par employé par semaine" : activeLang === "ES" ? "Nómina y horas de trabajo semanales" : "Payroll & weekly hours by employee"}</p>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 md:p-6 w-full animate-in fade-in duration-300">
-          <HeuresPaieView
-            paieRecords={paieRecords}
-            setPaieRecords={setPaieRecords}
-            darkMode={darkMode}
-            activeLang={activeLang}
-            currentCompany={currentCompany}
-            playNotificationSound={playNotificationSound}
-            setVista={setVista}
-            setAutonomeExpenses={setAutonomeExpenses}
-          />
-        </main>
-      </div>
+      <HeuresPaieShell
+        darkMode={darkMode}
+        activeLang={activeLang}
+        paieRecords={paieRecords}
+        setPaieRecords={setPaieRecords}
+        currentCompany={currentCompany}
+        setAutonomeExpenses={setAutonomeExpenses}
+        playNotificationSound={playNotificationSound}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+      />
     );
   }
 
