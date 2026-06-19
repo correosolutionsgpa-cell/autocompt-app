@@ -123,6 +123,7 @@ import BanqueSyncView from "./ramas-flujo/Rama_Gestionnaires/BanqueSyncView";
 import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceView";
 import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
+import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService } from "./lib/dataService";
@@ -18106,175 +18107,21 @@ Ceci est un message automatisé généré par AutoCompt.`;
     );
   }
 
-  if (vista === "admin_legacy_unused") {
-    return (
-      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300`}>
-        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setVista("dashboard")}
-              className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}
-            >
-              <ArrowLeft size={24} />
-            </button>
-            <div>
-              <h1 className="font-black uppercase italic tracking-tighter text-lg">
-                Tableau de bord Administrateur - AutoCompt
-              </h1>
-              <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">
-                Accès Privilégié
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setCurrentUserEmail(null);
-              setIsForfaitSelected(false);
-              setVista("login");
-            }}
-            className="py-2.5 px-5 bg-slate-800 text-white hover:bg-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all focus:outline-none flex items-center space-x-2"
-          >
-            <LogOut size={14} />
-            <span>Déconnexion de l'administration</span>
-          </button>
-        </header>
 
-        <main className="flex-1 max-w-7xl mx-auto w-full p-6 space-y-8 overflow-y-auto">
-          {/* Top Metrics Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-slate-200"}`}>
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-2xl ${darkMode ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
-                  <Users size={20} />
-                </div>
-              </div>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
-                Utilisateurs Actifs
-              </p>
-              <h3 className="text-3xl font-black mt-1 tracking-tight">142</h3>
-            </div>
-
-            <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-slate-200"}`}>
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-2xl ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
-                  <TrendingUp size={20} />
-                </div>
-              </div>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
-                Revenu Mensuel Récurrent (MRR)
-              </p>
-              <h3 className="text-3xl font-black mt-1 tracking-tight">3 450 $</h3>
-            </div>
-
-            <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-slate-200"}`}>
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-2xl ${darkMode ? "bg-purple-500/10 text-purple-400" : "bg-purple-50 text-purple-600"}`}>
-                  <Receipt size={20} />
-                </div>
-              </div>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
-                Factures Générées ce mois
-              </p>
-              <h3 className="text-3xl font-black mt-1 tracking-tight">875</h3>
-            </div>
-          </div>
-
-          {/* Pricing Management */}
-          <div className="mt-10">
-            <h2 className={`text-sm font-black uppercase tracking-widest mb-6 border-b pb-2 ${darkMode ? "border-zinc-800 text-zinc-300" : "border-slate-200 text-slate-800"}`}>
-              Gestion des Forfaits
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                { name: "Lancement", currentPrice: "Gratuit", icon: <Sparkles size={16} />, colorClass: darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600" },
-                { name: "Pro", currentPrice: "49 $ / mois", icon: <Building2 size={16} />, colorClass: darkMode ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600" },
-                { name: "Entreprise", currentPrice: "199 $ / mois", icon: <Briefcase size={16} />, colorClass: darkMode ? "bg-purple-500/10 text-purple-400" : "bg-purple-50 text-purple-600" }
-              ].map((tier, idx) => (
-                <div key={idx} className={`relative p-6 rounded-3xl border flex flex-col justify-between ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-slate-200"} shadow-sm hover:shadow-md transition-shadow`}>
-                  <div>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <div className={`p-2 rounded-xl ${tier.colorClass}`}>
-                        {tier.icon}
-                      </div>
-                      <h4 className="font-bold text-lg">{tier.name}</h4>
-                    </div>
-                    <p className={`text-[11px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                      Prix actuel
-                    </p>
-                    <p className="text-2xl font-black">{tier.currentPrice}</p>
-                  </div>
-                  <button className={`mt-6 w-full py-3 rounded-xl border border-dashed transition-all text-[10px] font-black uppercase tracking-wider ${darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-900 hover:border-zinc-500 hover:text-white" : "border-slate-300 text-slate-500 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-800"}`}>
-                    Modifier le prix
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
+  // ContratsDLShell → extraído a src/ramas-flujo/Rama_Gestionnaires/ContratsDLShell.tsx (Fase 13)
   if (vista === "contrats") {
     return (
-      <div className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
-        {/* Background gradient blooms for premium look */}
-        {darkMode && (
-          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
-            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-teal-650/10 blur-[100px]" />
-            <div className="absolute top-1/3 -right-40 w-96 h-96 rounded-full bg-indigo-650/10 blur-[100px]" />
-          </div>
-        )}
-
-        <WorkspaceSidebar />
-        <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
-          <div className="flex items-center space-x-3">
-            <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-              <ArrowLeft size={20} />
-            </button>
-            <div className="text-left">
-              <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
-                <span>AutoCompt</span>
-                <span>/</span>
-                <span>Tableau de Bord</span>
-                <span>/</span>
-                <span className="text-teal-500 font-bold">Contrats & Résolutions (DocuLegal)</span>
-              </div>
-              <h1 className="font-black uppercase italic tracking-tighter text-base sm:text-lg mt-0.5">Contrats & Résolutions (DocuLegal)</h1>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button className={`p-2 rounded-lg relative transition-all ${darkMode ? "bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800" : "bg-white shadow-sm border border-slate-200 text-slate-450 hover:bg-slate-50"}`}>
-              <Bell size={14} />
-            </button>
-
-            <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-teal-500/30 transition-all cursor-pointer">
-              <img
-                src={adminPhoto}
-                alt={adminName}
-                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-              />
-              <div className="text-left hidden sm:block">
-                <div className="flex items-center gap-1 leading-none">
-                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                  <ChevronDown size={8} className="text-slate-400" />
-                </div>
-                <p className="text-[7px] font-bold uppercase text-teal-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 max-w-5xl w-full p-4 sm:p-6 space-y-6 mx-auto">
-          <SyndicatDocuLegal
-            darkMode={darkMode}
-            companyName={currentCompany?.nombre || "Solutions GPA Inc."}
-            adminEmail={currentUserEmail || ''}
-            companyId={activeCompanyId || ''}
-          />
-        </main>
-      </div>
+      <ContratsDLShell
+        darkMode={darkMode}
+        adminName={adminName}
+        adminRole={adminRole}
+        adminPhoto={adminPhoto}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        currentUserEmail={currentUserEmail}
+        setVista={setVista}
+        WorkspaceSidebar={WorkspaceSidebar}
+      />
     );
   }
 
