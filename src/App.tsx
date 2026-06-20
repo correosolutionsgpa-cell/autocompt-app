@@ -135,14 +135,14 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
-  "#059669", // Émeraude (Solutions GPA standard)
-  "#06B6D4", // Cyan
-  "#6366F1", // Indigo d'affaires
-  "#F59E0B", // Ambre chaleureux
-  "#EF4444", // Rouge Alerte
-  "#8B5CF6", // Violet
-  "#3B82F6", // Bleu royal
-  "#EC4899", // Rose fuchsia
+  "#00E396", // ✦ Émeraude vif (Solutions GPA signature)
+  "#00D4FF", // ✦ Cyan électrique
+  "#818CF8", // ✦ Indigo lumineux
+  "#FFC107", // ✦ Ambre doré
+  "#FF5252", // ✦ Rouge vif
+  "#C084FC", // ✦ Violet lavande
+  "#60A5FA", // ✦ Bleu saphir clair
+  "#F472B6", // ✦ Rose fuchsia vif
 ];
 
 // --- CONFIGURATION SÉCURISÉE DES CLÉS GOOGLE API ---
@@ -9807,7 +9807,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
             accept="image/*,application/pdf"
           />
 
-          {/* Input dédié à la capture photo camera en direct sur mobile */}
+
+          {/* Input universel — photo, galerie OU fichier (PDF / image)
+               Sans attribut capture="" → le système affiche le menu natif:
+               [📷 Prendre une photo] [🖼 Choisir dans la galerie] [📁 Parcourir les fichiers]
+               Accepte : toutes images + PDF pour factures, baux, documents longs */}
           <input
             type="file"
             ref={cameraInputRef}
@@ -9818,9 +9822,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
               }
             }}
             className="hidden"
-            accept="image/*"
-            capture="environment"
+            accept="image/*,application/pdf"
           />
+
 
           <div className="space-y-4">
             <button
@@ -9908,37 +9912,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   SCANNER IA (FACTURES)
                 </span>
                 <p className="text-[8.5px] italic font-bold uppercase mt-1 leading-relaxed tracking-wider text-emerald-500/80">
-                  Numérisation et extraction des métadonnées en cours...
+                  📷 Photo &nbsp;•&nbsp; 🖼 Galerie &nbsp;•&nbsp; 📄 Fichier PDF
                 </p>
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedTier === "gratuit") {
-                  setPaywallTargetTier("Basique (4.99$)");
-                  setShowPaywallModal(true);
-                  playNotificationSound();
-                  return;
-                }
-                if (selectedTier === "basique" && monthlyScanCount >= 10) {
-                  setPaywallTargetTier("Pro Individuel (19.99$)");
-                  setShowPaywallModal(true);
-                  playNotificationSound();
-                  return;
-                }
-                if (fileInputRef.current) {
-                  fileInputRef.current.click();
-                }
-              }}
-              className={`w-full py-5 rounded-[28px] border-2 border-dashed flex items-center justify-center space-x-3 transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-805 text-zinc-400 hover:text-white" : "bg-white border-slate-100 text-slate-400 hover:text-slate-900"}`}
-            >
-              <Upload size={18} />
-              <span className="text-[10px] font-black uppercase italic tracking-widest text-[#475569]">
-                Importer un document {selectedTier === "gratuit" && "🔒"}
-              </span>
-            </button>
+
 
             {/* Scans limits counter indicators for Basique subscription */}
             {selectedTier === "basique" && (
@@ -9956,7 +9935,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           {/* WIDGET : RÉPARTITION DES DÉPENSES PAR CATÉGORIE (DONUT CHART) */}
           <div
-            className={`p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"} shadow-sm text-left relative overflow-hidden transition-all duration-300`}
+            className={`p-6 rounded-[32px] border card-glow-spin ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"} shadow-sm text-left relative transition-all duration-300`}
+            style={{ "--spin-rgb": "0,227,150" } as React.CSSProperties}
           >
             <div className="flex items-center space-x-2.5 mb-5">
               <span
@@ -10045,6 +10025,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   >
                     <ResponsiveContainer width="100%" height={208}>
                       <PieChart width={250} height={208}>
+                        <defs>
+                          {donutChartData.map((entry, index) => (
+                            <filter key={`glow-${index}`} id={`glow-${index}`} x="-30%" y="-30%" width="160%" height="160%">
+                              <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                              <feMerge>
+                                <feMergeNode in="coloredBlur" />
+                                <feMergeNode in="SourceGraphic" />
+                              </feMerge>
+                            </filter>
+                          ))}
+                        </defs>
                         <Pie
                           data={donutChartData}
                           cx="50%"
@@ -10053,9 +10044,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           outerRadius="85%"
                           paddingAngle={3}
                           dataKey="value"
+                          strokeWidth={0}
                         >
                           {donutChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              stroke={darkMode ? entry.color : "none"}
+                              strokeWidth={darkMode ? 0.5 : 0}
+                              style={darkMode ? { filter: `drop-shadow(0 0 6px ${entry.color}88)` } : {}}
+                            />
                           ))}
                         </Pie>
                         <Tooltip
