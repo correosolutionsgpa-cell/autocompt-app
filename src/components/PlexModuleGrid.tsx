@@ -8,6 +8,15 @@
  * Cards are conditionally rendered via hasAccess() — no module component
  * is deleted; they are simply hidden for profiles that lack permission.
  *
+ * Styling: design_system_rules.md §2 — 3D Glass Button Standard
+ *   • Resting: clear glass + specular top highlight
+ *   • Hover: inset colored glow using profile color token + outer halo
+ *   • Profile color tokens (§2 table):
+ *       prospecteur  → cyan-500   / rgba(6,182,212,...)
+ *       investisseur → emerald-500 / rgba(16,185,129,...)
+ *       flippeur     → amber-500  / rgba(245,158,11,...)
+ *       gestionnaire → indigo-500 / rgba(99,102,241,...)
+ *
  * RBAC source of truth: src/lib/rbacConfig.ts
  * Profile matrix source: .cursorrules §2 PROFILE ACCESS MATRIX
  */
@@ -38,6 +47,33 @@ interface PlexModuleGridProps {
   setShowFiscalChat: (show: boolean) => void;
 }
 
+// ── Profile color tokens — design_system_rules.md §2 ────────────────────────
+const PROFILE_RGB: Record<ProfileId, string> = {
+  prospecteur:  "6,182,212",    // cyan-500
+  investisseur: "16,185,129",   // emerald-500
+  flippeur:     "245,158,11",   // amber-500
+  gestionnaire: "99,102,241",   // indigo-500
+  syndicat:     "139,92,246",   // purple-500
+};
+
+// ── Shadow helpers ────────────────────────────────────────────────────────────
+const hoverShadow = (rgb: string) =>
+  [
+    `inset 0 1px 1px rgba(255,255,255,0.1)`,
+    `inset 0 0 30px rgba(${rgb},0.25)`,
+    `0 0 20px rgba(${rgb},0.18)`,
+  ].join(",");
+
+const hoverShadowLight = (rgb: string) =>
+  [
+    `inset 0 1px 1px rgba(255,255,255,0.6)`,
+    `inset 0 0 30px rgba(${rgb},0.15)`,
+    `0 0 16px rgba(${rgb},0.12)`,
+  ].join(",");
+
+const restShadowDark  = "inset 0 1px 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.40)";
+const restShadowLight = "inset 0 1px 1px rgba(255,255,255,0.6), 0 4px 24px rgba(0,0,0,0.04)";
+
 export default function PlexModuleGrid({
   darkMode,
   activeProfile,
@@ -48,26 +84,61 @@ export default function PlexModuleGrid({
   playNotificationSound,
   setShowFiscalChat,
 }: PlexModuleGridProps) {
-  const card = `${
-    darkMode
-      ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white"
-      : "bg-white border-slate-200 text-slate-900"
-  } p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95`;
 
+  const rgb = PROFILE_RGB[activeProfile] ?? PROFILE_RGB.investisseur;
   const tier = getEffectiveTier();
   const isLocked = tier === "gratuit" || tier === "basique";
 
-  // Convenience alias so each card reads: can("facturation")
+  // ── §4 Standard Card glass base ───────────────────────────────────────────
+  const cardBase = [
+    "p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left",
+    "transition-all duration-300 active:scale-[0.98] cursor-pointer",
+    "bg-white/60 dark:bg-white/[0.04]",
+    "backdrop-blur-xl",
+    "border-white/70 dark:border-white/[0.08]",
+    "text-slate-800 dark:text-zinc-100",
+    // Rotating border light (dark mode only — §index.css .card-glow-spin)
+    "card-glow-spin",
+  ].join(" ");
+
+  // ── Hover handlers — internal light turns on (§2) ─────────────────────────
+  const onHoverIn = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const shadow = darkMode ? hoverShadow(rgb) : hoverShadowLight(rgb);
+    (e.currentTarget as HTMLButtonElement).style.boxShadow = shadow;
+    (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${rgb},0.5)`;
+  };
+  const onHoverOut = (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e.currentTarget as HTMLButtonElement).style.boxShadow = darkMode ? restShadowDark : restShadowLight;
+    (e.currentTarget as HTMLButtonElement).style.borderColor = "";
+  };
+
+  const restShadow = darkMode ? restShadowDark : restShadowLight;
+
+  // Shared style for all module cards: rest shadow + profile spin RGB
+  const cardStyle = {
+    boxShadow: restShadow,
+    "--spin-rgb": rgb,
+  } as React.CSSProperties;
   const can = (moduleId: Parameters<typeof hasAccess>[1]) =>
     hasAccess(activeProfile, moduleId);
+
+  // ── Icon container per §7 — static glass badge, NO solid fills ───────────
+  const iconBadge = (colorBg: string, colorText: string) =>
+    `flex items-center justify-center p-3 rounded-2xl border border-white/30 dark:border-white/10 ${colorBg} ${colorText}`;
 
   return (
     <div className="grid grid-cols-2 gap-3 text-left">
 
       {/* Facturation — prospecteur, flippeur */}
       {can("facturation") && (
-        <button onClick={() => setVista("facturas")} className={card}>
-          <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("facturas")}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-emerald-500/10", "text-emerald-600 dark:text-emerald-400")}>
             <Receipt size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
@@ -78,8 +149,14 @@ export default function PlexModuleGrid({
 
       {/* Tenue de Livres — prospecteur, investisseur, flippeur, gestionnaire */}
       {can("tenue_livres") && (
-        <button onClick={() => setVista("reportes")} className={card}>
-          <div className={`${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-100 text-blue-600 shadow-inner"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("reportes")}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-blue-500/10", "text-blue-600 dark:text-blue-400")}>
             <FileSpreadsheet size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
@@ -90,8 +167,14 @@ export default function PlexModuleGrid({
 
       {/* Bureau à domicile — prospecteur, flippeur */}
       {can("bureau_domicile") && (
-        <button onClick={() => setVista("homeoffice")} className={card}>
-          <div className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("homeoffice")}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-amber-500/10", "text-amber-600 dark:text-amber-400")}>
             <Home size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
@@ -102,8 +185,14 @@ export default function PlexModuleGrid({
 
       {/* TPS / TVQ — prospecteur, flippeur */}
       {can("tps_tvq") && (
-        <button onClick={() => setVista("taxes")} className={card}>
-          <div className={`${darkMode ? "bg-rose-905/20 text-rose-450" : "bg-rose-100 text-rose-600"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("taxes")}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-rose-500/10", "text-rose-600 dark:text-rose-400")}>
             <Percent size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-tight">
@@ -130,12 +219,15 @@ export default function PlexModuleGrid({
             }
             setVista("doculegal");
           }}
-          className={card}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
         >
-          <div className={`${darkMode ? "bg-indigo-900/20 text-indigo-400" : "bg-indigo-100 text-indigo-600"} p-3 rounded-2xl relative`}>
+          <div className={`${iconBadge("bg-indigo-500/10", "text-indigo-600 dark:text-indigo-400")} relative`}>
             <FileSignature size={22} />
             {isLocked && (
-              <div className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow border border-white/20">
+              <div className="absolute -top-1 -right-1 bg-amber-500/90 backdrop-blur-sm text-slate-950 p-0.5 rounded-full shadow border border-white/20">
                 <span>🔒</span>
               </div>
             )}
@@ -148,8 +240,14 @@ export default function PlexModuleGrid({
 
       {/* Dossiers Fiscaux — Universal (all Plex profiles) */}
       {can("dossiers_fiscaux") && (
-        <button onClick={() => setVista("dossiers")} className={card}>
-          <div className={`${darkMode ? "bg-amber-900/20 text-amber-400" : "bg-amber-100 text-amber-600"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("dossiers")}
+          className={cardBase}
+          style={cardStyle}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-amber-500/10", "text-amber-600 dark:text-amber-400")}>
             <Folder size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
@@ -162,8 +260,14 @@ export default function PlexModuleGrid({
 
       {/* Heures & Paie — flippeur only */}
       {can("heures_paie") && (
-        <button onClick={() => setVista("heures-paie")} className={card}>
-          <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-105 text-[#059669]"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("heures-paie")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-emerald-500/10", "text-emerald-600 dark:text-emerald-400")}>
             <Timer size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
@@ -176,8 +280,14 @@ export default function PlexModuleGrid({
 
       {/* Conciliation Bancaire — prospecteur, investisseur, flippeur, gestionnaire */}
       {can("conciliation") && (
-        <button onClick={() => setVista("banque")} className={card}>
-          <div className={`${darkMode ? "bg-teal-900/20 text-teal-400" : "bg-teal-100 text-teal-600"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("banque")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-teal-500/10", "text-teal-600 dark:text-teal-400")}>
             <Wallet size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
@@ -190,8 +300,14 @@ export default function PlexModuleGrid({
 
       {/* Gestion Immobilière — investisseur, gestionnaire (shows live vacancy stats) */}
       {can("gestion_immo") && (
-        <button onClick={() => setVista("plex")} className={card}>
-          <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-[#059669]"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("plex")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-emerald-500/10", "text-emerald-600 dark:text-emerald-400")}>
             <Building2 size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
@@ -205,7 +321,7 @@ export default function PlexModuleGrid({
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span>{plexManagementProperties.filter((p) => p.status === "Actif").length} Unités Actives</span>
               </div>
-              <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-orange-500/20 to-amber-600/20 text-orange-600 dark:text-orange-400">
+              <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 dark:text-orange-400">
                 <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
                 <span>{plexManagementProperties.filter((p) => p.status === "Vacant").length} Vacantes</span>
               </div>
@@ -216,8 +332,14 @@ export default function PlexModuleGrid({
 
       {/* Taxes & Assurances — prospecteur, investisseur, flippeur, gestionnaire */}
       {can("taxes_assurances") && (
-        <button onClick={() => setVista("taxes_assurances")} className={card}>
-          <div className={`${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-100 text-emerald-600"} p-3 rounded-2xl`}>
+        <button
+          onClick={() => setVista("taxes_assurances")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-emerald-500/10", "text-emerald-600 dark:text-emerald-400")}>
             <ShieldAlert size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
@@ -229,37 +351,52 @@ export default function PlexModuleGrid({
       )}
 
       {/* Assistant IA — Universal (all Plex profiles, paywall-gated on gratuit) */}
+      {/* §2: Glass anatomy — NO solid bg-emerald-600, color lives as tint/glow */}
       {can("assistant_ia") && (
         <div className="col-span-2 grid grid-cols-1 gap-6 mt-6">
           <button
             onClick={() => {
-              if (tier === "gratuit") {
-                playNotificationSound();
-                // Paywall is opened from App.tsx — signal via setShowFiscalChat false-then-true
-                // We keep the paywall modal in App.tsx; this button simply opens the chat.
-                // For gratuit users, show the fiscal chat which internally handles upgrade CTA.
-              }
               setShowFiscalChat(true);
               playNotificationSound();
             }}
-            className={`${
-              darkMode
-                ? "bg-gradient-to-br from-emerald-950/40 to-zinc-900 border-zinc-900 text-white"
-                : "bg-gradient-to-br from-emerald-500/5 to-slate-50 border-emerald-500/20 text-slate-900"
-            } p-5 rounded-[32px] border shadow-sm flex flex-col items-start space-y-2 text-left hover:border-[#059669] hover:shadow-xl transition-all active:scale-95 relative`}
+            className={[
+              "p-5 rounded-[32px] border",
+              "flex flex-col items-start space-y-2 text-left",
+              "transition-all duration-300 active:scale-[0.99] cursor-pointer relative",
+              // Glass with profile-tinted base — translucent, NOT opaque
+              "bg-emerald-500/[0.05] dark:bg-emerald-500/[0.05]",
+              "backdrop-blur-xl",
+              "border-emerald-500/25 dark:border-emerald-500/20",
+              "text-slate-800 dark:text-zinc-100",
+            ].join(" ")}
+            style={{ boxShadow: restShadow }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                darkMode ? hoverShadow("16,185,129") : hoverShadowLight("16,185,129");
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(16,185,129,0.5)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = restShadow;
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "";
+            }}
           >
-            <div className="bg-emerald-600 p-2.5 rounded-2xl text-white shadow-md shadow-emerald-600/20 animate-pulse relative">
+            {/* Icon — §2: glass badge, NOT solid fill. §6: pulse allowed on AI hero */}
+            <div
+              className="bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-2xl text-emerald-600 dark:text-emerald-400 relative animate-living-pulse"
+              style={{ "--pulse-rgb": "16,185,129" } as React.CSSProperties}
+            >
               <Sparkles size={20} />
               {tier === "gratuit" && (
-                <div className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow border border-white/20">
+                <div className="absolute -top-1 -right-1 bg-amber-500/90 backdrop-blur-sm text-slate-950 p-0.5 rounded-full shadow border border-white/20">
                   <span className="text-[8px]">🔒</span>
                 </div>
               )}
             </div>
+
             <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none mt-1">
               ✨ Assistant IA {tier === "gratuit" && "🔒"}
             </span>
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tight leading-snug">
+            <p className="text-[7px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
               Posez vos questions fiscales ou demandez de l'aide en direct !
             </p>
           </button>

@@ -131,3 +131,267 @@ body {
 .custom-scrollbar::-webkit-scrollbar-track  { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.12); border-radius: 99px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/**
+ * ─── STANDARD CARD GLASS — design_system_rules.md §4 ─────────────────────
+ * Centralizes the "Physical 3D Glass" anatomy:
+ *   1. Near-invisible glass base (NOT an opaque block)
+ *   2. Specular top-edge highlight (the physical glass line)
+ *   3. backdrop-blur to distort content behind
+ *   4. Soft drop shadow to anchor the card
+ *
+ * Usage: add class="card-glass" to any card/panel container.
+ */
+.card-glass {
+  background: rgba(255, 255, 255, 0.60);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  border-radius: 2rem;             /* rounded-[32px] */
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.60),
+    0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+html.dark .card-glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.40);
+}
+
+/**
+ * ─── AMBIENT GLOW RADIALS — design_system_rules.md §1 Dark Canvas ─────────
+ * Helper classes for the two mandatory ambient glow orbs behind the canvas.
+ * Place inside a `relative overflow-hidden` parent container.
+ */
+.glow-radial-tl {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 60%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.glow-radial-br {
+  position: absolute;
+  bottom: -10%;
+  right: -10%;
+  width: 55%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+/**
+ * ─── PAGE / CARD ENTRANCE — design_system_rules.md §6 Motion ──────────────
+ * opacity-0 → opacity-100 + translateY(12px → 0) over 700ms
+ * Apply to top-level view containers for a premium entrance feel.
+ */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.7s ease-out both;
+}
+
+/**
+ * ─── ROTATING BORDER LIGHT — Dark Mode Card Effect ───────────────────────────
+ *
+ * COMPORTAMIENTO:
+ *   Reposo  → haz discreto gira solo por el borde (1.5px de ancho).
+ *             El interior de la tarjeta muestra un reflejo MUY sutil
+ *             solo en la zona donde pasa el haz (opacidad ≤ 0.04).
+ *   Hover   → el borde se ilumina al máximo y el reflejo interior
+ *             sube para destacar la tarjeta seleccionada.
+ *
+ * TÉCNICA ::before (borde puro):
+ *   • padding: 1.5px + mask xor →  solo el anillo de 1.5px es visible.
+ *   • El interior del conic-gradient queda COMPLETAMENTE oculto
+ *     por la máscara (content-box XOR border-box = solo el padding).
+ *
+ * TÉCNICA ::after (reflejo interior):
+ *   • inset: 0, mismo ángulo de animación (sincronizado).
+ *   • Radial mask: centro transparent → only el 20% más exterior
+ *     del área de la tarjeta recibe algo de color.
+ *   • Opacidad máx 0.04 en reposo — prácticamente invisible.
+ *   • Opacidad máx 0.13 en hover.
+ *
+ * USO:
+ *   class="card-glow-spin"
+ *   style={{ "--spin-rgb": "R,G,B" } as React.CSSProperties}
+ */
+
+@property --cba {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes cardBorderSpin {
+  to { --cba: 360deg; }
+}
+
+/* ── Stacking context base ── */
+html.dark .card-glow-spin {
+  position: relative;
+  isolation: isolate;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LAYER 1 — Pure border arc (ONLY the ring, nothing inside)
+   Técnica: padding + mask xor → solo el padding-ring es visible.
+   El conic-gradient rellena todo el pseudo, pero la máscara
+   elimina el área interior (content-box), dejando solo los
+   1.5 px del anillo perimetral.
+══════════════════════════════════════════════════════════════ */
+html.dark .card-glow-spin::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;             /* ← ancho del haz de luz en el borde */
+  border-radius: 33px;
+  z-index: -1;
+
+  /* Arco estrecho (~34°): discreto, como una linterna pequeña */
+  background: conic-gradient(
+    from var(--cba),
+    transparent       0deg,
+    transparent     283deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 288deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.65) 300deg,  /* peak reposo */
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 312deg,
+    transparent     360deg
+  );
+
+  /* MÁSCARA XOR — solo el anillo de padding es visible */
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+
+  animation: cardBorderSpin 5s linear infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LAYER 2 — Reflejo interior MUY sutil (reposo)
+   El mismo ángulo de giro → sincronizado con el borde.
+   La máscara radial oculta el 70% central y solo deja pasar
+   un toque de color en la franja más exterior de la tarjeta.
+   Opacidad pico: 0.04 → casi imperceptible, solo un whisper.
+══════════════════════════════════════════════════════════════ */
+html.dark .card-glow-spin::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 32px;
+  z-index: -1;
+
+  background: conic-gradient(
+    from var(--cba),
+    transparent       0deg,
+    transparent     278deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 286deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.04) 300deg,  /* whisper */
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 314deg,
+    transparent     360deg
+  );
+
+  /* Solo el 20% exterior del área de la tarjeta recibe color.
+     Centro: completamente oscuro. */
+  -webkit-mask: radial-gradient(
+    ellipse at 50% 50%,
+    transparent   0%,
+    transparent  65%,
+    rgba(0,0,0,0.4) 80%,
+    black        100%
+  );
+  mask: radial-gradient(
+    ellipse at 50% 50%,
+    transparent   0%,
+    transparent  65%,
+    rgba(0,0,0,0.4) 80%,
+    black        100%
+  );
+
+  animation: cardBorderSpin 5s linear infinite;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HOVER / SELECTED — La tarjeta seleccionada se ilumina
+   El borde sube a opacidad 1.0 y se ensancha.
+   El reflejo interior sube a 0.13 con zona visible más amplia.
+══════════════════════════════════════════════════════════════ */
+html.dark .card-glow-spin:hover::before {
+  padding: 2px;               /* borde ligeramente más ancho al hover */
+  background: conic-gradient(
+    from var(--cba),
+    transparent       0deg,
+    transparent     270deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 278deg,
+    rgba(var(--spin-rgb, 16,185,129), 1.00) 300deg,  /* plena luminosidad */
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 322deg,
+    transparent     360deg
+  );
+}
+
+html.dark .card-glow-spin:hover::after {
+  background: conic-gradient(
+    from var(--cba),
+    transparent       0deg,
+    transparent     262deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 272deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.13) 298deg,  /* reflejo visible */
+    rgba(var(--spin-rgb, 16,185,129), 0.04) 318deg,
+    rgba(var(--spin-rgb, 16,185,129), 0.00) 330deg,
+    transparent     360deg
+  );
+  /* Al hover, la zona iluminada se extiende un poco más hacia el centro */
+  -webkit-mask: radial-gradient(
+    ellipse at 50% 50%,
+    transparent   0%,
+    transparent  48%,
+    rgba(0,0,0,0.25) 65%,
+    rgba(0,0,0,0.80) 82%,
+    black        100%
+  );
+  mask: radial-gradient(
+    ellipse at 50% 50%,
+    transparent   0%,
+    transparent  48%,
+    rgba(0,0,0,0.25) 65%,
+    rgba(0,0,0,0.80) 82%,
+    black        100%
+  );
+}
+
+/* El contenido siempre por encima de los pseudo-layers */
+html.dark .card-glow-spin > * {
+  position: relative;
+  z-index: 1;
+}
+
+
+
+
+
+
+
