@@ -10,6 +10,7 @@ import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
 import { SofiPresence } from "./SofiPresence";
 import { useFiscal, BuildingLedger, CoOwner } from "../lib/FiscalContext";
+import { auth } from "../lib/firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -662,9 +663,13 @@ export default function SofiOnboarding({
           deductiblePct: isFirstOccupied ? deductiblePct : 100,
           coOwners:      i === 0 ? coOwners : [],
           ledgerId:      `ledger_${Date.now()}_${i}`,
+          // Required by BuildingLedger interface (dataService.ts §1)
+          ownerId:       auth.currentUser?.uid ?? "",
+          createdAt:     new Date().toISOString(),
         };
         upsertBuilding(ledger);
       }
+
     }
 
     onComplete(selectedProfile, lang, onboardingAnswers);
