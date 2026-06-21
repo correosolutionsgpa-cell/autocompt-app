@@ -108,6 +108,7 @@ import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
 import { SofiAvatarSVG } from "./components/SofiAvatarSVG";
+import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
@@ -10223,26 +10224,26 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   </div>
                 </div>
 
-                {/* ── Floating Sofi avatar with hover float animation ──────── */}
-                <motion.div
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-                  className="self-end"
-                >
-                  {/* — Canonical Sofi avatar — full body with equalizer chest panel */}
-                  <div className="relative cursor-pointer" onClick={() => {
+                {/* ── Floating SOFI — half-body waving asset (sofimediocuerpoblanco.png) ── */}
+                <div
+                  className="self-end cursor-pointer"
+                  onClick={() => {
                     setShowSettingsTour(false);
                     localStorage.setItem("autocompt_settings_tour_shown", "true");
                     setVista("settings");
                     playNotificationSound();
-                  }}>
-                    {/* Outer glow ring */}
-                    <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-xl animate-pulse" />
-                    <SofiAvatarSVG size={80} showShadow="cyan" className="relative z-10" />
-                    {/* Cyan online indicator */}
-                    <span className="absolute bottom-1 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
+                  }}
+                >
+                  {/* Online indicator dot */}
+                  <div className="relative">
+                    <SofiPresence
+                      variant="halfbody"
+                      height={140}
+                      className="relative z-10"
+                    />
+                    <span className="absolute bottom-2 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)] z-20" />
                   </div>
-                </motion.div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

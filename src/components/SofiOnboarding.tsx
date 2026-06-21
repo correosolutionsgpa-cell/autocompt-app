@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
+import { SofiPresence } from "./SofiPresence";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ interface SofiOnboardingProps {
 // ─── Translations (shared UI strings) ────────────────────────────────────────
 const T = {
   FR: {
-    greeting: "Bonjour ! Je suis Sofi, votre assistante IA d'AutoCompt experte en fiscalité immobilière. Je vais vous guider dans la configuration de votre profil afin d'automatiser entièrement votre comptabilité !",
+    greeting: "Bonjour et bienvenue sur votre portail AutoCompt. Je suis S.O.F.I. L'ère de la gestion manuelle est révolue\u00a0: optimisons et automatisons dès aujourd'hui la comptabilité de vos biens immobiliers en toute simplicité.",
     subtitle: "Choisissez votre spécialité pour lancer l'automatisation intelligente.",
     profileHeading: "Quel est votre profil principal ?",
     next: "Continuer",
@@ -497,10 +498,15 @@ export default function SofiOnboarding({
         {soundOn ? <Volume2 size={16} className="text-emerald-500" /> : <VolumeX size={16} />}
       </button>
 
-      {/* Canonical Sofi avatar */}
-      <div className="relative flex items-center justify-center w-full min-h-[220px] animate-fade-in">
-        <div className="absolute bottom-[-15px] w-28 h-3.5 rounded-full bg-emerald-950/20 dark:bg-emerald-950/30 blur-md animate-pulse" />
-        <SofiAvatarSVG size={160} floatAnim showShadow="soft" className="z-10" />
+      {/* ── SOFI Avatar — state-driven variant switching ── */}
+      {/* Step 1 (welcome): soficompletablanco.png — waving, welcoming */}
+      {/* Subsequent steps / idle: sofi completa mano baja.png — executive resting */}
+      <div className="relative flex items-center justify-center w-full min-h-[280px] animate-fade-in">
+        <SofiPresence
+          variant={step === "profile_select" ? "welcome" : "idle"}
+          height={step === "profile_select" ? 300 : 260}
+          className="mx-auto"
+        />
       </div>
 
       {/* Dialogue bubble */}
