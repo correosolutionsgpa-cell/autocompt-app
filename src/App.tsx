@@ -15456,6 +15456,43 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       </div>
                     )}
 
+                    {tabReporte !== "ventes" && (
+                      <div className={`p-4 rounded-2xl border transition-all ${
+                        newTxData.noReceiptConfirmed
+                          ? (darkMode ? "border-amber-500/30 bg-amber-950/20" : "border-amber-300 bg-amber-50")
+                          : (darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-100 bg-slate-50/60")
+                      }`}>
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={newTxData.noReceiptConfirmed || false}
+                              onChange={(e) =>
+                                setNewTxData({ ...newTxData, noReceiptConfirmed: e.target.checked })
+                              }
+                              className={`appearance-none w-4 h-4 rounded border-2 outline-none cursor-pointer transition-all ${
+                                newTxData.noReceiptConfirmed
+                                  ? "bg-amber-500 border-amber-500"
+                                  : "bg-transparent border-zinc-600 hover:border-amber-400"
+                              }`}
+                            />
+                            {newTxData.noReceiptConfirmed && (
+                              <svg className="absolute w-2.5 h-2.5 text-white pointer-events-none" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[8.5px] font-bold leading-snug ${
+                            newTxData.noReceiptConfirmed
+                              ? (darkMode ? "text-amber-300" : "text-amber-700")
+                              : (darkMode ? "text-zinc-500" : "text-slate-400")
+                          }`}>
+                            Aucun reçu disponible — je confirme que cette dépense est réelle et j’assume l’entière responsabilité en cas de vérification fiscale (ARC / Revenu Québec).
+                          </span>
+                        </label>
+                      </div>
+                    )}
+
                     {activeCompanyId === "1" && (
                       <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900 rounded-2xl mt-4 border border-[#059669]/10">
                         <span className="text-[10px] font-black uppercase italic tracking-wide text-slate-700 dark:text-zinc-300">
@@ -15476,7 +15513,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     )}
 
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         const totalVal = parseFloat(newTxData.total);
                         if (!totalVal || !newTxData.tiers) {
                           alert("⚠️ Tous les champs sont obligatoires.");
@@ -15488,17 +15525,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         let tvq = 0;
 
                         if (newTxData.isTaxable && activeCompanyId !== "3") {
-                          const tpsRate =
-                            currentCompany?.userProfile?.tpsRate || 5;
-                          const tvqRate =
-                            currentCompany?.userProfile?.tvqRate || 9.975;
-                          subtotal =
-                            totalVal / (1 + tpsRate / 100 + tvqRate / 100);
+                          const tpsRate = currentCompany?.userProfile?.tpsRate || 5;
+                          const tvqRate = currentCompany?.userProfile?.tvqRate || 9.975;
+                          subtotal = totalVal / (1 + tpsRate / 100 + tvqRate / 100);
                           tps = subtotal * (tpsRate / 100);
                           tvq = subtotal * (tvqRate / 100);
                         }
 
                         if (tabReporte === "ventes") {
+                          // ── REVENUE PATH (unchanged) ─────────────────────────────────
                           const newTx = {
                             id: `TX-${Date.now().toString().substring(8)}`,
                             companyId: activeCompanyId,
@@ -15511,16 +15546,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             status: "Payée",
                             cat: newTxData.cat || "Ventes",
                             noteComptable: newTxData.noteComptable || "",
-                            // ── Unit FK (only set for "Loyers résidentiels") ────
-                            ...(newTxData.unitId ? {
-                              unitId:     newTxData.unitId,
-                              buildingId: newTxData.buildingId,
-                            } : {}),
+                            ...(newTxData.unitId ? { unitId: newTxData.unitId, buildingId: newTxData.buildingId } : {}),
                           };
                           setHistorique((prev) => [newTx, ...prev]);
                         } else {
-                          const newTx = {
-                            id: Date.now(),
+                          // ── EXPENSE PATH ─────────────────────────────────────────────
+                          const expenseId = Date.now();
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const newTx: any = {
+                            id: expenseId,
                             companyId: activeCompanyId,
                             fecha: newTxData.fecha,
                             fournisseur: newTxData.tiers,
@@ -15533,15 +15567,43 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             partnerTag: activeUser,
                             refacturableTriplex: false,
                             noteComptable: newTxData.noteComptable || "",
-                            ...(activeCompanyId === "1" ? { concilied: newTxData.concilied || false } : {})
+                            noReceiptConfirmed: !!(newTxData.noReceiptConfirmed),
+                            ...(newTxData.unitId ? { unitId: newTxData.unitId, buildingId: newTxData.buildingId } : {}),
+                            ...(activeCompanyId === "1" ? { concilied: newTxData.concilied || false } : {}),
                           };
+
+                          // Instant local UI update
                           setDepenses((prev) => [newTx, ...prev]);
+
+                          // Async Firestore write — fire-and-forget so UI isn't blocked
+                          const userId = auth.currentUser?.uid;
+                          if (userId) {
+                            dataService.saveExpense(userId, {
+                              id: String(expenseId),
+                              companyId: newTx.companyId,
+                              fecha: newTx.fecha,
+                              fournisseur: newTx.fournisseur,
+                              cat: newTx.cat,
+                              subtotal: newTx.subtotal,
+                              tps: newTx.tps,
+                              tvq: newTx.tvq,
+                              total: newTx.total,
+                              lien: null,
+                              partnerTag: newTx.partnerTag,
+                              noReceiptConfirmed: newTx.noReceiptConfirmed,
+                              ...(newTx.unitId ? { unitId: newTx.unitId, buildingId: newTx.buildingId } : {}),
+                            }).catch((e: unknown) =>
+                              console.error("[saveExpense] Firestore write failed — kept in local state:", e)
+                            );
+                          }
                         }
 
                         setShowAddTxModal(false);
+                        setNewTxData({ fecha: "", tiers: "", cat: "", total: "", isTaxable: true, unitId: "", buildingId: "", noReceiptConfirmed: false });
                         playNotificationSound();
                         alert("🟢 Transaction ajoutée avec succès !");
                       }}
+
                       className="w-full py-5 bg-[#059669] text-white rounded-3xl text-[10px] font-black uppercase tracking-widest italic hover:bg-emerald-700 transition-all shadow-xl active:scale-95 duration-200"
                     >
                       Enregistrer la Transaction

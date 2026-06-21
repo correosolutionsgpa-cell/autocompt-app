@@ -121,8 +121,12 @@ export interface ExpenseDoc {
   total: number;
   lien: string | null;
   partnerTag: string;
-  /** Receipt confirmed missing — set by MissingReceiptDisclaimerModal */
+  /** Receipt confirmed missing — set by disclaimer checkbox */
   noReceiptConfirmed?: boolean;
+  /** FK → UnitDoc.id (optional, for property-linked expenses) */
+  unitId?: string;
+  /** FK → BuildingLedger.id (optional, for property-linked expenses) */
+  buildingId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -577,6 +581,8 @@ export const dataService = {
     await deleteDoc(doc(db, 'units', docId));
     return true;
   },
+
+  // ── Expenses — Firestore `expenses` collection ──────────────────────────
 
   // ── Loyers — Firestore `loyers` collection ─────────────────────────────────
 
