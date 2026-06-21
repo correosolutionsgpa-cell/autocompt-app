@@ -2344,6 +2344,9 @@ const App = () => {
     cat: "",
     total: "",
     isTaxable: true,
+    // ── Unit FK fields (populated when cat === 'Loyers résidentiels') ────
+    unitId: "",
+    buildingId: "",
   });
   const [showFiscalChat, setShowFiscalChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<any[]>([
@@ -15356,6 +15359,41 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       )}
                     </div>
 
+                    {/* ── Unité locative — visible uniquement pour "Loyers résidentiels" ── */}
+                    {newTxData.cat === "Loyers résidentiels" && (
+                      <div className="space-y-1">
+                        <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Unité locative liée
+                        </label>
+                        {allUnits.length > 0 ? (
+                          <select
+                            value={newTxData.unitId || ""}
+                            onChange={(e) => {
+                              const unit = allUnits.find(u => u.id === e.target.value);
+                              setNewTxData({
+                                ...newTxData,
+                                unitId:     e.target.value,
+                                buildingId: unit?.buildingId ?? "",
+                                tiers:      newTxData.tiers || unit?.tenantName || "",
+                              });
+                            }}
+                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                          >
+                            <option value="">-- Sélectionner une unité --</option>
+                            {allUnits.map(u => (
+                              <option key={u.id} value={u.id}>
+                                {u.unitName}{u.tenantName ? ` \u2014 ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className={`text-[10px] italic px-1 pt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                            Aucune unité enregistrée — ajoutez-en dans « Gestion Plex ».
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <label
                         className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -15464,6 +15502,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             status: "Payée",
                             cat: newTxData.cat || "Ventes",
                             noteComptable: newTxData.noteComptable || "",
+                            // ── Unit FK (only set for "Loyers résidentiels") ────
+                            ...(newTxData.unitId ? {
+                              unitId:     newTxData.unitId,
+                              buildingId: newTxData.buildingId,
+                            } : {}),
                           };
                           setHistorique((prev) => [newTx, ...prev]);
                         } else {
