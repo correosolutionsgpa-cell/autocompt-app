@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GestionPlex.tsx
  * ─────────────────────────────────────────────────────────────────────────────
  * Rama: Rama_Gestionnaires
@@ -17,7 +17,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React from "react";
+import React, { useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { UnitDoc } from "../../lib/dataService";
 import {
@@ -29,7 +29,9 @@ import {
   ChevronRight,
   Menu,
   Save,
+  Sparkles,
   Trash2,
+  Upload,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,6 +61,12 @@ export interface GestionPlexProps {
 
   // Composant sidebar
   WorkspaceSidebar: React.ComponentType;
+
+  // ── S.O.F.I. Magic Tax Scanner ──────────────────────────────────────────────
+  /** Called with a File when the user selects a tax bill image */
+  onTaxScan: (file: File) => Promise<void>;
+  /** Set by App when S.O.F.I. has pre-filled the form; cleared on next edit */
+  sofiPrefillMessage: string;
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -78,7 +86,12 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   setVista,
   setIsSidebarOpen,
   WorkspaceSidebar,
-}) => (
+  onTaxScan,
+  sofiPrefillMessage,
+}) => {
+  const taxScanInputRef = useRef<HTMLInputElement>(null);
+
+  return (
   <div
     className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
   >
@@ -153,7 +166,50 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
           >
             Ajouter une Propriété
           </h3>
+
+          {/* ── S.O.F.I. Tax Scanner ──────────────────────────────────────── */}
+          <div className="ml-auto flex-shrink-0">
+            <input
+              ref={taxScanInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onTaxScan(file);
+                // Reset so the same file can be re-scanned
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => taxScanInputRef.current?.click()}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm ${
+                darkMode
+                  ? "bg-indigo-950/60 border-indigo-500/30 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-400/50"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+              }`}
+            >
+              <Sparkles size={12} className="text-indigo-400" />
+              <span>Scanner le compte de taxes</span>
+              <Upload size={11} className="opacity-60" />
+            </button>
+          </div>
         </div>
+
+        {/* ── S.O.F.I. Pre-fill confirmation toast ──────────────────────── */}
+        {sofiPrefillMessage && (
+          <div className={`mb-4 flex items-start gap-3 p-3.5 rounded-2xl border ${
+            darkMode
+              ? "bg-indigo-950/40 border-indigo-500/30 text-indigo-200"
+              : "bg-indigo-50 border-indigo-200 text-indigo-800"
+          }`}>
+            <Sparkles size={14} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[9px] font-black uppercase tracking-widest leading-relaxed">
+              {sofiPrefillMessage}
+            </p>
+          </div>
+        )}
 
         <div className="space-y-4">
           {/* Type de location */}
@@ -961,6 +1017,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
       </AnimatePresence>
     </main>
   </div>
-);
+  );
+};
 
 export default GestionPlex;

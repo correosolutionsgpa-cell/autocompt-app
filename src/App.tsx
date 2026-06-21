@@ -1273,6 +1273,8 @@ const App = () => {
   // --- PRICING TIERS & WORKSPACE LIMITS STATE ---
   const [selectedTier, setSelectedTier] = useState<string>("porte_ouverte");
   const [showLimitModal, setShowLimitModal] = useState(false);
+  /** Toast shown in GestionPlex after S.O.F.I. pre-fills the property form */
+  const [sofiPrefillMessage, setSofiPrefillMessage] = useState("");
   const [showTrialUsedFraudModal, setShowTrialUsedFraudModal] = useState(false);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
   const [expandedPricingCard, setExpandedPricingCard] = useState<
@@ -17627,6 +17629,100 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   // GestionPlex → extraído a src/ramas-flujo/Rama_Gestionnaires/GestionPlex.tsx (Fase 5)
   if (vista === "plex") {
+
+    // ── S.O.F.I. Magic Tax Scanner handler ────────────────────────────────
+    const handleTaxScan = async (file: File): Promise<void> => {
+      setSofiPrefillMessage("");
+
+      // Convert file to base64
+      const toBase64 = (f: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1] ?? "");
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(f);
+        });
+
+      let base64Data = "";
+      let mimeType = file.type || "image/jpeg";
+      try {
+        base64Data = await toBase64(file);
+      } catch (e) {
+        console.error("[S.O.F.I. Tax Scanner] base64 conversion failed:", e);
+        setSofiPrefillMessage("⚠️ Impossible de lire le fichier. Veuillez réessayer.");
+        return;
+      }
+
+      const clientKey =
+        GEMINI_API_KEY && GEMINI_API_KEY !== "COLLEZ_VOTRE_CLE_GEMINI_ICI"
+          ? GEMINI_API_KEY.trim()
+          : "";
+
+      const taxPrompt = `Analyse ce document qui est un compte de taxes municipales du Québec.
+Extrais les informations suivantes et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans explication).
+Le JSON doit utiliser exactement ces clés :
+- "adresse": L'adresse civique complète de la propriété taxée (ex: "123 Rue Principale, Montréal, QC").
+- "numeroLot": Le numéro de lot au cadastre du Québec (ex: "1 234 567" ou "1-234-567").
+- "valeurTerrain": La valeur d'évaluation du terrain en tant que nombre (valeur numérique seulement, sans symbole $).
+- "valeurBatiment": La valeur d'évaluation du bâtiment en tant que nombre (valeur numérique seulement, sans symbole $).
+Si une valeur est introuvable, retourne null pour ce champ.
+Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerrain": number|null, "valeurBatiment": number|null }`;
+
+      let taxData: any = null;
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${clientKey}`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType, data: base64Data } },
+                { text: taxPrompt },
+              ],
+            }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (raw) {
+            let cleaned = raw.trim();
+            if (cleaned.startsWith("```")) {
+              cleaned = cleaned.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+            }
+            taxData = JSON.parse(cleaned);
+            console.log("[S.O.F.I. Tax Scanner] Extracted:", taxData);
+          }
+        } else {
+          console.error("[S.O.F.I. Tax Scanner] Gemini API error:", resp.status);
+        }
+      } catch (e) {
+        console.error("[S.O.F.I. Tax Scanner] fetch failed:", e);
+      }
+
+      if (!taxData) {
+        setSofiPrefillMessage("⚠️ S.O.F.I. n’a pas pu lire le document. Veuillez remplir le formulaire manuellement.");
+        return;
+      }
+
+      // Pre-fill plexManagementForm with extracted data
+      setPlexManagementForm((prev: any) => ({
+        ...prev,
+        ...(taxData.adresse ? { adresse: taxData.adresse } : {}),
+        ...(taxData.numeroLot ? { numeroLot: taxData.numeroLot } : {}),
+        ...(taxData.valeurTerrain != null ? { valeurTerrain: taxData.valeurTerrain } : {}),
+        ...(taxData.valeurBatiment != null ? { valeurBatiment: taxData.valeurBatiment } : {}),
+      }));
+
+      setSofiPrefillMessage("⚡ S.O.F.I. a prérempli les données. Veuillez vérifier avant d’enregistrer.");
+    };
+    // ── End S.O.F.I. Tax Scanner ────────────────────────────────────────────────
+
     return (
       <GestionPlex
         darkMode={darkMode}
@@ -17643,6 +17739,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
+        onTaxScan={handleTaxScan}
+        sofiPrefillMessage={sofiPrefillMessage}
       />
     );
   }
