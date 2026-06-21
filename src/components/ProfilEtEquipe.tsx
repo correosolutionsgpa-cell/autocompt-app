@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import MissingReceiptDisclaimerModal from "./modals/MissingReceiptDisclaimerModal";
 
 // ─── Inline SVG brand icons ───────────────────────────────────────────────────
 
@@ -125,6 +126,9 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
   const [inviteErr, setInviteErr]   = useState("");
   const [revoking, setRevoking]     = useState<string | null>(null);
 
+  // ── ⚠️ TEST HARNESS — remove after QA ────────────────────────────────────
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,6 +195,34 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
   return (
     <div className={`min-h-screen ${D ? "bg-[#070d1e]" : "bg-slate-50"} p-4 sm:p-8`}>
       <div className="max-w-[680px] mx-auto space-y-6">
+
+        {/* ── ⚠️ TEST BANNER — remove after QA ─────────────────────────────── */}
+        <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-500/[0.07]">
+          <div className="flex-1">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-400/80 mb-0.5">Zone de test QA</p>
+            <p className={`text-[11px] font-semibold ${D ? "text-zinc-400" : "text-slate-600"}`}>
+              Cliquez pour tester la modale de déclaration de dépense sans reçu.
+            </p>
+          </div>
+          <button
+            id="test-missing-receipt-modal"
+            onClick={() => setIsTestModalOpen(true)}
+            className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-amber-500 hover:bg-amber-400 text-white shadow-[0_4px_16px_rgba(245,158,11,0.35)] hover:shadow-[0_4px_24px_rgba(245,158,11,0.50)] transition-all active:scale-95"
+          >
+            🧪 TEST MODAL : Dépense sans reçu
+          </button>
+        </div>
+
+        {/* Modal mount */}
+        <MissingReceiptDisclaimerModal
+          isOpen={isTestModalOpen}
+          onCancel={() => setIsTestModalOpen(false)}
+          onConfirm={() => {
+            alert("✅ onConfirm déclenché — la dépense serait enregistrée ici.");
+            setIsTestModalOpen(false);
+          }}
+          darkMode={D}
+        />
 
         {/* ── Page Header ─────────────────────────────────────────────────── */}
         <div className="mb-6">
