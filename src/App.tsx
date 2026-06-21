@@ -1215,12 +1215,14 @@ const App = () => {
     "gratuit" | "basique" | "pro_ind" | "pro_multi" | "integral" | null
   >(null);
 
+  // ── BETA LAUNCH: Door limits bypassed (999 = uncapped for all tiers) ────────
+  // TODO: restore real tier limits before public pricing launch.
   const TIER_LIMITS: Record<string, number> = {
-    gratuit: 1,
-    basique: 1,
-    pro_ind: 1,
-    pro_multi: 3,
-    integral: 1,
+    gratuit:    999,
+    basique:    999,
+    pro_ind:    999,
+    pro_multi:  999,
+    integral:   999,
     superadmin: Infinity,
   };
 
@@ -1567,7 +1569,8 @@ const App = () => {
     cadastre: "",
     renouvellement: ""
   });
-  const [nombrePortes, setNombrePortes] = useState(1);
+  // Beta: start at 999 to prevent paywall from blocking QA flows
+  const [nombrePortes, setNombrePortes] = useState(999);
   const [showUpsellModal, setShowUpsellModal] = useState(false);
   const [showPorteLimitMessage, setShowPorteLimitMessage] = useState(false);
   const [showMultiPrompt, setShowMultiPrompt] = useState(false);

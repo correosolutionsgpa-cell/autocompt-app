@@ -613,10 +613,14 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     ? parseInt(plexManagementForm.nombreChambres) || 1
                     : 1;
 
-                if (totalUsedDoors + doorsToAdd > nombrePortes) {
+                // \u2500\u2500 BETA LAUNCH: paywall gate bypassed \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+                // TODO: remove BETA_BYPASS and restore the guard before pricing launch.
+                const BETA_BYPASS = true;
+                if (!BETA_BYPASS && totalUsedDoors + doorsToAdd > nombrePortes) {
                   setShowLimitModal(true);
                   return;
                 }
+
 
                 let allRoomsValid = true;
                 if (
