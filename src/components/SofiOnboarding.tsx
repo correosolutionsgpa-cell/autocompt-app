@@ -9,6 +9,7 @@ import {
 import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
 import { SofiPresence } from "./SofiPresence";
+import { useFiscal, BuildingLedger, CoOwner } from "../lib/FiscalContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,166 +71,319 @@ interface OnboardingQuestion {
 // ─── Question Config ──────────────────────────────────────────────────────────
 
 const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
+
   // ── A. Prospecteur ────────────────────────────────────────────────────────
   prospecteur: [
-    {
-      id: "volume_transactions",
-      type: "single_choice",
-      titleFR: "Combien de transactions visez-vous par année ?",
-      titleEN: "How many transactions are you targeting per year?",
-      titleES: "¿Cuántas transacciones planeas por año?",
-      subtitleFR: "Cela nous aide à calibrer vos outils de suivi de dossiers.",
-      subtitleEN: "This helps us calibrate your file tracking tools.",
-      subtitleES: "Esto nos ayuda a calibrar tus herramientas de seguimiento.",
-      options: [
-        { value: "1_10",    labelFR: "1 à 10",     labelEN: "1 to 10",     labelES: "1 a 10"    },
-        { value: "11_50",   labelFR: "11 à 50",    labelEN: "11 to 50",    labelES: "11 a 50"   },
-        { value: "plus_50", labelFR: "Plus de 50", labelEN: "More than 50", labelES: "Más de 50" },
-      ],
-    },
     {
       id: "tps_tvq_registered",
       type: "single_choice",
       titleFR: "Êtes-vous inscrit aux fichiers de la TPS/TVQ ?",
-      titleEN: "Are you registered for GST/QST?",
-      titleES: "¿Estás inscrito en los archivos de GST/QST?",
-      subtitleFR: "Le module TPS/TVQ inclut un tracker d'alerte à 27 000 $ et un verrou de conformité à 30 000 $.",
-      subtitleEN: "The GST/QST module includes a $27,000 alert tracker and a $30,000 compliance lock.",
-      subtitleES: "El módulo GST/QST incluye un rastreador de alerta a $27,000 y un bloqueo de cumplimiento a $30,000.",
+      titleEN: "Are you registered for GST/QST taxes?",
+      titleES: "¿Estás inscrito en los archivos fiscales de GST/QST?",
+      subtitleFR: "Obligatoire si vos revenus mondiaux taxables dépassent 30 000\u00a0$ par trimestre civil ou sur 4 trimestres.",
+      subtitleEN: "Mandatory if your taxable global income exceeds $30,000 per civil quarter or over 4 quarters.",
+      subtitleES: "Obligatorio si tus ingresos imponibles superan los 30,000\u00a0$ por trimestre civil o en 4 trimestres.",
       options: [
-        { value: "oui",      labelFR: "Oui",                    labelEN: "Yes",                       labelES: "Sí"                       },
-        { value: "non",      labelFR: "Non",                    labelEN: "No",                        labelES: "No"                       },
-        { value: "en_cours", labelFR: "En cours d'inscription", labelEN: "Registration in progress",  labelES: "En proceso de inscripción" },
+        { value: "oui",      labelFR: "Oui, compte actif",      labelEN: "Yes, active account",      labelES: "S\u00ed, cuenta activa" },
+        { value: "non",      labelFR: "Non",                    labelEN: "No",                        labelES: "No"                 },
+        { value: "en_cours", labelFR: "En cours d'inscription", labelEN: "Registration in progress", labelES: "En proceso"          },
       ],
     },
     {
       id: "bureau_domicile",
       type: "single_choice",
-      titleFR: "Avez-vous un bureau à domicile ?",
-      titleEN: "Do you have a home office?",
-      titleES: "¿Tienes una oficina en casa?",
-      subtitleFR: "Le module Bureau à domicile calcule automatiquement votre déduction fiscale.",
-      subtitleEN: "The Home Office module automatically calculates your tax deduction.",
-      subtitleES: "El módulo Oficina en Casa calcula automáticamente tu deducción fiscal.",
+      titleFR: "Avez-vous un bureau \u00e0 domicile ?",
+      titleEN: "Do you have a home office space?",
+      titleES: "¿Operas desde una oficina en casa?",
+      subtitleFR: "Le module Bureau \u00e0 domicile calcule automatiquement votre d\u00e9duction fiscale selon l'espace utilis\u00e9.",
+      subtitleEN: "The Home Office module automatically calculates your tax deduction based on space used.",
+      subtitleES: "El m\u00f3dulo Oficina en Casa calcula autom\u00e1ticamente tu deducci\u00f3n fiscal seg\u00fan el espacio utilizado.",
       options: [
-        { value: "oui_exclusif", labelFR: "Oui, un espace exclusif", labelEN: "Yes, an exclusive space", labelES: "Sí, un espacio exclusivo",  icon: <Home size={14}/> },
-        { value: "oui_partage",  labelFR: "Oui, un espace partagé",  labelEN: "Yes, a shared space",     labelES: "Sí, un espacio compartido", icon: <Home size={14}/> },
-        { value: "non",          labelFR: "Non",                      labelEN: "No",                      labelES: "No"                         },
+        { value: "oui_exclusif", labelFR: "Oui, espace exclusif", labelEN: "Yes, exclusive space", labelES: "S\u00ed, espacio exclusivo"   },
+        { value: "oui_partage",  labelFR: "Oui, espace partag\u00e9",  labelEN: "Yes, shared space",    labelES: "S\u00ed, espacio compartido" },
+        { value: "non",          labelFR: "Non",                  labelEN: "No",                   labelES: "No"                       },
       ],
     },
   ],
 
-  // ── B. Investisseur — Phase 5 (Quebec-FR approved 2026-06-18) ─────────────
+  // ── B. Investisseur — T776/TP-128, Relev\u00e9 31 ───────────────────────────────
   // Architectural rule: 1 building = 1 separate Tenue de Livres ledger.
   investisseur: [
     {
-      id: "nb_coproprietaires",
-      type: "co_owner_split",
-      titleFR: "Combien de copropriétaires détiennent l'immeuble ?",
-      titleEN: "How many co-owners hold the property?",
-      titleES: "¿Cuántos copropietarios tienen el inmueble?",
-      subtitleFR: "Si > 1, entrez le nom et le pourcentage de chaque copropriétaire. Le total doit être exactement 100 %.",
-      subtitleEN: "If > 1, enter each co-owner's name and percentage. Total must equal exactly 100%.",
-      subtitleES: "Si > 1, ingresa nombre y porcentaje de cada copropietario. El total debe ser exactamente 100%.",
+      id: "nb_immeubles",
+      type: "number_input",
+      titleFR: "Combien d'immeubles distincts g\u00e9rez-vous dans votre portefeuille ?",
+      titleEN: "How many distinct properties do you manage in your portfolio?",
+      titleES: "¿Cu\u00e1ntas propiedades distintas administras en tu cartera?",
+      subtitleFR: "Chaque actif n\u00e9cessite un grand livre comptable ind\u00e9pendant pour les formulaires T776 et TP-128.",
+      subtitleEN: "Each property generates a distinct bookkeeping ledger for your T776 and TP-128 forms.",
+      subtitleES: "Cada inmueble genera un libro contable distinto para tus formularios T776 y TP-128.",
+      min: 1, max: 99,
+      placeholder: { FR: "Ex\u00a0: 3", EN: "E.g. 3", ES: "Ej.: 3" },
+    },
+    {
+      id: "mode_gestion_investisseur",
+      type: "single_choice",
+      titleFR: "Comment est g\u00e9r\u00e9e l'op\u00e9ration de vos immeubles ?",
+      titleEN: "How is the operation of your properties managed?",
+      titleES: "¿C\u00f3mo se gestiona la operaci\u00f3n de tus inmuebles?",
+      subtitleFR: "D\u00e9termine si vous devez g\u00e9rer les baux op\u00e9rationnels ou uniquement votre fiscalit\u00e9 de financement.",
+      subtitleEN: "Determines if you need to manage operational leases or only your financial taxation.",
+      subtitleES: "Determina si necesitas gestionar contratos operativos o solo tu fiscalidad financiera.",
+      options: [
+        { value: "autogestion",      labelFR: "Autogestion compl\u00e8te (Baux & Locataires)",   labelEN: "Full self-management", labelES: "Autogesti\u00f3n completa" },
+        { value: "gestion_deleguee", labelFR: "Gestion d\u00e9l\u00e9gu\u00e9e (Via gestionnaire externe)", labelEN: "Delegated management", labelES: "Gesti\u00f3n delegada"    },
+      ],
+    },
+    {
+      id: "emission_releve_31",
+      type: "single_choice",
+      titleFR: "Devez-vous produire des Relevés 31 pour vos locataires ?",
+      titleEN: "Do you need to issue Relevé 31 forms for your tenants?",
+      titleES: "¿Debes emitir formularios Relevé 31 para tus inquilinos?",
+      subtitleFR: "Obligatoire pour tout logement (ou chambre) loué au 31 décembre au Québec.",
+      subtitleEN: "Mandatory for any housing (or room) rented on Dec 31 in Quebec.",
+      subtitleES: "Obligatorio para cualquier vivienda (o habitación) alquilada al 31 de diciembre en Quebec.",
+      showWhen: { questionId: "mode_gestion_investisseur", value: "autogestion" },
+      options: [
+        { value: "oui", labelFR: "Oui, logements ou chambres louées au 31 déc.", labelEN: "Yes, units or rooms rented on Dec 31",      labelES: "Sí, unidades o habitaciones alquiladas al 31 dic." },
+        { value: "non", labelFR: "Non, baux commerciaux ou 100% vacant",          labelEN: "No, commercial or 100% vacant",             labelES: "No, comercial o 100% vacante"                   },
+      ],
+    },
+    {
+      id: "besoins_autonomes_investisseur",
+      type: "multi_choice",
+      titleFR: "Que souhaitez-vous suivre de mani\u00e8re autonome dans AutoCompt ?",
+      titleEN: "What do you want to track autonomously in AutoCompt?",
+      titleES: "¿Qu\u00e9 deseas rastrear de manera aut\u00f3noma en AutoCompt?",
+      subtitleFR: "Permet de centraliser vos frais de financement priv\u00e9s sans interf\u00e9rer avec votre gestionnaire.",
+      subtitleEN: "Allows centralizing your private financing fees without interfering with your manager.",
+      subtitleES: "Permite centralizar tus gastos de financiamiento privados sin interferir con tu gestor.",
+      showWhen: { questionId: "mode_gestion_investisseur", value: "gestion_deleguee" },
+      options: [
+        { value: "interets_financement",  labelFR: "Int\u00e9r\u00eats hypoth\u00e9caires & Financement",            labelEN: "Mortgage interest & Financing",     labelES: "Intereses hipotecarios y Financiamiento" },
+        { value: "depenses_personnelles", labelFR: "D\u00e9penses mixtes (Automobile, Bureau \u00e0 domicile)", labelEN: "Mixed expenses (Car, Home office)", labelES: "Gastos mixtos (Auto, Oficina en casa)"        },
+        { value: "tableau_rendement",     labelFR: "Rapports fiscaux consolid\u00e9s (T776/TP-128)",        labelEN: "Consolidated tax reports",           labelES: "Reportes fiscales consolidados (T776/TP-128)"          },
+      ],
     },
     {
       id: "proprietaire_occupant",
       type: "single_choice",
-      titleFR: "Êtes-vous propriétaire occupant ?",
-      titleEN: "Are you an owner-occupant?",
-      titleES: "¿Eres propietario ocupante?",
-      subtitleFR: "Si oui, la proportion occupée personnellement sera déduite du calcul de déduction (ex : triplex 33 % occupé → 66 % déductible).",
-      subtitleEN: "If yes, the personally occupied portion is excluded from deductions (e.g. 33% occupied triplex → 66% deductible).",
-      subtitleES: "Si es así, la porción personalmente ocupada se excluye de las deducciones.",
+      titleFR: "\u00cates-vous propri\u00e9taire occupant au sein de l'un des b\u00e2timents ?",
+      titleEN: "Are you an owner-occupant within one of the buildings?",
+      titleES: "¿Resides como propietario ocupante en alguno de los edificios?",
+      subtitleFR: "Exigence fiscale\u00a0: la proportion occup\u00e9e personnellement doit \u00eatre retranch\u00e9e des d\u00e9penses d\u00e9ductibles.",
+      subtitleEN: "Tax requirement: the proportion occupied for personal purposes must be subtracted from deductions.",
+      subtitleES: "Requisito fiscal: la proporci\u00f3n ocupada para fines personales se restar\u00e1 de las deducciones.",
       options: [
-        { value: "oui", labelFR: "Oui", labelEN: "Yes", labelES: "Sí" },
-        { value: "non", labelFR: "Non", labelEN: "No",  labelES: "No" },
+        { value: "oui", labelFR: "Oui, j'y habite",    labelEN: "Yes, I live there", labelES: "S\u00ed, vivo ah\u00ed"       },
+        { value: "non", labelFR: "Non, 100\u00a0% locatif", labelEN: "No, 100% rented",   labelES: "No, 100% alquilado" },
       ],
     },
     {
-      id: "proportion_occupee",
-      type: "number_input",
-      titleFR: "Quelle proportion de l'immeuble occupez-vous personnellement ?",
-      titleEN: "What proportion of the building do you personally occupy?",
-      titleES: "¿Qué proporción del edificio ocupas personalmente?",
-      subtitleFR: "Ex : 33 % pour un triplex dont vous habitez une unité sur trois.",
-      subtitleEN: "E.g. 33% for a triplex where you occupy one unit of three.",
-      subtitleES: "Ej.: 33% para un triplex donde ocupas una de tres unidades.",
-      tooltipFR: "Ce pourcentage configure la portion déductible dans votre Tenue de Livres. Exemple : 33 % occupé = 67 % des dépenses d'immeuble sont déductibles.",
+      id: "methode_calcul_occupation",
+      type: "single_choice",
+      titleFR: "Comment souhaitez-vous calculer votre portion personnelle ?",
+      titleEN: "How would you like to calculate your personal portion?",
+      titleES: "¿Cómo deseas calcular tu porción personal?",
+      subtitleFR: "L'ARC recommande le calcul par superficie (pieds carrés) pour plus de précision.",
+      subtitleEN: "The CRA recommends calculating by square footage for better accuracy.",
+      subtitleES: "La ARC recomienda el cálculo por pies cuadrados para mayor precisión.",
       showWhen: { questionId: "proprietaire_occupant", value: "oui" },
-      min: 1, max: 99,
-      placeholder: { FR: "Ex : 33", EN: "E.g. 33", ES: "Ej.: 33" },
+      options: [
+        { value: "superficie",  labelFR: "Par superficie (Pieds carrés / pi²)", labelEN: "By square footage (sq ft)",      labelES: "Por superficie (Pies cuadrados)"   },
+        { value: "pourcentage", labelFR: "Je connais mon pourcentage exact",       labelEN: "I know my exact percentage",    labelES: "Conozco mi porcentaje exacto"      },
+      ],
     },
     {
-      id: "nb_immeubles",
+      id: "superficie_totale",
       type: "number_input",
-      titleFR: "Combien d'immeubles différents gérez-vous actuellement ?",
-      titleEN: "How many different properties do you currently manage?",
-      titleES: "¿Cuántos inmuebles distintos administras actualmente?",
-      subtitleFR: "Chaque immeuble génère une Tenue de Livres distincte avec ses propres règles de déduction.",
-      subtitleEN: "Each property generates a distinct bookkeeping ledger with its own deduction rules.",
-      subtitleES: "Cada inmueble genera un libro contable distinto con sus propias reglas de deducción.",
+      titleFR: "Quelle est la superficie TOTALE du bâtiment (en pi²) ?",
+      titleEN: "What is the TOTAL square footage of the building?",
+      titleES: "¿Cuál es la superficie TOTAL del edificio (en pies cuadrados)?",
+      subtitleFR: "Incluez toutes les unités — la vôtre ET celles des locataires.",
+      subtitleEN: "Include all units — yours AND the tenants'.",
+      subtitleES: "Incluye todas las unidades — la tuya Y las de los inquilinos.",
+      showWhen: { questionId: "methode_calcul_occupation", value: "superficie" },
+      min: 100, max: 99999,
+      placeholder: { FR: "Ex : 2500", EN: "E.g. 2500", ES: "Ej.: 2500" },
+    },
+    {
+      id: "superficie_personnelle",
+      type: "number_input",
+      titleFR: "Quelle est la superficie de l'unité que VOUS occupez (en pi²) ?",
+      titleEN: "What is the square footage of the unit YOU occupy?",
+      titleES: "¿Cuál es la superficie de la unidad que TÚ ocupas?",
+      subtitleFR: "AutoCompt calculera automatiquement votre % déductible : superficie personnelle ÷ superficie totale.",
+      subtitleEN: "AutoCompt will automatically calculate your deductible %: personal area ÷ total area.",
+      subtitleES: "AutoCompt calculará automáticamente tu % deducible: superficie personal ÷ superficie total.",
+      showWhen: { questionId: "methode_calcul_occupation", value: "superficie" },
+      min: 100, max: 99999,
+      placeholder: { FR: "Ex : 1000", EN: "E.g. 1000", ES: "Ej.: 1000" },
+    },
+    {
+      id: "proportion_occupee_exacte",
+      type: "number_input",
+      titleFR: "Quel est le pourcentage exact que vous occupez ?",
+      titleEN: "What exact percentage do you occupy?",
+      titleES: "¿Qué porcentaje exacto ocupas?",
+      subtitleFR: "Ex : 33 % pour un triplex dont vous habitez une unité sur trois.",
+      subtitleEN: "E.g. 33% for a triplex where you occupy one unit of three.",
+      subtitleES: "Ej.: 33% para un triplex donde ocupas una de tres unidades.",
+      tooltipFR: "33 % occupé = 67 % des dépenses d'immeuble sont déductibles dans vos formulaires T776 / TP-128.",
+      showWhen: { questionId: "methode_calcul_occupation", value: "pourcentage" },
       min: 1, max: 99,
-      placeholder: { FR: "Ex : 3", EN: "E.g. 3", ES: "Ej.: 3" },
+      placeholder: { FR: "Ex : 33", EN: "E.g. 33", ES: "Ej.: 33" },
+    },
+    {
+      id: "nb_coproprietaires",
+      type: "co_owner_split",
+      titleFR: "Y a-t-il d'autres copropriétaires ou partenaires pour ces actifs ?",
+      titleEN: "Are there other co-owners or partners for these assets?",
+      titleES: "¿Hay otros copropietarios o socios para estos activos?",
+      subtitleFR: "Structure la répartition automatique des gains/pertes nettes pour les déclarations d'impôts.",
+      subtitleEN: "Structures automated split of net income/losses for tax declarations.",
+      subtitleES: "Estructura el reparto automático de ingresos/pérdidas para las declaraciones.",
     },
   ],
 
-  // ── C. Flippeur ───────────────────────────────────────────────────────────
+  // ── C. Flippeur — Anti-Flip ARC, RBQ ──────────────────────────────────────
   flippeur: [
     {
-      id: "nb_projets_annee",
+      id: "structure_juridique",
       type: "single_choice",
-      titleFR: "Combien de projets de flip réalisez-vous par année ?",
-      titleEN: "How many flip projects do you complete per year?",
-      titleES: "¿Cuántos proyectos de flip realizas por año?",
+      titleFR: "Quelle est la structure juridique de vos projets de flip ?",
+      titleEN: "What is the legal structure of your flip projects?",
+      titleES: "¿Cuál es la estructura jurídica de tus proyectos de flip?",
+      subtitleFR: "Crucial pour valider si le gain est traité comme revenu d'entreprise (Inc.) ou personnel.",
+      subtitleEN: "Crucial to determine if gains are business income (Inc.) or personal.",
+      subtitleES: "Crucial para determinar si la ganancia es ingreso comercial (Inc.) o personal.",
       options: [
-        { value: "1_2",    labelFR: "1 à 2",    labelEN: "1 to 2",     labelES: "1 a 2"    },
-        { value: "3_5",    labelFR: "3 à 5",    labelEN: "3 to 5",     labelES: "3 a 5"    },
-        { value: "6_plus", labelFR: "6 et plus", labelEN: "6 and more", labelES: "6 o más"  },
+        { value: "inc",        labelFR: "Société par actions (Inc. / Incorporé)",   labelEN: "Incorporated Corporation (Inc.)",     labelES: "Sociedad por acciones (Inc.)"          },
+        { value: "individuel", labelFR: "Entreprise individuelle / Nom personnel", labelEN: "Sole Proprietorship / Personal Name", labelES: "Empresa individual / Nombre personal" },
+      ],
+    },
+    {
+      id: "nb_coproprietaires",
+      type: "co_owner_split",
+      titleFR: "Y a-t-il d'autres partenaires ou investisseurs dans ce projet ?",
+      titleEN: "Are there other partners or investors in this project?",
+      titleES: "¿Hay otros socios o inversores en este proyecto?",
+      subtitleFR: "Structure la répartition des revenus d'entreprise (Formulaire T2125 ou T2) entre les associés.",
+      subtitleEN: "Structures the split of business income (Form T2125 or T2) among partners.",
+      subtitleES: "Estructura el reparto de ingresos comerciales (Formulario T2125 o T2) entre los socios.",
+    },
+    {
+      id: "duree_retention_prevue",
+      type: "single_choice",
+      titleFR: "Quelle est la dur\u00e9e de d\u00e9tention pr\u00e9vue avant la revente ?",
+      titleEN: "What is the expected holding period before resale?",
+      titleES: "¿Cu\u00e1l es el per\u00edodo de retenci\u00f3n previsto antes de la reventa?",
+      subtitleFR: "Moins de 12 mois d\u00e9clenche automatiquement la r\u00e8gle Anti-Flip de l'ARC (100\u00a0% imp\u00f4t commercial).",
+      subtitleEN: "Less than 12 months automatically triggers the CRA Anti-Flip rule (100% business tax).",
+      subtitleES: "Menos de 12 meses activa autom\u00e1ticamente la regla Anti-Flip de la ARC (100% impuesto comercial).",
+      options: [
+        { value: "moins_12", labelFR: "Moins de 12 mois (Flip standard)",         labelEN: "Less than 12 months", labelES: "Menos de 12 meses" },
+        { value: "plus_12",  labelFR: "12 mois et plus (R\u00e9novation \u00e0 long terme)", labelEN: "12 months and more",  labelES: "12 meses o m\u00e1s"    },
+      ],
+    },
+    {
+      id: "statut_licence_rbq",
+      type: "single_choice",
+      titleFR: "Quel est votre statut r\u00e9glementaire vis-\u00e0-vis de la RBQ ?",
+      titleEN: "What is your regulatory status with the RBQ?",
+      titleES: "¿Cu\u00e1l es tu estado regulatorio ante la RBQ?",
+      subtitleFR: "Sans licence, la loi exige de confier 100\u00a0% des travaux \u00e0 des entrepreneurs licenci\u00e9s.",
+      subtitleEN: "Without a license, law requires delegating 100% of work to licensed contractors.",
+      subtitleES: "Sin licencia, la ley exige subcontratar el 100% de las obras a contratistas autorizados.",
+      options: [
+        { value: "licencie",       labelFR: "Titulaire d'une licence RBQ",            labelEN: "Licensed RBQ entrepreneur",      labelES: "Titular de una licencia RBQ"            },
+        { value: "sous_traitance", labelFR: "Aucune licence (Sous-traitance compl\u00e8te)", labelEN: "No license (100% subcontracted)", labelES: "Sin licencia (Subcontrataci\u00f3n completa)" },
       ],
     },
     {
       id: "financement",
       type: "single_choice",
-      titleFR: "Quel est votre mode de financement principal ?",
-      titleEN: "What is your main financing method?",
-      titleES: "¿Cuál es tu principal método de financiamiento?",
+      titleFR: "Quel est votre v\u00e9hicule de financement principal ?",
+      titleEN: "What is your primary financing vehicle?",
+      titleES: "¿Cu\u00e1l es tu veh\u00edculo de financiamiento principal?",
       options: [
-        { value: "prive",     labelFR: "Prêt privé / Capital propre", labelEN: "Private loan / Own capital",       labelES: "Préstamo privado / Capital propio" },
-        { value: "hypotheque",labelFR: "Hypothèque bancaire",          labelEN: "Bank mortgage",                    labelES: "Hipoteca bancaria"                  },
-        { value: "mixte",     labelFR: "Mixte",                        labelEN: "Mixed",                            labelES: "Mixto"                               },
+        { value: "prive",          labelFR: "Pr\u00eat priv\u00e9 / Capital propre",    labelEN: "Private loan / Equity", labelES: "Pr\u00e9stamo privado / Capital propio" },
+        { value: "institutionnel", labelFR: "Hypoth\u00e8que bancaire / Marge HELOC", labelEN: "Bank mortgage / HELOC",   labelES: "Hipoteca bancaria / HELOC"          },
       ],
     },
   ],
 
-  // ── D. Gestionnaire ───────────────────────────────────────────────────────
+  // ── D. Gestionnaire — T3 / Bare Trust ────────────────────────────────────────
   gestionnaire: [
+    {
+      id: "compte_fiducie",
+      type: "single_choice",
+      titleFR: "Utilisez-vous un compte en fiducie pour la gestion des loyers ?",
+      titleEN: "Do you use a trust account for rent management?",
+      titleES: "¿Utilizas una cuenta en fideicomiso para la gesti\u00f3n de rentas?",
+      subtitleFR: "Active les modules de rapprochement et d'audits requis pour les rapports de Simple Fiducie (T3 / Annexe 15) \u00e0 l'ARC.",
+      subtitleEN: "Activates specific flows required for Bare Trust reporting (T3 / Schedule 15) to the CRA.",
+      subtitleES: "Activa los m\u00f3dulos requeridos para los reportes de Fideicomiso Simple (T3 / Anexo 15) ante la ARC.",
+      options: [
+        { value: "oui", labelFR: "Oui, compte fiducie actif",       labelEN: "Yes, active trust account",      labelES: "S\u00ed, cuenta de fideicomiso activa" },
+        { value: "non", labelFR: "Non, perception directe standard", labelEN: "No, standard direct collection", labelES: "No, recaudaci\u00f3n directa est\u00e1ndar"  },
+      ],
+    },
     {
       id: "nb_clients",
       type: "single_choice",
-      titleFR: "Combien de clients/propriétaires gérez-vous ?",
-      titleEN: "How many clients/owners do you manage?",
-      titleES: "¿Cuántos clientes/propietarios administras?",
+      titleFR: "Quelle est la taille de votre portefeuille de clients investisseurs ?",
+      titleEN: "What is the size of your investor client portfolio?",
+      titleES: "¿Cu\u00e1l es el tama\u00f1o de tu cartera de clientes inversores?",
       options: [
-        { value: "1_5",    labelFR: "1 à 5",    labelEN: "1 to 5",     labelES: "1 a 5"    },
-        { value: "6_20",   labelFR: "6 à 20",   labelEN: "6 to 20",    labelES: "6 a 20"   },
-        { value: "21_plus",labelFR: "21 et plus",labelEN: "21 and more", labelES: "21 y más" },
+        { value: "small",  labelFR: "1 \u00e0 5 clients",      labelEN: "1 to 5 clients",  labelES: "1 a 5 clientes"     },
+        { value: "medium", labelFR: "6 \u00e0 20 clients",     labelEN: "6 to 20 clients", labelES: "6 a 20 clientes"    },
+        { value: "large",  labelFR: "Plus de 20 clients", labelEN: "20+ clients",      labelES: "M\u00e1s de 20 clientes" },
       ],
     },
   ],
 
-  // ── E. Syndicat ───────────────────────────────────────────────────────────
+  // ── E. Syndicat — Loi 141, Loi 16 ──────────────────────────────────────────
   syndicat: [
+    {
+      id: "loi_141_statut",
+      type: "single_choice",
+      titleFR: "Avez-vous constitu\u00e9 le Fonds d'auto-assurance prescrit par la Loi 141 ?",
+      titleEN: "Have you constituted the Self-insurance fund prescribed by Loi 141?",
+      titleES: "¿Han constituido el Fondo de autoaseguro prescrito por la Loi 141?",
+      subtitleFR: "Obligatoire pour couvrir l'int\u00e9gralit\u00e9 de la franchise la plus \u00e9lev\u00e9e de votre police d'assurance de copropri\u00e9t\u00e9.",
+      subtitleEN: "Mandatory to fully cover the highest deductible of your syndicate insurance policy.",
+      subtitleES: "Obligatorio para cubrir \u00edntegramente la franquicia m\u00e1s alta de su p\u00f3liza de seguro.",
+      options: [
+        { value: "constitue", labelFR: "Oui, capitalis\u00e9 selon la loi",  labelEN: "Yes, fully funded",  labelES: "S\u00ed, capitalizado por ley" },
+        { value: "non",       labelFR: "Non, en cours ou non planifi\u00e9", labelEN: "No, not funded yet", labelES: "No, a\u00fan no planificado"   },
+      ],
+    },
+    {
+      id: "fonds_prevoyance_status",
+      type: "single_choice",
+      titleFR: "O\u00f9 en est votre \u00e9tude de fonds de pr\u00e9voyance (Loi 16) ?",
+      titleEN: "What is the status of your contingency fund study (Bill 16)?",
+      titleES: "¿Cu\u00e1l es el estado de su estudio de fondo de previsi\u00f3n (Ley 16)?",
+      subtitleFR: "Obligatoire pour \u00e9tablir l\u00e9galement votre carnet d'entretien et indexer les charges de copropri\u00e9t\u00e9.",
+      subtitleEN: "Mandatory to log structural maintenance and legally index condo fees.",
+      subtitleES: "Obligatorio para planificar el libro de mantenimiento e indexar las cuotas de condominio legalmente.",
+      options: [
+        { value: "a_jour",    labelFR: "Compl\u00e9t\u00e9e et \u00e0 jour (Moins de 5 ans)", labelEN: "Completed & up to date", labelES: "Completado y al d\u00eda"          },
+        { value: "non_faite", labelFR: "Non planifi\u00e9e / \u00c0 d\u00e9marrer",           labelEN: "Not started yet",        labelES: "No planificado / Por iniciar" },
+      ],
+    },
     {
       id: "nb_unites",
       type: "single_choice",
-      titleFR: "Combien d'unités compte votre copropriété ?",
-      titleEN: "How many units does your condominium have?",
-      titleES: "¿Cuántas unidades tiene su condominio?",
+      titleFR: "Combien d'unit\u00e9s privatives compte l'ensemble de votre copropri\u00e9t\u00e9 ?",
+      titleEN: "How many private units does your entire condominium contain?",
+      titleES: "¿Cu\u00e1ntas unidades privadas abarca su copropiedad?",
       options: [
-        { value: "2_10",    labelFR: "2 à 10",    labelEN: "2 to 10",    labelES: "2 a 10"    },
-        { value: "11_50",   labelFR: "11 à 50",   labelEN: "11 to 50",   labelES: "11 a 50"   },
-        { value: "51_plus", labelFR: "51 et plus", labelEN: "51 and more", labelES: "51 o más"  },
+        { value: "small",  labelFR: "2 \u00e0 10 unit\u00e9s",    labelEN: "2 to 10 units",  labelES: "2 a 10 unidades"    },
+        { value: "medium", labelFR: "11 \u00e0 50 unit\u00e9s",   labelEN: "11 to 50 units", labelES: "11 a 50 unidades"   },
+        { value: "large",  labelFR: "Plus de 50 unit\u00e9s", labelEN: "50+ units",      labelES: "M\u00e1s de 50 unidades" },
       ],
     },
   ],
@@ -457,9 +611,62 @@ export default function SofiOnboarding({
     playStepChime();
   };
 
+  // ── Data Bridge — seeds BuildingLedger[] into FiscalContext on finish ────
+  const { upsertBuilding } = useFiscal();
+
   const handleFinish = () => {
     if (!selectedProfile) return;
     if (playNotificationSound) playNotificationSound();
+
+    if (selectedProfile === "investisseur") {
+      const nbRaw      = String(onboardingAnswers["nb_immeubles"] ?? "1");
+      const n          = Math.max(1, Math.min(99, parseInt(nbRaw, 10) || 1));
+      const isOccupant = onboardingAnswers["proprietaire_occupant"] === "oui";
+
+      // Resolve occupancy % from whichever calculation method the user chose
+      let occupancyPct = 0;
+      if (isOccupant) {
+        const method = onboardingAnswers["methode_calcul_occupation"];
+        if (method === "superficie") {
+          const total    = parseFloat(String(onboardingAnswers["superficie_totale"]    ?? "0"));
+          const personal = parseFloat(String(onboardingAnswers["superficie_personnelle"] ?? "0"));
+          occupancyPct   = (total > 0 && personal > 0)
+            ? Math.min(99, Math.max(1, Math.round((personal / total) * 10000) / 100))
+            : 0;
+        } else if (method === "pourcentage") {
+          const raw    = parseFloat(String(onboardingAnswers["proportion_occupee_exacte"] ?? "0"));
+          occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
+        } else {
+          // Legacy fallback (proportion_occupee from old flow)
+          const raw    = parseFloat(String(onboardingAnswers["proportion_occupee"] ?? "0"));
+          occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
+        }
+      }
+      const deductiblePct = Math.round((100 - occupancyPct) * 100) / 100;
+
+      const rawCoOwners = onboardingAnswers["nb_coproprietaires"];
+      const coOwners: CoOwner[] = Array.isArray(rawCoOwners)
+        ? (rawCoOwners as any[]).map((o: any) => ({
+            name:       String(o.name || ""),
+            percentage: parseFloat(String(o.percentage || "0")) || 0,
+          }))
+        : [];
+
+      for (let i = 0; i < n; i++) {
+        const isFirstOccupied = i === 0 && isOccupant;
+        const ledger: BuildingLedger = {
+          id:            `onboarding_building_${Date.now()}_${i}`,
+          address:       "",
+          type:          isFirstOccupied ? "owner_occupied" : "full_rental",
+          occupancyPct:  isFirstOccupied ? occupancyPct  : 0,
+          deductiblePct: isFirstOccupied ? deductiblePct : 100,
+          coOwners:      i === 0 ? coOwners : [],
+          ledgerId:      `ledger_${Date.now()}_${i}`,
+        };
+        upsertBuilding(ledger);
+      }
+    }
+
     onComplete(selectedProfile, lang, onboardingAnswers);
   };
 
