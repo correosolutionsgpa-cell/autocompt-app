@@ -15360,8 +15360,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       )}
                     </div>
 
-                    {/* ── Unité locative — visible uniquement pour "Loyers résidentiels" ── */}
-                    {newTxData.cat === "Loyers résidentiels" && (
+                    {/* ── Unité locative — visible pour toute catégorie loyer / location / bail ── */}
+                    {(() => {
+                      const isRentCategory =
+                        newTxData.cat?.toLowerCase().includes('loyer') ||
+                        newTxData.cat?.toLowerCase().includes('location') ||
+                        newTxData.cat?.toLowerCase().includes('bail') ||
+                        newTxData.cat?.toLowerCase().includes('rent');
+                      return isRentCategory && (
                       <div className="space-y-1">
                         <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                           Unité locative liée
@@ -15393,7 +15399,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           </p>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     <div className="space-y-1">
                       <label
