@@ -112,14 +112,14 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
     {
       id: "nb_immeubles",
       type: "number_input",
-      titleFR: "Combien d'immeubles distincts g\u00e9rez-vous dans votre portefeuille ?",
-      titleEN: "How many distinct properties do you manage in your portfolio?",
-      titleES: "¿Cu\u00e1ntas propiedades distintas administras en tu cartera?",
-      subtitleFR: "Chaque actif n\u00e9cessite un grand livre comptable ind\u00e9pendant pour les formulaires T776 et TP-128.",
-      subtitleEN: "Each property generates a distinct bookkeeping ledger for your T776 and TP-128 forms.",
-      subtitleES: "Cada inmueble genera un libro contable distinto para tus formularios T776 y TP-128.",
+      titleFR: "Combien de BÂTIMENTS distincts gérez-vous dans votre portefeuille ?",
+      titleEN: "How many distinct BUILDINGS do you manage in your portfolio?",
+      titleES: "¿Cuántos EDIFICIOS distintos administras en tu cartera?",
+      subtitleFR: "Entrez le nombre de bâtiments physiques. Peu importe le nombre de portes, chaque bâtiment a son propre grand livre. Les portes (unités) seront configurées à la prochaine étape.",
+      subtitleEN: "Enter the number of physical buildings. Regardless of doors, each building has its own ledger. Units/doors will be configured in the next step.",
+      subtitleES: "Ingresa el número de edificios físicos. Sin importar las puertas, cada edificio tiene su propio libro. Las unidades/puertas se configurarán en el siguiente paso.",
       min: 1, max: 99,
-      placeholder: { FR: "Ex\u00a0: 3", EN: "E.g. 3", ES: "Ej.: 3" },
+      placeholder: { FR: "Ex : 1", EN: "E.g. 1", ES: "Ej.: 1" },
     },
     {
       id: "mode_gestion_investisseur",
@@ -146,8 +146,8 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       subtitleES: "Obligatorio para cualquier vivienda (o habitación) alquilada al 31 de diciembre en Quebec.",
       showWhen: { questionId: "mode_gestion_investisseur", value: "autogestion" },
       options: [
-        { value: "oui", labelFR: "Oui, logements ou chambres louées au 31 déc.", labelEN: "Yes, units or rooms rented on Dec 31",      labelES: "Sí, unidades o habitaciones alquiladas al 31 dic." },
-        { value: "non", labelFR: "Non, baux commerciaux ou 100% vacant",          labelEN: "No, commercial or 100% vacant",             labelES: "No, comercial o 100% vacante"                   },
+        { value: "oui", labelFR: "Oui, logements ou chambres louées au 31 déc.",                    labelEN: "Yes, units or rooms rented on Dec 31",                 labelES: "Sí, unidades o habitaciones alquiladas al 31 dic." },
+        { value: "non", labelFR: "Non, commercial, Airbnb (court terme) ou 100 % vacant", labelEN: "No, commercial, Airbnb (short-term) or 100% vacant", labelES: "No, comercial, Airbnb (corto plazo) o 100% vacante"   },
       ],
     },
     {
