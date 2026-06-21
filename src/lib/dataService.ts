@@ -500,11 +500,12 @@ export const dataService = {
       ...propertyData,
       id: docId,
       ownerId: userId,
-      createdAt: propertyData.createdAt ?? new Date().toISOString(),
+      createdAt: new Date().toISOString(),   // service generates timestamp (not in Omit)
     };
     await setDoc(doc(db, 'properties', docId), data);
     return { ...data, id: originalId };
   },
+
 
   async deleteProperty(propertyId: string): Promise<boolean> {
     const userId = auth.currentUser?.uid;

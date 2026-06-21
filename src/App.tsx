@@ -852,14 +852,14 @@ const App = () => {
     for (const item of addedOrModified) {
       try {
         // 1. Save the address-level property shell
+        // NOTE: saveProperty accepts Omit<PropertyDoc, 'ownerId' | 'createdAt'>
+        // Those fields are injected by the service itself — do NOT pass them here.
         const saved = await dataService.saveProperty(userId, {
           id: item.id,
           buildingId: item.buildingId,
           typeLocation: item.typeLocation || "Logement entier",
           adresse: item.adresse,
-          status: item.status || "Actif",
-          ownerId: userId,
-          createdAt: item.createdAt || new Date().toISOString(),
+          status: (item.status as 'Actif' | 'Vacant' | 'Archivé') || "Actif",
         });
         const resolvedPropId = saved.id || item.id;
 
@@ -2541,7 +2541,8 @@ const App = () => {
   const [subVistaDocu, setSubVistaDocu] = useState("liste");
   const [docActiveVue, setDocActiveVue] = useState<'contrats' | 'resolutions'>('contrats');
   const [docuSignInProgress, setDocuSignInProgress] = useState<any>(null);
-  const [docuLegalList, setDocuLegalList] = useState([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [docuLegalList, setDocuLegalList] = useState<any[]>([
     {
       id: "DOC-001",
       name: "Bail Résidentiel - Apt. 3, 1234 Rue Saint-Hubert",
@@ -17547,7 +17548,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         setListaEmpresas={setListaEmpresas}
         setDepenses={setDepenses}
         setDossierFiles={setDossierFiles}
-        setDispatcherSuccessToast={setDispatcherSuccessToast}
+        setDispatcherSuccessToast={setDispatcherSuccessToast as any}
         playNotificationSound={playNotificationSound}
         WorkspaceSidebar={WorkspaceSidebar}
       />
