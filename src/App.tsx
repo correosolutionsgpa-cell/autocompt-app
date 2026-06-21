@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -5861,6 +5861,49 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
         const finalCatMapped = matchAppCategory(extractedCat);
 
+        // ── S.O.F.I. Address → Building Matcher ───────────────────────────────
+        // Normalises an address string to lowercase alphanum tokens for fuzzy compare
+        const normalizeAddr = (s: string) =>
+          s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        let sofiMatchedBuildingId = '';
+        let sofiMatchedBuildingAddress = '';
+
+        if (extractedAdresse && extractedAdresse !== 'Général') {
+          const addrNorm = normalizeAddr(extractedAdresse);
+          const addrTokens = addrNorm.split(' ').filter(t => t.length > 2);
+
+          // 1. Try matching against PropertyDoc.adresse (plexManagementProperties)
+          for (const prop of (plexManagementProperties as any[])) {
+            const propNorm = normalizeAddr(prop.adresse || '');
+            // Score: count how many tokens from extracted address appear in the property address
+            const hits = addrTokens.filter(t => propNorm.includes(t)).length;
+            if (hits >= 2 || (addrTokens.length === 1 && propNorm.includes(addrTokens[0]))) {
+              sofiMatchedBuildingId = prop.buildingId || prop.id || '';
+              sofiMatchedBuildingAddress = prop.adresse || '';
+              break;
+            }
+          }
+
+          // 2. Fallback: try matching unique buildingIds from allUnits by partial street number
+          if (!sofiMatchedBuildingId) {
+            const streetNum = addrNorm.match(/\d+/);
+            if (streetNum) {
+              const matchedUnit = allUnits.find(u =>
+                normalizeAddr(u.buildingId).includes(streetNum[0])
+              );
+              if (matchedUnit) sofiMatchedBuildingId = matchedUnit.buildingId;
+            }
+          }
+        }
+
+        if (sofiMatchedBuildingId) {
+          console.log(
+            `[S.O.F.I. Address Match] Extracted address "${extractedAdresse}" → buildingId "${sofiMatchedBuildingId}" ("${sofiMatchedBuildingAddress}")`,
+          );
+        }
+        // ── End S.O.F.I. Matcher ──────────────────────────────────────────────
+
         // Deductible calculations for Bureau à domicile rule
         const isHomeOffice = finalCatMapped === "Bureau à domicile";
         const homeOfficeRate = porcBureau > 0 ? porcBureau : 0.10;
@@ -5921,6 +5964,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
             driveLink ||
             `https://drive.google.com/error_fallback_vault/ocr/${Date.now()}_scanned.jpg`,
           status: "En attente", // Crucial: change from loading to ready so the user can see and work with it
+          // S.O.F.I. address-matched building suggestion
+          ...(sofiMatchedBuildingId ? {
+            buildingId: sofiMatchedBuildingId,
+            aiSuggestedBuilding: true,
+          } : {}),
         };
 
         if (isHomeOffice) {
@@ -14717,8 +14765,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     <span className="ml-2 px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-500 text-[7px] font-black tracking-widest italic border border-rose-500/20">Sans justificatif</span>
                                   )}
                                 </td>
-                                <td className={`py-4 px-6 font-bold uppercase truncate max-w-[150px] ${darkMode ? "text-[#059669]" : "text-teal-600"}`}>
-                                  {depense.cat}
+                                <td className={`py-4 px-6 font-bold uppercase max-w-[180px] ${darkMode ? "text-[#059669]" : "text-teal-600"}`}>
+                                  <div className="flex flex-col gap-1">
+                                    <span className="truncate">{depense.cat}</span>
+                                    {depense.buildingId && (!depense.cat || depense.cat === 'À classer' || depense.cat === 'A classer') && (
+                                      <span
+                                        title={`S.O.F.I. a associé cette dépense à un immeuble (buildingId: ${depense.buildingId}). Veuillez confirmer ou corriger la catégorie.`}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[7px] font-black tracking-widest italic border border-amber-500/20 w-fit whitespace-nowrap"
+                                      >
+                                        ⚡ Suggéré IA
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-4 px-6 font-mono font-bold text-right text-slate-500 dark:text-zinc-500">
                                   {(depense.subtotal || 0).toFixed(2)}$
