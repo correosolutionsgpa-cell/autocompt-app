@@ -19,6 +19,7 @@
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import type { UnitDoc } from "../../lib/dataService";
 import {
   ArrowLeft,
   Bell,
@@ -37,9 +38,11 @@ export interface GestionPlexProps {
   // Mode
   darkMode: boolean;
 
-  // États globaux partagés (non encapsulables — aussi utilisés dans "immeuble" et PlexModuleGrid)
+  // États globaux partagés (non encapsulables)
   plexManagementForm: any;
   plexManagementProperties: any[];
+  /** All units for the current user, fetched from Firestore `units` collection */
+  allUnits: UnitDoc[];
   expandedDoors: Record<string | number, boolean>;
   showLimitModal: boolean;
   nombrePortes: number;
@@ -64,6 +67,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   darkMode,
   plexManagementForm,
   plexManagementProperties,
+  allUnits,
   expandedDoors,
   showLimitModal,
   nombrePortes,
@@ -340,7 +344,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             </>
           )}
 
-          {/* Chambres individuelles fields */}
+          {/* ── Chambres individuelles (Colocation) ── using units[] (UnitDoc) ── */}
           {(plexManagementForm.typeLocation ===
             "Chambres individuelles (Colocation)" ||
             plexManagementForm.typeLocation === "Habitation/Chambre") && (
@@ -368,7 +372,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                 <label
                   className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}
                 >
-                  Nombre de chambres / habitations
+                  Nombre d'unités / habitations
                 </label>
                 <input
                   type="number"
@@ -377,28 +381,28 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   value={plexManagementForm.nombreChambres || 1}
                   onChange={(e) => {
                     const nb = parseInt(e.target.value) || 1;
-                    let newChambres = [...(plexManagementForm.chambres || [])];
-                    if (nb > newChambres.length) {
-                      newChambres = [
-                        ...newChambres,
-                        ...Array(nb - newChambres.length)
+                    let newUnits: any[] = [...(plexManagementForm.units || [])];
+                    if (nb > newUnits.length) {
+                      newUnits = [
+                        ...newUnits,
+                        ...Array(nb - newUnits.length)
                           .fill(null)
                           .map((_, i) => ({
-                            id: Date.now() + i,
-                            identifiantChambre: `Habitation ${newChambres.length + i + 1}`,
-                            montant: "",
-                            locataire: "",
-                            status: "Actif",
-                            vacanceMois: 0,
+                            id: `unit_${Date.now() + i}`,
+                            buildingId: "",
+                            unitName: `Habitation ${newUnits.length + i + 1}`,
+                            tenantName: "",
+                            monthlyRent: 0,
+                            isActive: true,
                           })),
                       ];
-                    } else if (nb < newChambres.length) {
-                      newChambres = newChambres.slice(0, nb);
+                    } else if (nb < newUnits.length) {
+                      newUnits = newUnits.slice(0, nb);
                     }
                     setPlexManagementForm({
                       ...plexManagementForm,
                       nombreChambres: nb,
-                      chambres: newChambres,
+                      units: newUnits,
                     });
                   }}
                   className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
@@ -412,61 +416,54 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   <h4
                     className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-500"}`}
                   >
-                    Configuration des Habitats (
-                    {plexManagementForm.nombreChambres || 1})
+                    Configuration des Unités ({plexManagementForm.nombreChambres || 1})
                   </h4>
                   <p
                     className={`text-[10px] font-black uppercase ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}
                   >
-                    Total par mois pour{" "}
-                    {plexManagementForm.adresse || "cette adresse"}:{" "}
-                    {(plexManagementForm.chambres || []).reduce(
-                      (s: number, r: any) =>
-                        s +
-                        (r.status === "Actif"
-                          ? parseFloat(r.montant || 0)
-                          : 0),
+                    Total:{" "}
+                    {(plexManagementForm.units || []).reduce(
+                      (s: number, u: any) =>
+                        s + (u.isActive ? (parseFloat(u.monthlyRent) || 0) : 0),
                       0,
                     )}{" "}
-                    $
+                    $ / mois
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {(plexManagementForm.chambres || []).map(
-                    (chambre: any, idx: number) => (
+                  {(plexManagementForm.units || []).map(
+                    (unit: any) => (
                       <div
-                        key={chambre.id}
+                        key={unit.id}
                         className={`p-4 rounded-2xl space-y-3 border ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
                       >
                         <div className="flex justify-between items-center">
                           <p
                             className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}
                           >
-                            {chambre.identifiantChambre}
+                            {unit.unitName}
                           </p>
                           <div
                             className={`flex p-0.5 rounded-full gap-0.5 border text-[9px] ${darkMode ? "border-zinc-700 bg-zinc-800" : "border-slate-200 bg-slate-100"}`}
                           >
-                            {["Actif", "Vacant"].map((s) => (
+                            {[true, false].map((active) => (
                               <button
-                                key={s}
+                                key={String(active)}
                                 type="button"
                                 onClick={() => {
                                   const updated = (
-                                    plexManagementForm.chambres || []
-                                  ).map((c: any) =>
-                                    c.id === chambre.id
-                                      ? { ...c, status: s }
-                                      : c,
+                                    plexManagementForm.units || []
+                                  ).map((u: any) =>
+                                    u.id === unit.id ? { ...u, isActive: active } : u
                                   );
                                   setPlexManagementForm({
                                     ...plexManagementForm,
-                                    chambres: updated,
+                                    units: updated,
                                   });
                                 }}
-                                className={`px-2 py-1 rounded-full font-black uppercase transition-all ${chambre.status === s ? (s === "Vacant" ? "bg-slate-400 text-white" : "bg-emerald-500 text-white") : "text-slate-400 dark:text-zinc-500"}`}
+                                className={`px-2 py-1 rounded-full font-black uppercase transition-all ${unit.isActive === active ? (!active ? "bg-slate-400 text-white" : "bg-emerald-500 text-white") : "text-slate-400 dark:text-zinc-500"}`}
                               >
-                                {s}
+                                {active ? "Actif" : "Vacant"}
                               </button>
                             ))}
                           </div>
@@ -479,23 +476,21 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           </label>
                           <input
                             type="text"
-                            value={chambre.locataire}
+                            value={unit.tenantName}
                             onChange={(e) => {
                               const updated = (
-                                plexManagementForm.chambres || []
-                              ).map((c: any) =>
-                                c.id === chambre.id
-                                  ? { ...c, locataire: e.target.value }
-                                  : c,
+                                plexManagementForm.units || []
+                              ).map((u: any) =>
+                                u.id === unit.id ? { ...u, tenantName: e.target.value } : u
                               );
                               setPlexManagementForm({
                                 ...plexManagementForm,
-                                chambres: updated,
+                                units: updated,
                               });
                             }}
                             placeholder="Nom du locataire"
                             className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
-                            disabled={chambre.status === "Vacant"}
+                            disabled={!unit.isActive}
                           />
                         </div>
                         <div>
@@ -507,23 +502,23 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           <div className="relative">
                             <input
                               type="number"
-                              value={chambre.montant}
+                              value={unit.monthlyRent || ""}
                               onChange={(e) => {
                                 const updated = (
-                                  plexManagementForm.chambres || []
-                                ).map((c: any) =>
-                                  c.id === chambre.id
-                                    ? { ...c, montant: e.target.value }
-                                    : c,
+                                  plexManagementForm.units || []
+                                ).map((u: any) =>
+                                  u.id === unit.id
+                                    ? { ...u, monthlyRent: parseFloat(e.target.value) || 0 }
+                                    : u
                                 );
                                 setPlexManagementForm({
                                   ...plexManagementForm,
-                                  chambres: updated,
+                                  units: updated,
                                 });
                               }}
                               placeholder="0"
                               className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
-                              disabled={chambre.status === "Vacant"}
+                              disabled={!unit.isActive}
                             />
                             <span
                               className={`absolute right-3 top-1/2 -translate-y-1/2 font-black text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -613,7 +608,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     ? parseInt(plexManagementForm.nombreChambres) || 1
                     : 1;
 
-                // \u2500\u2500 BETA LAUNCH: paywall gate bypassed \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+                // ── BETA LAUNCH: paywall gate bypassed ────────────────────────────────
                 // TODO: remove BETA_BYPASS and restore the guard before pricing launch.
                 const BETA_BYPASS = true;
                 if (!BETA_BYPASS && totalUsedDoors + doorsToAdd > nombrePortes) {
@@ -642,10 +637,29 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   return;
                 }
 
-                const newId = Date.now();
+                const newId = `prop_${Date.now()}`;
+                // Build units from the form (single unit for Logement entier, or multiple for Colocation)
+                const formUnits: any[] =
+                  plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" ||
+                  plexManagementForm.typeLocation === "Habitation/Chambre"
+                    ? (plexManagementForm.units || [])
+                    : [{
+                        id: `unit_${Date.now()}`,
+                        buildingId: newId,
+                        unitName: plexManagementForm.nombrePieces || "Unité principale",
+                        tenantName: plexManagementForm.locataire || "",
+                        monthlyRent: parseFloat(plexManagementForm.montant) || 0,
+                        isActive: plexManagementForm.status !== "Vacant",
+                      }];
+
                 setPlexManagementProperties([
                   ...plexManagementProperties,
-                  { ...plexManagementForm, id: newId },
+                  {
+                    ...plexManagementForm,
+                    id: newId,
+                    isContainer: formUnits.length > 1,
+                    units: formUnits,
+                  },
                 ]);
                 setPlexManagementForm({
                   typeLocation: "Logement entier",
@@ -658,14 +672,14 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   nombreChambres: 1,
                   estMeuble: false,
                   isContainer: false,
-                  chambres: [
+                  units: [
                     {
-                      id: Date.now() + 1,
-                      identifiantChambre: "Habitation 1",
-                      montant: "",
-                      locataire: "",
-                      status: "Actif",
-                      vacanceMois: 0,
+                      id: `unit_${Date.now() + 1}`,
+                      buildingId: "",
+                      unitName: "Habitation 1",
+                      tenantName: "",
+                      monthlyRent: 0,
+                      isActive: true,
                     },
                   ],
                 });
@@ -713,33 +727,20 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
 
           <div className="grid grid-cols-1 gap-4">
             {plexManagementProperties.map((p) => {
-              const isContainer = p.isContainer;
+              // ── Fetch units for this building from the allUnits prop ──────────────────
+              const buildingUnits = allUnits.filter(u => u.buildingId === p.id);
+              const isContainer = buildingUnits.length > 1 || p.isContainer;
               const doorIsExpanded = expandedDoors[p.id];
 
-              let containerTotal = 0;
-              let containerTotalVacantMonths = 0;
-              let containerTotalOpenMonths = 0;
-              if (isContainer && p.chambres) {
-                containerTotal = p.chambres.reduce(
-                  (sum: number, c: any) =>
-                    sum +
-                    (c.status === "Actif" ? parseFloat(c.montant || 0) : 0),
-                  0,
-                );
-                containerTotalVacantMonths = p.chambres.reduce(
-                  (sum: number, c: any) => sum + (c.vacanceMois || 0),
-                  0,
-                );
-                containerTotalOpenMonths = p.chambres.length * 12;
-              }
-              const totalVacantMonths = isContainer
-                ? containerTotalVacantMonths
-                : p.vacanceMois || 0;
-              const totalOpenMonths = isContainer
-                ? containerTotalOpenMonths
-                : 12;
-              const occupRate =
-                100 - (totalVacantMonths / totalOpenMonths) * 100;
+              // Compute totals from units instead of legacy chambres[]
+              const containerTotal = buildingUnits.reduce(
+                (sum, u) => sum + (u.isActive ? u.monthlyRent : 0), 0
+              );
+              const activeUnits   = buildingUnits.filter(u => u.isActive).length;
+              const vacantUnits   = buildingUnits.filter(u => !u.isActive).length;
+              const occupRate     = buildingUnits.length > 0
+                ? (activeUnits / buildingUnits.length) * 100
+                : (p.status === "Actif" ? 100 : 0);
 
               return (
                 <div
@@ -797,20 +798,20 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           </button>
                         )}
                       </div>
-                      <div
-                        className={`px-3 py-1.5 rounded-xl border ${occupRate < 90 ? (darkMode ? "bg-slate-900/50 border-slate-700" : "bg-slate-100 border-slate-300") : (darkMode ? "bg-emerald-950/20 border-emerald-900/50" : "bg-emerald-50 border-emerald-200")}`}
-                      >
-                        <p
-                          className={`text-[9px] font-black uppercase tracking-widest ${occupRate < 90 ? "text-emerald-600" : "text-emerald-600"}`}
-                        >
-                          Ocup. {occupRate.toFixed(1)}%
-                        </p>
-                        <p
-                          className={`text-[7px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-500"}`}
-                        >
-                          {totalVacantMonths} / {totalOpenMonths} mois vacants
-                        </p>
-                      </div>
+                  <div
+                    className={`px-3 py-1.5 rounded-xl border ${occupRate < 90 ? (darkMode ? "bg-slate-900/50 border-slate-700" : "bg-slate-100 border-slate-300") : (darkMode ? "bg-emerald-950/20 border-emerald-900/50" : "bg-emerald-50 border-emerald-200")}`}
+                  >
+                    <p
+                      className="text-[9px] font-black uppercase tracking-widest text-emerald-600"
+                    >
+                      Ocup. {occupRate.toFixed(1)}%
+                    </p>
+                    <p
+                      className={`text-[7px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-500"}`}
+                    >
+                      {activeUnits} actives / {buildingUnits.length || 1} unités
+                    </p>
+                  </div>
                     </div>
                   </div>
 
@@ -857,40 +858,32 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     </div>
                   )}
 
-                  {isContainer && doorIsExpanded && p.chambres && (
+                  {isContainer && doorIsExpanded && buildingUnits.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {p.chambres.map((c: any) => (
+                      {buildingUnits.map((u) => (
                         <div
-                          key={c.id}
+                          key={u.id}
                           className={`p-4 rounded-2xl flex flex-col justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"} border shadow-sm`}
                         >
                           <div className="flex justify-between items-start">
                             <div>
-                              <p
-                                className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}
-                              >
-                                {c.identifiantChambre}
+                              <p className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                                {u.unitName}
                               </p>
-                              <p
-                                className={`text-[9px] font-bold mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-500"}`}
-                              >
-                                Locataire: {c.locataire}
+                              <p className={`text-[9px] font-bold mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
+                                Locataire: {u.tenantName || "—"}
                               </p>
                             </div>
-                            <span
-                              className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md text-white ${c.status === "Vacant" ? "bg-slate-400" : "bg-emerald-500"}`}
-                            >
-                              {c.status}
+                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md text-white ${!u.isActive ? "bg-slate-400" : "bg-emerald-500"}`}>
+                              {u.isActive ? "Actif" : "Vacant"}
                             </span>
                           </div>
                           <div className="flex justify-between items-end mt-3">
                             <p className="text-[8px] font-mono font-black uppercase px-2 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                              PROP-{c.id}
+                              {u.id.slice(0, 12)}…
                             </p>
-                            <p
-                              className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                            >
-                              {c.montant} $
+                            <p className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                              {u.monthlyRent} $
                             </p>
                           </div>
                         </div>

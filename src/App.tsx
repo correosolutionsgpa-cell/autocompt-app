@@ -130,7 +130,7 @@ import ReceiptPreviewModal from "./components/modals/ReceiptPreviewModal";
 import CorporatifModal from "./components/modals/CorporatifModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService } from "./lib/dataService";
+import { dataService, type UnitDoc } from "./lib/dataService";
 import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -760,6 +760,7 @@ const App = () => {
   const [loyerEditingId, setLoyerEditingId] = useState<number | null>(null);
   const [plexExpenseEditingId, setPlexExpenseEditingId] = useState<number | null>(null);
 
+  const [allUnits, setAllUnits] = useState<UnitDoc[]>([]);
   const [plexLoyers, _setPlexLoyers] = useState<any[]>([]);
   const reconcileLoyers = async (prev: any[], next: any[]) => {
     const userId = auth.currentUser?.uid;
@@ -795,7 +796,18 @@ const App = () => {
   };
   const [plexDepenses, setPlexDepenses] = useState<any[]>([]);
 
-  const [loyerForm, setLoyerForm] = useState({ adresse: "", unite: "", montant: "", date: "", locataire: "", typeBail: "Logement complet" });
+  const [loyerForm, setLoyerForm] = useState({
+    // ── FK fields (new architecture) ─────────────────────────────────────────
+    unitId: "",        // UnitDoc.id
+    buildingId: "",    // UnitDoc.buildingId / PropertyDoc.id
+    // ── Display / legacy fallback (used when no unit selected yet) ──────────
+    adresse: "",
+    unite: "",
+    locataire: "",
+    montant: "",
+    date: "",
+    typeBail: "Logement complet"
+  });
   const [plexExpenseForm, setPlexExpenseForm] = useState({ adresse: "", categorie: "Taxes", montant: "", date: "", professionnel: "" });
   const [autonomeExpenseForm, setAutonomeExpenseForm] = useState({
     categorie: "Réparations et entretien",
@@ -815,25 +827,71 @@ const App = () => {
   const reconcileProperties = async (prev: any[], next: any[]) => {
     const userId = auth.currentUser?.uid;
     if (!userId) return;
+
+    // ── Delete removed properties (cascade units handled by deleteBuilding) ──
     const deleted = prev.filter(p => !next.some(n => n.id === p.id));
     for (const item of deleted) {
       if (item.id && typeof item.id === 'string' && item.id.length > 5 && isNaN(Number(item.id))) {
         await dataService.deleteProperty(item.id);
       }
     }
+
+    // ── Add / update properties and their units ────────────────────────────
     const addedOrModified = next.filter(n => {
       const p = prev.find(x => x.id === n.id);
       if (!p) return true;
-      return p.montant !== n.montant || p.status !== n.status || p.locataire !== n.locataire || p.adresse !== n.adresse || JSON.stringify(p.chambres) !== JSON.stringify(n.chambres);
+      return (
+        p.montant !== n.montant ||
+        p.status !== n.status ||
+        p.locataire !== n.locataire ||
+        p.adresse !== n.adresse ||
+        JSON.stringify(p.units) !== JSON.stringify(n.units)
+      );
     });
+
     for (const item of addedOrModified) {
       try {
-        const saved = await dataService.saveProperty(userId, item);
+        // 1. Save the address-level property shell
+        const saved = await dataService.saveProperty(userId, {
+          id: item.id,
+          buildingId: item.buildingId,
+          typeLocation: item.typeLocation || "Logement entier",
+          adresse: item.adresse,
+          status: item.status || "Actif",
+          ownerId: userId,
+          createdAt: item.createdAt || new Date().toISOString(),
+        });
+        const resolvedPropId = saved.id || item.id;
+
+        // 2. Save each unit in the independent `units` collection
+        const unitList: any[] = item.units || [];
+        const savedUnits: UnitDoc[] = [];
+        for (const u of unitList) {
+          const savedUnit = await dataService.saveUnit(userId, {
+            id: u.id || `unit_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            buildingId: resolvedPropId,
+            unitName: u.unitName || u.identifiantChambre || "Unité",
+            tenantName: u.tenantName || u.locataire || "",
+            monthlyRent: parseFloat(u.monthlyRent || u.montant || 0),
+            isActive: u.isActive !== undefined ? u.isActive : (u.status !== "Vacant"),
+          });
+          savedUnits.push(savedUnit);
+        }
+
+        // 3. Sync allUnits state (replace entries for this building)
+        setAllUnits(prev => [
+          ...prev.filter(u => u.buildingId !== resolvedPropId),
+          ...savedUnits,
+        ]);
+
+        // 4. Remap property ID if it changed
         if (saved.id && saved.id !== item.id) {
-          _setPlexManagementProperties(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
+          _setPlexManagementProperties(current =>
+            current.map(c => c.id === item.id ? { ...c, id: saved.id } : c)
+          );
         }
       } catch (err) {
-        console.error("Failed to save property:", err);
+        console.error("Failed to save property/units:", err);
       }
     }
   };
@@ -845,7 +903,7 @@ const App = () => {
     });
   };
   const [plexManagementForm, setPlexManagementForm] = useState<any>({
-    typeLocation: "Appartement/Maison",
+    typeLocation: "Logement entier",
     nombrePieces: "",
     adresse: "",
     montant: "",
@@ -853,31 +911,35 @@ const App = () => {
     nomBail: "",
     status: "Actif",
     nombreChambres: 1,
-    chambres: [
-      { id: Date.now(), identifiantChambre: "Habitation 1", montant: "", locataire: "", status: "Actif", vacanceMois: 0 }
+    estMeuble: false,
+    isContainer: false,
+    // ── units[] replaces legacy chambres[] ────────────────────────────────────
+    // Each entry maps 1:1 to a UnitDoc in the `units` Firestore collection.
+    units: [
+      { id: `unit_${Date.now()}`, buildingId: "", unitName: "Habitation 1", tenantName: "", monthlyRent: 0, isActive: true }
     ]
   });
 
   const checkPlexLimit = (newUnitId: string, excludeLoyerId?: number | null, excludeDepenseId?: number | null, newTypeBail?: string): boolean => {
+    // ── BETA LAUNCH: door limit gate completely bypassed ──────────────────────
+    // TODO: restore tier thresholds before public pricing launch.
+    const BETA_BYPASS = true;
+    if (BETA_BYPASS) return false;
+
     let totalHabitation = 0;
     const processedUnits = new Set<string>();
 
     plexLoyers.forEach(l => {
       if (l.id !== excludeLoyerId) {
-        if (l.typeBail === "Habitation") {
-          totalHabitation++;
-        } else {
-          processedUnits.add(l.uniteAdresse);
-        }
+        if (l.typeBail === "Habitation") totalHabitation++;
+        else processedUnits.add(l.unitId || l.uniteAdresse);
       }
     });
 
     if (newTypeBail === "Habitation") {
       totalHabitation++;
-    } else if (newTypeBail === "Logement complet" || newTypeBail) {
-      if (newUnitId) processedUnits.add(newUnitId);
     } else if (newUnitId) {
-      processedUnits.add(newUnitId); // Fallback for expenses
+      processedUnits.add(newUnitId);
     }
 
     plexDepenses.forEach(d => {
@@ -887,15 +949,10 @@ const App = () => {
     const calculatedDoors = processedUnits.size + Math.ceil(totalHabitation / 4);
     const currentTier = getEffectiveTier() as string;
 
-    if (currentTier === "superadmin") {
-      return false; // Bypass total pour Solutions GPA / SuperAdmin
-    }
+    if (currentTier === "superadmin") return false;
 
-    if (calculatedDoors > 4 && (currentTier === "gratuit" || currentTier === "basique" || currentTier === "assistant" || currentTier === "porte_ouverte" || currentTier === "pro_ind")) {
-      setShowGrowthModal(true);
-      return true;
-    }
-    if (calculatedDoors > 15 && (currentTier === "premium" || currentTier === "pro_multi" || currentTier === "integral")) {
+    const hardLimit = TIER_LIMITS[currentTier] ?? 999;
+    if (calculatedDoors > hardLimit) {
       setShowGrowthModal(true);
       return true;
     }
@@ -911,32 +968,39 @@ const App = () => {
   };
 
   const handleSaveLoyer = () => {
-    if (!loyerForm.adresse || !loyerForm.unite || !loyerForm.montant || !loyerForm.locataire) return;
-    const newUnitId = `${loyerForm.unite} - ${loyerForm.adresse}`;
-    if (checkPlexLimit(newUnitId, loyerEditingId, null, loyerForm.typeBail)) return;
+    if (!loyerForm.montant) return;
+    // Require either a unitId FK (new) or the legacy address fields (fallback)
+    const hasFK = !!loyerForm.unitId;
+    if (!hasFK && (!loyerForm.adresse || !loyerForm.unite || !loyerForm.locataire)) return;
+
+    // Resolve the display address string for backward-compat
+    const resolvedUnit = allUnits.find(u => u.id === loyerForm.unitId);
+    const uniteAdresse = hasFK
+      ? `${resolvedUnit?.unitName ?? loyerForm.unite} - ${resolvedUnit?.buildingId ?? loyerForm.adresse}`
+      : `${loyerForm.unite} - ${loyerForm.adresse}`;
+
+    if (checkPlexLimit(loyerForm.unitId || uniteAdresse, loyerEditingId, null, loyerForm.typeBail)) return;
+
+    const loyerPayload = {
+      unitId:       loyerForm.unitId,
+      buildingId:   loyerForm.buildingId,
+      uniteAdresse,
+      locataire:    loyerForm.locataire || resolvedUnit?.tenantName || "",
+      loyer:        parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
+      statut:       "Payé" as const,
+      date:         loyerForm.date,
+      typeBail:     loyerForm.typeBail,
+    };
 
     if (loyerEditingId) {
-      setPlexLoyers(plexLoyers.map(l => l.id === loyerEditingId ? {
-        ...l,
-        uniteAdresse: newUnitId,
-        locataire: loyerForm.locataire,
-        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
-        date: loyerForm.date,
-        typeBail: loyerForm.typeBail
-      } : l));
+      setPlexLoyers(plexLoyers.map(l =>
+        l.id === loyerEditingId ? { ...l, ...loyerPayload } : l
+      ));
     } else {
-      const newLoyer = {
-        id: Date.now(),
-        uniteAdresse: newUnitId,
-        locataire: loyerForm.locataire,
-        loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
-        statut: "Payé",
-        date: loyerForm.date,
-        typeBail: loyerForm.typeBail
-      };
-      setPlexLoyers([...plexLoyers, newLoyer]);
+      setPlexLoyers([...plexLoyers, { id: Date.now(), ...loyerPayload }]);
     }
-    setLoyerForm({ adresse: "", unite: "", montant: "", date: "", locataire: "", typeBail: "Logement complet" });
+
+    setLoyerForm({ unitId: "", buildingId: "", adresse: "", unite: "", locataire: "", montant: "", date: "", typeBail: "Logement complet" });
     setLoyerEditingId(null);
     setShowLoyerModal(false);
   };
@@ -6895,6 +6959,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid);
           setPlexManagementProperties(props);
+
+          // Fetch all units (independent collection)
+          const units = await dataService.fetchAllUnits(user.uid);
+          setAllUnits(units);
 
           // Fetch tenants/loyers
           const loyers = await dataService.fetchLoyers(user.uid);
@@ -17379,6 +17447,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         darkMode={darkMode}
         plexManagementForm={plexManagementForm}
         plexManagementProperties={plexManagementProperties}
+        allUnits={allUnits}
         expandedDoors={expandedDoors}
         showLimitModal={showLimitModal}
         nombrePortes={nombrePortes}
@@ -17528,6 +17597,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         loyerEditingId={loyerEditingId}
         plexLoyers={plexLoyers}
         setPlexLoyers={setPlexLoyers}
+        allUnits={allUnits}
         plexExpenseForm={plexExpenseForm}
         setPlexExpenseForm={setPlexExpenseForm}
         plexExpenseEditingId={plexExpenseEditingId}

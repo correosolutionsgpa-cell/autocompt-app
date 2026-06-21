@@ -18,6 +18,7 @@
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import type { UnitDoc } from "../../lib/dataService";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -115,6 +116,8 @@ export interface RapportComptableProps {
   plexExpenseForm: any;
   setPlexExpenseForm: (val: any) => void;
   plexExpenseEditingId: number | null;
+  /** All units from Firestore `units` collection — powers the loyer dropdown */
+  allUnits: UnitDoc[];
 
   // Handlers loyer/plex (définis dans App)
   handleAdresseChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -233,6 +236,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
   loyerEditingId,
   plexLoyers,
   setPlexLoyers,
+  allUnits,
   plexExpenseForm,
   setPlexExpenseForm,
   plexExpenseEditingId,
@@ -1017,28 +1021,63 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                   </button>
                 </div>
                 <div className="p-6 space-y-4">
+
+                  {/* ── Unité Selector (Firestore `units` FK) ────────────────────── */}
                   <div>
-                    <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Adresse de l'immeuble</label>
-                    <input type="text" value={loyerForm.adresse} onChange={handleAdresseChange} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="123 Rue Principale" />
+                    <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                      Unité locative
+                    </label>
+                    {allUnits.length > 0 ? (
+                      <select
+                        value={loyerForm.unitId || ""}
+                        onChange={(e) => {
+                          const selectedUnit = allUnits.find(u => u.id === e.target.value);
+                          setLoyerForm({
+                            ...loyerForm,
+                            unitId:     e.target.value,
+                            buildingId: selectedUnit?.buildingId || "",
+                            locataire:  selectedUnit?.tenantName || loyerForm.locataire,
+                            typeBail:   selectedUnit ? (selectedUnit.unitName.toLowerCase().includes("chambre") || selectedUnit.unitName.toLowerCase().includes("habitation") ? "Habitation" : "Logement complet") : loyerForm.typeBail,
+                            // keep legacy fields for backward-compat display
+                            adresse:    selectedUnit?.buildingId || loyerForm.adresse,
+                            unite:      selectedUnit?.unitName    || loyerForm.unite,
+                          });
+                        }}
+                        className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                      >
+                        <option value="">-- Sélectionner une unité --</option>
+                        {allUnits.map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.unitName}{u.tenantName ? ` — ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      // Fallback: manual text entry when no units exist yet
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={loyerForm.adresse}
+                          onChange={handleAdresseChange}
+                          className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                          placeholder="Adresse de l'immeuble"
+                        />
+                        <input
+                          type="text"
+                          value={loyerForm.unite}
+                          onChange={(e) => setLoyerForm({ ...loyerForm, unite: e.target.value })}
+                          className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                          placeholder="Numéro d'unité (ex: Apt 1)"
+                        />
+                        <p className={`text-[10px] italic ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Ajoutez d'abord des unités dans la section « Gestion Plex » pour activer le sélecteur automatique.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Type de bail</label>
-                    <div className="flex flex-col space-y-3">
-                      <label className={`flex items-center space-x-3 p-3 rounded-2xl border ${loyerForm.typeBail === "Logement complet" ? (darkMode ? "border-orange-500/50 bg-orange-500/10" : "border-orange-500 bg-orange-50") : (darkMode ? "border-zinc-800 bg-zinc-900" : "border-slate-200 bg-slate-50")} transition-all cursor-pointer`}>
-                        <input type="radio" value="Logement complet" checked={loyerForm.typeBail === "Logement complet"} onChange={(e) => setLoyerForm({ ...loyerForm, typeBail: e.target.value })} className="accent-orange-500 w-4 h-4" />
-                        <span className={`text-sm font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Logement complet</span>
-                      </label>
-                      <label className={`flex items-center space-x-3 p-3 rounded-2xl border ${loyerForm.typeBail === "Habitation" ? (darkMode ? "border-orange-500/50 bg-orange-500/10" : "border-orange-500 bg-orange-50") : (darkMode ? "border-zinc-800 bg-zinc-900" : "border-slate-200 bg-slate-50")} transition-all cursor-pointer`}>
-                        <input type="radio" value="Habitation" checked={loyerForm.typeBail === "Habitation"} onChange={(e) => setLoyerForm({ ...loyerForm, typeBail: e.target.value })} className="accent-orange-500 w-4 h-4" />
-                        <span className={`text-sm font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Habitation (Chambre)</span>
-                      </label>
-                    </div>
-                  </div>
+
+                  {/* ── Montant + Date ──────────────────────────────────────────────── */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Unité / Appartement</label>
-                      <input type="text" value={loyerForm.unite} onChange={(e) => setLoyerForm({ ...loyerForm, unite: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Apt 1" />
-                    </div>
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Montant du loyer</label>
                       <div className="relative">
@@ -1046,17 +1085,18 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                         <input type="text" value={loyerForm.montant} onChange={(e) => setLoyerForm({ ...loyerForm, montant: e.target.value })} className={`w-full pl-8 pr-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="1200.00" />
                       </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Date de réception</label>
                       <input type="date" value={loyerForm.date} onChange={(e) => setLoyerForm({ ...loyerForm, date: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} />
                     </div>
-                    <div>
-                      <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
-                      <input type="text" value={loyerForm.locataire} onChange={(e) => setLoyerForm({ ...loyerForm, locataire: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Jean Tremblay" />
-                    </div>
                   </div>
+
+                  {/* ── Nom du locataire (auto-filled from unit, editable) ────────── */}
+                  <div>
+                    <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Nom du locataire</label>
+                    <input type="text" value={loyerForm.locataire} onChange={(e) => setLoyerForm({ ...loyerForm, locataire: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`} placeholder="Jean Tremblay" />
+                  </div>
+
                 </div>
                 <div className={`p-4 border-t flex justify-end gap-2 ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-100 bg-slate-50"}`}>
                   {loyerEditingId && (
