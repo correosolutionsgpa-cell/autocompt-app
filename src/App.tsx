@@ -15300,10 +15300,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               return cats;
                             })()
                             : [
-                              "Ventes",
                               "Loyers résidentiels",
+                              "Loyers commerciaux",
+                              "Stationnement / Buanderie",
+                              "Frais de retard / Pénalités",
                               "Ventes de services",
-                              "Ventes de biens",
                             ]
                           ).map((catName) => {
                             const isSelected = newTxData.cat === catName;
