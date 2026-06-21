@@ -107,6 +107,7 @@ import SuperAdminPanel from "./components/SuperAdminPanel";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
+import ProfilEtEquipe from "./components/ProfilEtEquipe";
 import { SofiAvatarSVG } from "./components/SofiAvatarSVG";
 import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
@@ -15443,18 +15444,23 @@ Ceci est un message automatisé généré par AutoCompt.`;
       </div>
     );
 
-  // --- ÉQUIPE ET GESTION DES INVITATIONS ---
+  // --- ÉQUIPE, PROFIL & CLOUD — ProfilEtEquipe (hub unifié) ---
   if (vista === "equipe")
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${
+          darkMode ? "bg-[#070d1e] text-zinc-100" : "bg-slate-50 text-slate-900"
+        } flex flex-col animate-in slide-in-from-right font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
+        {/* Sticky page header — matches dashboard header pattern */}
         <header
-          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 text-left shadow-sm`}
-          style={{
-            borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}`,
-          }}
+          className={`sticky top-0 z-30 ${
+            darkMode
+              ? "bg-slate-900/60 border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+              : "bg-white/90 border-slate-200 backdrop-blur-md"
+          } px-6 py-4 border-b flex items-center gap-3 shadow-sm`}
+          style={{ borderTop: `3px solid ${darkMode ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.35)"}` }}
         >
           <button
             onClick={() => setIsSidebarOpen(true)}
@@ -15464,288 +15470,31 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </button>
           <button
             onClick={() => setVista("dashboard")}
-            className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+            className={`p-2 rounded-xl transition-colors ${
+              darkMode ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"
+            }`}
           >
-            <ArrowLeft />
+            <ArrowLeft size={18} />
           </button>
-          <div className="flex-1">
-            <h2 className="font-black uppercase italic tracking-tighter text-lg text-left">
-              Gestion de l'Équipe
-            </h2>
-            <p className="text-[8px] font-black text-[#059669] uppercase italic tracking-widest leading-none">
-              Espace: {currentCompany?.nombre}
-            </p>
+          <div className="flex items-center gap-2.5 flex-1">
+            <div className="p-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <Users size={15} className="text-emerald-400" />
+            </div>
+            <div>
+              <h2 className={`font-black uppercase tracking-tight text-[15px] leading-none ${
+                darkMode ? "text-white" : "text-slate-900"
+              }`}>
+                Profil & Équipe
+              </h2>
+              <p className="text-[8.5px] font-black text-emerald-500 uppercase tracking-widest leading-none mt-0.5">
+                {currentCompany?.nombre}
+              </p>
+            </div>
           </div>
         </header>
 
-        <main className="p-6 space-y-6 max-w-4xl mx-auto w-full">
-          {/* Banner Explaining Team / Invitation flow */}
-          <div
-            className={`p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950/80 border-zinc-900 text-zinc-300" : "bg-white border-slate-250 text-slate-700"} shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300`}
-          >
-            <div className="space-y-1">
-              <h3
-                className={`text-xs font-black uppercase italic tracking-wider ${darkMode ? "text-white" : "text-slate-900"}`}
-              >
-                Modèle de Partage de Frais & Collaboration Directe
-              </h3>
-              <p className="text-[9px] text-slate-400 leading-relaxed font-semibold">
-                Invitez vos partenaires d'affaires pour automatiser la tenue
-                documentaire, la répartition TPS-TVQ selon vos quotes-parts, ou
-                permettez à votre adjointe et votre comptable de classer vos
-                factures extraites en temps réel.
-              </p>
-            </div>
-            <span className="text-[8px] font-black px-3 py-1.5 self-start bg-emerald-500/10 text-[#059669] dark:text-emerald-400 rounded-full leading-none uppercase shrink-0">
-              Split 50% / BYOS Actif
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            {/* Form Card */}
-            <div
-              className={`md:col-span-12 lg:col-span-5 p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm space-y-4`}
-            >
-              <div>
-                <h3
-                  className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                >
-                  Inviter un membre
-                </h3>
-                <p className="text-[8px] font-bold text-[#059669] opacity-70 uppercase italic tracking-tight">
-                  Ajouter un partenaire ou un assistant
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-2 text-left">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase italic text-slate-400 pl-1">
-                    Nom complet
-                  </label>
-                  <input
-                    type="text"
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    placeholder="Ex: Jean Tremblay"
-                    className={`w-full px-4 py-3 rounded-2xl text-[10px] font-bold border-none outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase italic text-slate-400 pl-1">
-                    Adresse de Courriel
-                  </label>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="Ex: jean.tremblay@email.com"
-                    className={`w-full px-4 py-3 rounded-2xl text-[10px] font-bold border-none outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[8px] font-black uppercase italic text-slate-400 pl-1 font-sans">
-                    Rôle dans le Workspace
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setInviteRole("Socio / Partenaire (Split 50%)")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Socio / Partenaire (Split 50%)"
-                          ? darkMode
-                            ? "bg-sky-900/30 text-sky-400 border-sky-800/50 shadow-sm"
-                            : "bg-sky-50 text-sky-600 border-sky-100 shadow-sm"
-                          : darkMode
-                            ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-                            : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
-                    >
-                      Partenaire
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInviteRole("Adjoint(e) / Assistant(e)")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Adjoint(e) / Assistant(e)"
-                          ? darkMode
-                            ? "bg-teal-900/30 text-teal-400 border-teal-800/50 shadow-sm"
-                            : "bg-teal-50 text-teal-600 border-teal-100 shadow-sm"
-                          : darkMode
-                            ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-                            : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
-                    >
-                      Adjoint(e)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInviteRole("Comptable")}
-                      className={`py-3 px-3 rounded-2xl text-[8px] font-black uppercase tracking-widest transition-all text-center border ${inviteRole === "Comptable"
-                          ? darkMode
-                            ? "bg-violet-900/30 text-violet-400 border-violet-800/50 shadow-sm"
-                            : "bg-violet-50 text-violet-600 border-violet-100 shadow-sm"
-                          : darkMode
-                            ? "bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-                            : "bg-transparent border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
-                    >
-                      Comptable
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentTier = getEffectiveTier() as string;
-                    const maxMembers = TIER_LIMITS[currentTier] || 1;
-                    const currentMembersCount = teamMembers.filter((m) => m.companyId === activeCompanyId).length;
-
-                    if (currentMembersCount >= maxMembers) {
-                      setShowGrowthModal(true);
-                      return;
-                    }
-
-                    if (!inviteEmail.trim()) {
-                      alert(
-                        "Veuillez saisir une adresse courriel valide pour envoyer l'invitation.",
-                      );
-                      return;
-                    }
-
-                    const cleanName =
-                      inviteName.trim() || "Collaborateur Invité";
-                    const cleanEmail = inviteEmail.trim();
-
-                    // Add new item to team members state
-                    const newMember = {
-                      id: `m-${Date.now()}`,
-                      companyId: activeCompanyId,
-                      name: cleanName,
-                      email: cleanEmail,
-                      role: inviteRole,
-                      status:
-                        "Invitation envoyée (En attente de configuration du profil)",
-                    };
-
-                    setTeamMembers([...teamMembers, newMember]);
-
-                    // Pop beautiful dispatch notification toast
-                    setDispatcherSuccessToast({
-                      text: "Invitation enregistrée",
-                      channel: "Gestion de l'Équipe",
-                      customMessage: `Invitation transmise à ${cleanEmail} avec succès (${inviteRole})`,
-                    });
-
-                    if (typeof playNotificationSound === "function") {
-                      playNotificationSound();
-                    }
-
-                    // Reset inputs
-                    setInviteName("");
-                    setInviteEmail("");
-                  }}
-                  className={`w-full mt-4 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest italic transition-all shadow-md duration-200 ${teamMembers.filter((m) => m.companyId === activeCompanyId).length >= (TIER_LIMITS[getEffectiveTier() as string] || 1)
-                      ? "bg-slate-300 dark:bg-zinc-800 text-slate-500 dark:text-zinc-600 cursor-not-allowed shadow-none"
-                      : "bg-[#059669] text-white hover:bg-emerald-700 active:scale-95"
-                    }`}
-                >
-                  + Envoyer l'invitation
-                </button>
-              </div>
-            </div>
-
-            {/* Members List Card */}
-            <div
-              className={`md:col-span-12 lg:col-span-7 p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm space-y-4`}
-            >
-              <div>
-                <h3
-                  className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                >
-                  Membres & Collaborateurs
-                </h3>
-                <p className="text-[8px] font-bold text-[#059669] opacity-70 uppercase italic tracking-tight font-sans">
-                  Accès autorisés pour cet espace de travail
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-2">
-                {teamMembers.filter((m) => m.companyId === activeCompanyId)
-                  .length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-[10px] font-bold italic">
-                    Aucun membre configuré ou invité pour cet espace de travail.
-                  </div>
-                ) : (
-                  teamMembers
-                    .filter((m) => m.companyId === activeCompanyId)
-                    .map((member) => {
-                      const isPending = member.status !== "Actif";
-                      return (
-                        <div
-                          key={member.id}
-                          className={`p-4 rounded-[28px] border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span
-                                className={`w-2 h-2 rounded-full ${isPending ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`}
-                              />
-                              <h4
-                                className={`text-[10px] font-black tracking-tight uppercase leading-none ${darkMode ? "text-zinc-100" : "text-[#1E293B]"}`}
-                              >
-                                {member.name}
-                              </h4>
-                            </div>
-                            <p className="text-[8.5px] font-mono text-slate-400">
-                              {member.email}
-                            </p>
-                            <div className="flex items-center space-x-1.5 pt-0.5">
-                              <span
-                                className={`text-[6.5px] font-black px-2 py-0.5 rounded-full uppercase leading-none ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-200/60 text-slate-600"}`}
-                              >
-                                {member.role}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2">
-                            <span
-                              className={`text-[6.5px] font-black px-2 py-1 rounded-full uppercase leading-none ${isPending ? "bg-amber-500/10 text-amber-500 dark:text-amber-400" : "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400"}`}
-                            >
-                              {member.status}
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTeamMembers(
-                                  teamMembers.filter(
-                                    (m) => m.id !== member.id,
-                                  ),
-                                );
-                                setDispatcherSuccessToast({
-                                  text: "Membre retiré",
-                                  channel: "Gestion de l'Équipe",
-                                  customMessage: `L'accès de ${member.name} a été révoqué.`,
-                                });
-                                if (typeof playNotificationSound === "function") {
-                                  playNotificationSound();
-                                }
-                              }}
-                              className="text-[7px] font-black uppercase tracking-widest text-[#EF4444] hover:underline hover:text-red-650 cursor-pointer pt-0.5"
-                            >
-                              Retirer
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          </div>
-        </main>
+        {/* Component renders its own scrollable container */}
+        <ProfilEtEquipe darkMode={darkMode} />
       </div>
     );
 
