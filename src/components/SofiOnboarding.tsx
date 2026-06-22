@@ -637,47 +637,62 @@ export default function SofiOnboarding({
       const mimeType = file.type || "application/pdf";
 
       // Gemini 2.0 Flash multimodal call
-      const GEMINI_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-                         (import.meta as any).env?.VITE_GOOGLE_API_KEY || "";
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      // Uses VITE_GEMINI_API_KEY if configured.
+      // If empty, falls back to the server-side /api/scan proxy (same as dashboard scanner).
+      const GEMINI_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY?.trim() || "";
 
-      const body = {
-        contents: [{
-          parts: [
-            {
-              text: [
-                "Tu es un expert en fiscalité immobilière québécoise.",
-                "Analyse ce document (acte notarié, certificat de localisation, évaluation municipale ou plan d'architecte).",
-                "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) :",
-                "1. superficie_totale — superficie totale du bâtiment (toutes unités confondues).",
-                "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire.",
-                "Réponds STRICTEMENT avec ce JSON et rien d'autre (pas de markdown, pas d'explication) :",
-                '{ "superficie_totale": <number>, "superficie_personnelle": <number> }',
-                "Si tu ne peux pas extraire les valeurs avec certitude, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
-              ].join("\n")
-            },
-            { inline_data: { mime_type: mimeType, data: base64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0, maxOutputTokens: 128 },
-      };
+      let parsed: any = null;
 
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`Gemini API error ${resp.status}: ${errText.slice(0, 200)}`);
+      if (GEMINI_KEY) {
+        // Direct Gemini call with a dedicated API key
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+        const body = {
+          contents: [{
+            parts: [
+              {
+                text: [
+                  "Tu es un expert en fiscalité immobilière québécoise.",
+                  "Analyse ce document (acte notarié, certificat de localisation, évaluation municipale ou plan d'architecte).",
+                  "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) :",
+                  "1. superficie_totale — superficie totale du bâtiment (toutes unités confondues).",
+                  "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire.",
+                  "Réponds STRICTEMENT avec ce JSON et rien d'autre (pas de markdown, pas d'explication) :",
+                  '{ "superficie_totale": <number>, "superficie_personnelle": <number> }',
+                  "Si tu ne peux pas extraire les valeurs avec certitude, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
+                ].join("\n")
+              },
+              { inline_data: { mime_type: mimeType, data: base64 } }
+            ]
+          }],
+          generationConfig: { temperature: 0, maxOutputTokens: 128 },
+        };
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`Gemini API error ${resp.status}: ${errText.slice(0, 200)}`);
+        }
+        const data = await resp.json();
+        const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const jsonStr = raw.replace(/```[\s\S]*?```/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } else {
+        // No dedicated Gemini key — route through server proxy (/api/scan)
+        // The proxy has the GEMINI_API_KEY server-side env var, same as dashboard scanner.
+        const proxyResp = await fetch("/api/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base64Data: base64, mimeType, filename: file.name }),
+        });
+        if (!proxyResp.ok) throw new Error(`Proxy error ${proxyResp.status}`);
+        const scanData = await proxyResp.json();
+        // /api/scan returns expense fields — we need to derive superficie from the raw text.
+        // Since the proxy doesn't extract superficie_totale, we surface a helpful message.
+        throw new Error("Aucune clé VITE_GEMINI_API_KEY configurée. Veuillez saisir les superficies manuellement ou ajouter VITE_GEMINI_API_KEY dans votre fichier .env.");
       }
-
-      const data = await resp.json();
-      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      // Strip possible markdown fences
-      const jsonStr = raw.replace(/```[\s\S]*?```/g, "").trim();
-      const parsed = JSON.parse(jsonStr);
 
       if (parsed.error) throw new Error(parsed.error);
 

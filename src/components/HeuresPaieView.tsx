@@ -260,6 +260,7 @@ export const HeuresPaieView: React.FC<HeuresPaieViewProps> = ({
               <Upload size={16} className="mr-3" />
               <input 
                 type="file" 
+                accept="application/pdf, image/jpeg, image/png, image/webp"
                 onChange={(e) => setFileUrl(e.target.files?.[0]?.name || "")}
                 className="text-[10px] w-full bg-transparent file:mr-4 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" 
               />
