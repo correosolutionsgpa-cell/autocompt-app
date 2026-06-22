@@ -43,7 +43,7 @@ export function ReceiptDropzone({ onFileSelect }: Props) {
         id="file-input"
         type="file"
         className="hidden"
-        accept="image/*,application/pdf"
+        accept="application/pdf, image/jpeg, image/png, image/webp"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFile(file);

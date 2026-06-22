@@ -9967,7 +9967,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               }
             }}
             className="hidden"
-            accept="image/*,application/pdf"
+            accept="application/pdf, image/jpeg, image/png, image/webp"
           />
 
 
@@ -9985,7 +9985,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               }
             }}
             className="hidden"
-            accept="image/*,application/pdf"
+            accept="application/pdf, image/jpeg, image/png, image/webp"
           />
 
 

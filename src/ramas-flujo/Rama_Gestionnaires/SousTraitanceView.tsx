@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SousTraitanceView.tsx
  * ─────────────────────────────────────────────────────────────────────────────
  * Rama: Rama_Gestionnaires (Main-d'œuvre & Sous-traitance)
@@ -399,7 +399,7 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                               </span>
                               <input
                                 type="file"
-                                accept="image/*,application/pdf"
+                                accept="application/pdf, image/jpeg, image/png, image/webp"
                                 className="hidden"
                                 onChange={(e) => {
                                   if (e.target.files && e.target.files[0]) {

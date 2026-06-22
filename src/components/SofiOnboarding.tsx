@@ -1061,7 +1061,7 @@ export default function SofiOnboarding({
                         <input
                           ref={taxScanFileRef}
                           type="file"
-                          accept="image/*,application/pdf"
+                          accept="application/pdf, image/jpeg, image/png, image/webp"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
