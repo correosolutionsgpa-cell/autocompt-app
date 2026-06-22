@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Sparkles, Globe, FileSearch, Building, Hammer, Briefcase,
   Users, Volume2, VolumeX, Sun, Moon,
   ArrowRight, ArrowLeft, CheckCircle2,
   Building2, UserCheck, Home,
   Plus, Trash2, Info, AlertTriangle,
+  Scan, Loader2, Camera, X,
 } from "lucide-react";
 import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
@@ -154,73 +155,73 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
     {
       id: "besoins_autonomes_investisseur",
       type: "multi_choice",
-      titleFR: "Que souhaitez-vous suivre de mani\u00e8re autonome dans AutoCompt ?",
+      titleFR: "Que souhaitez-vous suivre de manière autonome dans AutoCompt ?",
       titleEN: "What do you want to track autonomously in AutoCompt?",
-      titleES: "¿Qu\u00e9 deseas rastrear de manera aut\u00f3noma en AutoCompt?",
-      subtitleFR: "Permet de centraliser vos frais de financement priv\u00e9s sans interf\u00e9rer avec votre gestionnaire.",
+      titleES: "¿Qué deseas rastrear de manera autónoma en AutoCompt?",
+      subtitleFR: "Permet de centraliser vos frais de financement privés sans interférer avec votre gestionnaire.",
       subtitleEN: "Allows centralizing your private financing fees without interfering with your manager.",
       subtitleES: "Permite centralizar tus gastos de financiamiento privados sin interferir con tu gestor.",
       showWhen: { questionId: "mode_gestion_investisseur", value: "gestion_deleguee" },
       options: [
-        { value: "interets_financement",  labelFR: "Int\u00e9r\u00eats hypoth\u00e9caires & Financement",            labelEN: "Mortgage interest & Financing",     labelES: "Intereses hipotecarios y Financiamiento" },
-        { value: "depenses_personnelles", labelFR: "D\u00e9penses mixtes (Automobile, Bureau \u00e0 domicile)", labelEN: "Mixed expenses (Car, Home office)", labelES: "Gastos mixtos (Auto, Oficina en casa)"        },
-        { value: "tableau_rendement",     labelFR: "Rapports fiscaux consolid\u00e9s (T776/TP-128)",        labelEN: "Consolidated tax reports",           labelES: "Reportes fiscales consolidados (T776/TP-128)"          },
+        { value: "interets_financement",  labelFR: "Intérêts hypothécaires & Financement",            labelEN: "Mortgage interest & Financing",     labelES: "Intereses hipotecarios y Financiamiento" },
+        { value: "depenses_personnelles", labelFR: "Dépenses mixtes (Automobile, Bureau à domicile)", labelEN: "Mixed expenses (Car, Home office)", labelES: "Gastos mixtos (Auto, Oficina en casa)"        },
+        { value: "tableau_rendement",     labelFR: "Rapports fiscaux consolidés (T776/TP-128)",        labelEN: "Consolidated tax reports",           labelES: "Reportes fiscales consolidados (T776/TP-128)"          },
       ],
     },
     {
       id: "proprietaire_occupant",
       type: "single_choice",
-      titleFR: "\u00cates-vous propri\u00e9taire occupant au sein de l'un des b\u00e2timents ?",
+      titleFR: "Êtes-vous propriétaire occupant au sein de l'un des bâtiments ?",
       titleEN: "Are you an owner-occupant within one of the buildings?",
       titleES: "¿Resides como propietario ocupante en alguno de los edificios?",
-      subtitleFR: "Exigence fiscale\u00a0: la proportion occup\u00e9e personnellement doit \u00eatre retranch\u00e9e des d\u00e9penses d\u00e9ductibles.",
+      subtitleFR: "Exigence fiscale : la proportion occupée personnellement doit être retranchée des dépenses déductibles.",
       subtitleEN: "Tax requirement: the proportion occupied for personal purposes must be subtracted from deductions.",
-      subtitleES: "Requisito fiscal: la proporci\u00f3n ocupada para fines personales se restar\u00e1 de las deducciones.",
+      subtitleES: "Requisito fiscal: la proporción ocupada para fines personales se restará de las deducciones.",
       options: [
-        { value: "oui", labelFR: "Oui, j'y habite",    labelEN: "Yes, I live there", labelES: "S\u00ed, vivo ah\u00ed"       },
-        { value: "non", labelFR: "Non, 100\u00a0% locatif", labelEN: "No, 100% rented",   labelES: "No, 100% alquilado" },
+        { value: "oui", labelFR: "Oui, j'y habite",    labelEN: "Yes, I live there", labelES: "Sí, vivo ahí"       },
+        { value: "non", labelFR: "Non, 100 % locatif", labelEN: "No, 100% rented",   labelES: "No, 100% alquilado" },
       ],
     },
     {
-      id: "methode_calcul_occupation",
+      id: "calcul_portion_personnelle",
       type: "single_choice",
       titleFR: "Comment souhaitez-vous calculer votre portion personnelle ?",
       titleEN: "How would you like to calculate your personal portion?",
       titleES: "¿Cómo deseas calcular tu porción personal?",
-      subtitleFR: "L'ARC recommande le calcul par superficie (pieds carrés) pour plus de précision.",
-      subtitleEN: "The CRA recommends calculating by square footage for better accuracy.",
-      subtitleES: "La ARC recomienda el cálculo por pies cuadrados para mayor precisión.",
+      subtitleFR: "L'ARC recommande le calcul par superficie (pieds carrés) pour plus de précision. S.O.F.I. peut extraire ces dimensions automatiquement depuis votre acte notarié ou évaluation municipale.",
+      subtitleEN: "The CRA recommends calculating by square footage for better accuracy. S.O.F.I. can extract these dimensions automatically from your deed or municipal assessment.",
+      subtitleES: "La ARC recomienda el cálculo por pies cuadrados para mayor precisión. S.O.F.I. puede extraer estas dimensiones automáticamente desde tu escritura o evaluación municipal.",
       showWhen: { questionId: "proprietaire_occupant", value: "oui" },
       options: [
-        { value: "superficie",  labelFR: "Par superficie (Pieds carrés / pi²)", labelEN: "By square footage (sq ft)",      labelES: "Por superficie (Pies cuadrados)"   },
-        { value: "pourcentage", labelFR: "Je connais mon pourcentage exact",       labelEN: "I know my exact percentage",    labelES: "Conozco mi porcentaje exacto"      },
+        { value: "superficie",  labelFR: "Par superficie (Pieds carrés / pi²)", labelEN: "By square footage (sq ft)",   labelES: "Por superficie (Pies cuadrados)"   },
+        { value: "pourcentage", labelFR: "Je connais mon pourcentage exact",        labelEN: "I know my exact percentage", labelES: "Conozco mi porcentaje exacto"      },
       ],
     },
     {
       id: "superficie_totale",
       type: "number_input",
-      titleFR: "Quelle est la superficie TOTALE du bâtiment (en pi²) ?",
+      titleFR: "Quelle est la superficie TOTALE du bâtiment (en pi²) ?",
       titleEN: "What is the TOTAL square footage of the building?",
       titleES: "¿Cuál es la superficie TOTAL del edificio (en pies cuadrados)?",
       subtitleFR: "Incluez toutes les unités — la vôtre ET celles des locataires.",
       subtitleEN: "Include all units — yours AND the tenants'.",
       subtitleES: "Incluye todas las unidades — la tuya Y las de los inquilinos.",
-      showWhen: { questionId: "methode_calcul_occupation", value: "superficie" },
+      showWhen: { questionId: "calcul_portion_personnelle", value: "superficie" },
       min: 100, max: 99999,
-      placeholder: { FR: "Ex : 2500", EN: "E.g. 2500", ES: "Ej.: 2500" },
+      placeholder: { FR: "Ex : 2500", EN: "E.g. 2500", ES: "Ej.: 2500" },
     },
     {
       id: "superficie_personnelle",
       type: "number_input",
-      titleFR: "Quelle est la superficie de l'unité que VOUS occupez (en pi²) ?",
+      titleFR: "Quelle est la superficie de l'unité que VOUS occupez (en pi²) ?",
       titleEN: "What is the square footage of the unit YOU occupy?",
       titleES: "¿Cuál es la superficie de la unidad que TÚ ocupas?",
-      subtitleFR: "AutoCompt calculera automatiquement votre % déductible : superficie personnelle ÷ superficie totale.",
+      subtitleFR: "AutoCompt calculera automatiquement votre % déductible : superficie personnelle ÷ superficie totale.",
       subtitleEN: "AutoCompt will automatically calculate your deductible %: personal area ÷ total area.",
       subtitleES: "AutoCompt calculará automáticamente tu % deducible: superficie personal ÷ superficie total.",
-      showWhen: { questionId: "methode_calcul_occupation", value: "superficie" },
+      showWhen: { questionId: "calcul_portion_personnelle", value: "superficie" },
       min: 100, max: 99999,
-      placeholder: { FR: "Ex : 1000", EN: "E.g. 1000", ES: "Ej.: 1000" },
+      placeholder: { FR: "Ex : 1000", EN: "E.g. 1000", ES: "Ej.: 1000" },
     },
     {
       id: "proportion_occupee_exacte",
@@ -228,13 +229,13 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       titleFR: "Quel est le pourcentage exact que vous occupez ?",
       titleEN: "What exact percentage do you occupy?",
       titleES: "¿Qué porcentaje exacto ocupas?",
-      subtitleFR: "Ex : 33 % pour un triplex dont vous habitez une unité sur trois.",
+      subtitleFR: "Ex : 33 % pour un triplex dont vous habitez une unité sur trois.",
       subtitleEN: "E.g. 33% for a triplex where you occupy one unit of three.",
       subtitleES: "Ej.: 33% para un triplex donde ocupas una de tres unidades.",
-      tooltipFR: "33 % occupé = 67 % des dépenses d'immeuble sont déductibles dans vos formulaires T776 / TP-128.",
-      showWhen: { questionId: "methode_calcul_occupation", value: "pourcentage" },
+      tooltipFR: "33 % occupé = 67 % des dépenses d'immeuble sont déductibles dans vos formulaires T776 / TP-128.",
+      showWhen: { questionId: "calcul_portion_personnelle", value: "pourcentage" },
       min: 1, max: 99,
-      placeholder: { FR: "Ex : 33", EN: "E.g. 33", ES: "Ej.: 33" },
+      placeholder: { FR: "Ex : 33", EN: "E.g. 33", ES: "Ej.: 33" },
     },
     {
       id: "nb_coproprietaires",
@@ -484,6 +485,12 @@ export default function SofiOnboarding({
   const [coOwners, setCoOwners]             = useState<CoOwnerEntry[]>([{ name: "", percentage: "" }]);
   const [numberInputVal, setNumberInputVal] = useState<string>("");
 
+  // ── S.O.F.I. AI Tax Dimension Scanner state ────────────────────────────────
+  const [taxScanLoading, setTaxScanLoading] = useState(false);
+  const [taxScanError, setTaxScanError]     = useState<string | null>(null);
+  const [taxScanSuccess, setTaxScanSuccess] = useState(false);
+  const taxScanFileRef = useRef<HTMLInputElement>(null);
+
   // ── Derived — filter questions by showWhen ────────────────────────────────
   const allQuestions = selectedProfile ? QUESTIONS[selectedProfile] : [];
   const questions = allQuestions.filter((q) => {
@@ -612,6 +619,112 @@ export default function SofiOnboarding({
     playStepChime();
   };
 
+  // ── S.O.F.I. AI Tax Dimension Scanner handler ─────────────────────────────
+  const handleTaxDimensionScan = async (file: File) => {
+    setTaxScanLoading(true);
+    setTaxScanError(null);
+    setTaxScanSuccess(false);
+    try {
+      // Convert the uploaded document to base64 for Gemini Vision
+      const toBase64 = (f: File): Promise<string> =>
+        new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res((reader.result as string).split(",")[1]);
+          reader.onerror = rej;
+          reader.readAsDataURL(f);
+        });
+      const base64 = await toBase64(file);
+      const mimeType = file.type || "application/pdf";
+
+      // Gemini 2.0 Flash multimodal call
+      const GEMINI_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+                         (import.meta as any).env?.VITE_GOOGLE_API_KEY || "";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+
+      const body = {
+        contents: [{
+          parts: [
+            {
+              text: [
+                "Tu es un expert en fiscalité immobilière québécoise.",
+                "Analyse ce document (acte notarié, certificat de localisation, évaluation municipale ou plan d'architecte).",
+                "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) :",
+                "1. superficie_totale — superficie totale du bâtiment (toutes unités confondues).",
+                "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire.",
+                "Réponds STRICTEMENT avec ce JSON et rien d'autre (pas de markdown, pas d'explication) :",
+                '{ "superficie_totale": <number>, "superficie_personnelle": <number> }',
+                "Si tu ne peux pas extraire les valeurs avec certitude, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
+              ].join("\n")
+            },
+            { inline_data: { mime_type: mimeType, data: base64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 128 },
+      };
+
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Gemini API error ${resp.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await resp.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      // Strip possible markdown fences
+      const jsonStr = raw.replace(/```[\s\S]*?```/g, "").trim();
+      const parsed = JSON.parse(jsonStr);
+
+      if (parsed.error) throw new Error(parsed.error);
+
+      const totale    = Number(parsed.superficie_totale);
+      const perso     = Number(parsed.superficie_personnelle);
+
+      if (!totale || !perso || totale < 100 || perso < 1) {
+        throw new Error("Les superficies extraites semblent invalides. Veuillez saisir manuellement.");
+      }
+
+      // ① Save the extracted dimensions into onboardingAnswers
+      const updated: OnboardingAnswers = {
+        ...onboardingAnswers,
+        superficie_totale:     String(totale),
+        superficie_personnelle: String(perso),
+        // ② Auto-select "Par superficie" for calcul_portion_personnelle
+        calcul_portion_personnelle: "superficie",
+      };
+      setOnboardingAnswers(updated);
+      setTaxScanSuccess(true);
+      playStepChime();
+
+      // ③ Auto-advance to the next screen after a brief success moment
+      setTimeout(() => {
+        // Recompute filtered questions with updated answers to find correct next index
+        const allQs = selectedProfile ? QUESTIONS[selectedProfile] : [];
+        const filteredQs = allQs.filter((q) => {
+          if (!q.showWhen) return true;
+          return updated[q.showWhen.questionId] === q.showWhen.value;
+        });
+        if (currentQuestionIndex < filteredQs.length - 1) {
+          setCurrentQuestionIndex((i) => i + 1);
+        } else {
+          setStep("summary");
+        }
+        setTaxScanLoading(false);
+      }, 1200);
+    } catch (err: any) {
+      setTaxScanError(
+        lang === "FR" ? `Échec du scan : ${err.message}` :
+        lang === "EN" ? `Scan failed: ${err.message}` :
+                        `Escaneo fallido: ${err.message}`
+      );
+      setTaxScanLoading(false);
+    }
+  };
+
   // ── Data Bridge — seeds BuildingLedger[] into FiscalContext on finish ────
   const { upsertBuilding } = useFiscal();
 
@@ -627,7 +740,7 @@ export default function SofiOnboarding({
       // Resolve occupancy % from whichever calculation method the user chose
       let occupancyPct = 0;
       if (isOccupant) {
-        const method = onboardingAnswers["methode_calcul_occupation"];
+        const method = onboardingAnswers["calcul_portion_personnelle"];
         if (method === "superficie") {
           const total    = parseFloat(String(onboardingAnswers["superficie_totale"]    ?? "0"));
           const personal = parseFloat(String(onboardingAnswers["superficie_personnelle"] ?? "0"));
@@ -866,32 +979,142 @@ export default function SofiOnboarding({
 
             {/* ── single_choice ───────────────────────────────────────────── */}
             {currentQuestion.type === "single_choice" && (
-              <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar animate-fade-in">
-                {currentQuestion.options?.map((opt) => {
-                  const optLabel = lang === "FR" ? opt.labelFR : lang === "EN" ? opt.labelEN : opt.labelES;
-                  const isSelected = onboardingAnswers[currentQuestion.id] === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleSingleAnswer(currentQuestion.id, opt.value)}
-                      className={`relative overflow-hidden w-full text-left px-4 py-3 rounded-2xl backdrop-blur-md border transition-all duration-300 cursor-pointer group ${
-                        isSelected
-                          ? darkMode
-                            ? `bg-white/10 border-[rgba(${pc?.rgb},0.6)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_20px_rgba(${pc?.rgb},0.2)]`
-                            : `bg-white/60 border-[rgba(${pc?.rgb},0.6)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_0_20px_rgba(${pc?.rgb},0.15)]`
-                          : darkMode
-                            ? `bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.07] hover:border-[rgba(${pc?.rgb},0.4)]`
-                            : `bg-white/50 border-slate-200 hover:border-[rgba(${pc?.rgb},0.4)] hover:bg-white/80`
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {opt.icon && <span style={{ color: `rgba(${pc?.rgb},1)` }} className="opacity-70">{opt.icon}</span>}
-                        <span className="text-[13px] font-semibold">{optLabel}</span>
-                        {isSelected && <CheckCircle2 size={16} className="ml-auto shrink-0" style={{ color: `rgba(${pc?.rgb},1)` }} />}
+              <div className="flex flex-col gap-3 animate-fade-in">
+
+                {/* ── S.O.F.I. AI Tax Scanner — shown only on calcul_portion_personnelle ── */}
+                {currentQuestion.id === "calcul_portion_personnelle" && (
+                  <div className={`relative overflow-hidden rounded-2xl border p-4 ${
+                    darkMode
+                      ? "bg-gradient-to-br from-emerald-950/50 to-cyan-950/40 border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.08)]"
+                      : "bg-gradient-to-br from-emerald-50 to-cyan-50 border-emerald-400/40 shadow-[0_4px_20px_rgba(16,185,129,0.08)]"
+                  }`}>
+                    {/* Decorative glow orb */}
+                    <div className="absolute top-[-20px] right-[-20px] w-24 h-24 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
+
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${
+                        darkMode ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-emerald-100 border border-emerald-200"
+                      }`}>
+                        <Scan size={18} className="text-emerald-400" />
                       </div>
-                    </button>
-                  );
-                })}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${
+                          darkMode ? "text-emerald-400" : "text-emerald-700"
+                        }`}>
+                          {lang === "FR" ? "✦ S.O.F.I. Scan Fiscal AI" : lang === "EN" ? "✦ S.O.F.I. AI Tax Scan" : "✦ S.O.F.I. Escaneo Fiscal IA"}
+                        </p>
+                        <p className={`text-[11px] font-medium mt-0.5 leading-relaxed ${
+                          darkMode ? "text-zinc-400" : "text-slate-500"
+                        }`}>
+                          {lang === "FR"
+                            ? "Importez votre acte notarié, évaluation municipale ou plan — S.O.F.I. extrait les superficies automatiquement."
+                            : lang === "EN"
+                            ? "Upload your deed, municipal assessment or blueprint — S.O.F.I. extracts square footage automatically."
+                            : "Suba su escritura, evaluación municipal o plano — S.O.F.I. extrae las superficies automáticamente."}
+                        </p>
+
+                        {/* Success state */}
+                        {taxScanSuccess && (
+                          <div className={`mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${
+                            darkMode ? "text-emerald-400" : "text-emerald-700"
+                          }`}>
+                            <CheckCircle2 size={13} />
+                            {lang === "FR" ? "Dimensions extraites — passage automatique" : lang === "EN" ? "Dimensions extracted — advancing" : "Dimensiones extraídas — avanzando"}
+                          </div>
+                        )}
+
+                        {/* Error state */}
+                        {taxScanError && !taxScanSuccess && (
+                          <div className={`mt-2 flex items-start gap-2 text-[10px] font-semibold leading-snug ${
+                            darkMode ? "text-rose-400" : "text-rose-600"
+                          }`}>
+                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                            <span>{taxScanError}</span>
+                          </div>
+                        )}
+
+                        {/* Upload / scan button */}
+                        {!taxScanSuccess && (
+                          <button
+                            onClick={() => {
+                              setTaxScanError(null);
+                              taxScanFileRef.current?.click();
+                            }}
+                            disabled={taxScanLoading}
+                            className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 cursor-pointer border ${
+                              taxScanLoading
+                                ? "opacity-60 cursor-not-allowed"
+                                : ""
+                            } ${
+                              darkMode
+                                ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:border-emerald-400/60 shadow-[0_0_16px_rgba(16,185,129,0.1)]"
+                                : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
+                            }`}
+                          >
+                            {taxScanLoading
+                              ? <><Loader2 size={12} className="animate-spin" />{lang === "FR" ? "Analyse en cours…" : lang === "EN" ? "Scanning…" : "Analizando…"}</>
+                              : <><Camera size={12} />{lang === "FR" ? "Analyser un document" : lang === "EN" ? "Scan a document" : "Escanear documento"}</>}
+                          </button>
+                        )}
+
+                        {/* Hidden file input */}
+                        <input
+                          ref={taxScanFileRef}
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleTaxDimensionScan(file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div className={`mt-4 flex items-center gap-3 ${
+                      darkMode ? "text-zinc-600" : "text-slate-300"
+                    }`}>
+                      <div className="flex-1 h-px bg-current opacity-30" />
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${
+                        darkMode ? "text-zinc-500" : "text-slate-400"
+                      }`}>
+                        {lang === "FR" ? "ou choisissez manuellement" : lang === "EN" ? "or choose manually" : "o elija manualmente"}
+                      </span>
+                      <div className="flex-1 h-px bg-current opacity-30" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Choices */}
+                <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
+                  {currentQuestion.options?.map((opt) => {
+                    const optLabel = lang === "FR" ? opt.labelFR : lang === "EN" ? opt.labelEN : opt.labelES;
+                    const isSelected = onboardingAnswers[currentQuestion.id] === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleSingleAnswer(currentQuestion.id, opt.value)}
+                        className={`relative overflow-hidden w-full text-left px-4 py-3 rounded-2xl backdrop-blur-md border transition-all duration-300 cursor-pointer group ${
+                          isSelected
+                            ? darkMode
+                              ? `bg-white/10 border-[rgba(${pc?.rgb},0.6)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_20px_rgba(${pc?.rgb},0.2)]`
+                              : `bg-white/60 border-[rgba(${pc?.rgb},0.6)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_0_20px_rgba(${pc?.rgb},0.15)]`
+                            : darkMode
+                              ? `bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.07] hover:border-[rgba(${pc?.rgb},0.4)]`
+                              : `bg-white/50 border-slate-200 hover:border-[rgba(${pc?.rgb},0.4)] hover:bg-white/80`
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {opt.icon && <span style={{ color: `rgba(${pc?.rgb},1)` }} className="opacity-70">{opt.icon}</span>}
+                          <span className="text-[13px] font-semibold">{optLabel}</span>
+                          {isSelected && <CheckCircle2 size={16} className="ml-auto shrink-0" style={{ color: `rgba(${pc?.rgb},1)` }} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
