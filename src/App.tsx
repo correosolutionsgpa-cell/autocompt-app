@@ -104,6 +104,7 @@ import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
+import AdminDashboard from "./components/AdminDashboard";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
@@ -18084,11 +18085,10 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
 
   if (vista === "admin") {
     return (
-      <SuperAdminPanel
+      <AdminDashboard
         darkMode={darkMode}
         onBack={() => setVista("dashboard")}
         adminName={adminName}
-        adminEmail={currentUserEmail || ''}
       />
     );
   }
