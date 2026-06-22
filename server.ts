@@ -154,10 +154,42 @@ async function startServer() {
       const { base64Data, mimeType, filename } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
 
+      /**
+       * parseCurrency – sanitize any currency string returned by Gemini before
+       * converting to a JS number.  Handles formats such as:
+       *   "229,95"  /  "$ 229.95"  /  "229,95 $"  /  "1 234,56 $"  /  "1,234.56"
+       * Returns 0 if the value is null / undefined / empty / unparseable.
+       */
+      const parseCurrency = (raw: any): number => {
+        if (raw == null || raw === '') return 0;
+        if (typeof raw === 'number') return isFinite(raw) ? Math.round(raw * 100) / 100 : 0;
+        const str = String(raw)
+          .replace(/\u00a0/g, ' ')           // non-breaking space → regular space
+          .replace(/[$€£CAD\s]/gi, '')        // strip currency symbols & whitespace
+          .replace(/[''']/g, '');              // strip thousands-separator apostrophes
+
+        const hasCommaDecimal = /,\d{1,2}$/.test(str);
+        const hasDotDecimal   = /\.\d{1,2}$/.test(str);
+
+        let normalised: string;
+        if (hasCommaDecimal && !hasDotDecimal) {
+          // European / francophone: "1.234,56" or "229,95"
+          normalised = str.replace(/\./g, '').replace(',', '.');
+        } else if (hasDotDecimal && !hasCommaDecimal) {
+          // North-American: "1,234.56" or "229.95"
+          normalised = str.replace(/,/g, '');
+        } else {
+          normalised = str.replace(/,/g, '.');
+        }
+
+        const result = parseFloat(normalised);
+        return isFinite(result) ? Math.round(result * 100) / 100 : 0;
+      };
+
       // 1. DYNAMIC REGEX & FUZZY-MATCHING FROM METADATA (Fallback / dynamic extraction)
       let detectedSupplier = "Amazon Business";
       let detectedDate = new Date().toISOString().split('T')[0];
-      let detectedSubtotal = 180.00;
+      let detectedSubtotal = 0;
       let detectedCategory = "À classer";
 
       const nameLower = (filename || "").toLowerCase();
@@ -298,10 +330,11 @@ async function startServer() {
           const ocrResult = {
             supplier: parsed.supplier || fallbackResult.supplier,
             date: parsed.date || fallbackResult.date,
-            subtotal: Number(parsed.subtotal) || fallbackResult.subtotal,
-            tps: Number(parsed.tps) !== undefined ? Number(parsed.tps) : fallbackResult.tps,
-            tvq: Number(parsed.tvq) !== undefined ? Number(parsed.tvq) : fallbackResult.tvq,
-            total: Number(parsed.total) || fallbackResult.total,
+            // parseCurrency handles francophone/formatted strings from Gemini ("229,95 $", "$ 1 234.56")
+            subtotal: (parsed.subtotal != null && parsed.subtotal !== '') ? parseCurrency(parsed.subtotal) : fallbackResult.subtotal,
+            tps:     (parsed.tps     != null && parsed.tps     !== '') ? parseCurrency(parsed.tps)     : fallbackResult.tps,
+            tvq:     (parsed.tvq     != null && parsed.tvq     !== '') ? parseCurrency(parsed.tvq)     : fallbackResult.tvq,
+            total:   (parsed.total   != null && parsed.total   !== '') ? parseCurrency(parsed.total)   : fallbackResult.total,
             category: parsed.category || fallbackResult.category
           };
           console.log("Real Gemini OCR Vision extraction complete:", ocrResult);

@@ -5672,14 +5672,49 @@ Ceci est un message automatisé généré par AutoCompt.`;
         }
 
         // Step D: Extract real values or default to simulation fallbacks
-        let supplierName = "Amazon Business";
+        let supplierName = "Fournisseur inconnu";
         let extractedDate = new Date().toISOString().split("T")[0];
-        let subtotal = 180.0;
-        let tps = 9.0;
-        let tvq = 17.96;
-        let total = 206.96;
+        let subtotal = 0;
+        let tps = 0;
+        let tvq = 0;
+        let total = 0;
         let extractedCat = "À classer";
         let extractedAdresse = "Général";
+
+        /**
+         * parseCurrency – sanitize any currency string returned by Gemini before
+         * converting to a JS number.  Handles formats such as:
+         *   "229,95"  /  "$ 229.95"  /  "229,95 $"  /  "1 234,56 $"  /  "1,234.56"
+         * Returns 0 if the value is null / undefined / empty / unparseable.
+         */
+        const parseCurrency = (raw: any): number => {
+          if (raw == null || raw === '') return 0;
+          // If already a finite number, round to 2 dp and return
+          if (typeof raw === 'number') return isFinite(raw) ? Math.round(raw * 100) / 100 : 0;
+          const str = String(raw)
+            .replace(/\u00a0/g, ' ')           // non-breaking space → regular space
+            .replace(/[\$€£CAD\s]/gi, '')       // strip currency symbols & whitespace
+            .replace(/[''']/g, '');              // strip thousands-separator apostrophes
+
+          // Distinguish European style (1.234,56) from North-American (1,234.56)
+          const hasCommaDecimal = /,\d{1,2}$/.test(str);   // comma followed by 1–2 digits at end
+          const hasDotDecimal   = /\.\d{1,2}$/.test(str);  // dot   followed by 1–2 digits at end
+
+          let normalised: string;
+          if (hasCommaDecimal && !hasDotDecimal) {
+            // European / francophone: "1.234,56" or "229,95"
+            normalised = str.replace(/\./g, '').replace(',', '.');
+          } else if (hasDotDecimal && !hasCommaDecimal) {
+            // North-American: "1,234.56" or "229.95"
+            normalised = str.replace(/,/g, '');
+          } else {
+            // Ambiguous or integer – remove any remaining commas & try
+            normalised = str.replace(/,/g, '.');
+          }
+
+          const result = parseFloat(normalised);
+          return isFinite(result) ? Math.round(result * 100) / 100 : 0;
+        };
 
         if (scanResults) {
           const normalized: any = {};
@@ -5736,11 +5771,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
             scanResults.grand_total ||
             0;
 
-          subtotal = Number(rawSubtotal) || 180.0;
-          tps = Number(rawTps) || parseFloat((subtotal * 0.05).toFixed(2));
-          tvq = Number(rawTvq) || parseFloat((subtotal * 0.09975).toFixed(2));
-          total =
-            Number(rawTotal) || parseFloat((subtotal + tps + tvq).toFixed(2));
+          // Use the AI value if present (even if 0); only compute from subtotal if truly absent.
+          // parseCurrency() safely handles francophone formats: "229,95", "$ 229.95", "1 234,56 $"
+          subtotal = (rawSubtotal != null && rawSubtotal !== '') ? parseCurrency(rawSubtotal) : 0;
+          tps     = (rawTps     != null && rawTps     !== '') ? parseCurrency(rawTps)     : parseFloat((subtotal * 0.05).toFixed(2));
+          tvq     = (rawTvq     != null && rawTvq     !== '') ? parseCurrency(rawTvq)     : parseFloat((subtotal * 0.09975).toFixed(2));
+          total   = (rawTotal   != null && rawTotal   !== '') ? parseCurrency(rawTotal)   : parseFloat((subtotal + tps + tvq).toFixed(2));
 
           extractedCat =
             normalized.categorie ||
