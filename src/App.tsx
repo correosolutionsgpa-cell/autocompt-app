@@ -5682,36 +5682,36 @@ Ceci est un message automatisé généré par AutoCompt.`;
         let extractedAdresse = "Général";
 
         /**
-         * parseCurrency – sanitize any currency string returned by Gemini before
-         * converting to a JS number.  Handles formats such as:
-         *   "229,95"  /  "$ 229.95"  /  "229,95 $"  /  "1 234,56 $"  /  "1,234.56"
-         * Returns 0 if the value is null / undefined / empty / unparseable.
+         * parseCurrency – robust parser for any currency string from Gemini.
+         * Strategy: strip EVERYTHING except digits, commas, and dots.
+         * Then decide if the last separator is a decimal mark.
+         * Handles: "471,40 $" / "$ 229.95" / "1 234,56 $" / "1,234.56" / 229.95
+         * Returns 0 for null / undefined / empty / non-numeric input.
          */
         const parseCurrency = (raw: any): number => {
-          if (raw == null || raw === '') return 0;
-          // If already a finite number, round to 2 dp and return
+          if (raw == null) return 0;
+          // Already a JS number — just round to 2dp
           if (typeof raw === 'number') return isFinite(raw) ? Math.round(raw * 100) / 100 : 0;
-          const str = String(raw)
-            .replace(/\u00a0/g, ' ')           // non-breaking space → regular space
-            .replace(/[\$€£CAD\s]/gi, '')       // strip currency symbols & whitespace
-            .replace(/[''']/g, '');              // strip thousands-separator apostrophes
-
-          // Distinguish European style (1.234,56) from North-American (1,234.56)
-          const hasCommaDecimal = /,\d{1,2}$/.test(str);   // comma followed by 1–2 digits at end
-          const hasDotDecimal   = /\.\d{1,2}$/.test(str);  // dot   followed by 1–2 digits at end
-
+          // Strip everything except digits, comma, dot
+          const stripped = String(raw).replace(/[^0-9.,]/g, '');
+          if (!stripped) return 0;
+          // Find the last comma or dot — treat it as the decimal separator
+          const lastComma = stripped.lastIndexOf(',');
+          const lastDot   = stripped.lastIndexOf('.');
+          const lastSep   = Math.max(lastComma, lastDot);
           let normalised: string;
-          if (hasCommaDecimal && !hasDotDecimal) {
-            // European / francophone: "1.234,56" or "229,95"
-            normalised = str.replace(/\./g, '').replace(',', '.');
-          } else if (hasDotDecimal && !hasCommaDecimal) {
-            // North-American: "1,234.56" or "229.95"
-            normalised = str.replace(/,/g, '');
+          if (lastSep === -1) {
+            // Pure integer string
+            normalised = stripped;
+          } else if (lastSep === lastComma) {
+            // Last separator is a comma → francophone decimal  e.g. "471,40"
+            // Remove all dots (thousands seps) and convert the final comma to dot
+            normalised = stripped.replace(/\./g, '').replace(',', '.');
           } else {
-            // Ambiguous or integer – remove any remaining commas & try
-            normalised = str.replace(/,/g, '.');
+            // Last separator is a dot → dot-decimal  e.g. "1,234.56"
+            // Remove all commas (thousands seps)
+            normalised = stripped.replace(/,/g, '');
           }
-
           const result = parseFloat(normalised);
           return isFinite(result) ? Math.round(result * 100) / 100 : 0;
         };
@@ -5771,12 +5771,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
             scanResults.grand_total ||
             0;
 
-          // Use the AI value if present (even if 0); only compute from subtotal if truly absent.
-          // parseCurrency() safely handles francophone formats: "229,95", "$ 229.95", "1 234,56 $"
-          subtotal = (rawSubtotal != null && rawSubtotal !== '') ? parseCurrency(rawSubtotal) : 0;
-          tps     = (rawTps     != null && rawTps     !== '') ? parseCurrency(rawTps)     : parseFloat((subtotal * 0.05).toFixed(2));
-          tvq     = (rawTvq     != null && rawTvq     !== '') ? parseCurrency(rawTvq)     : parseFloat((subtotal * 0.09975).toFixed(2));
-          total   = (rawTotal   != null && rawTotal   !== '') ? parseCurrency(rawTotal)   : parseFloat((subtotal + tps + tvq).toFixed(2));
+          // parseCurrency() handles any format Gemini returns ("471,40 $", "$ 229.95", 471.4, etc.)
+          // Use nullish coalescing so numeric 0 from Gemini is respected (not treated as falsy)
+          const resolvedSubtotal = rawSubtotal ?? 0;
+          const resolvedTps     = rawTps     ?? 0;
+          const resolvedTvq     = rawTvq     ?? 0;
+          const resolvedTotal   = rawTotal   ?? 0;
+          subtotal = parseCurrency(resolvedSubtotal);
+          tps     = resolvedTps   !== 0 ? parseCurrency(resolvedTps)   : parseFloat((subtotal * 0.05).toFixed(2));
+          tvq     = resolvedTvq   !== 0 ? parseCurrency(resolvedTvq)   : parseFloat((subtotal * 0.09975).toFixed(2));
+          total   = resolvedTotal !== 0 ? parseCurrency(resolvedTotal) : parseFloat((subtotal + tps + tvq).toFixed(2));
 
           extractedCat =
             normalized.categorie ||
@@ -6244,12 +6248,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
           const updateItemOnErr = (item: any) => ({
             ...item,
             status: "En attente", // Set status from loading to 'En attente' so user can see it and edit manually
-            cat: "À classer", // Default valid category
+            cat: item.cat || "À classer", // Default valid category
             fournisseur: item.fournisseur || "Facture scannée (Échec OCR)",
-            total: item.total || 180.0,
-            subtotal: item.subtotal || 150.0,
-            tps: item.tps || 7.5,
-            tvq: item.tvq || 14.96,
+            subtotal: item.subtotal ?? 0,
+            tps: item.tps ?? 0,
+            tvq: item.tvq ?? 0,
+            total: item.total ?? 0,
           });
           const hasTempId = prev.some(
             (d) => d.id === tempId || String(d.id) === String(tempId),
@@ -6284,10 +6288,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 fournisseur: "Facture scannée (Échec OCR)",
                 cat: "À classer",
                 partnerTag: activeUser,
-                subtotal: 150.0,
-                tps: 7.5,
-                tvq: 14.96,
-                total: 180.0,
+                subtotal: 0,
+                tps: 0,
+                tvq: 0,
+                total: 0,
                 lien: null,
                 refacturableTriplex: activeCompanyId === "3",
                 status: "En attente",
@@ -6387,22 +6391,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
   };
 
   const handleSimulateScan = () => {
-    const subtotal = 180.0;
-    const tps = 9.0;
-    const tvq = 17.96;
-    const total = 206.96;
-
     const mockExpense = {
       id: Date.now(),
       companyId: activeCompanyId,
       fecha: new Date().toISOString().split("T")[0],
       fournisseur: "Home Depot (Simulé)",
-      cat: "Réparations / Entretien", // Synchronize from "Entretien / Réparations" to correct category value
+      cat: "Réparations / Entretien",
       partnerTag: activeUser,
-      subtotal: subtotal,
-      tps: tps,
-      tvq: tvq,
-      total: total,
+      subtotal: 0,
+      tps: 0,
+      tvq: 0,
+      total: 0,
       lien: "https://drive.google.com/active_company_storage/simulation_vault/home_depot_invoice.jpg",
       refacturableTriplex: activeCompanyId === "3",
       status: "En attente",
@@ -6424,7 +6423,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
       text: "Facture traitée et ajoutée",
       channel: "IA Scanner",
       customMessage:
-        "Facture de Home Depot (Simulé) (206.96$) traitée et classée dans Réparations / Entretien.",
+        "Facture de Home Depot (Simulé) ajoutée — montants à valider dans le Tableau d'Audit.",
       actionText: "Voir dans le registre",
       onAction: () => {
         setVista("reportes");

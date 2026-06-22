@@ -312,7 +312,7 @@ export const defaultHistorique = [
 
 export const defaultDepenses: ExpenseDoc[] = [
   { id: '1', companyId: '1', fecha: '2026-05-01', fournisseur: 'Bell',              cat: 'Télécommunications', subtotal: 80.00,   tps: 4.0,  tvq: 7.98,   total: 91.98,   lien: null, partnerTag: 'Fabiola', ownerId: '', createdAt: '' },
-  { id: '2', companyId: '1', fecha: '2026-05-03', fournisseur: 'Hydro-Québec',      cat: 'Bureau à domicile',  subtotal: 150.00,  tps: 7.5,  tvq: 14.96,  total: 172.46,  lien: null, partnerTag: 'Fabiola', ownerId: '', createdAt: '' },
+  { id: '2', companyId: '1', fecha: '2026-05-03', fournisseur: 'Hydro-Québec',      cat: 'Bureau à domicile',  subtotal: 0,       tps: 0,    tvq: 0,      total: 0,       lien: null, partnerTag: 'Fabiola', ownerId: '', createdAt: '' },
   { id: '3', companyId: '2', fecha: '2026-05-05', fournisseur: 'Apple Store',       cat: 'Équipement',         subtotal: 1200.00, tps: 60.0, tvq: 119.70, total: 1379.70, lien: null, partnerTag: 'Natalia', ownerId: '', createdAt: '' },
   { id: '4', companyId: '3', fecha: '2026-05-06', fournisseur: 'Taxes Municipales', cat: 'Bureau à domicile',  subtotal: 2000.00, tps: 0,    tvq: 0,      total: 2000.00, lien: null, partnerTag: 'Fabiola', ownerId: '', createdAt: '' },
 ];

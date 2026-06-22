@@ -155,33 +155,33 @@ async function startServer() {
       const apiKey = process.env.GEMINI_API_KEY;
 
       /**
-       * parseCurrency – sanitize any currency string returned by Gemini before
-       * converting to a JS number.  Handles formats such as:
-       *   "229,95"  /  "$ 229.95"  /  "229,95 $"  /  "1 234,56 $"  /  "1,234.56"
-       * Returns 0 if the value is null / undefined / empty / unparseable.
+       * parseCurrency – robust parser for any currency string from Gemini.
+       * Strategy: strip EVERYTHING except digits, commas, and dots.
+       * Then decide if the last separator is a decimal mark.
+       * Handles: "471,40 $" / "$ 229.95" / "1 234,56 $" / "1,234.56" / 229.95
+       * Returns 0 for null / undefined / empty / non-numeric input.
        */
       const parseCurrency = (raw: any): number => {
-        if (raw == null || raw === '') return 0;
+        if (raw == null) return 0;
+        // Already a JS number — just round to 2dp
         if (typeof raw === 'number') return isFinite(raw) ? Math.round(raw * 100) / 100 : 0;
-        const str = String(raw)
-          .replace(/\u00a0/g, ' ')           // non-breaking space → regular space
-          .replace(/[$€£CAD\s]/gi, '')        // strip currency symbols & whitespace
-          .replace(/[''']/g, '');              // strip thousands-separator apostrophes
-
-        const hasCommaDecimal = /,\d{1,2}$/.test(str);
-        const hasDotDecimal   = /\.\d{1,2}$/.test(str);
-
+        // Strip everything except digits, comma, dot
+        const stripped = String(raw).replace(/[^0-9.,]/g, '');
+        if (!stripped) return 0;
+        // Find the last comma or dot — treat it as the decimal separator
+        const lastComma = stripped.lastIndexOf(',');
+        const lastDot   = stripped.lastIndexOf('.');
+        const lastSep   = Math.max(lastComma, lastDot);
         let normalised: string;
-        if (hasCommaDecimal && !hasDotDecimal) {
-          // European / francophone: "1.234,56" or "229,95"
-          normalised = str.replace(/\./g, '').replace(',', '.');
-        } else if (hasDotDecimal && !hasCommaDecimal) {
-          // North-American: "1,234.56" or "229.95"
-          normalised = str.replace(/,/g, '');
+        if (lastSep === -1) {
+          normalised = stripped;
+        } else if (lastSep === lastComma) {
+          // Last separator is a comma → francophone decimal  e.g. "471,40"
+          normalised = stripped.replace(/\./g, '').replace(',', '.');
         } else {
-          normalised = str.replace(/,/g, '.');
+          // Last separator is a dot → dot-decimal  e.g. "1,234.56"
+          normalised = stripped.replace(/,/g, '');
         }
-
         const result = parseFloat(normalised);
         return isFinite(result) ? Math.round(result * 100) / 100 : 0;
       };
@@ -347,13 +347,13 @@ async function startServer() {
     } catch (e: any) {
       console.error("API Scanner parser error, returning secure fallback:", e);
       res.status(200).json({
-        supplier: "Quincaillerie Laurentienne",
+        supplier: "Fournisseur inconnu",
         date: new Date().toISOString().split('T')[0],
-        subtotal: 150.00,
-        tps: 7.50,
-        tvq: 14.96,
-        total: 172.46,
-        category: "Réparations / Entretien"
+        subtotal: 0,
+        tps: 0,
+        tvq: 0,
+        total: 0,
+        category: "À classer"
       });
     }
   });
