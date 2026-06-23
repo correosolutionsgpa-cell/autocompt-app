@@ -20,9 +20,7 @@
 import { motion } from "motion/react";
 
 // ── Asset Imports ─────────────────────────────────────────────────────────────
-import sofiWelcome  from "../assets/sofi/soficompletablanco.png";
-import sofiIdle     from "../assets/sofi/sofi completa mano baja.png";
-import sofiHalfBody from "../assets/sofi/sofimediocuerpoblanco.png";
+// Images moved to /public/sofi/ for direct Vite resolution without bundling errors
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,9 +43,9 @@ export interface SofiPresenceProps {
 
 // ── Asset resolver ─────────────────────────────────────────────────────────────
 const ASSET_MAP: Record<SofiVariant, string> = {
-  welcome:  sofiWelcome,
-  idle:     sofiIdle,
-  halfbody: sofiHalfBody,
+  welcome:  "/sofi/soficompletablanco.png",
+  idle:     "/sofi/sofi completa mano baja.png",
+  halfbody: "/sofi/sofimediocuerpoblanco.png",
 };
 
 const ALT_MAP: Record<SofiVariant, string> = {
