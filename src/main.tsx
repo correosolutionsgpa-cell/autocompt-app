@@ -7,11 +7,13 @@ import { FiscalProvider } from './lib/FiscalContext.tsx'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <FiscalProvider>
-      <div className="relative min-h-screen">
-        <App />
-        <div className="pointer-events-none fixed bottom-0 w-full text-center p-3 z-[99999]">
+      <div className="flex flex-col min-h-screen">
+        <main className="flex-grow">
+          <App />
+        </main>
+        <footer className="w-full text-center p-3 mt-auto">
           <p className="text-[10px] font-medium text-slate-500/80 drop-shadow-sm">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
-        </div>
+        </footer>
       </div>
     </FiscalProvider>
   </StrictMode>,

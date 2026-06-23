@@ -4,7 +4,7 @@ import {
   MapPin, Globe, Building2, User, Edit3, Trash2, Check, X,
   PlusCircle, RefreshCw, ChevronDown, DollarSign, TrendingUp,
   ArrowUpRight, ArrowDownRight, Briefcase, Hammer, FileSearch,
-  Tag, Copy, Eye, Pause, Play, MessageSquare
+  Tag, Copy, Eye, Pause, Play, MessageSquare, Bell
 } from 'lucide-react';
 
 // ─── Types and Interfaces ──────────────────────────────────────────────────
@@ -332,7 +332,8 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
 
   const modalStatusOptions = [
     { value: 'Actif', label: 'Actif' },
-    { value: 'Suspendu', label: 'Suspendu' }
+    { value: 'Suspendu', label: 'Suspendu' },
+    { value: 'En retard', label: 'En retard' }
   ];
 
   // Promo Code Custom select options
@@ -484,6 +485,19 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
             >
               <Plus size={15} />
               <span>Nouveau Client</span>
+            </button>
+
+            <button
+              onClick={() => alert("Ouverture du tiroir de support client / Notifications")}
+              className={`relative p-2 rounded-xl transition-all active:scale-95 shadow-md border ${
+                darkMode 
+                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' 
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+              title="Notifications / Support client"
+            >
+              <Bell size={15} />
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-[#0b0f0b] animate-pulse" />
             </button>
           </div>
         </div>
@@ -703,7 +717,13 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                     >
                       {/* Name / Client */}
                       <td className="px-6 py-4">
-                        <div className="font-bold text-xs max-w-xs md:max-w-sm truncate" title={client.name}>
+                        <div 
+                          onClick={() => setEditingClient(client)}
+                          className={`font-bold text-xs max-w-xs md:max-w-sm truncate cursor-pointer transition-all hover:underline ${
+                            darkMode ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-700 hover:text-emerald-600'
+                          }`}
+                          title={client.name}
+                        >
                           {client.name}
                         </div>
                         <div className={`text-[9px] mt-0.5 ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
@@ -1111,7 +1131,7 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                   label="Statut"
                   value={editingClient.status}
                   options={modalStatusOptions}
-                  onChange={val => setEditingClient(prev => prev ? ({ ...prev, status: val as 'Actif' | 'Inactif' }) : null)}
+                  onChange={val => setEditingClient(prev => prev ? ({ ...prev, status: val as 'Actif' | 'Suspendu' | 'En retard' }) : null)}
                   darkMode={darkMode}
                   fullWidth
                 />
