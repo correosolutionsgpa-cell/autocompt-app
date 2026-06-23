@@ -638,8 +638,7 @@ export default function SofiOnboarding({
 
       // Gemini 2.0 Flash multimodal call
       // Uses VITE_GEMINI_API_KEY if configured.
-      // If empty, falls back to the server-side /api/scan proxy (same as dashboard scanner).
-      const GEMINI_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY?.trim() || "";
+      const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY?.trim() || "";
 
       let parsed: any = null;
 
@@ -652,13 +651,14 @@ export default function SofiOnboarding({
               {
                 text: [
                   "Tu es un expert en fiscalité immobilière québécoise.",
-                  "Analyse ce document (acte notarié, certificat de localisation, évaluation municipale ou plan d'architecte).",
-                  "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) :",
-                  "1. superficie_totale — superficie totale du bâtiment (toutes unités confondues).",
-                  "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire.",
+                  "Analyse ce document (acte notarié, compte de taxes, évaluation municipale de la ville, certificat de localisation ou plan d'architecte).",
+                  "L'objectif est de trouver les mesures de la propriété, spécifiquement l'aire de plancher, la superficie de l'aire d'étage, ou la superficie du bâtiment.",
+                  "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) ou mètres carrés convertis en pi² (1 m² = 10.764 pi²) :",
+                  "1. superficie_totale — superficie totale habitable du bâtiment (toutes unités confondues).",
+                  "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire (si indiquée). S'il s'agit d'une évaluation municipale pour une seule propriété, utilise la superficie totale pour les deux.",
                   "Réponds STRICTEMENT avec ce JSON et rien d'autre (pas de markdown, pas d'explication) :",
                   '{ "superficie_totale": <number>, "superficie_personnelle": <number> }',
-                  "Si tu ne peux pas extraire les valeurs avec certitude, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
+                  "Si tu ne peux vraiment pas extraire ou déduire les valeurs, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
                 ].join("\n")
               },
               { inline_data: { mime_type: mimeType, data: base64 } }
@@ -673,12 +673,14 @@ export default function SofiOnboarding({
         });
         if (!resp.ok) {
           const errText = await resp.text();
+          console.error("Gemini API Error Payload:", errText);
           throw new Error(`Gemini API error ${resp.status}: ${errText.slice(0, 200)}`);
         }
         const data = await resp.json();
         const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-        const jsonStr = raw.replace(/```[\s\S]*?```/g, "").trim();
-        parsed = JSON.parse(jsonStr);
+        console.log("Raw Gemini Response:", raw);
+        const jsonStr = raw.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, "$1").trim();
+        parsed = JSON.parse(jsonStr || "{}");
       } else {
         // No dedicated Gemini key — route through server proxy (/api/scan)
         // The proxy has the GEMINI_API_KEY server-side env var, same as dashboard scanner.
@@ -731,6 +733,7 @@ export default function SofiOnboarding({
         setTaxScanLoading(false);
       }, 1200);
     } catch (err: any) {
+      console.error("Tax Dimension Scan Error:", err);
       setTaxScanError(
         lang === "FR" ? `Échec du scan : ${err.message}` :
         lang === "EN" ? `Scan failed: ${err.message}` :

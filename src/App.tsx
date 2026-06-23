@@ -5627,19 +5627,22 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   .replace(/```$/, "")
                   .trim();
               }
-              scanResults = JSON.parse(cleanedText);
+              scanResults = JSON.parse(cleanedText || "{}");
               console.log(
                 "[Google Gemini API] Direct Client-side Vision OCR parse successful:",
                 scanResults,
               );
             }
           } else {
+            const errText = await response.text();
             console.error(
               "[Google Gemini API] Client-side fetch returned non-200 status:",
               response.status,
+              errText
             );
+            throw new Error(`API Status ${response.status}: ${errText.slice(0, 200)}`);
           }
-        } catch (clientErr) {
+        } catch (clientErr: any) {
           console.error(
             "[Google Gemini API] Direct client-side fetch failed, will try server-side proxy...",
             clientErr,
@@ -5669,13 +5672,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 scanResults,
               );
             } else {
-              throw new Error(`Server status: ${response.status}`);
+              const errText = await response.text();
+              throw new Error(`Server status ${response.status}: ${errText.slice(0, 200)}`);
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error(
-              "OCR API failed both client and server-side, invoking fallback values:",
+              "OCR API failed both client and server-side. Aborting scan:",
               err,
             );
+            alert(`S.O.F.I. Scanner Error:\n\n${err.message || err}\n\nPlease check your API key and network connection.`);
+            setDepenses((prev) => prev.filter((d) => d.id !== tempId && String(d.id) !== String(tempId)));
+            return; // Exit the pipeline immediately!
           }
         }
 
@@ -5972,15 +5979,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           : tvq;
 
         // Pre-check for duplicate with the currently captured state (to fail fast and notify synchronously)
-        const isCurrentlyDuplicate = depenses.some(
-          (d) =>
-            d.id !== tempId &&
-            String(d.id) !== String(tempId) &&
-            d.fournisseur.trim().toLowerCase() ===
-            supplierName.trim().toLowerCase() &&
-            d.fecha === extractedDate &&
-            Number(d.total) === Number(totalToUse),
-        );
+        // [DEBUG] TEMPORARILY BYPASS DOUBLON
+        const isCurrentlyDuplicate = false;
 
         if (isCurrentlyDuplicate) {
           setDepenses((prev) =>
@@ -6035,15 +6035,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         } else {
           // Step E: Update state entry matching tempId with real parsed data and change status to 'En attente'
           setDepenses((prev) => {
-            const hasDuplicate = prev.some(
-              (d) =>
-                d.id !== tempId &&
-                String(d.id) !== String(tempId) &&
-                d.fournisseur.trim().toLowerCase() ===
-                supplierName.trim().toLowerCase() &&
-                d.fecha === extractedDate &&
-                Number(d.total) === Number(totalToUse),
-            );
+            // [DEBUG] TEMPORARILY BYPASS DOUBLON
+            const hasDuplicate = false;
 
             if (hasDuplicate) {
               isDuplicate = true;
