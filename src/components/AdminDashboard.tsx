@@ -4,7 +4,7 @@ import {
   MapPin, Globe, Building2, User, Edit3, Trash2, Check, X,
   PlusCircle, RefreshCw, ChevronDown, DollarSign, TrendingUp,
   ArrowUpRight, ArrowDownRight, Briefcase, Hammer, FileSearch,
-  Tag, Copy
+  Tag, Copy, Eye, Pause, Play
 } from 'lucide-react';
 
 // ─── Types and Interfaces ──────────────────────────────────────────────────
@@ -23,7 +23,7 @@ export interface Client {
   phone: string;
   address: string;
   language: 'FR' | 'EN' | 'ES';
-  status: 'Actif' | 'Inactif';
+  status: 'Actif' | 'Suspendu';
   createdAt: string;
 }
 
@@ -156,7 +156,7 @@ const INITIAL_CLIENTS: Client[] = [
     phone: '(514) 555-0422',
     address: '1000 Rue de la Gauchetière O, Montréal, QC H3B 4W5',
     language: 'EN',
-    status: 'Actif',
+    status: 'Suspendu',
     createdAt: '2025-05-18'
   },
   {
@@ -178,7 +178,7 @@ const INITIAL_CLIENTS: Client[] = [
     phone: '(450) 555-0812',
     address: '500 Rue de la Rotonde, Verdun, QC H3E 1Z4',
     language: 'EN',
-    status: 'Actif',
+    status: 'Suspendu',
     createdAt: '2025-11-12'
   }
 ];
@@ -316,7 +316,7 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
 
   const modalStatusOptions = [
     { value: 'Actif', label: 'Actif' },
-    { value: 'Inactif', label: 'Inactif' }
+    { value: 'Suspendu', label: 'Suspendu' }
   ];
 
   // Promo Code Custom select options
@@ -452,7 +452,7 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                 setGeneratedPromoCode('');
                 setIsPromoOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-650 to-teal-650 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 shadow-md shadow-emerald-500/10 border border-emerald-500/35"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 shadow-md shadow-emerald-500/10 border border-emerald-500/35"
             >
               <Tag size={15} />
               <span>Générer un code promo</span>
@@ -741,10 +741,10 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
 
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className={`inline-flex px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                           client.status === 'Actif'
-                            ? 'bg-emerald-500/10 text-emerald-500'
-                            : 'bg-zinc-550/10 text-zinc-400'
+                            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
                         }`}>
                           {client.status}
                         </span>
@@ -752,13 +752,29 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
 
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs font-medium">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => alert(`Connexion en tant que : ${client.name}`)}
+                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-blue-400' : 'hover:bg-slate-100 text-blue-750'}`}
+                            title="Login as User"
+                          >
+                            <Eye size={14} />
+                          </button>
                           <button
                             onClick={() => setEditingClient(client)}
                             className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-emerald-400' : 'hover:bg-slate-100 text-emerald-700'}`}
                             title="Modifier"
                           >
                             <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: c.status === 'Actif' ? 'Suspendu' : 'Actif' } : c));
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-amber-400' : 'hover:bg-slate-100 text-amber-600'}`}
+                            title={client.status === 'Actif' ? 'Suspendre' : 'Activer'}
+                          >
+                            {client.status === 'Actif' ? <Pause size={14} /> : <Play size={14} />}
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client.id)}
