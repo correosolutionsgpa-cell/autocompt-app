@@ -4,7 +4,7 @@ import {
   MapPin, Globe, Building2, User, Edit3, Trash2, Check, X,
   PlusCircle, RefreshCw, ChevronDown, DollarSign, TrendingUp,
   ArrowUpRight, ArrowDownRight, Briefcase, Hammer, FileSearch,
-  Tag, Copy, Eye, Pause, Play
+  Tag, Copy, Eye, Pause, Play, MessageSquare
 } from 'lucide-react';
 
 // ─── Types and Interfaces ──────────────────────────────────────────────────
@@ -23,8 +23,10 @@ export interface Client {
   phone: string;
   address: string;
   language: 'FR' | 'EN' | 'ES';
-  status: 'Actif' | 'Suspendu';
+  status: 'Actif' | 'Suspendu' | 'En retard';
   createdAt: string;
+  tokensUsed: number;
+  tokenLimit: number;
 }
 
 interface AdminDashboardProps {
@@ -124,7 +126,9 @@ const INITIAL_CLIENTS: Client[] = [
     address: '1420 Blvd Saint-Laurent, Montréal, QC H2X 2S6',
     language: 'FR',
     status: 'Actif',
-    createdAt: '2025-01-10'
+    createdAt: '2025-01-10',
+    tokensUsed: 15200,
+    tokenLimit: 50000
   },
   {
     id: '2',
@@ -135,7 +139,9 @@ const INITIAL_CLIENTS: Client[] = [
     address: '3200 Chemin de la Côte-Sainte-Catherine, Montréal, QC H3T 1C1',
     language: 'FR',
     status: 'Actif',
-    createdAt: '2025-02-15'
+    createdAt: '2025-02-15',
+    tokensUsed: 48900,
+    tokenLimit: 50000
   },
   {
     id: '3',
@@ -145,8 +151,10 @@ const INITIAL_CLIENTS: Client[] = [
     phone: '(450) 555-0918',
     address: '1850 Rue Saint-Denis, Montréal, QC H2X 3K7',
     language: 'FR',
-    status: 'Actif',
-    createdAt: '2025-03-22'
+    status: 'En retard',
+    createdAt: '2025-03-22',
+    tokensUsed: 12100,
+    tokenLimit: 30000
   },
   {
     id: '4',
@@ -157,7 +165,9 @@ const INITIAL_CLIENTS: Client[] = [
     address: '1000 Rue de la Gauchetière O, Montréal, QC H3B 4W5',
     language: 'EN',
     status: 'Suspendu',
-    createdAt: '2025-05-18'
+    createdAt: '2025-05-18',
+    tokensUsed: 5000,
+    tokenLimit: 10000
   },
   {
     id: '5',
@@ -168,7 +178,9 @@ const INITIAL_CLIENTS: Client[] = [
     address: '450 Rue Saint-Jacques, Montréal, QC H2Y 1S1',
     language: 'ES',
     status: 'Actif',
-    createdAt: '2025-08-30'
+    createdAt: '2025-08-30',
+    tokensUsed: 8900,
+    tokenLimit: 25000
   },
   {
     id: '6',
@@ -179,7 +191,9 @@ const INITIAL_CLIENTS: Client[] = [
     address: '500 Rue de la Rotonde, Verdun, QC H3E 1Z4',
     language: 'EN',
     status: 'Suspendu',
-    createdAt: '2025-11-12'
+    createdAt: '2025-11-12',
+    tokensUsed: 15000,
+    tokenLimit: 15000
   }
 ];
 
@@ -210,7 +224,9 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
     phone: '',
     address: '',
     language: 'FR',
-    status: 'Actif'
+    status: 'Actif',
+    tokensUsed: 0,
+    tokenLimit: 50000
   });
 
   // Role details mapping for colors/icons (matching platform's SofiOnboarding glass styles)
@@ -371,7 +387,9 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
       phone: '',
       address: '',
       language: 'FR',
-      status: 'Actif'
+      status: 'Actif',
+      tokensUsed: 0,
+      tokenLimit: 50000
     });
   };
 
@@ -668,13 +686,10 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className={`border-b ${darkMode ? 'border-emerald-950/30 bg-[#0f150f]' : 'border-slate-100 bg-[#f9fbf9]'}`}>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Profil / Rôle</th>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Nom / Syndicat</th>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Contact & Email</th>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Téléphone</th>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Adresse Physique</th>
-                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Langue</th>
+                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Nom / Client</th>
+                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Type de Profil</th>
                   <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider text-center ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Statut</th>
+                  <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Consommation Tokens</th>
                   <th className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider text-right ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Actions</th>
                 </tr>
               </thead>
@@ -686,17 +701,7 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                       key={client.id}
                       className={`transition-colors ${darkMode ? 'hover:bg-emerald-950/10' : 'hover:bg-emerald-50/20'}`}
                     >
-                      {/* 5. COLOR-CODED BADGES (frosted glass glassmorphism in dark mode) */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
-                          darkMode ? `${conf.bgDark} ${conf.textDark} ${conf.borderDark}` : `${conf.bgLight} ${conf.textLight} ${conf.borderLight}`
-                        }`}>
-                          {conf.icon}
-                          {client.type}
-                        </span>
-                      </td>
-
-                      {/* Full Name */}
+                      {/* Name / Client */}
                       <td className="px-6 py-4">
                         <div className="font-bold text-xs max-w-xs md:max-w-sm truncate" title={client.name}>
                           {client.name}
@@ -706,37 +711,14 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                         </div>
                       </td>
 
-                      {/* Email Address */}
+                      {/* Profil Type Badges */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Mail size={12} className={darkMode ? 'text-emerald-500/50' : 'text-emerald-600/50'} />
-                          <a href={`mailto:${client.email}`} className="hover:underline font-semibold text-emerald-600 dark:text-emerald-400">
-                            {client.email}
-                          </a>
-                        </div>
-                      </td>
-
-                      {/* Phone Number */}
-                      <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold">
-                        <div className="flex items-center gap-1.5">
-                          <Phone size={12} className={darkMode ? 'text-zinc-600' : 'text-slate-400'} />
-                          <span>{client.phone}</span>
-                        </div>
-                      </td>
-
-                      {/* Physical Address */}
-                      <td className="px-6 py-4 max-w-xs">
-                        <div className="flex items-start gap-1.5 text-xs">
-                          <MapPin size={13} className={`shrink-0 mt-0.5 ${darkMode ? 'text-zinc-650' : 'text-slate-400'}`} />
-                          <span className="leading-tight font-medium" title={client.address}>
-                            {client.address}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Language Preference */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {renderLanguageFlag(client.language)}
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
+                          darkMode ? `${conf.bgDark} ${conf.textDark} ${conf.borderDark}` : `${conf.bgLight} ${conf.textLight} ${conf.borderLight}`
+                        }`}>
+                          {conf.icon}
+                          {client.type}
+                        </span>
                       </td>
 
                       {/* Status */}
@@ -744,44 +726,57 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                           client.status === 'Actif'
                             ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                            : client.status === 'En retard'
+                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                             : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
                         }`}>
                           {client.status}
                         </span>
                       </td>
 
+                      {/* Token Consumption */}
+                      <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold">
+                        <div className="flex flex-col">
+                          <div className="flex items-center justify-between text-[11px] mb-1 gap-2">
+                            <span className={darkMode ? 'text-zinc-400' : 'text-slate-600'}>
+                              {client.tokensUsed.toLocaleString('fr-CA')} / {client.tokenLimit.toLocaleString('fr-CA')}
+                            </span>
+                            <span className={`text-[9px] font-bold ${client.tokensUsed / client.tokenLimit > 0.8 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                              {Math.round((client.tokensUsed / client.tokenLimit) * 100)}%
+                            </span>
+                          </div>
+                          <div className={`w-28 h-1 rounded-full overflow-hidden ${darkMode ? 'bg-zinc-800' : 'bg-slate-100'}`}>
+                            <div 
+                              className={`h-full rounded-full ${client.tokensUsed / client.tokenLimit > 0.8 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${Math.min(100, (client.tokensUsed / client.tokenLimit) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs font-medium">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => alert(`Connexion en tant que : ${client.name}`)}
-                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-blue-400' : 'hover:bg-slate-100 text-blue-750'}`}
-                            title="Login as User"
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
                             onClick={() => setEditingClient(client)}
                             className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-emerald-400' : 'hover:bg-slate-100 text-emerald-700'}`}
-                            title="Modifier"
+                            title="Voir/Éditer les détails"
                           >
                             <Edit3 size={14} />
                           </button>
                           <button
-                            onClick={() => {
-                              setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: c.status === 'Actif' ? 'Suspendu' : 'Actif' } : c));
-                            }}
-                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-amber-400' : 'hover:bg-slate-100 text-amber-600'}`}
-                            title={client.status === 'Actif' ? 'Suspendre' : 'Activer'}
+                            onClick={() => alert(`Connexion en tant que client : ${client.name}`)}
+                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-blue-400' : 'hover:bg-slate-100 text-blue-750'}`}
+                            title="Connexion en tant que client"
                           >
-                            {client.status === 'Actif' ? <Pause size={14} /> : <Play size={14} />}
+                            <Eye size={14} />
                           </button>
                           <button
-                            onClick={() => handleDeleteClient(client.id)}
-                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-rose-950/20 text-rose-400' : 'hover:bg-rose-50 text-rose-600'}`}
-                            title="Supprimer"
+                            onClick={() => alert(`Ouverture de la messagerie interne pour : ${client.name}`)}
+                            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-zinc-800 text-purple-400' : 'hover:bg-slate-100 text-purple-700'}`}
+                            title="Message Interne"
                           >
-                            <Trash2 size={14} />
+                            <MessageSquare size={14} />
                           </button>
                         </div>
                       </td>
@@ -791,7 +786,7 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
 
                 {filteredClients.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
+                    <td colSpan={5} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <Users size={32} className={`mb-3 ${darkMode ? 'text-zinc-700' : 'text-slate-355'}`} />
                         <p className="font-bold text-sm">Aucun client ne correspond</p>
