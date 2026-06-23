@@ -27,6 +27,7 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { postJournalEntry } from '../services/ledgerService';
@@ -769,5 +770,34 @@ export const dataService = {
     await this.delay(800);
     console.log(`Email sent to ${to}`);
     return true;
+  },
+
+  // ── General Ledger ──────────────────────────────────────────────────────────
+
+  async fetchJournalEntries() {
+    try {
+      const entriesQuery = query(collection(db, 'journalEntries'), orderBy('date', 'desc'));
+      const entriesSnap = await getDocs(entriesQuery);
+      
+      const combinedEntries = await Promise.all(entriesSnap.docs.map(async (docSnap) => {
+        const entryData = docSnap.data();
+        const entryId = docSnap.id;
+        
+        const linesQuery = query(collection(db, 'journalLines'), where('journalEntryId', '==', entryId));
+        const linesSnap = await getDocs(linesQuery);
+        const linesData = linesSnap.docs.map(lineDoc => lineDoc.data());
+        
+        return {
+          ...entryData,
+          id: entryId,
+          lines: linesData
+        };
+      }));
+      
+      return combinedEntries;
+    } catch (error) {
+      console.error("Error fetching journal entries:", error);
+      throw error;
+    }
   },
 };
