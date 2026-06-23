@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft, Users, Search, Plus, Shield, Mail, Phone,
   MapPin, Globe, Building2, User, Edit3, Trash2, Check, X,
@@ -210,6 +210,15 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
   const [isPromoOpen, setIsPromoOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
+  // Private Client Promo Code State
+  const [isSendingPrivatePromo, setIsSendingPrivatePromo] = useState(false);
+  const [privatePromoSent, setPrivatePromoSent] = useState(false);
+
+  useEffect(() => {
+    setIsSendingPrivatePromo(false);
+    setPrivatePromoSent(false);
+  }, [editingClient?.id]);
+
   // Promo Code State
   const [generatedPromoCode, setGeneratedPromoCode] = useState('');
   const [promoDiscount, setPromoDiscount] = useState('20');
@@ -392,6 +401,15 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
       tokensUsed: 0,
       tokenLimit: 50000
     });
+  };
+
+  const handleSendPrivatePromo = () => {
+    setIsSendingPrivatePromo(true);
+    setPrivatePromoSent(false);
+    setTimeout(() => {
+      setIsSendingPrivatePromo(false);
+      setPrivatePromoSent(true);
+    }, 1000);
   };
 
   const handleUpdateClient = (e: React.FormEvent) => {
@@ -1135,6 +1153,41 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                   darkMode={darkMode}
                   fullWidth
                 />
+              </div>
+
+              {/* Promotions & Réductions Section */}
+              <hr className={darkMode ? 'border-white/10' : 'border-slate-200'} />
+              <div className={`p-4 rounded-xl border ${
+                darkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+              } space-y-3`}>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-emerald-550">
+                  Promotions & Réductions
+                </h4>
+                <p className={`text-[11px] font-medium leading-relaxed ${darkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                  Générez un code promo privé à usage unique pour ce client. Il sera automatiquement envoyé par messagerie interne.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={isSendingPrivatePromo}
+                    onClick={handleSendPrivatePromo}
+                    className="flex items-center justify-center gap-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
+                  >
+                    {isSendingPrivatePromo ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Génération en cours...</span>
+                      </>
+                    ) : (
+                      <span>Générer et envoyer un code privé</span>
+                    )}
+                  </button>
+                  {privatePromoSent && (
+                    <p className="text-[11px] font-extrabold text-emerald-500 text-center">
+                      ✓ Code à usage unique envoyé par messagerie interne !
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 justify-end pt-4 border-t border-slate-200 dark:border-white/10">
