@@ -1251,6 +1251,13 @@ const App = () => {
 
   const [subVistaFactura, setSubVistaFactura] = useState("liste");
   const [tabReporte, setTabReporte] = useState("ventes");
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+
+  useEffect(() => {
+    dataService.fetchJournalEntries()
+      .then(data => setJournalEntries(data))
+      .catch(err => console.error("Failed to load journal entries", err));
+  }, []);
   const [expandedGavetas, setExpandedGavetas] = useState<
     Record<string, boolean>
   >({});
@@ -14183,7 +14190,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <div
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
         >
-          {(getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin" ? (activeUser === "Fabiola" ? ["ventes", "taxes", "paie", "banque", "resume"] : ["ventes", "taxes", "banque", "resume"]) : ["ventes", "taxes", "banque", "resume"]).map((tab) => (
+          {(getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin" ? (activeUser === "Fabiola" ? ["ventes", "taxes", "paie", "banque", "resume", "grand_livre"] : ["ventes", "taxes", "banque", "resume", "grand_livre"]) : ["ventes", "taxes", "banque", "resume", "grand_livre"]).map((tab) => (
             <button
               key={tab}
               onClick={() => setTabReporte(tab as any)}
@@ -14199,7 +14206,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     ? "Paie / Personnel"
                     : tab === "banque"
                       ? "Banque"
-                      : "Résumé Annuel"}
+                      : tab === "grand_livre"
+                        ? "Grand Livre"
+                        : "Résumé Annuel"}
             </button>
           ))}
         </div>
@@ -15099,6 +15108,69 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {tabReporte === "grand_livre" && (
+            <div className="w-full flex flex-col space-y-6 pb-8 px-6 pt-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-between items-center w-full mb-4">
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-[#059669] text-left">
+                  Grand Livre (Double-Entry Ledger)
+                </h4>
+              </div>
+
+              <div className="space-y-6">
+                {journalEntries.length === 0 ? (
+                  <p className="text-sm font-black text-slate-400 italic">Aucune transaction trouvée.</p>
+                ) : (
+                  journalEntries.map((entry: any) => {
+                    const totalDebits = entry.lines?.filter((l: any) => l.type === 'Debit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
+                    const totalCredits = entry.lines?.filter((l: any) => l.type === 'Credit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
+                    
+                    return (
+                      <div key={entry.id} className={`p-5 rounded-2xl border shadow-sm ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
+                        <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-100 dark:border-zinc-800">
+                          <div className="text-left">
+                            <p className="text-[10px] font-black text-slate-400">{new Date(entry.date).toLocaleDateString()} • {entry.id}</p>
+                            <h5 className="text-sm font-black text-slate-800 dark:text-zinc-100">{entry.description}</h5>
+                          </div>
+                          <div className="text-right flex space-x-4">
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-slate-400">Total Débit</p>
+                              <p className="text-xs font-black text-rose-500">{totalDebits.toFixed(2)} $</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-slate-400">Total Crédit</p>
+                              <p className="text-xs font-black text-emerald-500">{totalCredits.toFixed(2)} $</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="w-full overflow-x-auto">
+                          <table className="w-full text-[9px] font-black uppercase tracking-wider text-left min-w-[400px]">
+                            <thead className="text-slate-400 border-b border-slate-50 dark:border-zinc-800">
+                              <tr>
+                                <th className="pb-2">Compte</th>
+                                <th className="pb-2 text-right">Débit</th>
+                                <th className="pb-2 text-right">Crédit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {entry.lines?.map((line: any) => (
+                                <tr key={line.id} className="border-b border-slate-50 dark:border-zinc-800/50">
+                                  <td className="py-2 text-slate-700 dark:text-zinc-300">{line.accountId}</td>
+                                  <td className="py-2 text-right text-rose-500">{line.type === 'Debit' ? `${Number(line.amount).toFixed(2)} $` : '-'}</td>
+                                  <td className="py-2 text-right text-emerald-500">{line.type === 'Credit' ? `${Number(line.amount).toFixed(2)} $` : '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
