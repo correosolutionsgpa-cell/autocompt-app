@@ -606,7 +606,43 @@ export const dataService = {
     const originalId = loyerData.id || `loyer_${Date.now()}`;
     const docId = `${userId}_loyer_${originalId}`;
     const data = { ...loyerData, id: docId, ownerId: userId, createdAt: loyerData.createdAt || new Date().toISOString() };
-    await setDoc(doc(db, 'loyers', docId), data);
+    
+    const entryData = {
+      id: docId,
+      date: new Date().toISOString(),
+      description: `Income: Rent collection from ${data.locataire || 'Unknown'} - Unit: ${data.uniteAdresse || 'Unknown'}`,
+      documentReference: docId,
+      createdAt: data.createdAt,
+    };
+
+    const totalAmount = data.loyer || 0;
+
+    const linesData = [
+      {
+        id: `${docId}-debit`,
+        journalEntryId: docId,
+        accountId: "acc-bank", // Debiting Bank (Asset increase)
+        type: 'Debit',
+        amount: totalAmount,
+      },
+      {
+        id: `${docId}-credit`,
+        journalEntryId: docId,
+        accountId: "acc-revenue", // Crediting Revenue (Income increase)
+        type: 'Credit',
+        amount: totalAmount,
+      }
+    ];
+
+    try {
+      await postJournalEntry(entryData, linesData);
+      console.log(`Successfully converted flat rent to double-entry journal (ID: ${docId})`);
+    } catch (error: any) {
+      console.error("Double-entry validation failed:", error.message);
+      alert(`Transaction rejected: ${error.message}`);
+      throw error;
+    }
+
     return { ...data, id: originalId } as LoyerDoc;
   },
 
