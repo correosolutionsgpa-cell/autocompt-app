@@ -14190,27 +14190,35 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <div
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
         >
-          {(getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin" ? (activeUser === "Fabiola" ? ["ventes", "taxes", "paie", "banque", "resume", "grand_livre"] : ["ventes", "taxes", "banque", "resume", "grand_livre"]) : ["ventes", "taxes", "banque", "resume", "grand_livre"]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setTabReporte(tab as any)}
-              className={`px-6 py-2 rounded-[20px] text-[9px] font-black uppercase italic transition-all tracking-widest ${tabReporte === tab ? "bg-[#059669] text-white shadow-lg shadow-emerald-900/10" : darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}
-            >
-              {tab === "ventes"
-                ? isSolutionsGPA
-                  ? "Revenus"
-                  : "Ventes"
-                : tab === "taxes"
-                  ? "Dépenses"
-                  : tab === "paie"
-                    ? "Paie / Personnel"
-                    : tab === "banque"
-                      ? "Banque"
-                      : tab === "grand_livre"
-                        ? "Grand Livre"
-                        : "Résumé Annuel"}
-            </button>
-          ))}
+          {(() => {
+            let activeTabs = ["ventes", "taxes", "banque", "resume", "grand_livre"];
+            if (getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin") {
+              if (activeUser === "Fabiola") {
+                activeTabs = ["ventes", "taxes", "paie", "banque", "resume", "grand_livre"];
+              }
+            }
+            return activeTabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setTabReporte(tab as any)}
+                className={`px-6 py-2 rounded-[20px] text-[9px] font-black uppercase italic transition-all tracking-widest ${tabReporte === tab ? "bg-[#059669] text-white shadow-lg shadow-emerald-900/10" : darkMode ? "text-zinc-500 hover:bg-zinc-900" : "text-slate-400 hover:bg-slate-50"}`}
+              >
+                {tab === "ventes"
+                  ? isSolutionsGPA
+                    ? "Revenus"
+                    : "Ventes"
+                  : tab === "taxes"
+                    ? "Dépenses"
+                    : tab === "paie"
+                      ? "Paie / Personnel"
+                      : tab === "banque"
+                        ? "Banque"
+                        : tab === "grand_livre"
+                          ? "Grand Livre"
+                          : "Résumé Annuel"}
+              </button>
+            ));
+          })()}
         </div>
 
         {/* ESPACE COMPTABLE MODERNE */}
