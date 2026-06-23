@@ -29,6 +29,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { postJournalEntry } from '../services/ledgerService';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // §1 — TYPED INTERFACES
@@ -643,16 +644,49 @@ export const dataService = {
       ownerId: userId,
       createdAt: expenseData.createdAt || new Date().toISOString(),
     };
-    const id = expenseData.id;
-    if (id && String(id).length > 6 && isNaN(Number(id))) {
-      delete (data as any).id;
-      await setDoc(doc(db, 'expenses', String(id)), data);
-      return { id, ...data, companyId: originalCompanyId } as ExpenseDoc;
-    } else {
-      delete (data as any).id;
-      const docRef = await addDoc(collection(db, 'expenses'), data);
-      return { id: docRef.id, ...data, companyId: originalCompanyId } as ExpenseDoc;
+    
+    // Generate an ID if not provided
+    const id = expenseData.id && String(expenseData.id).length > 6 && isNaN(Number(expenseData.id)) 
+      ? String(expenseData.id) 
+      : `exp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    const entryData = {
+      id: id,
+      date: data.fecha || new Date().toISOString(),
+      description: `Expense: ${data.fournisseur || 'Unknown'} - ${data.cat || 'General'}`,
+      documentReference: id,
+      createdAt: data.createdAt,
+    };
+
+    const totalAmount = data.total || 0;
+
+    const linesData = [
+      {
+        id: `${id}-debit`,
+        journalEntryId: id,
+        accountId: "acc-expense", // Debiting expense account
+        type: 'Debit',
+        amount: totalAmount,
+      },
+      {
+        id: `${id}-credit`,
+        journalEntryId: id,
+        accountId: "acc-bank", // Crediting bank account
+        type: 'Credit',
+        amount: totalAmount,
+      }
+    ];
+
+    try {
+      await postJournalEntry(entryData, linesData);
+      console.log(`Successfully converted flat expense to double-entry journal (ID: ${id})`);
+    } catch (error: any) {
+      console.error("Double-entry validation failed:", error.message);
+      alert(`Transaction rejected: ${error.message}`);
+      throw error;
     }
+
+    return { id, ...data, companyId: originalCompanyId } as ExpenseDoc;
   },
 
   async deleteExpense(expenseId: string): Promise<boolean> {
