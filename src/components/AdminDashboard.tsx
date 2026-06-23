@@ -211,13 +211,19 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   // Private Client Promo Code State
-  const [isSendingPrivatePromo, setIsSendingPrivatePromo] = useState(false);
-  const [privatePromoSent, setPrivatePromoSent] = useState(false);
+  const [promoStatus, setPromoStatus] = useState<'idle' | 'loading' | 'success'>('idle');
 
   useEffect(() => {
-    setIsSendingPrivatePromo(false);
-    setPrivatePromoSent(false);
+    setPromoStatus('idle');
   }, [editingClient?.id]);
+
+  // Global messaging state
+  const [hasUnread, setHasUnread] = useState(true);
+
+  useEffect(() => {
+    // Soft "ding" sound on mount for notification simulation
+    new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(() => {});
+  }, []);
 
   // Promo Code State
   const [generatedPromoCode, setGeneratedPromoCode] = useState('');
@@ -404,11 +410,9 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
   };
 
   const handleSendPrivatePromo = () => {
-    setIsSendingPrivatePromo(true);
-    setPrivatePromoSent(false);
+    setPromoStatus('loading');
     setTimeout(() => {
-      setIsSendingPrivatePromo(false);
-      setPrivatePromoSent(true);
+      setPromoStatus('success');
     }, 1000);
   };
 
@@ -506,7 +510,10 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
             </button>
 
             <button
-              onClick={() => alert("Ouverture du tiroir de support client / Notifications")}
+              onClick={() => {
+                alert("Ouverture du tiroir de support client / Notifications");
+                setHasUnread(false);
+              }}
               className={`relative p-2 rounded-xl transition-all active:scale-95 shadow-md border ${
                 darkMode 
                   ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' 
@@ -515,7 +522,9 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
               title="Notifications / Support client"
             >
               <Bell size={15} />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-[#0b0f0b] animate-pulse" />
+              {hasUnread && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-[#0b0f0b] animate-pulse" />
+              )}
             </button>
           </div>
         </div>
@@ -1163,28 +1172,28 @@ export default function AdminDashboard({ darkMode, onBack, adminName = 'Fabiola 
                 <h4 className="text-[10px] font-black uppercase tracking-wider text-emerald-550">
                   Promotions & Réductions
                 </h4>
-                <p className={`text-[11px] font-medium leading-relaxed ${darkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                <p className={`text-[11px] font-medium leading-relaxed ${darkMode ? 'text-zinc-400' : 'text-slate-650'}`}>
                   Générez un code promo privé à usage unique pour ce client. Il sera automatiquement envoyé par messagerie interne.
                 </p>
                 <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    disabled={isSendingPrivatePromo}
+                    disabled={promoStatus === 'loading'}
                     onClick={handleSendPrivatePromo}
                     className="flex items-center justify-center gap-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
                   >
-                    {isSendingPrivatePromo ? (
+                    {promoStatus === 'loading' ? (
                       <>
                         <RefreshCw size={13} className="animate-spin" />
-                        <span>Génération en cours...</span>
+                        <span>Génération...</span>
                       </>
                     ) : (
                       <span>Générer et envoyer un code privé</span>
                     )}
                   </button>
-                  {privatePromoSent && (
-                    <p className="text-[11px] font-extrabold text-emerald-500 text-center">
-                      ✓ Code à usage unique envoyé par messagerie interne !
+                  {promoStatus === 'success' && (
+                    <p className="text-emerald-600 text-sm mt-2 font-medium text-center">
+                      Code à usage unique envoyé par messagerie interne !
                     </p>
                   )}
                 </div>
