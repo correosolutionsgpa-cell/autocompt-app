@@ -33,3 +33,4 @@ patch_files/
 security_spec.md
 *.txt
 !README.md
+.vercel
