@@ -5585,14 +5585,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       },
                     },
                     {
-                      text: `Analyse cette image de reçu ou de facture de dépenses. Extrais les informations comptables suivantes et retourne UNIQUEMENT un objet JSON (sans blocs d'explications de type markdown ni texte). Le JSON doit utiliser exactement et uniquement ces clés :
-                      - "fournisseur": Le nom de l'entreprise ou du marchand (ex: "Home Depot", "Rona", "Bell", "Hydro-Québec").
+                      text: `RÔLE: Agis en tant qu'auditeur fiscal expert et très précis pour l'immobilier au Québec.
+                      Analyse cette image de reçu ou de facture de dépenses. Extrais les informations comptables suivantes et retourne UNIQUEMENT un objet JSON (sans blocs d'explications de type markdown ni texte). Le JSON doit utiliser exactement et uniquement ces clés :
+                      - "fournisseur": Le nom de l'entreprise ou du marchand. RÈGLE ZÉRO HALLUCINATION : Extrais UNIQUEMENT le texte exact. N'invente pas de nom de fournisseur. Si illisible, retourne null.
                       - "date": La date de transaction au format YYYY-MM-DD. Si aucune date n'est présente, utilise la date d'aujourd'hui : "${new Date().toISOString().split("T")[0]}".
-                      - "subtotal": Le montant sous-total net avant taxes (valeur numérique).
+                      - "subtotal": Le montant sous-total net avant taxes (valeur numérique). RÈGLE ZÉRO HALLUCINATION : Ne jamais inventer de montants.
                       - "tps": La taxe TPS (TPS 5%) (valeur numérique). Si elle n'est pas spécifiée, calcule-la comme subtotal * 0.05.
                       - "tvq": La taxe TVQ (TVQ 9.975%) (valeur numérique). Si elle n'est pas spécifiée, calcule-la comme subtotal * 0.09975.
-                      - "total": Le montant total de la transaction toutes taxes incluses (valeur numérique).
-                      - "cat": Ne présume pas qu'une facture (Hydro, Bell) est pour le Bureau à domicile. Si c'est pour un immeuble locatif, retourne la catégorie exacte. Si c'est strictement la résidence personnelle, retourne "Bureau à domicile". La catégorie doit être choisie ou déduite idéalement de cette liste : ${dashboardMode === "Syndic" ? '["À classer", "Contrat", "Entretien", "Assurance", "Frais de gestion"]' : '["À classer", "Télécommunications", "Bureau à domicile", "Équipement", "Réparations / Entretien", "Rénovation / Construction", "Taxes", "Assurance", "Chauffage", "Electricité", "Frais de gestion / Exploitation"]'}.
+                      - "total": Le montant total de la transaction toutes taxes incluses (valeur numérique). RÈGLE ZÉRO HALLUCINATION : Extrais UNIQUEMENT les nombres imprimés. N'invente jamais de totaux.
+                      - "cat": CATÉGORISATION PRÉDICTIVE : Basé sur le nom du fournisseur, assigne automatiquement une catégorie du plan comptable de l'immobilier au Québec (ex: Hydro-Québec -> 'Électricité / Énergie', Home Depot -> 'Entretien et réparations', Bell -> 'Télécommunications', etc.). En cas d'incertitude, utilise 'Non catégorisé'. La liste idéale est : ${dashboardMode === "Syndic" ? '["Non catégorisé", "Contrat", "Entretien", "Assurance", "Frais de gestion"]' : '["Non catégorisé", "Télécommunications", "Bureau à domicile", "Équipement", "Entretien et réparations", "Rénovation / Construction", "Taxes", "Assurance", "Chauffage", "Électricité / Énergie", "Frais de gestion / Exploitation"]'}.
                       - "adresse": Extrait l'adresse de service EXACTE. C'est absolument crucial pour différencier la résidence personnelle des immeubles locatifs.
 
                       Format JSON STRICT à respecter :

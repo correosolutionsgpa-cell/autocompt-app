@@ -285,14 +285,15 @@ async function startServer() {
           model: "gemini-3.5-flash",
           contents: [
             imagePart,
-            `Analyze this receipt or invoice image. Extract the following properties:
-            1. Supplier or company name / 'fournisseur' (e.g. 'Rona', 'Québec Tel', 'Bell')
+            `ROLE: Act as an expert, highly precise fiscal auditor for Quebec real estate.
+            Analyze this receipt or invoice image. Extract the following properties:
+            1. Supplier or company name / 'fournisseur'. ZERO HALLUCINATION RULE: Extract ONLY the exact text. Never invent names. If unreadable, return null.
             2. Date in YYYY-MM-DD format (if none is located, use '${detectedDate}')
-            3. Net subtotal amount (numerical value)
+            3. Net subtotal amount (numerical value). ZERO HALLUCINATION RULE: Never invent amounts.
             4. TPS tax (GST 5%) amount (numerical value) - if not specified, calculate as subtotal * 0.05
             5. TVQ tax (QST 9.975%) amount (numerical value) - if not specified, calculate as subtotal * 0.09975
-            6. Total amount (numerical value)
-            7. The single most appropriate bookkeeping account category selection from this discrete list:
+            6. Total amount (numerical value). ZERO HALLUCINATION RULE: Extract ONLY printed numbers. Never invent totals.
+            7. PREDICTIVE CATEGORIZATION: Based on the Vendor name, automatically assign a category from a standard Quebec real estate Chart of Accounts (e.g., Hydro-Québec -> 'Electricité', Home Depot -> 'Réparations / Entretien', Bell -> 'Télécommunications', etc.). If uncertain, default to 'À classer'. Choose from this discrete list:
                ["À classer", "Télécommunications", "Bureau à domicile", "Équipement", "Réparations / Entretien", "Rénovation / Construction", "Taxes", "Assurance", "Chauffage", "Electricité", "Frais de gestion / Exploitation"]
             
             Return ONLY a valid JSON object matching these fields strictly:

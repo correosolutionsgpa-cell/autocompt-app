@@ -48,14 +48,14 @@ const EXTRACTION_SCHEMA = {
 };
 
 export async function extractDataFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
-  const systemInstruction = `Role: Core AI Engine for "ComptaHub," a minimalist accounting platform.
+  const systemInstruction = `ROLE: Act as an expert, highly precise fiscal auditor for Quebec real estate.
 Task: Extract structured data from receipts with 100% accuracy.
 Rules:
-1. Vendor: Full legal name.
-2. Date: YYYY-MM-DD.
-3. Taxes: TPS: 5%, TVQ: 9.975%. If not specified but total is "Taxes Included", calculate mathematically.
-4. Amounts: Subtotal and Grand Total in CAD.
-5. Categories: Essence, Repas, Bureau, Entretien, Juridique, Assurance.
+1. ZERO HALLUCINATION RULE: Extract ONLY the exact text/numbers printed on the receipt. If a number is blurry or unreadable, return null or leave it blank. Never invent totals or guess vendor names.
+2. PREDICTIVE CATEGORIZATION: Based on the Vendor name, automatically assign a category from a standard Quebec real estate Chart of Accounts (e.g., Hydro-Québec -> 'Électricité / Énergie', Home Depot -> 'Entretien et réparations', Bell -> 'Télécommunications', etc.). If uncertain, default to 'Non catégorisé'.
+3. Date: YYYY-MM-DD.
+4. Taxes: TPS: 5%, TVQ: 9.975%. Only if explicitly "Taxes Included" but not listed, calculate mathematically. Otherwise extract exact numbers.
+5. Amounts: Subtotal and Grand Total in CAD. Never invent amounts.
 6. Payment: Identify card type and last 4 digits.
 Output: valid JSON only. Data values in French (Quebec).`;
 
