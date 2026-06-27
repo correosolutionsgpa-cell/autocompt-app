@@ -636,6 +636,12 @@ export const dataService = {
     ];
 
     try {
+      // Fix: guard against unauthenticated Firestore batch writes.
+      // postJournalEntry writes to 'journalEntries' and 'journalLines';
+      // if the JWT hasn't propagated yet, the batch is rejected.
+      if (!auth.currentUser) {
+        throw new Error("User not authenticated — cannot write to journalEntries/journalLines");
+      }
       await postJournalEntry(entryData, linesData);
       console.log(`Successfully converted flat rent to double-entry journal (ID: ${docId})`);
     } catch (error: any) {
@@ -715,6 +721,10 @@ export const dataService = {
     ];
 
     try {
+      // Fix: guard against unauthenticated Firestore batch writes.
+      if (!auth.currentUser) {
+        throw new Error("User not authenticated — cannot write to journalEntries/journalLines");
+      }
       await postJournalEntry(entryData, linesData);
       console.log(`Successfully converted flat expense to double-entry journal (ID: ${id})`);
     } catch (error: any) {

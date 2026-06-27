@@ -7012,6 +7012,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Fix: force JWT token refresh before any Firestore call.
+        // onAuthStateChanged fires as soon as Auth resolves, but Firestore
+        // can take ~1s to propagate the token. Without this, seedUserData
+        // and all subsequent reads fail with "Missing or insufficient permissions".
+        await user.getIdToken(true);
         setCurrentUserEmail(user.email);
         setIsLoadingData(true);
         try {

@@ -161,8 +161,14 @@ export function FiscalProvider({ children }: { children: React.ReactNode }) {
       if (!user) {
         // No logged-in user: clear buildings from memory, keep profile fields
         setFiscal((prev) => ({ ...prev, buildings: [] }));
+        setBuildingsLoading(false);
         return;
       }
+
+      // Fix: force token refresh so Firestore receives the valid JWT
+      // before the first read. Without this, calls can fire before Firestore
+      // has propagated the auth token, causing "Missing or insufficient permissions".
+      await user.getIdToken(true);
 
       setBuildingsLoading(true);
       try {
