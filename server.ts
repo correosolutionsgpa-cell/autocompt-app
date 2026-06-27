@@ -4,7 +4,10 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
-dotenv.config();
+// Load .env BEFORE anything else — including SDK initialization
+dotenv.config({ override: true });
+console.log("[server.ts] dotenv loaded. GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY, "| Length:", process.env.GEMINI_API_KEY?.length ?? 0);
+
 
 async function startServer() {
   const app = express();
@@ -269,81 +272,107 @@ async function startServer() {
         category: detectedCategory
       };
 
-      // 2. REAL GEMINI VISION EXTRACTION (if API Key is initialized)
-      if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim() !== "" && base64Data) {
-        console.log("Real Gemini Vision scan invocation -> extracting invoice from live capture");
-        const ai = new GoogleGenAI({ apiKey: apiKey });
+      // 2. REAL GEMINI EXTRACTION — diagnostic logging to surface exact failures
+      const apiKeyRaw = process.env.GEMINI_API_KEY ?? "";
+      const apiKeyOk = apiKeyRaw.trim() !== "" && apiKeyRaw !== "MY_GEMINI_API_KEY";
+      console.log(`[S.O.F.I. Scanner] /api/scan called — file: "${filename}", mimeType: "${mimeType}", base64 bytes: ${base64Data?.length ?? 0}`);
+      console.log(`[S.O.F.I. Scanner] API key present: ${apiKeyOk} | Key prefix: ${apiKeyRaw.slice(0, 8)}... | base64 present: ${!!base64Data}`);
 
-        const imagePart = {
-          inlineData: {
-            mimeType: mimeType || "image/jpeg",
-            data: base64Data
-          }
-        };
+      if (apiKeyOk && base64Data) {
+        const ai = new GoogleGenAI({ apiKey: apiKeyRaw });
+        const isPdf = (mimeType || "").toLowerCase() === "application/pdf";
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: [
-            imagePart,
-            `ROLE: Act as an expert, highly precise fiscal auditor for Quebec real estate.
-            Analyze this receipt or invoice image. Extract the following properties:
-            1. Supplier or company name / 'fournisseur'. ZERO HALLUCINATION RULE: Extract ONLY the exact text. Never invent names. If unreadable, return null.
-            2. Date in YYYY-MM-DD format (if none is located, use '${detectedDate}')
-            3. Net subtotal amount (numerical value). ZERO HALLUCINATION RULE: Never invent amounts.
-            4. TPS tax (GST 5%) amount (numerical value) - if not specified, calculate as subtotal * 0.05
-            5. TVQ tax (QST 9.975%) amount (numerical value) - if not specified, calculate as subtotal * 0.09975
-            6. Total amount (numerical value). ZERO HALLUCINATION RULE: Extract ONLY printed numbers. Never invent totals.
-            7. PREDICTIVE CATEGORIZATION: Based on the Vendor name, automatically assign a category from a standard Quebec real estate Chart of Accounts (e.g., Hydro-Québec -> 'Electricité', Home Depot -> 'Réparations / Entretien', Bell -> 'Télécommunications', etc.). If uncertain, default to 'À classer'. Choose from this discrete list:
-               ["À classer", "Télécommunications", "Bureau à domicile", "Équipement", "Réparations / Entretien", "Rénovation / Construction", "Taxes", "Assurance", "Chauffage", "Electricité", "Frais de gestion / Exploitation"]
-            
-            Return ONLY a valid JSON object matching these fields strictly:
-            {
-              "supplier": string,
-              "date": string,
-              "subtotal": number,
-              "tps": number,
-              "tvq": number,
-              "total": number,
-              "category": string
-            }`
-          ],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT" as any,
-              properties: {
-                supplier: { type: "STRING" as any },
-                date: { type: "STRING" as any },
-                subtotal: { type: "NUMBER" as any },
-                tps: { type: "NUMBER" as any },
-                tvq: { type: "NUMBER" as any },
-                total: { type: "NUMBER" as any },
-                category: { type: "STRING" as any }
-              },
-              required: ["supplier", "date", "subtotal", "tps", "tvq", "total", "category"]
-            }
-          }
-        });
+        console.log(`[S.O.F.I. Scanner] Gemini extraction — type: ${isPdf ? "PDF (Files API)" : "Image (inlineData)"}, file: ${filename}`);
 
-        const textOutput = response.text;
-        if (textOutput) {
-          const parsed = JSON.parse(textOutput.trim());
-          const ocrResult = {
-            supplier: parsed.supplier || fallbackResult.supplier,
-            date: parsed.date || fallbackResult.date,
-            // parseCurrency handles francophone/formatted strings from Gemini ("229,95 $", "$ 1 234.56")
-            subtotal: (parsed.subtotal != null && parsed.subtotal !== '') ? parseCurrency(parsed.subtotal) : fallbackResult.subtotal,
-            tps:     (parsed.tps     != null && parsed.tps     !== '') ? parseCurrency(parsed.tps)     : fallbackResult.tps,
-            tvq:     (parsed.tvq     != null && parsed.tvq     !== '') ? parseCurrency(parsed.tvq)     : fallbackResult.tvq,
-            total:   (parsed.total   != null && parsed.total   !== '') ? parseCurrency(parsed.total)   : fallbackResult.total,
-            category: parsed.category || fallbackResult.category
+        const extractionPrompt = `ROLE: Act as an expert, highly precise fiscal auditor for Quebec real estate.
+Analyze this receipt or invoice document. Extract the following and return ONLY valid JSON.
+ZERO HALLUCINATION RULE: Extract ONLY exact text/numbers printed on the document. Never invent names or amounts.
+
+JSON schema to return:
+{
+  "supplier": string,   // Legal company/vendor name. null if unreadable.
+  "date": string,       // Transaction date YYYY-MM-DD. Use "${detectedDate}" if not found.
+  "subtotal": number,   // Net amount before taxes (CAD). Never invent.
+  "tps": number,        // GST/TPS (5%) amount. Calculate as subtotal*0.05 if not printed.
+  "tvq": number,        // QST/TVQ (9.975%) amount. Calculate as subtotal*0.09975 if not printed.
+  "total": number,      // Grand total all-taxes-included (CAD). Never invent.
+  "category": string    // One of: ["À classer","Télécommunications","Bureau à domicile","Équipement","Réparations / Entretien","Rénovation / Construction","Taxes","Assurance","Chauffage","Electricité","Frais de gestion / Exploitation"]
+}`;
+
+        let documentPart: any;
+
+        if (isPdf) {
+          // ── PDF via inlineData: Gemini 1.5-flash/2.0-flash support PDFs directly ──
+          // We avoid the Files API (FileService.CreateFile) which is blocked on this project.
+          // Per Google docs: inlineData accepts application/pdf up to 20MB inline.
+          console.log(`[S.O.F.I. Scanner] Sending PDF as inlineData (${Math.round(base64Data.length * 0.75 / 1024)}KB)`);
+          documentPart = {
+            inlineData: {
+              mimeType: "application/pdf",
+              data: base64Data,
+            },
           };
-          console.log("Real Gemini OCR Vision extraction complete:", ocrResult);
-          return res.json(ocrResult);
+        } else {
+          // ── Image: inlineData path (JPEG, PNG, WebP) ───────────────────────────
+          documentPart = { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } };
         }
+
+
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: [{ parts: [documentPart, { text: extractionPrompt }] }],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT" as any,
+                properties: {
+                  supplier: { type: "STRING" as any },
+                  date:     { type: "STRING" as any },
+                  subtotal: { type: "NUMBER" as any },
+                  tps:      { type: "NUMBER" as any },
+                  tvq:      { type: "NUMBER" as any },
+                  total:    { type: "NUMBER" as any },
+                  category: { type: "STRING" as any },
+                },
+                required: ["supplier", "date", "subtotal", "tps", "tvq", "total", "category"],
+              },
+            },
+          });
+
+          const textOutput = response.text;
+          if (textOutput) {
+            const parsed = JSON.parse(textOutput.trim());
+            const ocrResult = {
+              supplier: parsed.supplier || fallbackResult.supplier,
+              date:     parsed.date     || fallbackResult.date,
+              subtotal: (parsed.subtotal != null && parsed.subtotal !== '') ? parseCurrency(parsed.subtotal) : fallbackResult.subtotal,
+              tps:      (parsed.tps     != null && parsed.tps     !== '') ? parseCurrency(parsed.tps)     : fallbackResult.tps,
+              tvq:      (parsed.tvq     != null && parsed.tvq     !== '') ? parseCurrency(parsed.tvq)     : fallbackResult.tvq,
+              total:    (parsed.total   != null && parsed.total   !== '') ? parseCurrency(parsed.total)   : fallbackResult.total,
+              category: parsed.category || fallbackResult.category,
+            };
+            console.log("[S.O.F.I. Scanner] Gemini extraction complete:", ocrResult);
+            return res.json(ocrResult);
+          } else {
+            console.warn("[S.O.F.I. Scanner] Gemini returned empty text — using fallback.");
+          }
+        } catch (geminiErr: any) {
+          // Full error dump — do NOT mask anything
+          console.error("[S.O.F.I. Scanner] ❌ Gemini generateContent FAILED");
+          console.error("  message  :", geminiErr?.message);
+          console.error("  status   :", geminiErr?.status);
+          console.error("  code     :", geminiErr?.code);
+          console.error("  toString :", String(geminiErr));
+          try { console.error("  full JSON:", JSON.stringify(geminiErr, null, 2)); } catch {}
+          console.error("[S.O.F.I. Scanner] Falling back to filename-based extraction.");
+        }
+      } else {
+        if (!apiKeyOk) console.error("[S.O.F.I. Scanner] ❌ API key missing or invalid — check GEMINI_API_KEY in .env");
+        if (!base64Data) console.error("[S.O.F.I. Scanner] ❌ No base64 document data received");
       }
 
-      console.log("API Key absent or unconfigured -> returning dynamic fallback extraction results:", fallbackResult);
+      console.log("[S.O.F.I. Scanner] Returning fallback result:", fallbackResult);
       return res.json(fallbackResult);
     } catch (e: any) {
       console.error("API Scanner parser error, returning secure fallback:", e);
