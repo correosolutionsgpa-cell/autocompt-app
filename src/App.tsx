@@ -7066,7 +7066,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           setSetupComplet(true);
           setIsForfaitSelected(true);
-          setVista("dashboard");
+          // Only redirect to dashboard on initial login — preserve active module
+          // navigation if the auth token refreshes silently in the background.
+          setVista((prev) => {
+            const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal"];
+            return preAuthScreens.includes(prev) ? "dashboard" : prev;
+          });
         } catch (err) {
           console.error("Error loading user data from Firestore:", err);
         } finally {
