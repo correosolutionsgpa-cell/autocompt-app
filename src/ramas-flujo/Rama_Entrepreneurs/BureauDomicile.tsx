@@ -272,6 +272,60 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
           />
         </div>
 
+        {/* ── S.O.F.I. Conseil Banner ─────────────────────────────────────── */}
+        <div
+          className={`relative overflow-hidden rounded-[28px] border px-5 py-4 flex items-start space-x-4 ${
+            darkMode
+              ? "bg-emerald-950/30 border-emerald-500/20 shadow-[0_0_24px_rgba(16,185,129,0.06)]"
+              : "bg-emerald-50 border-emerald-200"
+          }`}
+        >
+          {/* Avatar icon */}
+          <div
+            className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg ${
+              darkMode
+                ? "bg-emerald-500/20 text-emerald-400"
+                : "bg-emerald-500 text-white"
+            }`}
+          >
+            <Sparkles size={20} />
+          </div>
+
+          {/* Text */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-2 mb-1">
+              <span
+                className={`text-[8px] font-black uppercase italic tracking-widest ${
+                  darkMode ? "text-emerald-400" : "text-emerald-600"
+                }`}
+              >
+                S.O.F.I. CONSEIL
+              </span>
+              {/* Pulsing active dot */}
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+            </div>
+            <p
+              className={`text-[11px] font-semibold leading-snug ${
+                darkMode ? "text-zinc-200" : "text-slate-700"
+              }`}
+            >
+              💡 Pour maximiser vos déductions, veuillez saisir le montant{" "}
+              <strong>TOTAL ANNUEL</strong> de vos factures pour chaque
+              catégorie. S.O.F.I. s&apos;occupera d&apos;extraire la portion
+              déductible exacte.
+            </p>
+          </div>
+
+          {/* Decorative gradient orb */}
+          <Sparkles
+            size={80}
+            className="absolute -right-4 -bottom-4 opacity-[0.04] text-emerald-400 pointer-events-none"
+          />
+        </div>
+
         {/* Mosaic Cards Layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
@@ -456,7 +510,7 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
 
                     <div className="space-y-1">
                       <label className="text-[7px] font-black uppercase text-slate-500 italic">
-                        Montant total ($)
+                        Total annuel ($)
                       </label>
                       <input
                         type="number"
