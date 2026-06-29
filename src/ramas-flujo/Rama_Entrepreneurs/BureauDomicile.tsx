@@ -45,6 +45,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { dataService } from "../../lib/dataService";
+import { auth } from "../../lib/firebase";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -155,6 +157,16 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
   // currentHomeOffice is still needed for adresse & other read-only derived fields
   const currentHomeOffice: HomeOfficeData =
     (currentCompany?.partnerData?.[activeUser]?.homeOffice as HomeOfficeData) ?? {};
+
+  // ── Accounting category map: home office key → Tenue de Livres cat ───────
+  const LEDGER_CATEGORY_MAP: Record<string, string> = {
+    loyer: "Loyer et charges locatives",
+    hydro: "Électricité / Énergie",
+    internet: "Télécommunications",
+    assurance: "Assurance",
+    taxesMuni: "Taxes",
+    entretien: "Entretien et réparations",
+  };
 
   const totalHomeOfficeExpenses = filteredDepenses
     .filter((d) => d.cat === "Bureau à domicile" && d.partnerTag === activeUser)
@@ -341,10 +353,10 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                         if (el) el.click();
                       }}
                       className={`w-9 h-9 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer ${hasFile
-                          ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
-                          : darkMode
-                            ? "bg-zinc-900 text-slate-400 border-zinc-800 hover:text-white"
-                            : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+                        : darkMode
+                          ? "bg-zinc-900 text-slate-400 border-zinc-800 hover:text-white"
+                          : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                         }`}
                       title="Joindre un reçu (+)"
                     >
@@ -483,7 +495,7 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
 
                 {/* Bouton Confirmer Déduction */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     // Read from local state — guaranteed to reflect what user typed
                     const rawVal = inputValues[item.key] ?? "";
                     const amount = parseFloat(rawVal);
@@ -508,6 +520,10 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                     );
                     const fileUrl = homeOfficeFiles[fileKey] || null;
 
+                    // ── Map to Tenue de Livres accounting category ──────────
+                    const ledgerCat =
+                      LEDGER_CATEGORY_MAP[item.key] ?? "Bureau à domicile";
+
                     // Double sauvegarde dans partnerData
                     setPartnerData((prev: any) => {
                       const baseObj = prev[activeUser] || {};
@@ -525,13 +541,14 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                       };
                     });
 
-                    // Envoi au pont comptable global
+                    // ── Build the ExpenseDoc record ──────────────────────────
                     const newGlobalExpense = {
                       id: `HO-${Date.now()}-${item.key}`,
                       companyId: activeCompanyId,
                       fecha: new Date().toISOString().split("T")[0],
-                      fournisseur: `${item.name} (Bureau à domicile - ${activeUser})`,
-                      cat: "Bureau à domicile",
+                      fournisseur: `${item.name} (Bureau à domicile — ${activeUser})`,
+                      // Use the proper ledger category so it appears in Tenue de Livres
+                      cat: ledgerCat,
                       subtotal: subtotalNum,
                       tps: tpsNum,
                       tvq: tvqNum,
@@ -543,7 +560,10 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                       adresseHistorique: currentHomeOffice.adresse || "",
                     };
 
-                    // Enregistrement dans les dossiers fiscaux si fichier joint
+                    // ── ① Optimistic UI update (instant) ─────────────────────
+                    setDepenses((prev) => [newGlobalExpense, ...prev]);
+
+                    // ── Enregistrement dossiers fiscaux si fichier joint ─────
                     if (fileUrl) {
                       const fname =
                         homeOfficeFiles[`${item.key}_fileName`] ||
@@ -569,10 +589,33 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                       setDossierFiles((prev: any) => [...prev, newFileItem]);
                     }
 
-                    setDepenses((prev) => [newGlobalExpense, ...prev]);
-                    setDispatcherSuccessToast(
-                      `Dépense confirmée! Déduction de ${deductibleAmount}$ (${(porcBureau * 100).toFixed(1)}%) enregistrée.`,
-                    );
+                    // ── ② Persist to Firestore + double-entry journal ─────────
+                    const userId = auth.currentUser?.uid;
+                    if (userId) {
+                      try {
+                        await dataService.saveExpense(userId, {
+                          ...newGlobalExpense,
+                          ownerId: userId,
+                          createdAt: new Date().toISOString(),
+                        });
+                        console.log(
+                          `[Bureau à Domicile] ✅ Expense persisted to Firestore + journal: ${ledgerCat} ${deductibleAmount}$`,
+                        );
+                        setDispatcherSuccessToast(
+                          `✅ Tenue de Livres: ${ledgerCat} — ${deductibleAmount.toFixed(2)}$ (${(porcBureau * 100).toFixed(1)}% bureau) enregistrée dans le grand livre.`,
+                        );
+                      } catch (fsErr: any) {
+                        console.error("[Bureau à Domicile] Firestore persist failed:", fsErr);
+                        setDispatcherSuccessToast(
+                          `⚠️ Dépense sauvegardée localement. Erreur Firestore: ${fsErr?.message?.slice(0, 80)}`,
+                        );
+                      }
+                    } else {
+                      // Offline fallback — local state already updated above
+                      setDispatcherSuccessToast(
+                        `Dépense confirmée! Déduction de ${deductibleAmount}$ (${(porcBureau * 100).toFixed(1)}%) enregistrée.`,
+                      );
+                    }
                     playNotificationSound();
                   }}
                   className="w-full py-2.5 rounded-xl flex items-center justify-center space-x-2 text-[9px] font-black uppercase italic transition-all active:scale-95 bg-[#059669] text-white hover:bg-emerald-700 cursor-pointer border-none shadow-md"
