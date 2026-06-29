@@ -128,7 +128,21 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
   playNotificationSound,
   WorkspaceSidebar,
 }) => {
-  // ── États encapsulés (extraits de App.tsx L685-687) ──────────────────────
+  // ── Local input state — avoids parent-round-trip resets on every keystroke ──
+  // Keys mirror the item.key values (loyer, hydro, internet, assurance, taxesMuni, entretien).
+  const [inputValues, setInputValues] = useState<Record<string, string>>(() => {
+    const ho = (currentCompany?.partnerData?.[activeUser]?.homeOffice as any) ?? {};
+    return {
+      loyer: ho.loyer != null ? String(ho.loyer) : "",
+      hydro: ho.hydro != null ? String(ho.hydro) : "",
+      internet: ho.internet != null ? String(ho.internet) : "",
+      assurance: ho.assurance != null ? String(ho.assurance) : "",
+      taxesMuni: ho.taxesMuni != null ? String(ho.taxesMuni) : "",
+      entretien: ho.entretien != null ? String(ho.entretien) : "",
+    };
+  });
+
+  // ── Autres états encapsulés (extraits de App.tsx L685-687) ────────────────
   const [homeOfficeFiles, setHomeOfficeFiles] = useState<Record<string, string>>({});
   const [showHomeOfficeConfig, setShowHomeOfficeConfig] = useState(false);
   const [hoConfigForm, setHoConfigForm] = useState({
@@ -137,13 +151,15 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
     aireBureau: "",
   });
 
-  // ── Calcul dérivé ─────────────────────────────────────────────────────────
+
+  // currentHomeOffice is still needed for adresse & other read-only derived fields
   const currentHomeOffice: HomeOfficeData =
     (currentCompany?.partnerData?.[activeUser]?.homeOffice as HomeOfficeData) ?? {};
 
   const totalHomeOfficeExpenses = filteredDepenses
     .filter((d) => d.cat === "Bureau à domicile" && d.partnerTag === activeUser)
     .reduce((a, b) => a + (b.total || 0), 0);
+
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -324,13 +340,12 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                         );
                         if (el) el.click();
                       }}
-                      className={`w-9 h-9 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer ${
-                        hasFile
+                      className={`w-9 h-9 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer ${hasFile
                           ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                           : darkMode
                             ? "bg-zinc-900 text-slate-400 border-zinc-800 hover:text-white"
                             : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
-                      }`}
+                        }`}
                       title="Joindre un reçu (+)"
                     >
                       {hasFile ? <FileCheck size={18} /> : <Plus size={18} />}
@@ -349,6 +364,12 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                           const simulatedAmount = parseFloat(
                             (Math.random() * 120 + 40).toFixed(2),
                           );
+
+                          // ① Update local input display immediately
+                          setInputValues((prev) => ({
+                            ...prev,
+                            [fileKey]: String(simulatedAmount),
+                          }));
 
                           setHomeOfficeFiles((prev) => ({
                             ...prev,
@@ -428,38 +449,31 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                       <input
                         type="number"
                         step="0.01"
+                        min="0"
                         placeholder="0.00"
-                        value={(currentHomeOffice as any)[item.key] || ""}
+                        value={inputValues[item.key] ?? ""}
                         onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          setPartnerData((prev: any) => ({
+                          // Only update local state — no parent round-trip on every keystroke
+                          setInputValues((prev) => ({
                             ...prev,
-                            [activeUser]: {
-                              ...prev[activeUser],
-                              homeOffice: {
-                                ...prev[activeUser].homeOffice,
-                                [item.key]: val,
-                              },
-                            },
+                            [item.key]: e.target.value,
                           }));
-                          setListaEmpresas((prev) =>
-                            prev.map((emp) => {
-                              if (emp.id === activeCompanyId) {
-                                const newData = {
-                                  ...partnerData,
-                                  [activeUser]: {
-                                    ...partnerData[activeUser],
-                                    homeOffice: {
-                                      ...partnerData[activeUser].homeOffice,
-                                      [item.key]: val,
-                                    },
-                                  },
-                                };
-                                return { ...emp, partnerData: newData };
-                              }
-                              return emp;
-                            }),
-                          );
+                        }}
+                        onBlur={(e) => {
+                          // Sync to parent on blur (lose focus), not on every keystroke
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val >= 0) {
+                            setPartnerData((prev: any) => ({
+                              ...prev,
+                              [activeUser]: {
+                                ...prev[activeUser],
+                                homeOffice: {
+                                  ...(prev[activeUser]?.homeOffice ?? {}),
+                                  [item.key]: val,
+                                },
+                              },
+                            }));
+                          }
                         }}
                         className={`w-full p-3 rounded-xl text-[11px] font-bold border focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-slate-50 text-slate-900 border-slate-100"}`}
                       />
@@ -470,8 +484,10 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                 {/* Bouton Confirmer Déduction */}
                 <button
                   onClick={() => {
-                    const amount = (currentHomeOffice as any)[item.key] || 0;
-                    if (!amount || amount <= 0) {
+                    // Read from local state — guaranteed to reflect what user typed
+                    const rawVal = inputValues[item.key] ?? "";
+                    const amount = parseFloat(rawVal);
+                    if (!rawVal || isNaN(amount) || amount <= 0) {
                       alert(
                         "Veuillez d'abord saisir un montant ou numériser un reçu.",
                       );
@@ -638,10 +654,10 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
               (d) =>
                 d.cat === "Bureau à domicile" && d.partnerTag === activeUser,
             ).length === 0 && (
-              <div className="p-8 text-center text-slate-400 dark:text-zinc-500 text-sm font-bold">
-                Aucune dépense enregistrée.
-              </div>
-            )}
+                <div className="p-8 text-center text-slate-400 dark:text-zinc-500 text-sm font-bold">
+                  Aucune dépense enregistrée.
+                </div>
+              )}
           </div>
         </div>
       </main>
