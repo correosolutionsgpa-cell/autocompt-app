@@ -139,7 +139,7 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
 
   // ── Calcul dérivé ─────────────────────────────────────────────────────────
   const currentHomeOffice: HomeOfficeData =
-    (currentCompany.partnerData[activeUser]?.homeOffice as HomeOfficeData) ?? {};
+    (currentCompany?.partnerData?.[activeUser]?.homeOffice as HomeOfficeData) ?? {};
 
   const totalHomeOfficeExpenses = filteredDepenses
     .filter((d) => d.cat === "Bureau à domicile" && d.partnerTag === activeUser)

@@ -723,7 +723,9 @@ const App = () => {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState("admin");
   const [onboardingStatus, setOnboardingStatus] = useState("welcome");
-  const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<string | null>(
+    () => localStorage.getItem("autocompt_selected_profile") || null
+  );
   // ── Phase 4: Post-onboarding guided tour state ─────────────────────────────
   // showSettingsTour is set to true the moment the user completes the Sofi
   // onboarding and lands on the dashboard for the very first time.
