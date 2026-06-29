@@ -5568,7 +5568,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           "[Google Gemini API] Direct Client-side Vision OCR request initiated...",
         );
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${clientKey}`;
+          const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${clientKey}`;
           const response = await fetch(url, {
             method: "POST",
             headers: {
