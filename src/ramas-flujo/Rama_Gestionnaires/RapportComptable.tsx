@@ -60,6 +60,17 @@ import {
   Tooltip,
 } from "recharts";
 
+// ── Currency formatter — fr-CA, CAD ─────────────────────────────────────────
+// Produces: 86 250,00 $ (NNBSP grouping, comma decimal, $ suffix)
+const _cadFormatter = new Intl.NumberFormat("fr-CA", {
+  style: "currency",
+  currency: "CAD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+/** Format a number as Québec CAD currency: 86250 → "86 250,00 $" */
+const fmtCAD = (n: number) => _cadFormatter.format(n);
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RapportComptableProps {
@@ -713,7 +724,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                 Total des Revenus
               </p>
               <h3 className="text-2xl font-black italic tracking-tighter text-emerald-600 dark:text-emerald-400 mt-1">
-                {totalRevenus.toFixed(2)} $
+                {fmtCAD(totalRevenus)}
               </h3>
               <p className="text-[7px] font-bold text-slate-400 dark:text-zinc-500 mt-2.5 uppercase tracking-wide">
                 Indice de rentabilité • Est. AutoCompt
@@ -738,7 +749,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                 Total des Dépenses
               </p>
               <h3 className="text-2xl font-black italic tracking-tighter text-teal-600 dark:text-teal-400 mt-1">
-                {totalDepenses.toFixed(2)} $
+                {fmtCAD(totalDepenses)}
               </h3>
               <p className="text-[7px] font-bold text-slate-400 dark:text-zinc-500 mt-2.5 uppercase tracking-wide">
                 Justificatifs réclamables indexés
@@ -761,13 +772,13 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                     </h5>
                     <div className="flex items-center space-x-1.5 mt-1 font-mono text-[9px]">
                       <span className="text-emerald-600 font-bold">
-                        +{tpsCollectee.toFixed(2)}$
+                        +{fmtCAD(tpsCollectee)}
                       </span>
                       <span className="text-slate-400 dark:text-zinc-650">
                         /
                       </span>
                       <span className="text-teal-600 dark:text-teal-400">
-                        -{tpsPayee.toFixed(2)}$
+                        -{fmtCAD(tpsPayee)}
                       </span>
                     </div>
                   </div>
@@ -777,13 +788,13 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                     </h5>
                     <div className="flex items-center space-x-1.5 mt-1 font-mono text-[9px]">
                       <span className="text-emerald-600 font-bold">
-                        +{tvqCollectee.toFixed(2)}$
+                        +{fmtCAD(tvqCollectee)}
                       </span>
                       <span className="text-slate-400 dark:text-zinc-650">
                         /
                       </span>
                       <span className="text-teal-600 dark:text-teal-400">
-                        -{tvqPayee.toFixed(2)}$
+                        -{fmtCAD(tvqPayee)}
                       </span>
                     </div>
                   </div>
@@ -798,7 +809,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                   className={`font-mono text-[10px] font-black italic px-2 py-1 rounded-lg ${netTaxBalance >= 0 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"}`}
                 >
                   {netTaxBalance >= 0 ? "+" : ""}
-                  {netTaxBalance.toFixed(2)} $
+                  {fmtCAD(netTaxBalance)}
                 </span>
               </div>
             </div>
@@ -890,20 +901,20 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                         </span>
                       </td>
                       <td className="py-4 px-4 font-mono text-right text-slate-600 dark:text-zinc-400">
-                        {row.status === "Traitement de la facture en cours..." ? "..." : `${row.net.toFixed(2)} $`}
+                        {row.status === "Traitement de la facture en cours..." ? "..." : fmtCAD(row.net)}
                       </td>
                       <td className="py-4 px-4 font-mono text-right text-slate-500 dark:text-zinc-500">
-                        {row.status === "Traitement de la facture en cours..." ? "..." : `${row.tps.toFixed(2)} $`}
+                        {row.status === "Traitement de la facture en cours..." ? "..." : fmtCAD(row.tps)}
                       </td>
                       <td className="py-4 px-4 font-mono text-right text-slate-500 dark:text-zinc-500">
-                        {row.status === "Traitement de la facture en cours..." ? "..." : `${row.tvq.toFixed(2)} $`}
+                        {row.status === "Traitement de la facture en cours..." ? "..." : fmtCAD(row.tvq)}
                       </td>
                       <td className="py-4 px-4 font-mono text-right font-black italic text-slate-900 dark:text-zinc-100">
                         {row.status === "Traitement de la facture en cours..." ? (
                           <span className="text-amber-500 animate-pulse text-[8px] uppercase tracking-widest leading-tight">Traitement...</span>
                         ) : (
                           <div className="flex flex-col items-end">
-                            <span>{row.total.toFixed(2)} $</span>
+                            <span>{fmtCAD(row.total)}</span>
                             {row.status === "En attente" && (
                               <span
                                 onClick={() => {

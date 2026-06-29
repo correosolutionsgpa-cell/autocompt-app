@@ -509,15 +509,22 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                     const deductibleAmount = parseFloat(
                       (amount * porcBureau).toFixed(2),
                     );
-                    const subtotalNum = parseFloat(
-                      (deductibleAmount / 1.14975).toFixed(2),
-                    );
-                    const tpsNum = parseFloat(
-                      (subtotalNum * 0.05).toFixed(2),
-                    );
-                    const tvqNum = parseFloat(
-                      (subtotalNum * 0.09975).toFixed(2),
-                    );
+
+                    // ── Quebec tax-exempt categories ─────────────────────────
+                    // Per Revenu Québec: municipal taxes and insurance premiums
+                    // are NOT subject to TPS or TVQ.
+                    const TAX_EXEMPT_KEYS = new Set(["taxesMuni", "assurance"]);
+                    const isTaxExempt = TAX_EXEMPT_KEYS.has(item.key);
+
+                    const subtotalNum = isTaxExempt
+                      ? deductibleAmount                                  // no reverse-tax calc
+                      : parseFloat((deductibleAmount / 1.14975).toFixed(2));
+                    const tpsNum = isTaxExempt
+                      ? 0
+                      : parseFloat((subtotalNum * 0.05).toFixed(2));
+                    const tvqNum = isTaxExempt
+                      ? 0
+                      : parseFloat((subtotalNum * 0.09975).toFixed(2));
                     const fileUrl = homeOfficeFiles[fileKey] || null;
 
                     // ── Map to Tenue de Livres accounting category ──────────
