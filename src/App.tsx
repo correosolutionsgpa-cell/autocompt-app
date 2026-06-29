@@ -17788,37 +17788,24 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
 
       let taxData: any = null;
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${clientKey}`;
-        const resp = await fetch(url, {
+        // Route through server proxy — never call Gemini directly client-side.
+        // VITE_GEMINI_API_KEY is a stale OAuth token that causes 403 errors.
+        // The backend /api/scan-tax uses the real GEMINI_API_KEY from .env.
+        const resp = await fetch("/api/scan-tax", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inlineData: { mimeType, data: base64Data } },
-                { text: taxPrompt },
-              ],
-            }],
-            generationConfig: { responseMimeType: "application/json" },
-          }),
+          body: JSON.stringify({ base64Data, mimeType, filename: file.name }),
         });
         if (resp.ok) {
-          const data = await resp.json();
-          const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (raw) {
-            let cleaned = raw.trim();
-            if (cleaned.startsWith("```")) {
-              cleaned = cleaned.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
-            }
-            taxData = JSON.parse(cleaned);
-            console.log("[S.O.F.I. Tax Scanner] Extracted:", taxData);
-          }
+          taxData = await resp.json();
+          console.log("[S.O.F.I. Tax Scanner] Extracted:", taxData);
         } else {
-          console.error("[S.O.F.I. Tax Scanner] Gemini API error:", resp.status);
+          console.error("[S.O.F.I. Tax Scanner] Server error:", resp.status);
         }
       } catch (e) {
         console.error("[S.O.F.I. Tax Scanner] fetch failed:", e);
       }
+
 
       if (!taxData) {
         setSofiPrefillMessage("⚠️ S.O.F.I. n’a pas pu lire le document. Veuillez remplir le formulaire manuellement.");

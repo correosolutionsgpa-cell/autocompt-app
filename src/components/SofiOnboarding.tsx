@@ -640,60 +640,33 @@ export default function SofiOnboarding({
       // Uses VITE_GEMINI_API_KEY if configured.
       const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY?.trim() || "";
 
+      // Route ALL Gemini calls through the backend proxy — never call Gemini directly
+      // client-side. The VITE_GEMINI_API_KEY in .env.local is a short-lived OAuth token
+      // (AQ.Ab... format), not a real API key, and causes 403 errors.
+      // The server /api/scan-dimensions endpoint uses the GEMINI_API_KEY from .env.
       let parsed: any = null;
 
-      if (GEMINI_KEY) {
-        // Direct Gemini call with a dedicated API key
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-        const body = {
-          contents: [{
-            parts: [
-              {
-                text: [
-                  "Tu es un expert en fiscalité immobilière québécoise.",
-                  "Analyse ce document (acte notarié, compte de taxes, évaluation municipale de la ville, certificat de localisation ou plan d'architecte).",
-                  "L'objectif est de trouver les mesures de la propriété, spécifiquement l'aire de plancher, la superficie de l'aire d'étage, ou la superficie du bâtiment.",
-                  "Extrais UNIQUEMENT ces deux valeurs numériques en pieds carrés (pi²) ou mètres carrés convertis en pi² (1 m² = 10.764 pi²) :",
-                  "1. superficie_totale — superficie totale habitable du bâtiment (toutes unités confondues).",
-                  "2. superficie_personnelle — superficie de l'unité occupée personnellement par le propriétaire (si indiquée). S'il s'agit d'une évaluation municipale pour une seule propriété, utilise la superficie totale pour les deux.",
-                  "Réponds STRICTEMENT avec ce JSON et rien d'autre (pas de markdown, pas d'explication) :",
-                  '{ "superficie_totale": <number>, "superficie_personnelle": <number> }',
-                  "Si tu ne peux vraiment pas extraire ou déduire les valeurs, réponds : { \"error\": \"Données insuffisantes dans le document.\" }"
-                ].join("\n")
-              },
-              { inline_data: { mime_type: mimeType, data: base64 } }
-            ]
-          }],
-          generationConfig: { temperature: 0, maxOutputTokens: 128 },
-        };
-        const resp = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error("Gemini API Error Payload:", errText);
-          throw new Error(`Gemini API error ${resp.status}: ${errText.slice(0, 200)}`);
-        }
-        const data = await resp.json();
-        const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-        console.log("Raw Gemini Response:", raw);
-        const jsonStr = raw.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, "$1").trim();
-        parsed = JSON.parse(jsonStr || "{}");
-      } else {
-        // No dedicated Gemini key — route through server proxy (/api/scan)
-        // The proxy has the GEMINI_API_KEY server-side env var, same as dashboard scanner.
-        const proxyResp = await fetch("/api/scan", {
+      // ── Primary: dedicated dimensions endpoint ──────────────────────────────
+      try {
+        const dimResp = await fetch("/api/scan-dimensions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ base64Data: base64, mimeType, filename: file.name }),
         });
-        if (!proxyResp.ok) throw new Error(`Proxy error ${proxyResp.status}`);
-        const scanData = await proxyResp.json();
-        // /api/scan returns expense fields — we need to derive superficie from the raw text.
-        // Since the proxy doesn't extract superficie_totale, we surface a helpful message.
-        throw new Error("Aucune clé VITE_GEMINI_API_KEY configurée. Veuillez saisir les superficies manuellement ou ajouter VITE_GEMINI_API_KEY dans votre fichier .env.");
+        if (dimResp.ok) {
+          parsed = await dimResp.json();
+          console.log("[S.O.F.I. Dimensions] Server extraction result:", parsed);
+        } else {
+          const err = await dimResp.text();
+          throw new Error(`Server error ${dimResp.status}: ${err.slice(0, 200)}`);
+        }
+      } catch (proxyErr: any) {
+        console.error("[S.O.F.I. Dimensions] /api/scan-dimensions failed:", proxyErr.message);
+        throw new Error(
+          lang === "FR" ? "Le serveur n'a pas pu analyser le document. Veuillez saisir les superficies manuellement." :
+          lang === "EN" ? "The server could not analyze the document. Please enter the square footage manually." :
+                          "El servidor no pudo analizar el documento. Por favor, ingrese las superficies manualmente."
+        );
       }
 
       if (parsed.error) throw new Error(parsed.error);

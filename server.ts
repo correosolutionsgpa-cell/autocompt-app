@@ -8,6 +8,21 @@ import dotenv from "dotenv";
 dotenv.config({ override: true });
 console.log("[server.ts] dotenv loaded. GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY, "| Length:", process.env.GEMINI_API_KEY?.length ?? 0);
 
+// ── Startup: list available models to confirm which names this key supports ──
+(async () => {
+  const apiKey = process.env.GEMINI_API_KEY ?? "";
+  if (!apiKey) return;
+  try {
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
+    const modelsPage = await ai.models.list();
+    const names: string[] = [];
+    for await (const m of modelsPage) { names.push(m.name ?? ""); }
+    console.log("[server.ts] Available models for this API key:", names.filter(n => n.includes("gemini")));
+  } catch (e: any) {
+    console.error("[server.ts] Could not list models:", e?.message?.slice(0, 200));
+  }
+})();
+
 
 async function startServer() {
   const app = express();
@@ -103,11 +118,11 @@ async function startServer() {
       }
 
       // Real Gemini API call using @google/genai SDK
-      const ai = new GoogleGenAI({ apiKey: apiKey });
+      const ai = new GoogleGenAI({ apiKey: apiKey, httpOptions: { apiVersion: "v1" } });
 
       let systemInstruction = "";
       if (currentForfeit !== "Pro") {
-        systemInstruction = 
+        systemInstruction =
           "Tu es Sofi, une assistante de vente d'AutoCompt et assistante virtuelle spécialisée en organisation comptable. Tu es une assistante multilingue. Tu dois détecter automatiquement la langue de l'utilisateur (Français, Anglais, Espagnol) et répondre dans cette même langue. Ton but est d'agir comme une assistante et de pousser l'utilisateur à s'abonner au forfait Pro d'AutoCompt. " +
           "Pour toute question fiscale complexe, d'amortissement, d'optimisation d'impôts ou de déduction d'immeubles, tu devez ABSOLUMENT et uniquement répondre avec l'équivalent de cette phrase exacte dans la langue détectée : " +
           "En Français : \"Pour automatiser votre comptabilité et analyser vos déductions, passez au forfait AutoCompt Pro.\", " +
@@ -116,7 +131,7 @@ async function startServer() {
           "Si l'utilisateur pose une question de facturation, de seuil, de limite ou d'abonnement bloqué, explique poliment les avantages du forfait supérieur en utilisant la psychologie du 'moins qu'un café par jour' pour dédramatiser l'investissement. " +
           "Rappelle toujours gentiment à l'utilisateur que tu es une assistante virtuelle d'organisation comptable, que tu ne remplaces pas un véritable CPA, et que tu l'aides simplement à organiser et trier ses documents.";
       } else {
-        systemInstruction = 
+        systemInstruction =
           "Tu es Sofi, assistante virtuelle spécialisée en organisation comptable pour AutoCompt, et assistante multilingue. Tu ne remplaces pas un véritable CPA et ton rôle consiste uniquement à aider avec plaisir à préparer et à organiser de manière structurée les rapports et les justificatifs comptables. " +
           "Tu devez détecter automatiquement la langue de l'utilisateur (Français, Anglais, Espagnol) et répondre dans cette même langue. " +
           "Tu es capable de répondre de façon extrêmement précise pour aider à l'organisation des stratégies de dépenses, les déductions fiscales d'usage, le classement des reçus, des baux, " +
@@ -133,7 +148,7 @@ async function startServer() {
 
       // Create Chat
       const chat = ai.chats.create({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         config: {
           systemInstruction: systemInstruction,
         }
@@ -173,8 +188,8 @@ async function startServer() {
         if (!stripped) return 0;
         // Find the last comma or dot — treat it as the decimal separator
         const lastComma = stripped.lastIndexOf(',');
-        const lastDot   = stripped.lastIndexOf('.');
-        const lastSep   = Math.max(lastComma, lastDot);
+        const lastDot = stripped.lastIndexOf('.');
+        const lastSep = Math.max(lastComma, lastDot);
         let normalised: string;
         if (lastSep === -1) {
           normalised = stripped;
@@ -279,7 +294,7 @@ async function startServer() {
       console.log(`[S.O.F.I. Scanner] API key present: ${apiKeyOk} | Key prefix: ${apiKeyRaw.slice(0, 8)}... | base64 present: ${!!base64Data}`);
 
       if (apiKeyOk && base64Data) {
-        const ai = new GoogleGenAI({ apiKey: apiKeyRaw });
+        const ai = new GoogleGenAI({ apiKey: apiKeyRaw, httpOptions: { apiVersion: "v1" } });
         const isPdf = (mimeType || "").toLowerCase() === "application/pdf";
 
         console.log(`[S.O.F.I. Scanner] Gemini extraction — type: ${isPdf ? "PDF (Files API)" : "Image (inlineData)"}, file: ${filename}`);
@@ -320,52 +335,51 @@ JSON schema to return:
 
         try {
           const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-1.5-flash",
             contents: [{ parts: [documentPart, { text: extractionPrompt }] }],
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "OBJECT" as any,
-                properties: {
-                  supplier: { type: "STRING" as any },
-                  date:     { type: "STRING" as any },
-                  subtotal: { type: "NUMBER" as any },
-                  tps:      { type: "NUMBER" as any },
-                  tvq:      { type: "NUMBER" as any },
-                  total:    { type: "NUMBER" as any },
-                  category: { type: "STRING" as any },
-                },
-                required: ["supplier", "date", "subtotal", "tps", "tvq", "total", "category"],
-              },
-            },
           });
 
-          const textOutput = response.text;
-          if (textOutput) {
-            const parsed = JSON.parse(textOutput.trim());
-            const ocrResult = {
-              supplier: parsed.supplier || fallbackResult.supplier,
-              date:     parsed.date     || fallbackResult.date,
-              subtotal: (parsed.subtotal != null && parsed.subtotal !== '') ? parseCurrency(parsed.subtotal) : fallbackResult.subtotal,
-              tps:      (parsed.tps     != null && parsed.tps     !== '') ? parseCurrency(parsed.tps)     : fallbackResult.tps,
-              tvq:      (parsed.tvq     != null && parsed.tvq     !== '') ? parseCurrency(parsed.tvq)     : fallbackResult.tvq,
-              total:    (parsed.total   != null && parsed.total   !== '') ? parseCurrency(parsed.total)   : fallbackResult.total,
-              category: parsed.category || fallbackResult.category,
-            };
-            console.log("[S.O.F.I. Scanner] Gemini extraction complete:", ocrResult);
-            return res.json(ocrResult);
+          const rawText = response.text ?? "";
+          console.log("[S.O.F.I. Scanner] 📤 RAW Gemini response (" + rawText.length + " chars):", JSON.stringify(rawText.slice(0, 500)));
+
+          if (rawText) {
+            // Strip markdown code fences that Gemini sometimes wraps around JSON
+            let cleanText = rawText.trim();
+            if (cleanText.startsWith("```")) {
+              cleanText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+            }
+            try {
+              const parsed = JSON.parse(cleanText);
+              const ocrResult = {
+                supplier: parsed.supplier || fallbackResult.supplier,
+                date: parsed.date || fallbackResult.date,
+                subtotal: (parsed.subtotal != null && parsed.subtotal !== '') ? parseCurrency(parsed.subtotal) : fallbackResult.subtotal,
+                tps: (parsed.tps != null && parsed.tps !== '') ? parseCurrency(parsed.tps) : fallbackResult.tps,
+                tvq: (parsed.tvq != null && parsed.tvq !== '') ? parseCurrency(parsed.tvq) : fallbackResult.tvq,
+                total: (parsed.total != null && parsed.total !== '') ? parseCurrency(parsed.total) : fallbackResult.total,
+                category: parsed.category || fallbackResult.category,
+              };
+              console.log("[S.O.F.I. Scanner] ✅ Parsed result:", ocrResult);
+              return res.json(ocrResult);
+            } catch (parseErr: any) {
+              console.error("[S.O.F.I. Scanner] ❌ JSON.parse failed. cleanText was:", JSON.stringify(cleanText.slice(0, 300)));
+              console.error("[S.O.F.I. Scanner] Parse error:", parseErr?.message);
+            }
           } else {
-            console.warn("[S.O.F.I. Scanner] Gemini returned empty text — using fallback.");
+            console.warn("[S.O.F.I. Scanner] ⚠️ Gemini returned empty text.");
           }
         } catch (geminiErr: any) {
-          // Full error dump — do NOT mask anything
-          console.error("[S.O.F.I. Scanner] ❌ Gemini generateContent FAILED");
-          console.error("  message  :", geminiErr?.message);
-          console.error("  status   :", geminiErr?.status);
-          console.error("  code     :", geminiErr?.code);
-          console.error("  toString :", String(geminiErr));
-          try { console.error("  full JSON:", JSON.stringify(geminiErr, null, 2)); } catch {}
-          console.error("[S.O.F.I. Scanner] Falling back to filename-based extraction.");
+          console.error("[S.O.F.I. Scanner] ❌ Gemini generateContent FAILED — FULL ERROR DUMP:");
+          console.error("  message     :", geminiErr?.message);
+          console.error("  status      :", geminiErr?.status);
+          console.error("  statusText  :", geminiErr?.statusText);
+          console.error("  errorDetails:", JSON.stringify(geminiErr?.errorDetails ?? geminiErr?.details ?? null));
+          console.error("  body        :", JSON.stringify(geminiErr?.body ?? null));
+          console.error("  response    :", JSON.stringify(geminiErr?.response ?? null));
+          console.error("  stack       :", geminiErr?.stack?.slice(0, 600));
+          console.error("  toString    :", String(geminiErr));
+          try { console.error("  full JSON   :", JSON.stringify(geminiErr, Object.getOwnPropertyNames(geminiErr))); } catch { }
+          console.error("[S.O.F.I. Scanner] ⚠️ Falling back to filename-based extraction.");
         }
       } else {
         if (!apiKeyOk) console.error("[S.O.F.I. Scanner] ❌ API key missing or invalid — check GEMINI_API_KEY in .env");
@@ -385,6 +399,143 @@ JSON schema to return:
         total: 0,
         category: "À classer"
       });
+    }
+  });
+
+  // ── S.O.F.I. Dimensions Scanner: extracts superficie_totale & superficie_personnelle ──
+  app.post("/api/scan-dimensions", async (req, res) => {
+    try {
+      const { base64Data, mimeType, filename } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY ?? "";
+      if (!apiKey || !base64Data) {
+        return res.status(200).json({ superficie_totale: 0, superficie_personnelle: 0 });
+      }
+
+      // safeInt: converts any value (number, string, null) to a rounded integer ≥ 0
+      const safeInt = (val: any): number => {
+        if (val == null) return 0;
+        if (typeof val === 'number') return isFinite(val) && val > 0 ? Math.round(val) : 0;
+        // Handle Quebec comma-decimal strings like "402,100" → 402.1
+        const clean = String(val).replace(/\s/g, '').replace(',', '.').replace(/[^0-9.]/g, '');
+        const n = parseFloat(clean);
+        return isFinite(n) && n > 0 ? Math.round(n) : 0;
+      };
+
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
+      const prompt = `Tu es un expert en fiscalité immobilière québécoise spécialisé dans la lecture de documents officiels.
+Analyse ce document (acte notarié, compte de taxes, évaluation municipale, certificat de localisation ou plan d'architecte).
+L'objectif est de trouver la superficie bâtie ou habitable de la propriété.
+
+RÈGLES OBLIGATOIRES — applique-les dans cet ordre exact :
+
+1. UNITÉS : Si la superficie est exprimée en mètres carrés (m², mètre carré, mètres 2, mètres²), tu DOIS la convertir en pieds carrés en multipliant par 10.764. Ne retourne JAMAIS une valeur en m².
+
+2. VIRGULE DÉCIMALE QUÉBÉCOISE : Dans les documents du Québec, la virgule (,) est le séparateur décimal. Exemples de lecture obligatoire :
+   - "402,100 mètres 2"  →  402.1 m²  ×  10.764  =  4 328 pi²
+   - "1 200,50 mètres 2" →  1200.5 m²  ×  10.764  =  12 921 pi²
+   - "85,30 m²"          →  85.3 m²   ×  10.764  =  918 pi²
+   NE confonds PAS la virgule décimale avec un séparateur de milliers anglophone.
+
+3. PIEDS CARRÉS DIRECTS : Si la valeur est déjà en pieds carrés (pi², sq ft, square feet), utilise-la telle quelle sans conversion.
+
+4. superficie_totale = superficie totale habitable du bâtiment (toutes unités confondues).
+5. superficie_personnelle = superficie de l'unité occupée personnellement par le propriétaire.
+   → S'il s'agit d'une évaluation municipale pour une seule propriété, utilise la même valeur pour les deux champs.
+
+6. Retourne STRICTEMENT ce JSON (entiers arrondis, JAMAIS de décimales, pas de markdown, pas d'explication) :
+{ "superficie_totale": <integer>, "superficie_personnelle": <integer> }
+
+IMPORTANT : Tu ne peux PAS retourner null. Si tu ne trouves pas de valeur, retourne 0.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [{
+          parts: [
+            { inlineData: { mimeType: mimeType || "application/pdf", data: base64Data } },
+            { text: prompt },
+          ]
+        }],
+      });
+
+      const raw = (response.text ?? "").replace(/```json/gi, "").replace(/```/g, "").trim();
+      console.log("[S.O.F.I. Dimensions] 📤 RAW response:", JSON.stringify(raw.slice(0, 300)));
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        console.error("[S.O.F.I. Dimensions] ❌ JSON.parse failed on:", JSON.stringify(raw.slice(0, 200)));
+        return res.json({ superficie_totale: 0, superficie_personnelle: 0 });
+      }
+
+      const safeResult = {
+        superficie_totale:     safeInt(parsed.superficie_totale),
+        superficie_personnelle: safeInt(parsed.superficie_personnelle),
+      };
+      console.log("[S.O.F.I. Dimensions] ✅ Safe result:", safeResult);
+      return res.json(safeResult);
+    } catch (e: any) {
+      console.error("[S.O.F.I. Dimensions] Error:", e);
+      return res.json({ superficie_totale: 0, superficie_personnelle: 0 });
+    }
+  });
+
+  // ── S.O.F.I. Tax Scanner: extracts cadastral values from Quebec municipal tax bills ──
+  app.post("/api/scan-tax", async (req, res) => {
+    try {
+      const { base64Data, mimeType, filename } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY ?? "";
+      if (!apiKey || !base64Data) {
+        return res.status(400).json({ error: "Missing API key or document data" });
+      }
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
+      console.log(`[S.O.F.I. Tax] Scanning: "${filename}", type: ${mimeType}`);
+
+      const prompt = `Analyse ce document qui est un compte de taxes municipales du Québec.
+Extrais les informations suivantes et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans explication).
+Le JSON doit utiliser exactement ces clés :
+- "adresse": L'adresse civique complète de la propriété taxée (ex: "123 Rue Principale, Montréal, QC").
+- "numeroLot": Le numéro de lot au cadastre du Québec (ex: "1 234 567" ou "1-234-567").
+- "valeurTerrain": La valeur d'évaluation du terrain (valeur numérique seulement, sans symbole $).
+- "valeurBatiment": La valeur d'évaluation du bâtiment (valeur numérique seulement, sans symbole $).
+Si une valeur est introuvable, retourne null pour ce champ.
+Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerrain": number|null, "valeurBatiment": number|null }`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [{
+          parts: [
+            { inlineData: { mimeType: mimeType || "application/pdf", data: base64Data } },
+            { text: prompt },
+          ]
+        }],
+      });
+
+      const rawTax = response.text ?? "";
+      console.log("[S.O.F.I. Tax] 📤 RAW response (" + rawTax.length + " chars):", JSON.stringify(rawTax.slice(0, 400)));
+
+      let cleanTax = rawTax.trim();
+      if (cleanTax.startsWith("```")) {
+        cleanTax = cleanTax.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      }
+      if (!cleanTax) return res.json({ adresse: null, numeroLot: null, valeurTerrain: null, valeurBatiment: null });
+
+      try {
+        const parsed = JSON.parse(cleanTax);
+        console.log("[S.O.F.I. Tax] ✅ Parsed:", parsed);
+        return res.json(parsed);
+      } catch (parseErr: any) {
+        console.error("[S.O.F.I. Tax] ❌ JSON.parse failed. cleanTax was:", JSON.stringify(cleanTax.slice(0, 300)));
+        console.error("[S.O.F.I. Tax] Parse error:", parseErr?.message);
+        return res.json({ adresse: null, numeroLot: null, valeurTerrain: null, valeurBatiment: null });
+      }
+    } catch (e: any) {
+      console.error("[S.O.F.I. Tax] ❌ FULL ERROR:");
+      console.error("  message:", e?.message);
+      console.error("  status :", e?.status);
+      console.error("  toString:", String(e));
+      try { console.error("  JSON:", JSON.stringify(e, null, 2)); } catch { }
+      res.status(200).json({ adresse: null, numeroLot: null, valeurTerrain: null, valeurBatiment: null });
     }
   });
 
@@ -423,8 +574,8 @@ JSON schema to return:
             <div style="padding:32px 40px">
               <p style="color:#374151;font-size:15px;margin:0 0 16px">
                 ${recipientType === "admin"
-                  ? `<strong>${clientName}</strong> a signé le document suivant le <strong>${dateStr}</strong>.`
-                  : `Vous avez signé le document suivant le <strong>${dateStr}</strong>. Une copie vous est remise ci-dessous.`}
+          ? `<strong>${clientName}</strong> a signé le document suivant le <strong>${dateStr}</strong>.`
+          : `Vous avez signé le document suivant le <strong>${dateStr}</strong>. Une copie vous est remise ci-dessous.`}
               </p>
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin-bottom:24px">
                 <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Document</div>
