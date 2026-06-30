@@ -13,6 +13,7 @@
  */
 
 import React from "react";
+import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -257,15 +258,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     {/* Glow halo */}
                     <div className="absolute inset-0 rounded-full bg-emerald-400/20 blur-lg animate-pulse pointer-events-none" />
 
-                    {/* Icon badge */}
-                    <div
-                      className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl ${darkMode
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : "bg-emerald-500 text-white"
-                        }`}
-                    >
-                      <Sparkles size={22} />
-                    </div>
+                    {/* S.O.F.I. circular face avatar */}
+                    <img
+                      src={sofiAvatar}
+                      alt="S.O.F.I. — Assistante IA"
+                      className="relative z-10 w-12 h-12 rounded-full object-cover object-top border-2 border-emerald-500 shadow-xl shadow-emerald-500/30"
+                    />
 
                     {/* Live pulsing status dot */}
                     <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
