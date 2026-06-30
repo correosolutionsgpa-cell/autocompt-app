@@ -1,4 +1,4 @@
-otro/**
+/**
  * CorporatifModal.tsx
  * ─────────────────────────────────────────────────────────────────────────────
  * Carpeta: src/components/modals/

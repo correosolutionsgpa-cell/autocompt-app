@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -7031,6 +7031,21 @@ Ceci est un message automatisé généré par AutoCompt.`;
     return { status: "Erreur/Rejet", reason: "Aucune Correspondance", match: null };
   };
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Safety valve: if Firebase auth never calls onAuthStateChanged (offline, timeout),
+  // force the loader off after 8s so the app is still usable.
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      setIsLoadingData(prev => {
+        if (prev) {
+          console.warn("[AutoCompt] Firebase auth timeout — forcing isLoadingData=false after 8s");
+          return false;
+        }
+        return prev;
+      });
+    }, 8000);
+    return () => clearTimeout(safetyTimer);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {

@@ -146,6 +146,45 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  // ── Empty state: no vehicle registered yet ─────────────────────────────────
+  // The GPS module needs at least one registered vehicle from Paramètres → Véhicules.
+  // Show a helpful prompt instead of crashing or showing a blank screen.
+  if (registeredVehicles.length === 0) {
+    return (
+      <div className={`min-h-screen flex flex-col ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} md:pl-72`}>
+        <WorkspaceSidebar />
+        <header
+          className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center space-x-3 shadow-sm`}
+          style={{ borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}` }}
+        >
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 md:hidden mr-1"><Menu size={18} /></button>
+          <button onClick={() => setVista("dashboard")} className={`p-2 ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><ArrowLeft /></button>
+          <div className="flex-1">
+            <h2 className="font-black uppercase italic tracking-tighter text-lg">Kilométrage GPS</h2>
+          </div>
+        </header>
+        <main className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-5">
+          <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center text-4xl ${darkMode ? "bg-zinc-900" : "bg-slate-100"}`}>
+            🚗
+          </div>
+          <div>
+            <h3 className="font-black text-base uppercase tracking-tight mb-1">Aucun véhicule enregistré</h3>
+            <p className={`text-[10px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-500"} max-w-[260px] leading-relaxed`}>
+              Pour utiliser le module Kilométrage GPS, commencez par enregistrer votre véhicule d'entreprise dans les Paramètres.
+            </p>
+          </div>
+          <button
+            onClick={() => setVista("settings")}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-600/25 to-indigo-500/15 border border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:from-indigo-600/35 transition-all cursor-pointer"
+          >
+            ⚙️ Aller aux Paramètres
+          </button>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
