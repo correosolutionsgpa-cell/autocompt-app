@@ -57,12 +57,28 @@ import { recordBusinessTrip } from "../../lib/vehicleRateService";
 import {
   ArrowLeft,
   CheckCircle2,
+  MapPin,
   Menu,
   Navigation,
   Plus,
   Scan,
+  Square,
   Trash2,
 } from "lucide-react";
+
+// ── Haversine formula (no external API needed) ────────────────────────────────
+// Returns distance in km between two GPS coordinates.
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -154,9 +170,90 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const [isTrackingAuto, setIsTrackingAuto] = useState(restored?.isTracking ?? false);
   // Banner: shown once when we auto-resume an interrupted GPS trip
   const [showResumedBanner, setShowResumedBanner] = useState<boolean>(!!restored?.isTracking);
+  // Inline save form state (replaces native prompt())
+  const [showGpsSaveForm, setShowGpsSaveForm] = useState(false);
+  const [gpsSaveKmInput, setGpsSaveKmInput] = useState<string>("");
+  // Elapsed trip duration
+  const [tripStartTime, setTripStartTime] = useState<number | null>(null);
+  const [tripElapsedSec, setTripElapsedSec] = useState(0);
+
+  // ── Refs: watchPosition ID + last known position for Haversine ──────────────
+  const watchIdRef = useRef<number | null>(null);
+  const lastPosRef = useRef<{ lat: number; lon: number } | null>(
+    restored?.lat && restored?.lon ? { lat: restored.lat, lon: restored.lon } : null
+  );
+
+  // ── Effect: Real watchPosition GPS tracking ──────────────────────────────────
+  // Starts when isTrackingAuto=true, stops when false.
+  // Accumulates distance using Haversine between each position update.
+  useEffect(() => {
+    if (!isTrackingAuto) {
+      // Stop watching
+      if (watchIdRef.current !== null) {
+        navigator.geolocation?.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      return;
+    }
+    if (!navigator.geolocation) {
+      setGpsStatus("GPS non disponible sur cet appareil.");
+      setIsTrackingAuto(false);
+      return;
+    }
+    setGpsStatus("📡 Acquisition des satellites...");
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setGpsLatitude(latitude);
+        setGpsLongitude(longitude);
+        setGpsAccuracy(accuracy);
+        setGpsStatus("🟢 Signal actif — suivi en cours");
+        // Accumulate km using Haversine
+        if (lastPosRef.current) {
+          const delta = haversineKm(
+            lastPosRef.current.lat, lastPosRef.current.lon,
+            latitude, longitude
+          );
+          // Filter micro-movements (< 5m = GPS drift, not actual travel)
+          if (delta > 0.005) {
+            setKilometrageComputedKm((prev) =>
+              parseFloat((prev + delta).toFixed(3))
+            );
+          }
+        }
+        lastPosRef.current = { lat: latitude, lon: longitude };
+      },
+      (err) => {
+        setGpsStatus(`⚠️ Erreur GPS: ${err.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+    );
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation?.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [isTrackingAuto]);
+
+  // ── Effect: Trip elapsed timer (updates every second while tracking) ─────────
+  useEffect(() => {
+    if (!isTrackingAuto) { setTripElapsedSec(0); return; }
+    setTripStartTime(Date.now());
+    const timer = setInterval(() => {
+      setTripElapsedSec((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isTrackingAuto]);
+
+  // ── Helper: format elapsed seconds as MM:SS ──────────────────────────────────
+  const formatElapsed = (sec: number) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   // ── Effect 1: Persist active trip state to localStorage every 5s ────────────
-  // This keeps the data alive across phone calls, OS suspends, and tab switches.
   useEffect(() => {
     if (!isTrackingAuto && kilometrageComputedKm === 0) return;
     const persist = () => {
@@ -172,12 +269,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
       };
       localStorage.setItem(TRIP_PERSIST_KEY, JSON.stringify(state));
     };
-    persist(); // write immediately on any state change
-    const interval = setInterval(persist, 5000); // heartbeat every 5s
+    persist();
+    const interval = setInterval(persist, 5000);
     return () => clearInterval(interval);
   }, [isTrackingAuto, kilometrageComputedKm, kilometrageAddresses, gpsLatitude, gpsLongitude, gpsAccuracy, activeKilometrageTab]);
 
-  // ── Effect 2: Clear persistence when the user stops tracking without saving ──
+  // ── Effect 2: Clear persistence when idle ───────────────────────────────────
   useEffect(() => {
     if (!isTrackingAuto && kilometrageComputedKm === 0) {
       clearPersistedTrip();
@@ -472,153 +569,262 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   <p className="text-[8px] font-medium text-amber-700/80 dark:text-amber-300/70 leading-snug">
                     Votre trajet précédent a été restauré automatiquement
                     {restored?.savedAt ? ` (sauvegardé le ${new Date(restored.savedAt).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })})` : ""}.
-                    {restored?.km && restored.km > 0 ? ` Distance restaurée\u00a0: ${restored.km}\u00a0km.` : ""}
+                    {restored?.km && restored.km > 0 ? ` Distance restaurée\u00a0: ${restored.km.toFixed(2)}\u00a0km.` : ""}
                     {" "}Enregistrez le trajet ou arrêtez le suivi pour annuler.
                   </p>
                 </div>
                 <button
-                  onClick={() => { setShowResumedBanner(false); }}
+                  onClick={() => setShowResumedBanner(false)}
                   className="text-amber-500 hover:text-amber-300 transition-colors text-xs font-black leading-none mt-0.5 cursor-pointer"
-                  title="Fermer le message"
+                  title="Fermer"
                 >✕</button>
               </div>
             )}
 
-            <button
-              onClick={() => {
-                setGpsStatus("Acquisition des satellites...");
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                      setGpsLatitude(position.coords.latitude);
-                      setGpsLongitude(position.coords.longitude);
-                      setGpsAccuracy(position.coords.accuracy);
-                      setGpsStatus("Connexion Établie (Haute Précision)");
-                    },
-                    (error) => {
-                      setGpsStatus(`Erreur GPS: ${error.message}`);
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-                  );
-                } else {
-                  setGpsStatus("Module non pris en charge.");
-                }
-              }}
-              className="w-full bg-[#3B82F6] text-white font-black py-4 rounded-[28px] flex items-center justify-center space-x-3 text-[10px] uppercase italic shadow-lg active:scale-95 transition-all outline-none"
-            >
-              <Scan size={18} />
-              <span>Me localiser (Haute Précision)</span>
-            </button>
-
-            <div
-              className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-5 rounded-3xl border shadow-sm`}
-            >
-              <div className="flex items-center space-x-3 mb-2">
-                <div
-                  className={`w-2 h-2 rounded-full ${gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"}`}
-                />
-                <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
-                  Statut Télémétrique
+            {/* ── Live tracking dashboard (shown while tracking) ───────────── */}
+            {isTrackingAuto && (
+              <div className={`p-6 rounded-[32px] border space-y-4 animate-in zoom-in-95 duration-300 ${
+                darkMode
+                  ? "bg-[#059669]/10 border-[#059669]/40"
+                  : "bg-emerald-50 border-emerald-200"
+              }`}>
+                {/* Big odometer */}
+                <div className="text-center">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">
+                    📡 Distance en cours
+                  </p>
+                  <p className="text-5xl font-black tabular-nums text-[#059669] dark:text-emerald-400 tracking-tighter">
+                    {kilometrageComputedKm.toFixed(2)}
+                    <span className="text-lg ml-1 opacity-60">km</span>
+                  </p>
+                  <p className="text-[9px] font-mono text-emerald-700/60 dark:text-emerald-500/60 mt-1">
+                    ⏱ {formatElapsed(tripElapsedSec)}
+                    {gpsAccuracy ? ` · ±${gpsAccuracy.toFixed(0)}m` : ""}
+                  </p>
+                </div>
+                {/* Coordinates row */}
+                {gpsLatitude && (
+                  <div className="flex gap-2 justify-center flex-wrap">
+                    <span className="flex items-center gap-1 text-[8px] font-mono bg-black/10 dark:bg-black/30 px-2 py-1 rounded-lg text-emerald-700 dark:text-emerald-300">
+                      <MapPin size={10} /> {gpsLatitude.toFixed(5)}, {gpsLongitude?.toFixed(5)}
+                    </span>
+                  </div>
+                )}
+                {/* GPS status pill */}
+                <p className="text-center text-[8px] font-black uppercase tracking-widest text-emerald-600/80 dark:text-emerald-500/80">
+                  {gpsStatus}
                 </p>
               </div>
-              <p className="text-xs font-black text-slate-900 dark:text-zinc-100">
-                {gpsStatus}
-              </p>
-              {gpsLatitude && (
-                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-dashed border-slate-200 dark:border-zinc-800 pt-4">
-                  <div>
-                    <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">
-                      Latitude
-                    </p>
-                    <p className="text-[10px] font-mono font-bold text-slate-800 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 py-1.5 px-3 rounded-lg inline-block border border-slate-100 dark:border-zinc-800">
-                      {gpsLatitude.toFixed(6)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">
-                      Longitude
-                    </p>
-                    <p className="text-[10px] font-mono font-bold text-slate-800 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 py-1.5 px-3 rounded-lg inline-block border border-slate-100 dark:border-zinc-800">
-                      {gpsLongitude?.toFixed(6)}
-                    </p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">
-                      Précision Signal
-                    </p>
-                    <p className="text-[10px] font-mono font-bold text-[#059669] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 py-1.5 px-3 rounded-lg inline-block border border-emerald-100 dark:border-emerald-900">
-                      ± {gpsAccuracy?.toFixed(1)} mètres
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
-            {/* Dual-State Auto Tracking Button */}
+            {/* ── Static GPS fix panel (shown when NOT tracking) ───────────── */}
+            {!isTrackingAuto && (
+              <>
+                <button
+                  onClick={() => {
+                    setGpsStatus("Acquisition des satellites...");
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          setGpsLatitude(position.coords.latitude);
+                          setGpsLongitude(position.coords.longitude);
+                          setGpsAccuracy(position.coords.accuracy);
+                          setGpsStatus("📍 Position initiale verrouillée");
+                          lastPosRef.current = { lat: position.coords.latitude, lon: position.coords.longitude };
+                        },
+                        (error) => { setGpsStatus(`Erreur GPS: ${error.message}`); },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                      );
+                    } else {
+                      setGpsStatus("Module non pris en charge.");
+                    }
+                  }}
+                  className="w-full bg-[#3B82F6] text-white font-black py-4 rounded-[28px] flex items-center justify-center space-x-3 text-[10px] uppercase italic shadow-lg active:scale-95 transition-all outline-none"
+                >
+                  <Scan size={18} />
+                  <span>Verrouiller position de départ</span>
+                </button>
+
+                <div className={`${
+                  darkMode
+                    ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+                    : "bg-white border-slate-200"
+                } p-5 rounded-3xl border shadow-sm`}>
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"
+                    }`} />
+                    <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
+                      Statut Télémétrique
+                    </p>
+                  </div>
+                  <p className="text-xs font-black text-slate-900 dark:text-zinc-100">{gpsStatus}</p>
+                  {gpsLatitude && (
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-dashed border-slate-200 dark:border-zinc-800 pt-4">
+                      <div>
+                        <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Latitude</p>
+                        <p className="text-[10px] font-mono font-bold text-slate-800 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 py-1.5 px-3 rounded-lg inline-block border border-slate-100 dark:border-zinc-800">
+                          {gpsLatitude.toFixed(6)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Longitude</p>
+                        <p className="text-[10px] font-mono font-bold text-slate-800 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 py-1.5 px-3 rounded-lg inline-block border border-slate-100 dark:border-zinc-800">
+                          {gpsLongitude?.toFixed(6)}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Précision Signal</p>
+                        <p className="text-[10px] font-mono font-bold text-[#059669] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 py-1.5 px-3 rounded-lg inline-block border border-emerald-100 dark:border-emerald-900">
+                          ± {gpsAccuracy?.toFixed(1)} mètres
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── Start / Stop tracking button ─────────────────────────────── */}
             <button
-              onClick={() => setIsTrackingAuto(!isTrackingAuto)}
-              className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${isTrackingAuto
-                ? darkMode
-                  ? "bg-[#059669]/20 border-[#059669] text-emerald-400"
-                  : "bg-emerald-50 border-emerald-200 text-[#059669]"
-                : darkMode
-                  ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-500"
-                  : "bg-slate-900 border-slate-800 text-white"
-                }`}
+              onClick={() => {
+                if (isTrackingAuto) {
+                  // STOP: show the inline save form with the accumulated km pre-filled
+                  setIsTrackingAuto(false);
+                  setGpsStatus("Trajet terminé — prêt à enregistrer.");
+                  setGpsSaveKmInput(kilometrageComputedKm > 0 ? kilometrageComputedKm.toFixed(2) : "");
+                  setShowGpsSaveForm(true);
+                } else {
+                  // START: reset distance counter and begin watching
+                  setKilometrageComputedKm(0);
+                  setTripElapsedSec(0);
+                  lastPosRef.current = gpsLatitude && gpsLongitude
+                    ? { lat: gpsLatitude, lon: gpsLongitude }
+                    : null;
+                  setShowGpsSaveForm(false);
+                  setIsTrackingAuto(true);
+                }
+              }}
+              className={`w-full p-6 rounded-[32px] border-2 transition-all flex items-center justify-between active:scale-95 ${
+                isTrackingAuto
+                  ? "bg-rose-500/10 border-rose-500 text-rose-500 dark:text-rose-400"
+                  : darkMode
+                    ? "bg-[#059669]/10 border-[#059669]/50 text-emerald-400"
+                    : "bg-slate-900 border-slate-900 text-white"
+              }`}
             >
               <div className="flex items-center space-x-3">
-                <div
-                  className={`p-3 rounded-2xl transition-colors ${isTrackingAuto
-                    ? "bg-[#059669]/20 animate-pulse text-[#059669] dark:text-emerald-400"
-                    : darkMode
-                      ? "bg-zinc-900 text-zinc-600"
-                      : "bg-white/10 text-slate-300"
-                    }`}
-                >
-                  <Navigation size={20} />
+                <div className={`p-3 rounded-2xl ${
+                  isTrackingAuto
+                    ? "bg-rose-500/20"
+                    : darkMode ? "bg-zinc-900" : "bg-white/10"
+                }`}>
+                  {isTrackingAuto
+                    ? <Square size={20} fill="currentColor" />
+                    : <Navigation size={20} />}
                 </div>
                 <div className="text-left">
-                  <p
-                    className={`text-[10px] font-black uppercase italic tracking-tight ${isTrackingAuto ? "text-[#059669] dark:text-emerald-400" : ""}`}
-                  >
-                    {isTrackingAuto
-                      ? "Routage Actif (Arrière-plan)"
-                      : "Démarrer le trajet"}
+                  <p className="text-[10px] font-black uppercase italic tracking-tight">
+                    {isTrackingAuto ? "Arrêter le trajet" : "Démarrer le trajet GPS"}
                   </p>
-                  <p
-                    className={`text-[7px] font-black uppercase opacity-60 tracking-widest mt-0.5 ${isTrackingAuto ? "text-[#059669] dark:text-emerald-500" : ""}`}
-                  >
+                  <p className="text-[7px] font-black uppercase opacity-60 tracking-widest mt-0.5">
                     {isTrackingAuto
-                      ? "Synchronisation satellite courante"
-                      : "Suivi cinématique automatique"}
+                      ? `${kilometrageComputedKm.toFixed(2)} km · ${formatElapsed(tripElapsedSec)}`
+                      : "Suivi cinématique Haversine — sans API"}
                   </p>
                 </div>
               </div>
               {isTrackingAuto && (
-                <div className="w-2.5 h-2.5 bg-[#059669] rounded-full animate-ping" />
+                <div className="flex gap-1 items-center">
+                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-ping" />
+                  <div className="w-2 h-2 bg-rose-400 rounded-full" />
+                </div>
               )}
             </button>
+
+            {/* ── Inline save form (replaces native prompt()) ──────────────── */}
+            {showGpsSaveForm && !isTrackingAuto && (
+              <div className={`p-6 rounded-[28px] border space-y-4 animate-in slide-in-from-bottom duration-300 ${
+                darkMode
+                  ? "bg-slate-900/60 border-white/[0.08] backdrop-blur-md"
+                  : "bg-white border-slate-200"
+              }`}>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#059669] mb-0.5">
+                    Confirmer le trajet
+                  </p>
+                  <p className={`text-[8px] font-medium ${
+                    darkMode ? "text-zinc-400" : "text-slate-400"
+                  }`}>
+                    Distance mesurée par le GPS embarqué. Ajustez si nécessaire.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-2xl border ${
+                    darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <Navigation size={14} className="text-[#059669] shrink-0" />
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={gpsSaveKmInput}
+                      onChange={(e) => setGpsSaveKmInput(e.target.value)}
+                      className={`flex-1 bg-transparent outline-none text-sm font-black tabular-nums ${
+                        darkMode ? "text-zinc-100" : "text-slate-900"
+                      }`}
+                      placeholder="Distance (km)"
+                    />
+                    <span className={`text-[9px] font-black uppercase ${
+                      darkMode ? "text-zinc-500" : "text-slate-400"
+                    }`}>km</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setGpsSaveKmInput("");
+                      setShowGpsSaveForm(false);
+                      setKilometrageComputedKm(0);
+                      clearPersistedTrip();
+                    }}
+                    className={`px-3 py-3 rounded-2xl border text-[8px] font-black uppercase transition-all ${
+                      darkMode
+                        ? "border-zinc-800 text-zinc-500 hover:text-rose-400"
+                        : "border-slate-200 text-slate-400 hover:text-rose-500"
+                    } cursor-pointer`}
+                  >
+                    Annuler
+                  </button>
+                </div>
+                {/* deductible preview */}
+                {parseFloat(gpsSaveKmInput) > 0 && (
+                  <div className="flex justify-between items-center px-1">
+                    <span className={`text-[8px] font-black uppercase tracking-widest ${
+                      darkMode ? "text-zinc-500" : "text-slate-400"
+                    }`}>Montant déductible (0.70$/km)</span>
+                    <span className="text-sm font-black text-[#059669]">
+                      {(parseFloat(gpsSaveKmInput) * 0.70).toFixed(2)} $
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* ── Bouton Enregistrer le trajet ──────────────────────────────────── */}
+        {/* In GPS mode this button is embedded inside the save form — only show for calculateur */}
         <div className="pt-2">
           <button
             onClick={() => {
-              let kmToSave = kilometrageComputedKm;
+              let kmToSave: number;
               if (activeKilometrageTab === "gps") {
-                const kmStr = prompt(
-                  "Distance enregistrée par le GPS pour ce trajet (km)?",
-                  "10",
-                );
-                if (!kmStr) return;
-                kmToSave = parseFloat(kmStr);
+                // Read from the inline form input (no more prompt())
+                kmToSave = parseFloat(gpsSaveKmInput);
+              } else {
+                kmToSave = kilometrageComputedKm;
               }
               if (isNaN(kmToSave) || kmToSave <= 0) {
-                alert(
-                  "Distance invalide. Veuillez calculer une route ou commencer un suivi GPS valide.",
-                );
-                return;
+                return; // silently ignore — UI already prevents this
               }
 
               const fecha = new Date().toISOString().split("T")[0];
@@ -693,6 +899,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               // Nettoyage + clear persisted trip (trip was saved intentionally)
               setKilometrageComputedKm(0);
               setShowResumedBanner(false);
+              setShowGpsSaveForm(false);
+              setGpsSaveKmInput("");
               clearPersistedTrip();
               if (activeKilometrageTab === "gps") {
                 setIsTrackingAuto(false);
@@ -705,7 +913,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 });
               }
             }}
-            className="w-full bg-[#059669] text-white font-black py-5 rounded-[32px] flex items-center justify-center space-x-3 text-sm uppercase italic shadow-xl active:scale-95 transition-all shadow-emerald-900/20"
+            className={`w-full bg-[#059669] text-white font-black py-5 rounded-[32px] flex items-center justify-center space-x-3 text-sm uppercase italic shadow-xl active:scale-95 transition-all shadow-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed`}
+            disabled={
+              activeKilometrageTab === "gps"
+                ? isNaN(parseFloat(gpsSaveKmInput)) || parseFloat(gpsSaveKmInput) <= 0
+                : kilometrageComputedKm <= 0
+            }
           >
             <CheckCircle2 size={24} />
             <span>Enregistrer le trajet</span>
