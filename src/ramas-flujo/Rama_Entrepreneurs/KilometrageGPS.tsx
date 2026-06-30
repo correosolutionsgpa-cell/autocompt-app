@@ -21,7 +21,38 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+
+// ── Trip persistence key (localStorage) ──────────────────────────────────────
+const TRIP_PERSIST_KEY = "autocompt_active_trip";
+
+interface PersistedTripState {
+  isTracking: boolean;
+  km: number;
+  addresses: string[];
+  lat: number | null;
+  lon: number | null;
+  accuracy: number | null;
+  tab: "calculateur" | "gps";
+  savedAt: number; // timestamp ms
+}
+
+function loadPersistedTrip(): PersistedTripState | null {
+  try {
+    const raw = localStorage.getItem(TRIP_PERSIST_KEY);
+    if (!raw) return null;
+    const parsed: PersistedTripState = JSON.parse(raw);
+    // Only restore if the persisted state had an active trip
+    if (!parsed.isTracking && parsed.km === 0) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedTrip(): void {
+  localStorage.removeItem(TRIP_PERSIST_KEY);
+}
 import { recordBusinessTrip } from "../../lib/vehicleRateService";
 import {
   ArrowLeft,
@@ -101,21 +132,57 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   setDispatcherSuccessToast,
   WorkspaceSidebar,
 }) => {
-  // ── États GPS (encapsulés ici — ne polluent plus App.tsx) ──────────────────
-  const [activeKilometrageTab, setActiveKilometrageTab] = useState<
-    "calculateur" | "gps"
-  >("calculateur");
-  const [kilometrageAddresses, setKilometrageAddresses] = useState<string[]>([
-    "",
-    "",
-  ]);
-  const [kilometrageComputedKm, setKilometrageComputedKm] =
-    useState<number>(0);
-  const [gpsLatitude, setGpsLatitude] = useState<number | null>(null);
-  const [gpsLongitude, setGpsLongitude] = useState<number | null>(null);
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<string>("En attente de signal");
-  const [isTrackingAuto, setIsTrackingAuto] = useState(false);
+  // ── États GPS — seedés depuis localStorage si un trajet interrompu existe ──
+  const restoredTrip = useRef<PersistedTripState | null>(loadPersistedTrip());
+  const restored = restoredTrip.current;
+
+  const [activeKilometrageTab, setActiveKilometrageTab] = useState<"calculateur" | "gps">(
+    restored?.tab ?? "calculateur"
+  );
+  const [kilometrageAddresses, setKilometrageAddresses] = useState<string[]>(
+    restored?.addresses ?? ["", ""]
+  );
+  const [kilometrageComputedKm, setKilometrageComputedKm] = useState<number>(
+    restored?.km ?? 0
+  );
+  const [gpsLatitude, setGpsLatitude] = useState<number | null>(restored?.lat ?? null);
+  const [gpsLongitude, setGpsLongitude] = useState<number | null>(restored?.lon ?? null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(restored?.accuracy ?? null);
+  const [gpsStatus, setGpsStatus] = useState<string>(
+    restored?.isTracking ? "⚠️ Trajet interrompu — reprise en cours..." : "En attente de signal"
+  );
+  const [isTrackingAuto, setIsTrackingAuto] = useState(restored?.isTracking ?? false);
+  // Banner: shown once when we auto-resume an interrupted GPS trip
+  const [showResumedBanner, setShowResumedBanner] = useState<boolean>(!!restored?.isTracking);
+
+  // ── Effect 1: Persist active trip state to localStorage every 5s ────────────
+  // This keeps the data alive across phone calls, OS suspends, and tab switches.
+  useEffect(() => {
+    if (!isTrackingAuto && kilometrageComputedKm === 0) return;
+    const persist = () => {
+      const state: PersistedTripState = {
+        isTracking: isTrackingAuto,
+        km: kilometrageComputedKm,
+        addresses: kilometrageAddresses,
+        lat: gpsLatitude,
+        lon: gpsLongitude,
+        accuracy: gpsAccuracy,
+        tab: activeKilometrageTab,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(TRIP_PERSIST_KEY, JSON.stringify(state));
+    };
+    persist(); // write immediately on any state change
+    const interval = setInterval(persist, 5000); // heartbeat every 5s
+    return () => clearInterval(interval);
+  }, [isTrackingAuto, kilometrageComputedKm, kilometrageAddresses, gpsLatitude, gpsLongitude, gpsAccuracy, activeKilometrageTab]);
+
+  // ── Effect 2: Clear persistence when the user stops tracking without saving ──
+  useEffect(() => {
+    if (!isTrackingAuto && kilometrageComputedKm === 0) {
+      clearPersistedTrip();
+    }
+  }, [isTrackingAuto, kilometrageComputedKm]);
 
   // ── Guard: ce module n'existe pas en mode Syndic ───────────────────────────
   if (dashboardMode === "Syndic") {
@@ -393,6 +460,30 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         {/* ── Tab: GPS ─────────────────────────────────────────────────────── */}
         {activeKilometrageTab === "gps" && (
           <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+
+            {/* ── Resumed trip banner ───────────────────────────────────────── */}
+            {showResumedBanner && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 animate-in slide-in-from-top duration-300">
+                <span className="text-xl leading-none mt-0.5">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-0.5">
+                    Trajet interrompu détecté
+                  </p>
+                  <p className="text-[8px] font-medium text-amber-700/80 dark:text-amber-300/70 leading-snug">
+                    Votre trajet précédent a été restauré automatiquement
+                    {restored?.savedAt ? ` (sauvegardé le ${new Date(restored.savedAt).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })})` : ""}.
+                    {restored?.km && restored.km > 0 ? ` Distance restaurée\u00a0: ${restored.km}\u00a0km.` : ""}
+                    {" "}Enregistrez le trajet ou arrêtez le suivi pour annuler.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setShowResumedBanner(false); }}
+                  className="text-amber-500 hover:text-amber-300 transition-colors text-xs font-black leading-none mt-0.5 cursor-pointer"
+                  title="Fermer le message"
+                >✕</button>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setGpsStatus("Acquisition des satellites...");
@@ -599,8 +690,10 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 playNotificationSound();
               }
 
-              // Nettoyage
+              // Nettoyage + clear persisted trip (trip was saved intentionally)
               setKilometrageComputedKm(0);
+              setShowResumedBanner(false);
+              clearPersistedTrip();
               if (activeKilometrageTab === "gps") {
                 setIsTrackingAuto(false);
               }

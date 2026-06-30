@@ -7,7 +7,7 @@ export function validateAndPrepareTransaction(entryData: any, linesData: any[]) 
   for (const line of linesData) {
     // Ensure amount is treated as a number
     const amount = Number(line.amount) || 0;
-    
+
     if (line.type === 'Debit') {
       totalDebits += amount;
     } else if (line.type === 'Credit') {

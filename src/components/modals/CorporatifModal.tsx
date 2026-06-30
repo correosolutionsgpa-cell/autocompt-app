@@ -43,8 +43,8 @@ const CorporatifModal: React.FC<CorporatifModalProps> = ({
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: "spring", duration: 0.4 }}
             className={`w-full max-w-md ${darkMode
-                ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white"
-                : "bg-white border-slate-100 text-slate-900"
+              ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white"
+              : "bg-white border-slate-100 text-slate-900"
               } rounded-[36px] border p-8 shadow-2xl space-y-6 relative overflow-hidden`}
           >
             {/* Background accent */}
@@ -111,8 +111,8 @@ const CorporatifModal: React.FC<CorporatifModalProps> = ({
               <button
                 onClick={() => setShowCorporatifModal(false)}
                 className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${darkMode
-                    ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
-                    : "bg-white border-slate-200 text-slate-500 hover:text-slate-900"
+                  ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
+                  : "bg-white border-slate-200 text-slate-500 hover:text-slate-900"
                   } border cursor-pointer`}
               >
                 Fermer
