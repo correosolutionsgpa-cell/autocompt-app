@@ -122,24 +122,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     return null;
   }
 
-  // ── Guard: Firebase data not yet loaded ───────────────────────────────────
+  // ── Safe data derivation (always works even before Firebase resolves) ────────
+  // currentCompany is a derived value (listaEmpresas.find), NOT a loading flag.
+  // It can be undefined indefinitely when there are no companies yet — never block on it.
   const safePartnerData = partnerData ?? {};
   const safeCurrentCompanyPartnerData = currentCompany?.partnerData ?? {};
   const safeLogs: MileageLog[] =
     safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
-
-  if (!currentCompany || !partnerData) {
-    return (
-      <div
-        className={`min-h-screen flex flex-col items-center justify-center gap-4 ${darkMode ? "bg-transparent text-zinc-400" : "bg-slate-50 text-slate-500"
-          } md:pl-72`}
-      >
-        <WorkspaceSidebar />
-        <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-        <p className="text-[10px] font-black uppercase tracking-widest">Chargement des données…</p>
-      </div>
-    );
-  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -183,8 +172,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           <button
             onClick={() => setActiveKilometrageTab("calculateur")}
             className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "calculateur"
-                ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
+              ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
+              : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
               }`}
           >
             Calculateur (API)
@@ -192,8 +181,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           <button
             onClick={() => setActiveKilometrageTab("gps")}
             className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "gps"
-                ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
+              ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
+              : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
               }`}
           >
             Suivi (GPS)
@@ -419,21 +408,21 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             <button
               onClick={() => setIsTrackingAuto(!isTrackingAuto)}
               className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${isTrackingAuto
-                  ? darkMode
-                    ? "bg-[#059669]/20 border-[#059669] text-emerald-400"
-                    : "bg-emerald-50 border-emerald-200 text-[#059669]"
-                  : darkMode
-                    ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-500"
-                    : "bg-slate-900 border-slate-800 text-white"
+                ? darkMode
+                  ? "bg-[#059669]/20 border-[#059669] text-emerald-400"
+                  : "bg-emerald-50 border-emerald-200 text-[#059669]"
+                : darkMode
+                  ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-500"
+                  : "bg-slate-900 border-slate-800 text-white"
                 }`}
             >
               <div className="flex items-center space-x-3">
                 <div
                   className={`p-3 rounded-2xl transition-colors ${isTrackingAuto
-                      ? "bg-[#059669]/20 animate-pulse text-[#059669] dark:text-emerald-400"
-                      : darkMode
-                        ? "bg-zinc-900 text-zinc-600"
-                        : "bg-white/10 text-slate-300"
+                    ? "bg-[#059669]/20 animate-pulse text-[#059669] dark:text-emerald-400"
+                    : darkMode
+                      ? "bg-zinc-900 text-zinc-600"
+                      : "bg-white/10 text-slate-300"
                     }`}
                 >
                   <Navigation size={20} />
