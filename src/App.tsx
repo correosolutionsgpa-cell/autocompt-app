@@ -2188,8 +2188,8 @@ const App = () => {
                                 )}
                                 <span
                                   className={`relative transition-transform duration-200 group-hover:scale-110 ${isSettingsTourTarget
-                                      ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]"
-                                      : isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
+                                    ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]"
+                                    : isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
                                     }`}
                                 >
                                   {item.icon}
@@ -2228,12 +2228,12 @@ const App = () => {
                     playNotificationSound();
                   }}
                   className={`relative w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${vista === "settings"
-                      ? darkMode
-                        ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa]"
-                        : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155]"
-                      : showSettingsTour
-                        ? darkMode ? "border border-cyan-500/50 bg-cyan-950/20 text-cyan-300" : "border border-cyan-400/50 bg-cyan-50/60 text-cyan-700"
-                        : darkMode ? "border border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "border border-transparent text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"
+                    ? darkMode
+                      ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa]"
+                      : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155]"
+                    : showSettingsTour
+                      ? darkMode ? "border border-cyan-500/50 bg-cyan-950/20 text-cyan-300" : "border border-cyan-400/50 bg-cyan-50/60 text-cyan-700"
+                      : darkMode ? "border border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "border border-transparent text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"
                     }`}
                 >
                   {/* Tour pulse ring */}
@@ -2241,8 +2241,8 @@ const App = () => {
                     <span className="absolute inset-0 rounded-2xl pointer-events-none animate-ping opacity-20 bg-cyan-400" />
                   )}
                   <span className={`relative transition-transform duration-200 group-hover:scale-110 ${showSettingsTour
-                      ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.9)]"
-                      : vista === "settings" ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
+                    ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.9)]"
+                    : vista === "settings" ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
                     }`}>
                     <Settings size={18} />
                   </span>
@@ -9539,12 +9539,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   playNotificationSound();
                 }}
                 className={`relative p-2.5 rounded-xl transition-all ${showSettingsTour
-                    ? darkMode
-                      ? "bg-cyan-950/40 border border-cyan-500/50 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.4)]"
-                      : "bg-cyan-50 border border-cyan-400/50 text-cyan-600 shadow-[0_0_16px_rgba(6,182,212,0.25)]"
-                    : darkMode
-                      ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700"
-                      : "bg-white border border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm hover:shadow-md"
+                  ? darkMode
+                    ? "bg-cyan-950/40 border border-cyan-500/50 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.4)]"
+                    : "bg-cyan-50 border border-cyan-400/50 text-cyan-600 shadow-[0_0_16px_rgba(6,182,212,0.25)]"
+                  : darkMode
+                    ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700"
+                    : "bg-white border border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm hover:shadow-md"
                   }`}
               >
                 {/* Continuous pulse ring when tour is active */}
@@ -10377,8 +10377,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
               >
                 {/* ── Speech bubble ────────────────────────────── */}
                 <div className={`relative rounded-[24px] border p-4 shadow-2xl overflow-hidden ${darkMode
-                    ? "bg-[#060C1D]/85 border-cyan-500/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(6,182,212,0.12)] backdrop-blur-2xl"
-                    : "bg-white/90 border-cyan-400/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_8px_40px_rgba(6,182,212,0.10)] backdrop-blur-xl"
+                  ? "bg-[#060C1D]/85 border-cyan-500/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(6,182,212,0.12)] backdrop-blur-2xl"
+                  : "bg-white/90 border-cyan-400/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_8px_40px_rgba(6,182,212,0.10)] backdrop-blur-xl"
                   }`}>
                   {/* Specular top edge */}
                   <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-400/90 via-emerald-400/60 to-transparent pointer-events-none" />
@@ -15688,8 +15688,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                     {tabReporte !== "ventes" && (
                       <div className={`p-4 rounded-2xl border transition-all ${newTxData.noReceiptConfirmed
-                          ? (darkMode ? "border-amber-500/30 bg-amber-950/20" : "border-amber-300 bg-amber-50")
-                          : (darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-100 bg-slate-50/60")
+                        ? (darkMode ? "border-amber-500/30 bg-amber-950/20" : "border-amber-300 bg-amber-50")
+                        : (darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-100 bg-slate-50/60")
                         }`}>
                         <label className="flex items-start gap-3 cursor-pointer">
                           <div className="relative flex items-center justify-center mt-0.5 shrink-0">
@@ -15700,8 +15700,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 setNewTxData({ ...newTxData, noReceiptConfirmed: e.target.checked })
                               }
                               className={`appearance-none w-4 h-4 rounded border-2 outline-none cursor-pointer transition-all ${newTxData.noReceiptConfirmed
-                                  ? "bg-amber-500 border-amber-500"
-                                  : "bg-transparent border-zinc-600 hover:border-amber-400"
+                                ? "bg-amber-500 border-amber-500"
+                                : "bg-transparent border-zinc-600 hover:border-amber-400"
                                 }`}
                             />
                             {newTxData.noReceiptConfirmed && (
@@ -15711,8 +15711,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             )}
                           </div>
                           <span className={`text-[8.5px] font-bold leading-snug ${newTxData.noReceiptConfirmed
-                              ? (darkMode ? "text-amber-300" : "text-amber-700")
-                              : (darkMode ? "text-zinc-500" : "text-slate-400")
+                            ? (darkMode ? "text-amber-300" : "text-amber-700")
+                            : (darkMode ? "text-zinc-500" : "text-slate-400")
                             }`}>
                             Aucun reçu disponible — je confirme que cette dépense est réelle et j’assume l’entière responsabilité en cas de vérification fiscale (ARC / Revenu Québec).
                           </span>
@@ -15867,8 +15867,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         {/* Sticky page header — matches dashboard header pattern */}
         <header
           className={`sticky top-0 z-30 ${darkMode
-              ? "bg-slate-900/60 border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
-              : "bg-white/90 border-slate-200 backdrop-blur-md"
+            ? "bg-slate-900/60 border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+            : "bg-white/90 border-slate-200 backdrop-blur-md"
             } px-6 py-4 border-b flex items-center gap-3 shadow-sm`}
           style={{ borderTop: `3px solid ${darkMode ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.35)"}` }}
         >
