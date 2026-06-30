@@ -986,14 +986,14 @@ const App = () => {
     if (checkPlexLimit(loyerForm.unitId || uniteAdresse, loyerEditingId, null, loyerForm.typeBail)) return;
 
     const loyerPayload = {
-      unitId:       loyerForm.unitId,
-      buildingId:   loyerForm.buildingId,
+      unitId: loyerForm.unitId,
+      buildingId: loyerForm.buildingId,
       uniteAdresse,
-      locataire:    loyerForm.locataire || resolvedUnit?.tenantName || "",
-      loyer:        parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
-      statut:       "Payé" as const,
-      date:         loyerForm.date,
-      typeBail:     loyerForm.typeBail,
+      locataire: loyerForm.locataire || resolvedUnit?.tenantName || "",
+      loyer: parseFloat(loyerForm.montant.replace(/[^0-9.-]+/g, "")),
+      statut: "Payé" as const,
+      date: loyerForm.date,
+      typeBail: loyerForm.typeBail,
     };
 
     if (loyerEditingId) {
@@ -1295,11 +1295,11 @@ const App = () => {
   // ── BETA LAUNCH: Door limits bypassed (999 = uncapped for all tiers) ────────
   // TODO: restore real tier limits before public pricing launch.
   const TIER_LIMITS: Record<string, number> = {
-    gratuit:    999,
-    basique:    999,
-    pro_ind:    999,
-    pro_multi:  999,
-    integral:   999,
+    gratuit: 999,
+    basique: 999,
+    pro_ind: 999,
+    pro_multi: 999,
+    integral: 999,
     superadmin: Infinity,
   };
 
@@ -1689,24 +1689,24 @@ const App = () => {
     // ── RBAC module-id → vista-id mapping for syndicNavItems filtering ──────
     // Keeps only the items whose rbacConfig moduleId is accessible to the profile.
     const SYNDIC_ITEM_RBAC: Record<string, import("./lib/rbacConfig").ModuleId | null> = {
-      dashboard:    null,         // always visible (general nav)
-      cotisations:  "cotisations",
-      contrats:     "contrats",
+      dashboard: null,         // always visible (general nav)
+      cotisations: "cotisations",
+      contrats: "contrats",
       transparence: "transparence",
-      loi16:        "loi16",
+      loi16: "loi16",
       "rapport-ia": "rapport_ia",
-      muro:         "mur_communication",
-      settings:     null,         // always visible
+      muro: "mur_communication",
+      settings: null,         // always visible
     };
 
     const syndicNavItemsAll = [
-      { id: "dashboard",    label: "Tableau de Bord",                    icon: <Layout size={18} />,        bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
-      { id: "cotisations",  label: "Gestion des Cotisations",             icon: <Wallet size={18} />,        bgClass: "bg-amber-100 dark:bg-amber-500/20",   textClass: "text-amber-600 dark:text-amber-400" },
-      { id: "contrats",     label: "Contrats & Résolutions (DocuLegal)",  icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20",    textClass: "text-teal-600 dark:text-teal-400" },
-      { id: "transparence", label: "Tableau de Transparence",             icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
-      { id: "loi16",        label: "Loi 16 & Carnet Entretien",           icon: <Wrench size={18} />,        bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
-      { id: "rapport-ia",   label: "Rapport IA (SyndicAI)",               icon: <Sparkles size={18} />,      bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
-      { id: "muro",         label: "Mur de Communication",                icon: <Bell size={18} />,          bgClass: "bg-rose-100 dark:bg-rose-500/20",    textClass: "text-rose-600 dark:text-rose-400" },
+      { id: "dashboard", label: "Tableau de Bord", icon: <Layout size={18} />, bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
+      { id: "cotisations", label: "Gestion des Cotisations", icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
+      { id: "contrats", label: "Contrats & Résolutions (DocuLegal)", icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
+      { id: "transparence", label: "Tableau de Transparence", icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
+      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
+      { id: "rapport-ia", label: "Rapport IA (SyndicAI)", icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
+      { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
@@ -2187,11 +2187,10 @@ const App = () => {
                                   <span className="absolute inset-0 rounded-2xl pointer-events-none animate-ping opacity-30 bg-cyan-500" />
                                 )}
                                 <span
-                                  className={`relative transition-transform duration-200 group-hover:scale-110 ${
-                                    isSettingsTourTarget
+                                  className={`relative transition-transform duration-200 group-hover:scale-110 ${isSettingsTourTarget
                                       ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]"
                                       : isActive ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
-                                  }`}
+                                    }`}
                                 >
                                   {item.icon}
                                 </span>
@@ -2228,25 +2227,23 @@ const App = () => {
                     }
                     playNotificationSound();
                   }}
-                  className={`relative w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${
-                    vista === "settings"
+                  className={`relative w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left text-[10px] font-black uppercase tracking-tight transition-all duration-200 active:scale-95 group ${vista === "settings"
                       ? darkMode
                         ? "bg-[#71717a]/15 border border-[#71717a]/40 text-[#a1a1aa]"
                         : "bg-[#64748b]/10 border border-[#64748b]/35 text-[#334155]"
                       : showSettingsTour
                         ? darkMode ? "border border-cyan-500/50 bg-cyan-950/20 text-cyan-300" : "border border-cyan-400/50 bg-cyan-50/60 text-cyan-700"
                         : darkMode ? "border border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/60" : "border border-transparent text-[#374151] hover:text-slate-900 hover:bg-slate-50/80"
-                  }`}
+                    }`}
                 >
                   {/* Tour pulse ring */}
                   {showSettingsTour && (
                     <span className="absolute inset-0 rounded-2xl pointer-events-none animate-ping opacity-20 bg-cyan-400" />
                   )}
-                  <span className={`relative transition-transform duration-200 group-hover:scale-110 ${
-                    showSettingsTour
+                  <span className={`relative transition-transform duration-200 group-hover:scale-110 ${showSettingsTour
                       ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.9)]"
                       : vista === "settings" ? "text-current" : "text-slate-400 dark:text-zinc-500 group-hover:text-[#059669]"
-                  }`}>
+                    }`}>
                     <Settings size={18} />
                   </span>
                   <span className={showSettingsTour ? "text-cyan-400 font-black" : ""}>Paramètres</span>
@@ -2284,8 +2281,8 @@ const App = () => {
                 <a
                   href="mailto:info@solutionsgpa.com"
                   className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
-                      ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
-                      : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
+                    ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
+                    : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
                     }`}
                 >
                   <Mail size={12} />
@@ -3589,8 +3586,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
       >
         <div
           className={`w-full max-w-sm border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-300 ${darkMode
-              ? "bg-[#1e1515] border-rose-950 text-white"
-              : "bg-[#FFF5F5] border-rose-100/80 text-[#1E293B]"
+            ? "bg-[#1e1515] border-rose-950 text-white"
+            : "bg-[#FFF5F5] border-rose-100/80 text-[#1E293B]"
             }`}
         >
           {/* Circular danger badge */}
@@ -3771,8 +3768,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
       >
         <div
           className={`w-full max-w-md border rounded-[40px] shadow-2xl overflow-hidden p-8 flex flex-col space-y-6 animate-in zoom-in-95 duration-300 ${darkMode
-              ? "bg-[#121214] border-zinc-900 text-white"
-              : "bg-white border-slate-100 text-[#1E293B]"
+            ? "bg-[#121214] border-zinc-900 text-white"
+            : "bg-white border-slate-100 text-[#1E293B]"
             }`}
         >
           {/* Header */}
@@ -3926,8 +3923,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
             {/* Partner Split 50/50 */}
             <div
               className={`p-5 rounded-[28px] border text-center space-y-4 ${darkMode
-                  ? "bg-zinc-900 border-zinc-800 text-white"
-                  : "bg-indigo-50/50 border-indigo-100 text-slate-800"
+                ? "bg-zinc-900 border-zinc-800 text-white"
+                : "bg-indigo-50/50 border-indigo-100 text-slate-800"
                 }`}
             >
               <span className="text-[8.5px] font-black uppercase tracking-widest text-[#059669] bg-emerald-500/10 px-3 py-1 rounded-full">
@@ -4380,8 +4377,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className="flex flex-wrap items-center gap-2 animate-pulse-subtle">
             <span
               className={`text-[8px] font-black uppercase italic px-3 py-1.5 rounded-full ${activeModulesCount > 0
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                  : "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 border border-transparent"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                : "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 border border-transparent"
                 }`}
             >
               📊 {activeModulesCount}{" "}
@@ -4652,14 +4649,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     playNotificationSound();
                   }}
                   className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-205 ease-in-out focus:outline-none ${showServicesHorsLoyer
-                      ? "bg-[#059669]"
-                      : "bg-zinc-300 dark:bg-zinc-750"
+                    ? "bg-[#059669]"
+                    : "bg-zinc-300 dark:bg-zinc-750"
                     }`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-205 ease-in-out ${showServicesHorsLoyer
-                        ? "translate-x-3.5"
-                        : "translate-x-0"
+                      ? "translate-x-3.5"
+                      : "translate-x-0"
                       }`}
                   />
                 </button>
@@ -4728,14 +4725,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     playNotificationSound();
                   }}
                   className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showSurchargesEntretien
-                      ? "bg-[#059669]"
-                      : "bg-zinc-300 dark:bg-zinc-750"
+                    ? "bg-[#059669]"
+                    : "bg-zinc-300 dark:bg-zinc-750"
                     }`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${showSurchargesEntretien
-                        ? "translate-x-3.5"
-                        : "translate-x-0"
+                      ? "translate-x-3.5"
+                      : "translate-x-0"
                       }`}
                   />
                 </button>
@@ -4804,8 +4801,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     playNotificationSound();
                   }}
                   className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showGestionContrats
-                      ? "bg-[#059669]"
-                      : "bg-zinc-300 dark:bg-zinc-750"
+                    ? "bg-[#059669]"
+                    : "bg-zinc-300 dark:bg-zinc-750"
                     }`}
                 >
                   <span
@@ -4878,14 +4875,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     playNotificationSound();
                   }}
                   className={`relative inline-flex h-4 w-7.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-250 ease-in-out focus:outline-none ${showPretsPrivesModule
-                      ? "bg-[#059669]"
-                      : "bg-zinc-300 dark:bg-zinc-750"
+                    ? "bg-[#059669]"
+                    : "bg-zinc-300 dark:bg-zinc-750"
                     }`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-250 ease-in-out ${showPretsPrivesModule
-                        ? "translate-x-3.5"
-                        : "translate-x-0"
+                      ? "translate-x-3.5"
+                      : "translate-x-0"
                       }`}
                   />
                 </button>
@@ -5736,8 +5733,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           if (!stripped) return 0;
           // Find the last comma or dot — treat it as the decimal separator
           const lastComma = stripped.lastIndexOf(',');
-          const lastDot   = stripped.lastIndexOf('.');
-          const lastSep   = Math.max(lastComma, lastDot);
+          const lastDot = stripped.lastIndexOf('.');
+          const lastSep = Math.max(lastComma, lastDot);
           let normalised: string;
           if (lastSep === -1) {
             // Pure integer string
@@ -5813,13 +5810,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // parseCurrency() handles any format Gemini returns ("471,40 $", "$ 229.95", 471.4, etc.)
           // Use nullish coalescing so numeric 0 from Gemini is respected (not treated as falsy)
           const resolvedSubtotal = rawSubtotal ?? 0;
-          const resolvedTps     = rawTps     ?? 0;
-          const resolvedTvq     = rawTvq     ?? 0;
-          const resolvedTotal   = rawTotal   ?? 0;
+          const resolvedTps = rawTps ?? 0;
+          const resolvedTvq = rawTvq ?? 0;
+          const resolvedTotal = rawTotal ?? 0;
           subtotal = parseCurrency(resolvedSubtotal);
-          tps     = resolvedTps   !== 0 ? parseCurrency(resolvedTps)   : parseFloat((subtotal * 0.05).toFixed(2));
-          tvq     = resolvedTvq   !== 0 ? parseCurrency(resolvedTvq)   : parseFloat((subtotal * 0.09975).toFixed(2));
-          total   = resolvedTotal !== 0 ? parseCurrency(resolvedTotal) : parseFloat((subtotal + tps + tvq).toFixed(2));
+          tps = resolvedTps !== 0 ? parseCurrency(resolvedTps) : parseFloat((subtotal * 0.05).toFixed(2));
+          tvq = resolvedTvq !== 0 ? parseCurrency(resolvedTvq) : parseFloat((subtotal * 0.09975).toFixed(2));
+          total = resolvedTotal !== 0 ? parseCurrency(resolvedTotal) : parseFloat((subtotal + tps + tvq).toFixed(2));
 
           extractedCat =
             normalized.categorie ||
@@ -7346,8 +7343,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     if (typeof playNotificationSound === "function") playNotificationSound();
                   }}
                   className={`p-6 rounded-[28px] border-2 bg-gradient-to-br hover:shadow-xl transition-all duration-300 flex flex-col justify-between min-h-[260px] cursor-pointer text-left ${isSelected
-                      ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10"
-                      : "border-slate-100 hover:border-slate-350 bg-white"
+                    ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10"
+                    : "border-slate-100 hover:border-slate-350 bg-white"
                     }`}
                 >
                   <div>
@@ -7399,8 +7396,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 if (typeof playNotificationSound === "function") playNotificationSound();
               }}
               className={`py-4 px-10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 ${userLevel
-                  ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed border-none shadow-none"
+                ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed border-none shadow-none"
                 }`}
             >
               Confirmer et Continuer
@@ -7644,8 +7641,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       playNotificationSound();
                   }}
                   className={`p-5 rounded-[24px] border flex flex-col items-start transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased hover:scale-105 hover:shadow-2xl hover:z-10 cursor-pointer ${isSelected
-                      ? `${getRingClass(prof.color)} ring-2 scale-105 shadow-2xl z-10`
-                      : "border-slate-200 hover:border-slate-300 bg-white text-slate-800"
+                    ? `${getRingClass(prof.color)} ring-2 scale-105 shadow-2xl z-10`
+                    : "border-slate-200 hover:border-slate-300 bg-white text-slate-800"
                     }`}
                 >
                   <div
@@ -7682,8 +7679,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   playNotificationSound();
               }}
               className={`py-4 px-8 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg ${selectedProfile
-                  ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none shadow-emerald-600/20"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed border-none"
+                ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none shadow-emerald-600/20"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed border-none"
                 }`}
             >
               Confirmer mon profil
@@ -7797,8 +7794,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       playNotificationSound();
                   }}
                   className={`p-5 rounded-[24px] border flex flex-col items-center justify-center transition-all duration-300 transform-gpu will-change-transform subpixel-antialiased cursor-pointer ${isSelected
-                      ? `${model.activeBorder} ring-2 scale-105 shadow-2xl z-10`
-                      : `border-slate-200 bg-white text-slate-800 hover:scale-[1.03] hover:z-10 ${model.hoverBorder}`
+                    ? `${model.activeBorder} ring-2 scale-105 shadow-2xl z-10`
+                    : `border-slate-200 bg-white text-slate-800 hover:scale-[1.03] hover:z-10 ${model.hoverBorder}`
                     }`}
                 >
                   <div className="flex items-center justify-center p-3 rounded-xl mb-3 bg-transparent">
@@ -9267,14 +9264,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
     return (
       <div
         className={`min-h-screen flex items-center justify-center p-6 bg-gradient-to-br ${darkMode
-            ? "from-zinc-950 via-emerald-950/10 to-zinc-900"
-            : "from-slate-50 via-emerald-50/30 to-slate-100"
+          ? "from-zinc-950 via-emerald-950/10 to-zinc-900"
+          : "from-slate-50 via-emerald-50/30 to-slate-100"
           }`}
       >
         <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-500 relative z-20">
           <div className={`p-8 sm:p-10 rounded-[40px] border shadow-2xl relative overflow-hidden backdrop-blur-xl ${darkMode
-              ? "bg-zinc-900/80 border-zinc-800 shadow-black/50"
-              : "bg-white/80 border-slate-200/60 shadow-slate-200/50"
+            ? "bg-zinc-900/80 border-zinc-800 shadow-black/50"
+            : "bg-white/80 border-slate-200/60 shadow-slate-200/50"
             }`}>
             <div className="text-center space-y-6">
               <LogoPrincipal size={32} showText animate textColor={darkMode ? "text-white" : "text-slate-900"} />
@@ -9381,8 +9378,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <button
                   onClick={() => setVista("equipe")}
                   className={`inline-flex items-center justify-center px-8 py-4 rounded-[20px] text-xs font-black uppercase tracking-widest transition-all ${darkMode
-                      ? "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 shadow-md"
-                      : "bg-slate-800 text-white hover:bg-slate-700 border border-slate-900 shadow-md"
+                    ? "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 shadow-md"
+                    : "bg-slate-800 text-white hover:bg-slate-700 border border-slate-900 shadow-md"
                     }`}
                 >
                   Accepter l'invitation
@@ -9541,15 +9538,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   }
                   playNotificationSound();
                 }}
-                className={`relative p-2.5 rounded-xl transition-all ${
-                  showSettingsTour
+                className={`relative p-2.5 rounded-xl transition-all ${showSettingsTour
                     ? darkMode
                       ? "bg-cyan-950/40 border border-cyan-500/50 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.4)]"
                       : "bg-cyan-50 border border-cyan-400/50 text-cyan-600 shadow-[0_0_16px_rgba(6,182,212,0.25)]"
                     : darkMode
                       ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700"
                       : "bg-white border border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm hover:shadow-md"
-                }`}
+                  }`}
               >
                 {/* Continuous pulse ring when tour is active */}
                 {showSettingsTour && (
@@ -9629,8 +9625,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 playNotificationSound();
                               }}
                               className={`w-full px-3 py-2 rounded-xl text-left text-[9.5px] font-bold tracking-tight transition-all flex items-center justify-between cursor-pointer ${idx !== 0
-                                  ? "border-t border-slate-100/50 dark:border-zinc-800/40"
-                                  : ""
+                                ? "border-t border-slate-100/50 dark:border-zinc-800/40"
+                                : ""
                                 } ${isSelected
                                   ? "bg-emerald-50 text-emerald-750 dark:bg-emerald-950/25 dark:text-emerald-400 font-black"
                                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800/50"
@@ -10380,30 +10376,26 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 style={{ maxWidth: 340 }}
               >
                 {/* ── Speech bubble ────────────────────────────── */}
-                <div className={`relative rounded-[24px] border p-4 shadow-2xl overflow-hidden ${
-                  darkMode
+                <div className={`relative rounded-[24px] border p-4 shadow-2xl overflow-hidden ${darkMode
                     ? "bg-[#060C1D]/85 border-cyan-500/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(6,182,212,0.12)] backdrop-blur-2xl"
                     : "bg-white/90 border-cyan-400/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_8px_40px_rgba(6,182,212,0.10)] backdrop-blur-xl"
-                }`}>
+                  }`}>
                   {/* Specular top edge */}
                   <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-400/90 via-emerald-400/60 to-transparent pointer-events-none" />
                   {/* Bubble tail pointing down-right toward the avatar */}
-                  <div className={`absolute -bottom-[9px] right-10 w-4 h-4 rotate-45 border-b border-r ${
-                    darkMode ? "bg-[#060C1D]/85 border-cyan-500/30" : "bg-white/90 border-cyan-400/40"
-                  }`} />
+                  <div className={`absolute -bottom-[9px] right-10 w-4 h-4 rotate-45 border-b border-r ${darkMode ? "bg-[#060C1D]/85 border-cyan-500/30" : "bg-white/90 border-cyan-400/40"
+                    }`} />
 
                   {/* Label */}
-                  <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${
-                    darkMode ? "text-cyan-400" : "text-cyan-600"
-                  }`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${darkMode ? "text-cyan-400" : "text-cyan-600"
+                    }`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse inline-block" />
                     Sofi — Assistante IA
                   </p>
 
                   {/* Exact Phase 5 Quebec-FR text */}
-                  <p className={`text-[11.5px] font-medium leading-relaxed mb-3 ${
-                    darkMode ? "text-zinc-100" : "text-slate-800"
-                  }`}>
+                  <p className={`text-[11.5px] font-medium leading-relaxed mb-3 ${darkMode ? "text-zinc-100" : "text-slate-800"
+                    }`}>
                     Parfait, voici votre espace de travail ! Maintenant, terminons votre configuration pour que votre comptabilité soit automatisée à 100 %. Venez, cliquez sur la roue dentée (​Paramètres​) pour compléter vos informations fiscales.
                   </p>
 
@@ -10426,9 +10418,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         setShowSettingsTour(false);
                         localStorage.setItem("autocompt_settings_tour_shown", "true");
                       }}
-                      className={`text-[8px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                        darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-slate-300 hover:text-slate-500"
-                      }`}
+                      className={`text-[8px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-slate-300 hover:text-slate-500"
+                        }`}
                     >
                       Plus tard
                     </button>
@@ -10525,8 +10516,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       >
                         <div
                           className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${isUser
-                              ? "bg-[#059669] text-white rounded-tr-none border-[#059669]"
-                              : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
+                            ? "bg-[#059669] text-white rounded-tr-none border-[#059669]"
+                            : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
                             }`}
                         >
                           <div className="flex items-center space-x-2 mb-2 opacity-80">
@@ -10996,8 +10987,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <button
                     onClick={handleSkipDriveAndScan}
                     className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all ${darkMode
-                        ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white"
-                        : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
+                      ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white"
+                      : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
                       } border cursor-pointer`}
                   >
                     ⚡ Continuer en mode local (OCR IA uniquement)
@@ -11320,11 +11311,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
     // ── RBAC: Smart template whitelist per profile ────────────────────────────
     // "Bail Résidentiel" and "NDA" are NOT in the Prospecteur allowed set.
     const DOCULEGAL_TEMPLATE_KEYWORDS: Record<typeof activeProfile, string[]> = {
-      prospecteur:  ["promesse", "cession", "sous-traitance", "cessionnaire"],
-      flippeur:     ["promesse", "cession", "sous-traitance", "cessionnaire", "permis", "soumission"],
+      prospecteur: ["promesse", "cession", "sous-traitance", "cessionnaire"],
+      flippeur: ["promesse", "cession", "sous-traitance", "cessionnaire", "permis", "soumission"],
       gestionnaire: ["promesse", "gestion", "bail", "corporatif", "nda", "confidentialité"],
       investisseur: ["promesse", "cession", "entente", "confidentialité", "nda", "partenariat"],
-      syndicat:     ["résolution", "contrat", "syndicat"],
+      syndicat: ["résolution", "contrat", "syndicat"],
     };
     const templateKeywords = DOCULEGAL_TEMPLATE_KEYWORDS[activeProfile] ?? [];
     const profileSmartTemplates = smartTemplates.filter((t) => {
@@ -11700,8 +11691,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             );
                           }}
                           className={`p-6 rounded-[32px] border-2 border-dashed ${darkMode
-                              ? "bg-zinc-950/40 border-teal-500/20 hover:border-teal-400 text-zinc-300"
-                              : "bg-teal-50/10 border-[#14b8a6]/30 hover:border-[#059669] text-slate-800"
+                            ? "bg-zinc-950/40 border-teal-500/20 hover:border-teal-400 text-zinc-300"
+                            : "bg-teal-50/10 border-[#14b8a6]/30 hover:border-[#059669] text-slate-800"
                             } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px]`}
                         >
                           <div
@@ -11718,8 +11709,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           <button
                             type="button"
                             className={`mt-3 px-4 py-2 rounded-xl text-[7.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-md ${darkMode
-                                ? "bg-teal-950/50 hover:bg-teal-900/60 text-teal-400 border border-teal-500/10"
-                                : "bg-[#059669] hover:bg-emerald-600 text-white"
+                              ? "bg-teal-950/50 hover:bg-teal-900/60 text-teal-400 border border-teal-500/10"
+                              : "bg-[#059669] hover:bg-emerald-600 text-white"
                               }`}
                           >
                             Sélectionner un fichier
@@ -11786,8 +11777,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   playNotificationSound();
                                 }}
                                 className={`px-2 py-1 rounded-lg text-[6.5px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${docuFilterTab === tab.id
-                                    ? "bg-[#7c3aed] text-white shadow-sm shadow-violet-900/10"
-                                    : "bg-slate-150/40 text-slate-400 hover:text-slate-600 dark:bg-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-350"
+                                  ? "bg-[#7c3aed] text-white shadow-sm shadow-violet-900/10"
+                                  : "bg-slate-150/40 text-slate-400 hover:text-slate-600 dark:bg-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-350"
                                   }`}
                               >
                                 {tab.label}
@@ -11887,8 +11878,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       playNotificationSound();
                                     }}
                                     className={`p-4 rounded-[28px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.012] ${darkMode
-                                        ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md hover:border-[#7c3aed]/40"
-                                        : "bg-white border-slate-150 hover:border-[#7c3aed]/40"
+                                      ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md hover:border-[#7c3aed]/40"
+                                      : "bg-white border-slate-150 hover:border-[#7c3aed]/40"
                                       } hover:shadow-md duration-200`}
                                   >
                                     <div className="flex items-center space-x-3 max-w-[65%] text-left">
@@ -11919,11 +11910,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     <div className="flex items-center space-x-2 shrink-0">
                                       <span
                                         className={`px-2 py-0.5 rounded-full text-[6px] font-black uppercase italic ${doc.status === "Signé"
-                                            ? "bg-emerald-500/10 text-emerald-500"
-                                            : doc.status === "Révoqué" ||
-                                              doc.status === "Annulé"
-                                              ? "bg-rose-500/10 text-rose-500"
-                                              : "bg-amber-500/10 text-amber-505"
+                                          ? "bg-emerald-500/10 text-emerald-500"
+                                          : doc.status === "Révoqué" ||
+                                            doc.status === "Annulé"
+                                            ? "bg-rose-500/10 text-rose-500"
+                                            : "bg-amber-500/10 text-amber-505"
                                           }`}
                                       >
                                         {doc.status}
@@ -11950,8 +11941,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                             }}
                                             title="Envoyer une relance par Courriel / SMS"
                                             className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
-                                                ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
-                                                : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
+                                              ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
+                                              : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
                                               }`}
                                           >
                                             <Bell
@@ -12178,8 +12169,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   playNotificationSound();
                                 }}
                                 className={`p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md ${darkMode
-                                    ? "bg-zinc-950 border-zinc-905 hover:border-zinc-800 text-zinc-100"
-                                    : "bg-white border-slate-200 hover:border-slate-300 text-slate-900"
+                                  ? "bg-zinc-950 border-zinc-905 hover:border-zinc-800 text-zinc-100"
+                                  : "bg-white border-slate-200 hover:border-slate-300 text-slate-900"
                                   }`}
                               >
                                 <div className="flex items-center space-x-3.5 flex-1 min-w-0 pr-3">
@@ -12211,11 +12202,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 <div className="text-right flex items-center space-x-2 shrink-0">
                                   <span
                                     className={`px-2.5 py-1 rounded-full text-[6.5px] font-black uppercase italic leading-none whitespace-nowrap ${doc.status === "Signé"
-                                        ? "bg-emerald-500/10 text-emerald-500"
-                                        : doc.status === "Révoqué" ||
-                                          doc.status === "Annulé"
-                                          ? "bg-rose-500/10 text-rose-505"
-                                          : "bg-amber-500/10 text-amber-505"
+                                      ? "bg-emerald-500/10 text-emerald-500"
+                                      : doc.status === "Révoqué" ||
+                                        doc.status === "Annulé"
+                                        ? "bg-rose-500/10 text-rose-505"
+                                        : "bg-amber-500/10 text-amber-505"
                                       }`}
                                   >
                                     {doc.status}
@@ -12242,8 +12233,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                         }}
                                         title="Envoyer une relance par Courriel / SMS"
                                         className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
-                                            ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
-                                            : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
+                                          ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
+                                          : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
                                           }`}
                                       >
                                         <Bell
@@ -12626,10 +12617,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                             }));
                                           }}
                                           className={`px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wide transition-all ${paPropType === type
-                                              ? 'bg-[#7c3aed] text-white shadow-md shadow-violet-500/30'
-                                              : darkMode
-                                                ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-                                                : 'bg-white text-slate-600 border border-slate-200 hover:border-violet-400 hover:text-violet-600'
+                                            ? 'bg-[#7c3aed] text-white shadow-md shadow-violet-500/30'
+                                            : darkMode
+                                              ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                                              : 'bg-white text-slate-600 border border-slate-200 hover:border-violet-400 hover:text-violet-600'
                                             }`}
                                         >{type}</button>
                                       ))}
@@ -12735,8 +12726,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       <label
                                         key={key}
                                         className={`flex items-start gap-3 cursor-pointer p-3 rounded-2xl transition-all ${paConditions[key]
-                                            ? (darkMode ? 'bg-violet-950/50 border border-violet-700/40' : 'bg-violet-50 border border-violet-200')
-                                            : (darkMode ? 'hover:bg-zinc-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')
+                                          ? (darkMode ? 'bg-violet-950/50 border border-violet-700/40' : 'bg-violet-50 border border-violet-200')
+                                          : (darkMode ? 'hover:bg-zinc-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')
                                           }`}
                                       >
                                         <input
@@ -12814,8 +12805,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     playNotificationSound();
                                   }}
                                   className={`flex items-center justify-center space-x-1.5 p-2 rounded-xl text-[8px] font-black uppercase italic tracking-tight border transition-all ${isSelected
-                                      ? `${colorMeta.border} border-2 scale-[1.03] ring-1 ring-violet-500/20`
-                                      : "bg-transparent border-slate-150 dark:border-zinc-850 text-slate-405 dark:text-zinc-500 hover:text-slate-650"
+                                    ? `${colorMeta.border} border-2 scale-[1.03] ring-1 ring-violet-500/20`
+                                    : "bg-transparent border-slate-150 dark:border-zinc-850 text-slate-405 dark:text-zinc-500 hover:text-slate-650"
                                     }`}
                                 >
                                   <div
@@ -13048,8 +13039,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               <div
                                 key={signer.id}
                                 className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${darkMode
-                                    ? "bg-zinc-900/40 border-zinc-900/45 animate-in slide-in-from-left-2"
-                                    : "bg-slate-50/50 border-slate-100 animate-in slide-in-from-left-2"
+                                  ? "bg-zinc-900/40 border-zinc-900/45 animate-in slide-in-from-left-2"
+                                  : "bg-slate-50/50 border-slate-100 animate-in slide-in-from-left-2"
                                   }`}
                               >
                                 <div className="flex items-center space-x-2.5 min-w-0 text-left">
@@ -13110,8 +13101,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => setNewSignerName(e.target.value)}
                             placeholder="Nom complet (ex: Jean Talon)"
                             className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
-                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                              : "bg-slate-50 border-slate-105 text-slate-800"
                               } focus:border-[#7c3aed]`}
                           />
                           <input
@@ -13120,8 +13111,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => setNewSignerEmail(e.target.value)}
                             placeholder="Courriel (ex: jean@talon.com)"
                             className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
-                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                              : "bg-slate-50 border-slate-105 text-slate-800"
                               } focus:border-[#7c3aed]`}
                           />
                           <input
@@ -13130,8 +13121,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => { setNewSignerRole(e.target.value); setNewSignerError(""); }}
                             placeholder="Rôle (ex: Vendeur, Cessionnaire, Acheteur)"
                             className={`w-full p-2.5 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode
-                                ? "bg-zinc-900 border-zinc-801 text-zinc-100"
-                                : "bg-slate-50 border-slate-105 text-slate-800"
+                              ? "bg-zinc-900 border-zinc-801 text-zinc-100"
+                              : "bg-slate-50 border-slate-105 text-slate-800"
                               } focus:border-[#7c3aed]`}
                           />
                         </div>
@@ -13284,8 +13275,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             playNotificationSound();
                           }}
                           className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${darkMode
-                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                              : 'bg-white border-slate-205 text-slate-705 hover:bg-slate-50'
+                            ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                            : 'bg-white border-slate-205 text-slate-705 hover:bg-slate-50'
                             }`}
                         >
                           Retourner aux dossiers
@@ -13372,8 +13363,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             );
                           }}
                           className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border ${darkMode
-                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                              : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
+                            ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                            : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
                             }`}
                         >
                           Sauvegarder Brouillon
@@ -13418,8 +13409,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             playNotificationSound();
                           }}
                           className={`w-full py-4 text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-md border flex items-center justify-center space-x-1.5 ${darkMode
-                              ? 'bg-zinc-900 border-zinc-800 text-zinc-350 hover:text-white'
-                              : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
+                            ? 'bg-zinc-900 border-zinc-800 text-zinc-350 hover:text-white'
+                            : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
                             }`}
                         >
                           <Eye size={13} className="text-[#059669]" />
@@ -13567,8 +13558,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               <div
                                 key={i}
                                 className={`rounded-[2px] ${isCornerSquare
-                                    ? 'bg-[#059669]'
-                                    : (isRandomActive ? 'bg-zinc-800 dark:bg-zinc-200' : 'bg-transparent')
+                                  ? 'bg-[#059669]'
+                                  : (isRandomActive ? 'bg-zinc-800 dark:bg-zinc-200' : 'bg-transparent')
                                   }`}
                               />
                             );
@@ -13816,8 +13807,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       );
                     }}
                     className={`px-4 py-2.5 text-[8.5px] font-black uppercase italic rounded-xl border transition-all cursor-pointer ${darkMode
-                        ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                   >
                     Annuler & Sauvegarder "En attente"
@@ -13834,8 +13825,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 className={`w-full max-w-xl rounded-[36px] shadow-2xl overflow-hidden border p-6 flex flex-col space-y-5 animate-in zoom-in-95 duration-300 ${darkMode
-                    ? "bg-zinc-950 border-zinc-905 text-zinc-100"
-                    : "bg-white border-slate-150 text-slate-900"
+                  ? "bg-zinc-950 border-zinc-905 text-zinc-100"
+                  : "bg-white border-slate-150 text-slate-900"
                   }`}
               >
                 {/* Modal Header */}
@@ -13878,8 +13869,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           playNotificationSound();
                         }}
                         className={`py-2 rounded-xl text-[8.5px] font-black uppercase italic tracking-wider transition-all border-none cursor-pointer ${isActive
-                            ? "bg-[#059669] text-white shadow-sm"
-                            : "text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 bg-transparent"
+                          ? "bg-[#059669] text-white shadow-sm"
+                          : "text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 bg-transparent"
                           }`}
                       >
                         {labels[tab]}
@@ -13925,8 +13916,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             value={typeSigName}
                             onChange={(e) => setTypeSigName(e.target.value)}
                             className={`w-full p-2.5 rounded-xl text-xs font-bold border outline-none ${darkMode
-                                ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
-                                : "bg-slate-50 border-slate-100 focus:border-[#059669]"
+                              ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
+                              : "bg-slate-50 border-slate-100 focus:border-[#059669]"
                               }`}
                           />
                         </div>
@@ -13940,8 +13931,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             onChange={(e) => setTypeInitials(e.target.value)}
                             maxLength={3}
                             className={`w-full p-2.5 rounded-xl text-xs font-mono font-bold border outline-none ${darkMode
-                                ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
-                                : "bg-slate-50 border-slate-100 focus:border-[#059669]"
+                              ? "bg-zinc-900 border-zinc-805 text-zinc-100 focus:border-[#059669]"
+                              : "bg-slate-50 border-slate-100 focus:border-[#059669]"
                               }`}
                           />
                         </div>
@@ -14108,8 +14099,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       alert("🗑️ Profil de signature effacé.");
                     }}
                     className={`py-3 text-[9px] font-black uppercase italic rounded-2xl border transition-all cursor-pointer ${darkMode
-                        ? "bg-zinc-905 border-zinc-800 text-rose-455 hover:text-rose-300"
-                        : "bg-white border-slate-205 text-rose-600 hover:bg-rose-50"
+                      ? "bg-zinc-905 border-zinc-800 text-rose-455 hover:text-rose-300"
+                      : "bg-white border-slate-205 text-rose-600 hover:bg-rose-50"
                       }`}
                   >
                     Effacer le profil
@@ -14506,8 +14497,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       window.open(driveUrl, "_blank");
                     }}
                     className={`px-4.5 py-3 rounded-[18px] text-[9.5px] font-black uppercase italic tracking-wider transition-all border flex items-center space-x-2 active:scale-95 cursor-pointer ${darkMode
-                        ? "bg-zinc-90 w-full bg-zinc-900 border-zinc-800 text-teal-400 hover:bg-zinc-850 hover:border-zinc-750"
-                        : "bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100/40 hover:border-teal-200"
+                      ? "bg-zinc-90 w-full bg-zinc-900 border-zinc-800 text-teal-400 hover:bg-zinc-850 hover:border-zinc-750"
+                      : "bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100/40 hover:border-teal-200"
                       }`}
                   >
                     <Folder size={13} className="shrink-0 text-amber-500" fill="currentColor" />
@@ -14873,14 +14864,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                         ⚡ Suggéré IA
                                       </span>
                                     )}
-                                     {depense.vehicleRateApplied && (
-                                       <span
-                                         title="Taux d utilisation professionnelle du vehicule applique automatiquement (T2125/TP-80). Seule la portion affaires est deductible."
-                                         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 text-[7px] font-black tracking-widest border border-indigo-500/20 w-fit whitespace-nowrap"
-                                       >
-                                         {depense.tauxApplique != null ? `🚗 ${depense.tauxApplique}% vehicule` : "Pro-rata vehicule"}
-                                       </span>
-                                     )}
+                                    {depense.vehicleRateApplied && (
+                                      <span
+                                        title="Taux d utilisation professionnelle du vehicule applique automatiquement (T2125/TP-80). Seule la portion affaires est deductible."
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 text-[7px] font-black tracking-widest border border-indigo-500/20 w-fit whitespace-nowrap"
+                                      >
+                                        {depense.tauxApplique != null ? `🚗 ${depense.tauxApplique}% vehicule` : "Pro-rata vehicule"}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="py-4 px-6 font-mono font-bold text-right text-slate-500 dark:text-zinc-500">
@@ -15185,7 +15176,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   journalEntries.map((entry: any) => {
                     const totalDebits = entry.lines?.filter((l: any) => l.type === 'Debit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
                     const totalCredits = entry.lines?.filter((l: any) => l.type === 'Credit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
-                    
+
                     return (
                       <div key={entry.id} className={`p-5 rounded-2xl border shadow-sm ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
                         <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-100 dark:border-zinc-800">
@@ -15204,7 +15195,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="w-full overflow-x-auto">
                           <table className="w-full text-[9px] font-black uppercase tracking-wider text-left min-w-[400px]">
                             <thead className="text-slate-400 border-b border-slate-50 dark:border-zinc-800">
@@ -15557,8 +15548,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   playNotificationSound();
                                 }}
                                 className={`p-3 rounded-2xl border flex items-center space-x-3 text-left transition-all duration-300 ${isSelected
-                                    ? "border-[#059669] bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold shadow-sm"
-                                    : `${darkMode ? "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700" : "border-slate-100 bg-slate-50/60 text-slate-600 hover:border-slate-200"}`
+                                  ? "border-[#059669] bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold shadow-sm"
+                                  : `${darkMode ? "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700" : "border-slate-100 bg-slate-50/60 text-slate-600 hover:border-slate-200"}`
                                   }`}
                               >
                                 <div
@@ -15608,37 +15599,37 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         newTxData.cat?.toLowerCase().includes('bail') ||
                         newTxData.cat?.toLowerCase().includes('rent');
                       return isRentCategory && (
-                      <div className="space-y-1">
-                        <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                          Unité locative liée
-                        </label>
-                        {allUnits.length > 0 ? (
-                          <select
-                            value={newTxData.unitId || ""}
-                            onChange={(e) => {
-                              const unit = allUnits.find(u => u.id === e.target.value);
-                              setNewTxData({
-                                ...newTxData,
-                                unitId:     e.target.value,
-                                buildingId: unit?.buildingId ?? "",
-                                tiers:      newTxData.tiers || unit?.tenantName || "",
-                              });
-                            }}
-                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                          >
-                            <option value="">-- Sélectionner une unité --</option>
-                            {allUnits.map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.unitName}{u.tenantName ? ` \u2014 ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <p className={`text-[10px] italic px-1 pt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                            Aucune unité enregistrée — ajoutez-en dans « Gestion Plex ».
-                          </p>
-                        )}
-                      </div>
+                        <div className="space-y-1">
+                          <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                            Unité locative liée
+                          </label>
+                          {allUnits.length > 0 ? (
+                            <select
+                              value={newTxData.unitId || ""}
+                              onChange={(e) => {
+                                const unit = allUnits.find(u => u.id === e.target.value);
+                                setNewTxData({
+                                  ...newTxData,
+                                  unitId: e.target.value,
+                                  buildingId: unit?.buildingId ?? "",
+                                  tiers: newTxData.tiers || unit?.tenantName || "",
+                                });
+                              }}
+                              className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                            >
+                              <option value="">-- Sélectionner une unité --</option>
+                              {allUnits.map(u => (
+                                <option key={u.id} value={u.id}>
+                                  {u.unitName}{u.tenantName ? ` \u2014 ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className={`text-[10px] italic px-1 pt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                              Aucune unité enregistrée — ajoutez-en dans « Gestion Plex ».
+                            </p>
+                          )}
+                        </div>
                       );
                     })()}
 
@@ -15696,11 +15687,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     )}
 
                     {tabReporte !== "ventes" && (
-                      <div className={`p-4 rounded-2xl border transition-all ${
-                        newTxData.noReceiptConfirmed
+                      <div className={`p-4 rounded-2xl border transition-all ${newTxData.noReceiptConfirmed
                           ? (darkMode ? "border-amber-500/30 bg-amber-950/20" : "border-amber-300 bg-amber-50")
                           : (darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-100 bg-slate-50/60")
-                      }`}>
+                        }`}>
                         <label className="flex items-start gap-3 cursor-pointer">
                           <div className="relative flex items-center justify-center mt-0.5 shrink-0">
                             <input
@@ -15709,23 +15699,21 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               onChange={(e) =>
                                 setNewTxData({ ...newTxData, noReceiptConfirmed: e.target.checked })
                               }
-                              className={`appearance-none w-4 h-4 rounded border-2 outline-none cursor-pointer transition-all ${
-                                newTxData.noReceiptConfirmed
+                              className={`appearance-none w-4 h-4 rounded border-2 outline-none cursor-pointer transition-all ${newTxData.noReceiptConfirmed
                                   ? "bg-amber-500 border-amber-500"
                                   : "bg-transparent border-zinc-600 hover:border-amber-400"
-                              }`}
+                                }`}
                             />
                             {newTxData.noReceiptConfirmed && (
                               <svg className="absolute w-2.5 h-2.5 text-white pointer-events-none" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
                             )}
                           </div>
-                          <span className={`text-[8.5px] font-bold leading-snug ${
-                            newTxData.noReceiptConfirmed
+                          <span className={`text-[8.5px] font-bold leading-snug ${newTxData.noReceiptConfirmed
                               ? (darkMode ? "text-amber-300" : "text-amber-700")
                               : (darkMode ? "text-zinc-500" : "text-slate-400")
-                          }`}>
+                            }`}>
                             Aucun reçu disponible — je confirme que cette dépense est réelle et j’assume l’entière responsabilité en cas de vérification fiscale (ARC / Revenu Québec).
                           </span>
                         </label>
@@ -15872,18 +15860,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
   if (vista === "equipe")
     return (
       <div
-        className={`min-h-screen ${
-          darkMode ? "bg-[#070d1e] text-zinc-100" : "bg-slate-50 text-slate-900"
-        } flex flex-col animate-in slide-in-from-right font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-[#070d1e] text-zinc-100" : "bg-slate-50 text-slate-900"
+          } flex flex-col animate-in slide-in-from-right font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
         {/* Sticky page header — matches dashboard header pattern */}
         <header
-          className={`sticky top-0 z-30 ${
-            darkMode
+          className={`sticky top-0 z-30 ${darkMode
               ? "bg-slate-900/60 border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
               : "bg-white/90 border-slate-200 backdrop-blur-md"
-          } px-6 py-4 border-b flex items-center gap-3 shadow-sm`}
+            } px-6 py-4 border-b flex items-center gap-3 shadow-sm`}
           style={{ borderTop: `3px solid ${darkMode ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.35)"}` }}
         >
           <button
@@ -15894,9 +15880,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </button>
           <button
             onClick={() => setVista("dashboard")}
-            className={`p-2 rounded-xl transition-colors ${
-              darkMode ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"
-            }`}
+            className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"
+              }`}
           >
             <ArrowLeft size={18} />
           </button>
@@ -15905,9 +15890,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
               <Users size={15} className="text-emerald-400" />
             </div>
             <div>
-              <h2 className={`font-black uppercase tracking-tight text-[15px] leading-none ${
-                darkMode ? "text-white" : "text-slate-900"
-              }`}>
+              <h2 className={`font-black uppercase tracking-tight text-[15px] leading-none ${darkMode ? "text-white" : "text-slate-900"
+                }`}>
                 Profil & Équipe
               </h2>
               <p className="text-[8.5px] font-black text-emerald-500 uppercase tracking-widest leading-none mt-0.5">
@@ -16067,8 +16051,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             type="button"
                             onClick={() => setPropertyType(type)}
                             className={`p-3 rounded-2xl border text-center transition-all duration-300 ${isActive
-                                ? "border-[#059669] bg-emerald-50/55 text-emerald-700 font-extrabold shadow-sm"
-                                : `${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`
+                              ? "border-[#059669] bg-emerald-50/55 text-emerald-700 font-extrabold shadow-sm"
+                              : `${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`
                               }`}
                           >
                             <span className="text-[10px] font-bold uppercase tracking-tight">
