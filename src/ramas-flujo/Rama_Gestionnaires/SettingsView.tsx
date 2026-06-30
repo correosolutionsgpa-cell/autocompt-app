@@ -12,15 +12,17 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React from "react";
+import React, { useState } from "react";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Bell,
   Building2,
+  Car,
   CheckCircle2,
   ChevronDown,
+  Gauge,
   Hash,
   Mail,
   MapPin,
@@ -28,8 +30,10 @@ import {
   Palette,
   Percent,
   Phone,
+  Plus,
   Sparkles,
   Sun,
+  Trash2,
   Upload,
   User,
   Image as ImageIcon,
@@ -80,6 +84,19 @@ export interface SettingsViewProps {
   WorkspaceSidebar: React.ComponentType;
 }
 
+// ── Registre Véhicules — Single Source of Truth ──────────────────────────────
+// Exported so KilometrageGPS can import the type for safe reading.
+export interface RegisteredVehicle {
+  id: string;
+  marque: string;
+  modele: string;
+  annee: string;
+  plaque: string;
+  odometreInitial: number;
+}
+
+const VEHICLES_STORAGE_KEY = "autocompt_vehicles";
+
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 const SettingsView: React.FC<SettingsViewProps> = ({
@@ -107,6 +124,42 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   setVista,
   WorkspaceSidebar,
 }) => {
+  // ── Registre Véhicules — état local persisté dans localStorage ───────────
+  const [vehicles, setVehicles] = useState<RegisteredVehicle[]>(() => {
+    try { return JSON.parse(localStorage.getItem(VEHICLES_STORAGE_KEY) || "[]"); }
+    catch { return []; }
+  });
+  const [vehMarque, setVehMarque] = useState("");
+  const [vehModele, setVehModele] = useState("");
+  const [vehAnnee, setVehAnnee] = useState("");
+  const [vehPlaque, setVehPlaque] = useState("");
+  const [vehOdometre, setVehOdometre] = useState("");
+
+  const handleAddVehicle = () => {
+    const marque = vehMarque.trim();
+    const modele = vehModele.trim();
+    if (!marque || !modele) return;
+    const newV: RegisteredVehicle = {
+      id: Date.now().toString(),
+      marque,
+      modele,
+      annee: vehAnnee.trim(),
+      plaque: vehPlaque.trim().toUpperCase(),
+      odometreInitial: parseFloat(vehOdometre) || 0,
+    };
+    const updated = [...vehicles, newV];
+    setVehicles(updated);
+    localStorage.setItem(VEHICLES_STORAGE_KEY, JSON.stringify(updated));
+    playNotificationSound();
+    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre("");
+  };
+
+  const handleRemoveVehicle = (id: string) => {
+    const updated = vehicles.filter(v => v.id !== id);
+    setVehicles(updated);
+    localStorage.setItem(VEHICLES_STORAGE_KEY, JSON.stringify(updated));
+  };
+
   return (
     <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}>
       {/* Background gradient blooms for premium look */}
@@ -163,8 +216,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               design_system_rules.md §2: 3D glass card anatomy.
           ══════════════════════════════════════════════════════════════════ */}
         <div className={`relative p-8 rounded-[32px] border overflow-hidden ${darkMode
-            ? "bg-[#090D1A]/60 border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
-            : "bg-white border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_30px_rgba(16,185,129,0.05)]"
+          ? "bg-[#090D1A]/60 border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+          : "bg-white border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_30px_rgba(16,185,129,0.05)]"
           }`}>
           {/* Specular top highlight line (design_system_rules §2) */}
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/70 via-cyan-500/40 to-transparent rounded-full pointer-events-none" />
@@ -275,8 +328,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   {/* Speech bubble — emerald design system */}
                   <div
                     className={`relative rounded-[14px] border p-3 max-w-[178px] shadow-lg overflow-hidden ${darkMode
-                        ? "bg-emerald-950/40 border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl"
-                        : "bg-emerald-50 border-emerald-200"
+                      ? "bg-emerald-950/40 border-emerald-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl"
+                      : "bg-emerald-50 border-emerald-200"
                       }`}
                   >
                     {/* Specular top line */}
@@ -476,6 +529,205 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               Sauvegarder le profil
             </button>
           </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+              Section: Véhicules d'Entreprise (Actifs)
+              Single Source of Truth → alimenté automatiquement dans
+              le module Kilométrage GPS. Clé localStorage: autocompt_vehicles
+          ══════════════════════════════════════════════════════════════════ */}
+        <div className={`relative p-8 rounded-[32px] border overflow-hidden ${darkMode
+          ? "bg-[#090D1A]/60 border-indigo-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+          : "bg-white border-indigo-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_30px_rgba(99,102,241,0.05)]"
+          }`}>
+          {/* Specular top highlight — indigo accent */}
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500/70 via-violet-500/40 to-transparent rounded-full pointer-events-none" />
+
+          {/* Section heading */}
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-zinc-800/60">
+            <h2 className="text-sm font-black uppercase tracking-widest flex items-center space-x-2">
+              <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                <Car size={18} />
+              </span>
+              <span>Véhicules d&apos;Entreprise</span>
+            </h2>
+            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full border ${vehicles.length > 0
+              ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
+              : darkMode ? "bg-zinc-900 text-zinc-500 border-zinc-800" : "bg-slate-100 text-slate-400 border-slate-200"
+              }`}>
+              {vehicles.length} actif{vehicles.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* S.O.F.I. conseil — intégration GPS */}
+          <div className={`flex items-start gap-2.5 p-3 rounded-2xl border mb-6 ${darkMode ? "bg-indigo-950/30 border-indigo-500/15" : "bg-indigo-50 border-indigo-100"
+            }`}>
+            <Sparkles size={12} className="text-indigo-400 mt-0.5 shrink-0" />
+            <p className={`text-[9.5px] font-medium leading-snug ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>
+              Les véhicules enregistrés ici sont reconnus automatiquement par le module{" "}
+              <strong>Kilométrage GPS</strong>. Source unique de vérité&nbsp;—&nbsp;aucune ressaisie.
+            </p>
+          </div>
+
+          {/* ── Formulaire d'ajout ──────────────────────────────────────────── */}
+          <div className={`p-5 rounded-2xl border mb-6 ${darkMode ? "bg-zinc-950/50 border-zinc-800" : "bg-slate-50 border-slate-200"
+            }`}>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-4 flex items-center gap-1.5 pl-1">
+              <Plus size={11} />
+              Enregistrer un nouveau véhicule
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Marque */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Marque
+                </label>
+                <input
+                  id="settings-vehicle-marque"
+                  type="text"
+                  value={vehMarque}
+                  onChange={e => setVehMarque(e.target.value)}
+                  placeholder="Ex&nbsp;: Toyota"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-white border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+              </div>
+              {/* Modèle */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Modèle
+                </label>
+                <input
+                  id="settings-vehicle-modele"
+                  type="text"
+                  value={vehModele}
+                  onChange={e => setVehModele(e.target.value)}
+                  placeholder="Ex&nbsp;: RAV4"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-white border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+              </div>
+              {/* Année */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Année
+                </label>
+                <input
+                  id="settings-vehicle-annee"
+                  type="text"
+                  value={vehAnnee}
+                  onChange={e => setVehAnnee(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Ex&nbsp;: 2021"
+                  maxLength={4}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-white border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+              </div>
+              {/* Plaque */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Plaque d&apos;immatriculation
+                </label>
+                <input
+                  id="settings-vehicle-plaque"
+                  type="text"
+                  value={vehPlaque}
+                  onChange={e => setVehPlaque(e.target.value.toUpperCase())}
+                  placeholder="Ex&nbsp;: ABC 1234"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-white border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+              </div>
+              {/* Odomètre initial */}
+              <div className="md:col-span-2 space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Gauge size={11} className="text-indigo-400" />
+                  Odomètre initial (km)
+                </label>
+                <input
+                  id="settings-vehicle-odometer"
+                  type="number"
+                  value={vehOdometre}
+                  onChange={e => setVehOdometre(e.target.value)}
+                  placeholder="Ex&nbsp;: 45 000"
+                  min={0}
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-white border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+              </div>
+            </div>
+
+            {/* Add CTA */}
+            <div className="mt-5 flex justify-end">
+              <button
+                id="settings-vehicle-add"
+                onClick={handleAddVehicle}
+                disabled={!vehMarque.trim() || !vehModele.trim()}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border bg-gradient-to-r from-indigo-600/25 to-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:from-indigo-600/35 hover:to-indigo-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0_20px_rgba(99,102,241,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Plus size={12} />
+                Ajouter au registre
+              </button>
+            </div>
+          </div>
+
+          {/* ── Liste des véhicules enregistrés ────────────────────────────── */}
+          {vehicles.length === 0 ? (
+            <div className={`py-10 text-center border-2 border-dashed rounded-[24px] ${darkMode ? "border-zinc-800 text-zinc-600" : "border-slate-200 text-slate-400"
+              }`}>
+              <Car size={28} className="mx-auto mb-2.5 opacity-20" />
+              <p className="text-[9px] font-black uppercase italic tracking-widest">Aucun véhicule enregistré</p>
+              <p className="text-[8px] mt-1.5 opacity-50">Remplissez le formulaire ci-dessus pour commencer.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {vehicles.map((v) => (
+                <div
+                  key={v.id}
+                  className={`p-4 rounded-2xl border flex items-center gap-4 transition-all ${darkMode
+                    ? "bg-zinc-900/50 border-zinc-800 hover:border-indigo-500/30"
+                    : "bg-slate-50 border-slate-200 hover:border-indigo-300"
+                    }`}
+                >
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <Car size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[12px] font-black truncate ${darkMode ? "text-zinc-100" : "text-slate-900"
+                      }`}>
+                      {[v.annee, v.marque, v.modele].filter(Boolean).join(" ")}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {v.plaque && (
+                        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-400" : "bg-white border-slate-200 text-slate-500"
+                          }`}>
+                          🪪&nbsp;{v.plaque}
+                        </span>
+                      )}
+                      {v.odometreInitial > 0 && (
+                        <span className={`text-[8px] font-bold flex items-center gap-1 ${darkMode ? "text-zinc-500" : "text-slate-400"
+                          }`}>
+                          <Gauge size={9} />
+                          {v.odometreInitial.toLocaleString("fr-CA")} km départ
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveVehicle(v.id)}
+                    aria-label={`Supprimer ${v.marque} ${v.modele}`}
+                    className={`p-2 rounded-xl transition-all shrink-0 ${darkMode
+                      ? "text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10"
+                      : "text-slate-300 hover:text-rose-500 hover:bg-rose-50"
+                      }`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Section: Profile Config */}

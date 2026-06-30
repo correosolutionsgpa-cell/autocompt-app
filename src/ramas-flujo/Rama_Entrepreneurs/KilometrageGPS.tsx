@@ -130,6 +130,20 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const safeLogs: MileageLog[] =
     safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
 
+  // ── Registered vehicles — Single Source of Truth (Settings → localStorage) ──
+  // Read the same key written by SettingsView (autocompt_vehicles).
+  const registeredVehicles: Array<{
+    id: string; marque: string; modele: string;
+    annee: string; plaque: string; odometreInitial: number;
+  }> = (() => {
+    try { return JSON.parse(localStorage.getItem("autocompt_vehicles") || "[]"); }
+    catch { return []; }
+  })();
+  const primaryVehicle = registeredVehicles[0] ?? null;
+  const primaryVehicleLabel = primaryVehicle
+    ? [primaryVehicle.annee, primaryVehicle.marque, primaryVehicle.modele].filter(Boolean).join(" ")
+    : null;
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
@@ -161,6 +175,11 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           <p className="text-[8px] font-black text-[#059669] uppercase italic tracking-widest leading-none">
             Usager: {activeUser}
           </p>
+          {primaryVehicleLabel && (
+            <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1 mt-0.5 leading-none">
+              🚗 {primaryVehicleLabel}{primaryVehicle?.plaque ? ` · ${primaryVehicle.plaque}` : ""}
+            </p>
+          )}
         </div>
       </header>
 
@@ -481,10 +500,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 console.warn("[KilometrageGPS] partnerData not ready for user:", activeUser);
               } else {
                 const userVehicle = newData[activeUser].vehicle;
+                // Use the SSOT vehicle label from Settings (falls back to Firebase model)
+                const vehicleLabel = primaryVehicleLabel ?? userVehicle.model ?? "Véhicule";
                 userVehicle.mileageLogs = [
                   {
                     fecha,
-                    modelo: userVehicle.model,
+                    modelo: vehicleLabel,
                     distancia: kmToSave,
                     id: Date.now(),
                   },
