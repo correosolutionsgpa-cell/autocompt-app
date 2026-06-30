@@ -43,8 +43,8 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
     <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
       <div
         className={`w-full max-w-lg p-6 rounded-[32px] border shadow-2xl flex flex-col justify-between animate-in zoom-in-95 duration-300 ${darkMode
-            ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
-            : "bg-white border-slate-200"
+          ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+          : "bg-white border-slate-200"
           }`}
       >
         {/* Header */}
@@ -64,8 +64,8 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
             type="button"
             onClick={handleClose}
             className={`p-2 rounded-full transition-all cursor-pointer shrink-0 ${darkMode
-                ? "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              ? "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             aria-label="Fermer"
           >
@@ -99,8 +99,8 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
           type="button"
           onClick={handleClose}
           className={`w-full py-3.5 text-[9px] font-black uppercase tracking-widest italic rounded-[18px] transition-all cursor-pointer active:scale-95 ${darkMode
-              ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 border border-zinc-800"
-              : "bg-slate-900 text-white hover:bg-[#111827]"
+            ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 border border-zinc-800"
+            : "bg-slate-900 text-white hover:bg-[#111827]"
             }`}
         >
           Fermer l&apos;aperçu
