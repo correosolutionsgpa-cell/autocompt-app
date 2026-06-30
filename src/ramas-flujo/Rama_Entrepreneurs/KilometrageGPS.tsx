@@ -122,6 +122,25 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     return null;
   }
 
+  // ── Guard: Firebase data not yet loaded ───────────────────────────────────
+  const safePartnerData = partnerData ?? {};
+  const safeCurrentCompanyPartnerData = currentCompany?.partnerData ?? {};
+  const safeLogs: MileageLog[] =
+    safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
+
+  if (!currentCompany || !partnerData) {
+    return (
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center gap-4 ${darkMode ? "bg-transparent text-zinc-400" : "bg-slate-50 text-slate-500"
+          } md:pl-72`}
+      >
+        <WorkspaceSidebar />
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+        <p className="text-[10px] font-black uppercase tracking-widest">Chargement des données…</p>
+      </div>
+    );
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
@@ -163,21 +182,19 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         >
           <button
             onClick={() => setActiveKilometrageTab("calculateur")}
-            className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              activeKilometrageTab === "calculateur"
+            className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "calculateur"
                 ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-            }`}
+              }`}
           >
             Calculateur (API)
           </button>
           <button
             onClick={() => setActiveKilometrageTab("gps")}
-            className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              activeKilometrageTab === "gps"
+            className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeKilometrageTab === "gps"
                 ? "bg-white dark:bg-zinc-800 text-[#059669] dark:text-emerald-400 shadow-sm"
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-            }`}
+              }`}
           >
             Suivi (GPS)
           </button>
@@ -401,25 +418,23 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             {/* Dual-State Auto Tracking Button */}
             <button
               onClick={() => setIsTrackingAuto(!isTrackingAuto)}
-              className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${
-                isTrackingAuto
+              className={`w-full p-6 rounded-[32px] border transition-all flex items-center justify-between group active:scale-95 ${isTrackingAuto
                   ? darkMode
                     ? "bg-[#059669]/20 border-[#059669] text-emerald-400"
                     : "bg-emerald-50 border-emerald-200 text-[#059669]"
                   : darkMode
                     ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-500"
                     : "bg-slate-900 border-slate-800 text-white"
-              }`}
+                }`}
             >
               <div className="flex items-center space-x-3">
                 <div
-                  className={`p-3 rounded-2xl transition-colors ${
-                    isTrackingAuto
+                  className={`p-3 rounded-2xl transition-colors ${isTrackingAuto
                       ? "bg-[#059669]/20 animate-pulse text-[#059669] dark:text-emerald-400"
                       : darkMode
                         ? "bg-zinc-900 text-zinc-600"
                         : "bg-white/10 text-slate-300"
-                  }`}
+                    }`}
                 >
                   <Navigation size={20} />
                 </div>
@@ -470,19 +485,24 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               const fecha = new Date().toISOString().split("T")[0];
               const tripAmount = kmToSave * 0.7;
 
-              // 1. Mettre à jour les logs kilométriques
-              const newData = { ...partnerData };
-              const userVehicle = newData[activeUser].vehicle;
-              userVehicle.mileageLogs = [
-                {
-                  fecha,
-                  modelo: userVehicle.model,
-                  distancia: kmToSave,
-                  id: Date.now(),
-                },
-                ...userVehicle.mileageLogs,
-              ];
-              setPartnerData(newData);
+              // 1. Mettre à jour les logs kilométriques (null-safe)
+              const newData = { ...safePartnerData };
+              if (!newData[activeUser]?.vehicle) {
+                // partnerData not yet hydrated for this user — skip write
+                console.warn("[KilometrageGPS] partnerData not ready for user:", activeUser);
+              } else {
+                const userVehicle = newData[activeUser].vehicle;
+                userVehicle.mileageLogs = [
+                  {
+                    fecha,
+                    modelo: userVehicle.model,
+                    distancia: kmToSave,
+                    id: Date.now(),
+                  },
+                  ...(userVehicle.mileageLogs ?? []),
+                ];
+                setPartnerData(newData);
+              }
 
               // 2. Injecter dans les dépenses globales
               const newDepense = {
@@ -538,7 +558,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             <div className="bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900">
               <span className="text-[8px] font-black text-[#059669] uppercase italic tracking-widest">
                 {" "}Volume:{" "}
-                {currentCompany.partnerData[activeUser]?.vehicle?.mileageLogs
+                {safeLogs
                   .reduce(
                     (acc: number, log: MileageLog) => acc + log.distancia,
                     0,
@@ -550,8 +570,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </div>
 
           <div className="space-y-3">
-            {currentCompany.partnerData[activeUser]?.vehicle?.mileageLogs
-              .length === 0 ? (
+            {safeLogs.length === 0 ? (
               <div
                 className={`py-12 px-6 text-center border-2 border-dashed rounded-[32px] ${darkMode ? "border-zinc-900 text-zinc-700 bg-zinc-950/50" : "border-slate-200 text-slate-400 bg-slate-50/50"}`}
               >
@@ -564,7 +583,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 </p>
               </div>
             ) : (
-              currentCompany.partnerData[activeUser]?.vehicle?.mileageLogs.map(
+              safeLogs.map(
                 (log: MileageLog, i: number) => (
                   <div
                     key={i}
