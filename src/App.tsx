@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -113,6 +113,7 @@ import { SofiAvatarSVG } from "./components/SofiAvatarSVG";
 import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
+import { getPrimaryVehicleBusinessRate } from "./lib/vehicleRateService";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
 import MuroTransparencia from "./ramas-flujo/MuroTransparencia";
 import GestionCotisations from "./ramas-flujo/Rama_Syndicats/GestionCotisations";
@@ -5035,6 +5036,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
   const porcBureau =
     currentCompany?.deductionFactor ??
     (currentHomeOffice.aireBureau / currentHomeOffice.aireTotale || 0);
+
+  // ── Taux d'utilisation professionnelle du véhicule (T2125 / TP-80) ──────────
+  // Formula: Business KM Logged ÷ (Current Odometer − Initial Odometer)
+  // Reads the same localStorage SSOT written by SettingsView + KilometrageGPS.
+  const porcVehicule = getPrimaryVehicleBusinessRate();
+
   const currentParadas = partnerData[activeUser]?.paradas || [""];
 
   const buildingWideCats = [
@@ -5096,15 +5103,24 @@ Ceci est un message automatisé généré par AutoCompt.`;
       fiscalRate = isBuildingWide ? propFactor : 1.0;
     } else {
       // Logic for Commercial Profiles
-      if (dossierRule === "half") fiscalRate = 0.5;
-      else if (dossierRule === "homeoffice") fiscalRate = porcBureau;
-      // 'full' and 'mileage' (already calculated) stay at 1.0 for the current entry's recorded subtotal
+      if (dossierRule === "half") {
+        fiscalRate = 0.5;
+      } else if (dossierRule === "homeoffice") {
+        fiscalRate = porcBureau;
+      } else if (dossierRule === "mileage") {
+        // Quebec pro-rata: Business KM / Total KM driven this year.
+        // Falls back to 1.0 if no vehicle data exists yet (expense already stored at correct amount).
+        fiscalRate = porcVehicule > 0 ? porcVehicule : 1.0;
+      }
+      // 'full' stays at 1.0
     }
 
     const activePct =
       currentCompany?.partnersPct?.[activeUser] ??
       currentCompany?.ownerPercentage ??
       50;
+
+    const isMileage = dossierRule === "mileage";
 
     return {
       ...d,
@@ -5115,6 +5131,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
       deductibleTvq: d.tvq * fiscalRate * (isPlex ? activePct / 100 : 1),
       deductibleTotal: d.total * fiscalRate * (isPlex ? activePct / 100 : 1),
       partnerSplit: d.total * fiscalRate * (isPlex ? activePct / 100 : 1),
+      // Stamp vehicle rate badge (mirrors tauxApplique used for home office)
+      ...(isMileage && porcVehicule > 0 ? {
+        tauxApplique: Number((porcVehicule * 100).toFixed(1)),
+        vehicleRateApplied: true,
+      } : {}),
     };
   });
 
@@ -14837,6 +14858,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                         ⚡ Suggéré IA
                                       </span>
                                     )}
+                                     {depense.vehicleRateApplied && (
+                                       <span
+                                         title="Taux d utilisation professionnelle du vehicule applique automatiquement (T2125/TP-80). Seule la portion affaires est deductible."
+                                         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 text-[7px] font-black tracking-widest border border-indigo-500/20 w-fit whitespace-nowrap"
+                                       >
+                                         {depense.tauxApplique != null ? `🚗 ${depense.tauxApplique}% vehicule` : "Pro-rata vehicule"}
+                                       </span>
+                                     )}
                                   </div>
                                 </td>
                                 <td className="py-4 px-6 font-mono font-bold text-right text-slate-500 dark:text-zinc-500">

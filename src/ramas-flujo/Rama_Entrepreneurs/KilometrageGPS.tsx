@@ -22,6 +22,7 @@
  */
 
 import React, { useState } from "react";
+import { recordBusinessTrip } from "../../lib/vehicleRateService";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -514,7 +515,28 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 setPartnerData(newData);
               }
 
+              // 1b. Sync to vehicleRateService SSOT so the ledger rate auto-updates
+              if (primaryVehicle) {
+                // Running odometer = initial + sum of all logged business trips
+                const allLogs = safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
+                const previousBizKM = allLogs.reduce((acc: number, l: any) => acc + (l.distancia ?? 0), 0);
+                const runningOdometer = primaryVehicle.odometreInitial + previousBizKM + kmToSave;
+                recordBusinessTrip(primaryVehicle.id, kmToSave, runningOdometer);
+              }
+
               // 2. Injecter dans les dépenses globales
+              // Compute current vehicle rate for badge stamping on the ledger expense
+              const currentVehicleRate = primaryVehicle ? (() => {
+                try {
+                  const biz = JSON.parse(localStorage.getItem("autocompt_km_business") || "{}");
+                  const cur = JSON.parse(localStorage.getItem("autocompt_km_current")  || "{}");
+                  const bizKM  = (biz[primaryVehicle.id] ?? 0) + kmToSave; // include this trip
+                  const curOdo = cur[primaryVehicle.id]  ?? primaryVehicle.odometreInitial;
+                  const totalKM = curOdo - primaryVehicle.odometreInitial;
+                  return totalKM > 0 ? Math.min(bizKM / totalKM, 1) : 0;
+                } catch { return 0; }
+              })() : 0;
+
               const newDepense = {
                 id: Date.now() + 1,
                 companyId: activeCompanyId,
@@ -528,6 +550,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 total: tripAmount,
                 lien: null,
                 partnerTag: activeUser,
+                // Vehicle pro-rata badge (read by Tenue de livres UI)
+                vehicleRateApplied: true,
+                ...(currentVehicleRate > 0 ? { tauxApplique: Number((currentVehicleRate * 100).toFixed(1)) } : {}),
               };
 
               setDepenses((prev) => [newDepense, ...prev]);
