@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -114,6 +114,7 @@ import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
 import { getPrimaryVehicleBusinessRate } from "./lib/vehicleRateService";
+import { extractDataFromImage } from "./lib/gemini";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
 import MuroTransparencia from "./ramas-flujo/MuroTransparencia";
 import GestionCotisations from "./ramas-flujo/Rama_Syndicats/GestionCotisations";
@@ -5598,135 +5599,67 @@ Ceci est un message automatisé généré par AutoCompt.`;
           );
         }
 
-        // Step C: Trigger /api/scan OCR or direct Client-side Gemini Vision OCR
+        // Step C: OCR via gemini.ts (extractDataFromImage reads VITE_GEMINI_API_KEY)
+        // This replaces the legacy raw-fetch path that used the empty GEMINI_API_KEY constant.
         let scanResults: any = null;
 
-        // Use client key if set. Falls back to empty string to try the client fetch
-        const clientKey =
-          GEMINI_API_KEY && GEMINI_API_KEY !== "COLLEZ_VOTRE_CLE_GEMINI_ICI"
-            ? GEMINI_API_KEY.trim()
-            : "";
-
-        console.log(
-          "[Google Gemini API] Direct Client-side Vision OCR request initiated...",
-        );
         try {
-          const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${clientKey}`;
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: mimeType || "image/jpeg",
-                        data: base64Data,
-                      },
-                    },
-                    {
-                      text: `RÔLE: Agis en tant qu'auditeur fiscal expert et très précis pour l'immobilier au Québec.
-                      Analyse cette image de reçu ou de facture de dépenses. Extrais les informations comptables suivantes et retourne UNIQUEMENT un objet JSON (sans blocs d'explications de type markdown ni texte). Le JSON doit utiliser exactement et uniquement ces clés :
-                      - "fournisseur": Le nom de l'entreprise ou du marchand. RÈGLE ZÉRO HALLUCINATION : Extrais UNIQUEMENT le texte exact. N'invente pas de nom de fournisseur. Si illisible, retourne null.
-                      - "date": La date de transaction au format YYYY-MM-DD. Si aucune date n'est présente, utilise la date d'aujourd'hui : "${new Date().toISOString().split("T")[0]}".
-                      - "subtotal": Le montant sous-total net avant taxes (valeur numérique). RÈGLE ZÉRO HALLUCINATION : Ne jamais inventer de montants.
-                      - "tps": La taxe TPS (TPS 5%) (valeur numérique). Si elle n'est pas spécifiée, calcule-la comme subtotal * 0.05.
-                      - "tvq": La taxe TVQ (TVQ 9.975%) (valeur numérique). Si elle n'est pas spécifiée, calcule-la comme subtotal * 0.09975.
-                      - "total": Le montant total de la transaction toutes taxes incluses (valeur numérique). RÈGLE ZÉRO HALLUCINATION : Extrais UNIQUEMENT les nombres imprimés. N'invente jamais de totaux.
-                      - "cat": CATÉGORISATION PRÉDICTIVE : Basé sur le nom du fournisseur, assigne automatiquement une catégorie du plan comptable de l'immobilier au Québec (ex: Hydro-Québec -> 'Électricité / Énergie', Home Depot -> 'Entretien et réparations', Bell -> 'Télécommunications', etc.). En cas d'incertitude, utilise 'Non catégorisé'. La liste idéale est : ${dashboardMode === "Syndic" ? '["Non catégorisé", "Contrat", "Entretien", "Assurance", "Frais de gestion"]' : '["Non catégorisé", "Télécommunications", "Bureau à domicile", "Équipement", "Entretien et réparations", "Rénovation / Construction", "Taxes", "Assurance", "Chauffage", "Électricité / Énergie", "Frais de gestion / Exploitation"]'}.
-                      - "adresse": Extrait l'adresse de service EXACTE. C'est absolument crucial pour différencier la résidence personnelle des immeubles locatifs.
-
-                      Format JSON STRICT à respecter :
-                      {
-                        "fournisseur": string,
-                        "date": string,
-                        "subtotal": number,
-                        "tps": number,
-                        "tvq": number,
-                        "total": number,
-                        "cat": string,
-                        "adresse": string
-                      }`,
-                    },
-                  ],
-                },
-              ],
-              generationConfig: {
-                responseMimeType: "application/json",
-              },
-            }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rawText) {
-              let cleanedText = rawText.trim();
-              if (cleanedText.startsWith("```")) {
-                cleanedText = cleanedText
-                  .replace(/^```(json)?/i, "")
-                  .replace(/```$/, "")
-                  .trim();
-              }
-              scanResults = JSON.parse(cleanedText || "{}");
-              console.log(
-                "[Google Gemini API] Direct Client-side Vision OCR parse successful:",
-                scanResults,
-              );
-            }
-          } else {
-            const errText = await response.text();
-            console.error(
-              "[Google Gemini API] Client-side fetch returned non-200 status:",
-              response.status,
-              errText
-            );
-            throw new Error(`API Status ${response.status}: ${errText.slice(0, 200)}`);
-          }
-        } catch (clientErr: any) {
-          console.error(
-            "[Google Gemini API] Direct client-side fetch failed, will try server-side proxy...",
-            clientErr,
-          );
-        }
-
-        if (!scanResults) {
           console.log(
-            "[AutoCompt OCR Pipeline] Fetching server-side proxy /api/scan...",
+            "[S.O.F.I. OCR] Calling extractDataFromImage via gemini.ts...",
+            "mimeType:", mimeType,
+            "base64 length:", base64Data?.length ?? 0,
+            "base64 preview:", base64Data?.slice(0, 60) ?? "(empty)",
           );
+
+          if (!base64Data || base64Data.length < 100) {
+            throw new Error("Base64 payload is empty or too short — file read may have failed.");
+          }
+
+          const extracted = await extractDataFromImage(base64Data, mimeType);
+
+          console.log("[S.O.F.I. OCR] extractDataFromImage returned:", extracted);
+
+          // Flatten ExtractionResult into the flat shape expected by Step D
+          // (Step D already handles vendor/fournisseur, tps/gst, tvq/qst aliases)
+          scanResults = {
+            fournisseur: extracted.vendor,
+            date:        extracted.date,
+            subtotal:    extracted.subtotal,
+            tps:         extracted.taxes?.tps ?? 0,
+            tvq:         extracted.taxes?.tvq ?? 0,
+            total:       extracted.grandTotal,
+            cat:         extracted.category,
+            adresse:     "Général",
+          };
+
+          console.log("[S.O.F.I. OCR] scanResults normalized:", scanResults);
+        } catch (geminiErr: any) {
+          console.error("[S.O.F.I. OCR] extractDataFromImage failed:", geminiErr);
+
+          // Fallback: server-side proxy /api/scan (for environments with a backend)
+          console.log("[S.O.F.I. OCR] Trying server-side /api/scan fallback...");
           try {
             const response = await fetch("/api/scan", {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                base64Data,
-                mimeType,
-                filename: file.name,
-              }),
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ base64Data, mimeType, filename: file.name }),
             });
             if (response.ok) {
               scanResults = await response.json();
-              console.log(
-                "[AutoCompt OCR Pipeline] Server-side OCR parsed successfully:",
-                scanResults,
-              );
+              console.log("[S.O.F.I. OCR] /api/scan fallback succeeded:", scanResults);
             } else {
               const errText = await response.text();
-              throw new Error(`Server status ${response.status}: ${errText.slice(0, 200)}`);
+              throw new Error(`/api/scan status ${response.status}: ${errText.slice(0, 300)}`);
             }
-          } catch (err: any) {
-            console.error(
-              "OCR API failed both client and server-side. Aborting scan:",
-              err,
+          } catch (proxyErr: any) {
+            console.error("[S.O.F.I. OCR] Both paths failed. Primary error:", geminiErr?.message, "| Proxy error:", proxyErr?.message);
+            alert(
+              `S.O.F.I. OCR — Échec de l'analyse:\n\n` +
+              `${geminiErr?.message || geminiErr}\n\n` +
+              `Vérifiez que VITE_GEMINI_API_KEY est défini dans votre fichier .env et que la clé est valide.`
             );
-            alert(`S.O.F.I. Scanner Error:\n\n${err.message || err}\n\nPlease check your API key and network connection.`);
             setDepenses((prev) => prev.filter((d) => d.id !== tempId && String(d.id) !== String(tempId)));
-            return; // Exit the pipeline immediately!
+            return;
           }
         }
 

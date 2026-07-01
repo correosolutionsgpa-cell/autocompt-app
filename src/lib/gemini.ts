@@ -59,14 +59,25 @@ Rules:
 6. Payment: Identify card type and last 4 digits.
 Output: valid JSON only. Data values in French (Quebec).`;
 
+  // ── Diagnostic logs — visible in browser DevTools console ────────────────
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+  console.log("[gemini.ts] extractDataFromImage called");
+  console.log("[gemini.ts] API key set:", apiKey ? `YES (${apiKey.slice(0, 8)}...)` : "NO — VITE_GEMINI_API_KEY is missing or empty");
+  console.log("[gemini.ts] mimeType:", mimeType);
+  console.log("[gemini.ts] base64Data length:", base64Data?.length ?? 0);
+  console.log("[gemini.ts] base64Data preview (first 60 chars):", base64Data?.slice(0, 60) ?? "(empty)");
+
+  // Strip data URL prefix if caller forgot to (safety net)
+  const cleanBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: {
         parts: [
           {
             inlineData: {
-              data: base64Data.split(",")[1] || base64Data,
+              data: cleanBase64,
               mimeType: mimeType,
             },
           },
@@ -80,10 +91,12 @@ Output: valid JSON only. Data values in French (Quebec).`;
       },
     });
 
+    console.log("[gemini.ts] Raw API response text:", response.text?.slice(0, 200));
     const result = JSON.parse(response.text || "{}");
+    console.log("[gemini.ts] Parsed result:", result);
     return result as ExtractionResult;
-  } catch (error) {
-    console.error("Extraction failed:", error);
-    throw new Error("Failed to extract data. Please ensure the image is clear.");
+  } catch (error: any) {
+    console.error("[gemini.ts] Extraction failed:", error?.message ?? error);
+    throw new Error(`Failed to extract data: ${error?.message || "unknown error"}. Ensure the image is clear and VITE_GEMINI_API_KEY is valid.`);
   }
 }
