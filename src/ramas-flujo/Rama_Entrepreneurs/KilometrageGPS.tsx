@@ -586,8 +586,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             {/* ÔöÇÔöÇ Live tracking dashboard (shown while tracking) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
             {isTrackingAuto && (
               <div className={`p-6 rounded-[32px] border space-y-4 animate-in zoom-in-95 duration-300 ${darkMode
-                  ? "bg-[#059669]/10 border-[#059669]/40"
-                  : "bg-emerald-50 border-emerald-200"
+                ? "bg-[#059669]/10 border-[#059669]/40"
+                : "bg-emerald-50 border-emerald-200"
                 }`}>
                 {/* Big odometer */}
                 <div className="text-center">
@@ -647,8 +647,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 </button>
 
                 <div className={`${darkMode
-                    ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
-                    : "bg-white border-slate-200"
+                  ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+                  : "bg-white border-slate-200"
                   } p-5 rounded-3xl border shadow-sm`}>
                   <div className="flex items-center space-x-3 mb-2">
                     <div className={`w-2 h-2 rounded-full ${gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"
@@ -705,16 +705,16 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 }
               }}
               className={`w-full p-6 rounded-[32px] border-2 transition-all flex items-center justify-between active:scale-95 ${isTrackingAuto
-                  ? "bg-rose-500/10 border-rose-500 text-rose-500 dark:text-rose-400"
-                  : darkMode
-                    ? "bg-[#059669]/10 border-[#059669]/50 text-emerald-400"
-                    : "bg-slate-900 border-slate-900 text-white"
+                ? "bg-rose-500/10 border-rose-500 text-rose-500 dark:text-rose-400"
+                : darkMode
+                  ? "bg-[#059669]/10 border-[#059669]/50 text-emerald-400"
+                  : "bg-slate-900 border-slate-900 text-white"
                 }`}
             >
               <div className="flex items-center space-x-3">
                 <div className={`p-3 rounded-2xl ${isTrackingAuto
-                    ? "bg-rose-500/20"
-                    : darkMode ? "bg-zinc-900" : "bg-white/10"
+                  ? "bg-rose-500/20"
+                  : darkMode ? "bg-zinc-900" : "bg-white/10"
                   }`}>
                   {isTrackingAuto
                     ? <Square size={20} fill="currentColor" />
@@ -742,8 +742,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             {/* ÔöÇÔöÇ Inline save form (replaces native prompt()) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
             {showGpsSaveForm && !isTrackingAuto && (
               <div className={`p-6 rounded-[28px] border space-y-4 animate-in slide-in-from-bottom duration-300 ${darkMode
-                  ? "bg-slate-900/60 border-white/[0.08] backdrop-blur-md"
-                  : "bg-white border-slate-200"
+                ? "bg-slate-900/60 border-white/[0.08] backdrop-blur-md"
+                : "bg-white border-slate-200"
                 }`}>
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-[#059669] mb-0.5">
@@ -758,8 +758,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 {/* Business km info pill ÔÇö replaces flat-rate preview */}
                 {parseFloat(gpsSaveKmInput) > 0 && (
                   <div className={`flex items-center gap-2.5 p-3 rounded-2xl border ${darkMode
-                      ? "bg-emerald-950/30 border-emerald-900/50"
-                      : "bg-emerald-50 border-emerald-200"
+                    ? "bg-emerald-950/30 border-emerald-900/50"
+                    : "bg-emerald-50 border-emerald-200"
                     }`}>
                     <span className="text-base leading-none">­ƒôï</span>
                     <div className="flex-1">
@@ -800,8 +800,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       clearPersistedTrip();
                     }}
                     className={`px-3 py-3 rounded-2xl border text-[8px] font-black uppercase transition-all ${darkMode
-                        ? "border-zinc-800 text-zinc-500 hover:text-rose-400"
-                        : "border-slate-200 text-slate-400 hover:text-rose-500"
+                      ? "border-zinc-800 text-zinc-500 hover:text-rose-400"
+                      : "border-slate-200 text-slate-400 hover:text-rose-500"
                       } cursor-pointer`}
                   >
                     Annuler
