@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -1266,6 +1266,16 @@ const App = () => {
   >({});
   const [showPreview, setShowPreview] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  // S.O.F.I. OCR confirmation draft — shown as a floating card after scan
+  const [sofiDraft, setSofiDraft] = useState<{
+    fournisseur: string;
+    subtotal: number;
+    tps: number;
+    tvq: number;
+    total: number;
+    cat: string;
+    fecha: string;
+  } | null>(null);
   const [selectedFac, setSelectedFac] = useState(null);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
 
@@ -5039,6 +5049,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
   // Reads the same localStorage SSOT written by SettingsView + KilometrageGPS.
   const porcVehicule = getPrimaryVehicleBusinessRate();
 
+  // ── Catégories véhicule TP-80 / T2125 — aucune configuration manuelle requise ─
+  // Ces catégories déclenchent automatiquement le pro-rata d'utilisation
+  // professionnelle du véhicule, sans dépendre des dossiers personnalisés.
+  const VEHICLE_EXPENSE_CATS = new Set([
+    "Essence / Carburant",
+    "Entretien Véhicule",
+    "Assurance auto",
+    "Déplacements / Automobile",
+    "Immatriculation / Permis",
+  ]);
+
   const currentParadas = partnerData[activeUser]?.paradas || [""];
 
   const buildingWideCats = [
@@ -5104,10 +5125,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
         fiscalRate = 0.5;
       } else if (dossierRule === "homeoffice") {
         fiscalRate = porcBureau;
-      } else if (dossierRule === "mileage") {
+      } else if (dossierRule === "mileage" || VEHICLE_EXPENSE_CATS.has(d.cat)) {
         // Quebec pro-rata: Business KM / Total KM driven this year.
-        // Falls back to 1.0 if no vehicle data exists yet (expense already stored at correct amount).
-        fiscalRate = porcVehicule > 0 ? porcVehicule : 1.0;
+        // Triggered automatically by VEHICLE_EXPENSE_CATS — no manual dossier config required.
+        // Uses permanently-stamped tauxApplique if available (protects historical records).
+        const frozenRate = d.tauxApplique != null ? d.tauxApplique / 100 : null;
+        fiscalRate = frozenRate ?? (porcVehicule > 0 ? porcVehicule : 1.0);
       }
       // 'full' stays at 1.0
     }
@@ -6047,6 +6070,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
           updatedNewItemObj.adresseHistorique = currentHomeOffice.adresse || "";
         }
 
+        // ── Stamp vehicle pro-rata permanently at scan time (TP-80 / T2125) ────
+        // tauxApplique is frozen here so historical dépenses never change if the
+        // global vehicle rate changes in the future.
+        if (VEHICLE_EXPENSE_CATS.has(finalCatMapped) && porcVehicule > 0) {
+          updatedNewItemObj.tauxApplique = Number((porcVehicule * 100).toFixed(1));
+          updatedNewItemObj.vehicleRateApplied = true;
+        }
+
         let resultingItem: any = null;
 
         if (finalCatMapped === "Relevé 31") {
@@ -6135,6 +6166,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
             console.log("[AutoCompt OCR State Update] OCR completed for item", resultingItem);
             if (resultingItem) {
               setEditingExpense(resultingItem);
+              // ── S.O.F.I. confirmation card ──────────────────────────────────
+              // Populate the draft card so the user sees a visual summary and
+              // can confirm before the expense is locked in the ledger.
+              setSofiDraft({
+                fournisseur: resultingItem.fournisseur || "Fournisseur inconnu",
+                subtotal:    resultingItem.subtotal   ?? 0,
+                tps:         resultingItem.tps        ?? 0,
+                tvq:         resultingItem.tvq        ?? 0,
+                total:       resultingItem.total      ?? 0,
+                cat:         resultingItem.cat        || "À classer",
+                fecha:       resultingItem.fecha      || new Date().toISOString().split("T")[0],
+              });
             }
           }
         }
@@ -15275,6 +15318,87 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </button>
           </div>
 
+          {/* ── S.O.F.I. OCR Confirmation Card ─────────────────────────────── */}
+          {sofiDraft && (
+            <div className="fixed bottom-6 right-6 z-[300] max-w-sm w-full animate-in slide-in-from-bottom-4 duration-500 drop-shadow-2xl">
+              <div className={`p-5 rounded-[28px] border shadow-2xl backdrop-blur-xl ${
+                darkMode
+                  ? "bg-slate-900/90 border-emerald-500/30 shadow-emerald-900/40"
+                  : "bg-white/95 border-emerald-200 shadow-emerald-100"
+              }`}>
+                {/* Header — avatar + headline */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="relative shrink-0">
+                    <SofiAvatarSVG size={40} className="rounded-full border-2 border-emerald-500" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500 mb-0.5">S.O.F.I. · Analyse complétée</p>
+                    <p className={`text-xs font-black leading-tight truncate ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                      J'ai extrait {sofiDraft.total.toFixed(2)}$&nbsp;chez&nbsp;
+                      <span className="text-[#059669]">{sofiDraft.fournisseur}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Amount breakdown */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className={`p-2.5 rounded-2xl text-center ${darkMode ? "bg-zinc-800" : "bg-slate-50"}`}>
+                    <p className={`text-[7px] uppercase font-black mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Sous-total</p>
+                    <p className={`text-sm font-black tabular-nums ${darkMode ? "text-zinc-100" : "text-slate-800"}`}>{sofiDraft.subtotal.toFixed(2)}$</p>
+                  </div>
+                  <div className={`p-2.5 rounded-2xl text-center ${darkMode ? "bg-zinc-800" : "bg-slate-50"}`}>
+                    <p className={`text-[7px] uppercase font-black mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>TPS+TVQ</p>
+                    <p className={`text-sm font-black tabular-nums ${darkMode ? "text-zinc-100" : "text-slate-800"}`}>{(sofiDraft.tps + sofiDraft.tvq).toFixed(2)}$</p>
+                  </div>
+                  <div className="p-2.5 rounded-2xl text-center bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-[7px] uppercase font-black mb-1 text-emerald-600 dark:text-emerald-400">Total</p>
+                    <p className="text-sm font-black tabular-nums text-emerald-600 dark:text-emerald-400">{sofiDraft.total.toFixed(2)}$</p>
+                  </div>
+                </div>
+
+                {/* Category pill + date */}
+                <div className="flex items-center justify-between mb-5">
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase ${
+                    darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-slate-50 border-slate-200 text-slate-600"
+                  }`}>
+                    {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) ? "🚗" : "📋"}&nbsp;{sofiDraft.cat}
+                    {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) && porcVehicule > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        {Math.round(porcVehicule * 100)}% véhicule
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-[8px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{sofiDraft.fecha}</p>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSofiDraft(null)}
+                    className={`flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                      darkMode
+                        ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300"
+                    }`}
+                  >
+                    Fermer
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSofiDraft(null);
+                      setVista("reportes");
+                      setTabReporte("taxes");
+                    }}
+                    className="flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-[#059669] text-white shadow-lg shadow-emerald-900/20 transition-all active:scale-95 hover:bg-emerald-700"
+                  >
+                    ✓ Voir dans le registre
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* DYNAMIC EXPENSE EDITOR MODAL (SPLIT VIEW) */}
           <AnimatePresence>
             {editingExpense && (
@@ -15345,6 +15469,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             <option value="Honoraires professionnels">Honoraires professionnels</option>
                             <option value="Frais de gestion / Marketing">Frais de gestion / Marketing</option>
                             <option value="Fournitures de bureau">Fournitures de bureau</option>
+                            <optgroup label="🚗 Vehicule (Pro-rata TP-80)">
+                              <option value="Essence / Carburant">Essence / Carburant</option>
+                              <option value="Entretien Vehicule">Entretien Vehicule</option>
+                              <option value="Assurance auto">Assurance auto</option>
+                              <option value="Deplacements / Automobile">Deplacements / Automobile</option>
+                              <option value="Immatriculation / Permis">Immatriculation / Permis</option>
+                            </optgroup>
                             <option value="Autre">Autre</option>
                           </select>
                         </div>
@@ -15414,7 +15545,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                     <div className="mt-8">
                       <button onClick={() => {
-                        setDepenses(prev => prev.map(d => d.id === editingExpense.id ? { ...d, ...editingExpense, status: "Vérifiée" } : d));
+                        // Freeze vehicle pro-rata at save time if not already stamped by OCR pipeline
+                        const stampedVehicleFields = (
+                          VEHICLE_EXPENSE_CATS.has(editingExpense.cat) &&
+                          editingExpense.tauxApplique == null &&
+                          porcVehicule > 0
+                        ) ? {
+                          tauxApplique: Number((porcVehicule * 100).toFixed(1)),
+                          vehicleRateApplied: true,
+                        } : {};
+                        setDepenses(prev => prev.map(d =>
+                          d.id === editingExpense.id
+                            ? { ...d, ...editingExpense, ...stampedVehicleFields, status: "Vérifiée" }
+                            : d
+                        ));
                         setEditingExpense(null);
                       }} className="w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all bg-[#059669] text-white hover:bg-emerald-700 shadow-xl shadow-emerald-900/20 active:scale-95 flex items-center justify-center space-x-2">
                         <Save size={16} />
@@ -15585,6 +15729,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             <option value="Honoraires professionnels">Honoraires professionnels</option>
                             <option value="Frais de gestion / Marketing">Frais de gestion / Marketing</option>
                             <option value="Fournitures de bureau">Fournitures de bureau</option>
+                            <optgroup label="🚗 Vehicule (Pro-rata TP-80)">
+                              <option value="Essence / Carburant">Essence / Carburant</option>
+                              <option value="Entretien Vehicule">Entretien Vehicule</option>
+                              <option value="Assurance auto">Assurance auto</option>
+                              <option value="Deplacements / Automobile">Deplacements / Automobile</option>
+                              <option value="Immatriculation / Permis">Immatriculation / Permis</option>
+                            </optgroup>
                             <option value="Autre">Autre</option>
                           </select>
                         </div>
