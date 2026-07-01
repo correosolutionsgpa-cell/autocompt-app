@@ -15255,8 +15255,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {sofiDraft && (
             <div className="fixed bottom-6 right-6 z-[300] max-w-sm w-full animate-in slide-in-from-bottom-4 duration-500 drop-shadow-2xl">
               <div className={`p-5 rounded-[28px] border shadow-2xl backdrop-blur-xl ${darkMode
-                  ? "bg-slate-900/90 border-emerald-500/30 shadow-emerald-900/40"
-                  : "bg-white/95 border-emerald-200 shadow-emerald-100"
+                ? "bg-slate-900/90 border-emerald-500/30 shadow-emerald-900/40"
+                : "bg-white/95 border-emerald-200 shadow-emerald-100"
                 }`}>
                 {/* Header — avatar + headline */}
                 <div className="flex items-center gap-3 mb-4">
@@ -15308,8 +15308,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   <button
                     onClick={() => setSofiDraft(null)}
                     className={`flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95 ${darkMode
-                        ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                        : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                      : "border-slate-200 text-slate-500 hover:border-slate-300"
                       }`}
                   >
                     Fermer
