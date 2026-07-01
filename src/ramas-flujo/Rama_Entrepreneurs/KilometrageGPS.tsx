@@ -22,6 +22,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
+import { recordBusinessTrip } from "../../lib/vehicleRateService";
 
 // ── Trip persistence key (localStorage) ──────────────────────────────────────
 const TRIP_PERSIST_KEY = "autocompt_active_trip";
@@ -34,7 +35,7 @@ interface PersistedTripState {
   lon: number | null;
   accuracy: number | null;
   tab: "calculateur" | "gps";
-  savedAt: number; // timestamp ms
+  savedAt: number; // timestamp ms — used in the resume banner
 }
 
 function loadPersistedTrip(): PersistedTripState | null {
@@ -42,7 +43,7 @@ function loadPersistedTrip(): PersistedTripState | null {
     const raw = localStorage.getItem(TRIP_PERSIST_KEY);
     if (!raw) return null;
     const parsed: PersistedTripState = JSON.parse(raw);
-    // Only restore if the persisted state had an active trip
+    // Restore if tracking was active OR if km were accumulated but not yet saved
     if (!parsed.isTracking && parsed.km === 0) return null;
     return parsed;
   } catch {
@@ -53,7 +54,7 @@ function loadPersistedTrip(): PersistedTripState | null {
 function clearPersistedTrip(): void {
   localStorage.removeItem(TRIP_PERSIST_KEY);
 }
-import { recordBusinessTrip } from "../../lib/vehicleRateService";
+
 import {
   ArrowLeft,
   CheckCircle2,
