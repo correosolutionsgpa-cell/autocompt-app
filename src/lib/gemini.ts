@@ -70,15 +70,29 @@ Output: valid JSON only. Data values in French (Quebec).`;
   // Strip data URL prefix if caller forgot to (safety net)
   const cleanBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
 
+  // Normalise MIME type — Gemini Vision accepts image/* and application/pdf.
+  // Some browsers/OS report PDFs as "application/octet-stream"; map those back.
+  const normalisedMime: string = (
+    mimeType === "application/pdf" ||
+    mimeType === "application/octet-stream" &&
+      (base64Data.slice(0, 8).startsWith("JVBERi0") /* %PDF base64 */) 
+      ? "application/pdf"
+      : mimeType || "image/jpeg"
+  );
+  console.log("[gemini.ts] normalisedMime:", normalisedMime);
+
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      // Use the stable REST alias — bare 'gemini-1.5-flash' returns 404 on v1beta.
+      model: "gemini-1.5-flash-latest",
       contents: {
         parts: [
           {
             inlineData: {
               data: cleanBase64,
-              mimeType: mimeType,
+              // Pass the normalised MIME type so PDFs are sent as application/pdf
+              // and handled by Gemini's Document Understanding pipeline.
+              mimeType: normalisedMime,
             },
           },
           { text: "Extract the accounting data from this document following the schema." },

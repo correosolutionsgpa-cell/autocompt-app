@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -5623,13 +5623,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // (Step D already handles vendor/fournisseur, tps/gst, tvq/qst aliases)
           scanResults = {
             fournisseur: extracted.vendor,
-            date:        extracted.date,
-            subtotal:    extracted.subtotal,
-            tps:         extracted.taxes?.tps ?? 0,
-            tvq:         extracted.taxes?.tvq ?? 0,
-            total:       extracted.grandTotal,
-            cat:         extracted.category,
-            adresse:     "Général",
+            date: extracted.date,
+            subtotal: extracted.subtotal,
+            tps: extracted.taxes?.tps ?? 0,
+            tvq: extracted.taxes?.tvq ?? 0,
+            total: extracted.grandTotal,
+            cat: extracted.category,
+            adresse: "Général",
           };
 
           console.log("[S.O.F.I. OCR] scanResults normalized:", scanResults);
@@ -6104,12 +6104,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
               // can confirm before the expense is locked in the ledger.
               setSofiDraft({
                 fournisseur: resultingItem.fournisseur || "Fournisseur inconnu",
-                subtotal:    resultingItem.subtotal   ?? 0,
-                tps:         resultingItem.tps        ?? 0,
-                tvq:         resultingItem.tvq        ?? 0,
-                total:       resultingItem.total      ?? 0,
-                cat:         resultingItem.cat        || "À classer",
-                fecha:       resultingItem.fecha      || new Date().toISOString().split("T")[0],
+                subtotal: resultingItem.subtotal ?? 0,
+                tps: resultingItem.tps ?? 0,
+                tvq: resultingItem.tvq ?? 0,
+                total: resultingItem.total ?? 0,
+                cat: resultingItem.cat || "À classer",
+                fecha: resultingItem.fecha || new Date().toISOString().split("T")[0],
               });
             }
           }
@@ -15254,11 +15254,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           {/* ── S.O.F.I. OCR Confirmation Card ─────────────────────────────── */}
           {sofiDraft && (
             <div className="fixed bottom-6 right-6 z-[300] max-w-sm w-full animate-in slide-in-from-bottom-4 duration-500 drop-shadow-2xl">
-              <div className={`p-5 rounded-[28px] border shadow-2xl backdrop-blur-xl ${
-                darkMode
+              <div className={`p-5 rounded-[28px] border shadow-2xl backdrop-blur-xl ${darkMode
                   ? "bg-slate-900/90 border-emerald-500/30 shadow-emerald-900/40"
                   : "bg-white/95 border-emerald-200 shadow-emerald-100"
-              }`}>
+                }`}>
                 {/* Header — avatar + headline */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="relative shrink-0">
@@ -15292,9 +15291,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                 {/* Category pill + date */}
                 <div className="flex items-center justify-between mb-5">
-                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase ${
-                    darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-slate-50 border-slate-200 text-slate-600"
-                  }`}>
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-slate-50 border-slate-200 text-slate-600"
+                    }`}>
                     {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) ? "🚗" : "📋"}&nbsp;{sofiDraft.cat}
                     {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) && porcVehicule > 0 && (
                       <span className="ml-1.5 px-1.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -15309,11 +15307,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 <div className="flex gap-2">
                   <button
                     onClick={() => setSofiDraft(null)}
-                    className={`flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
-                      darkMode
+                    className={`flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95 ${darkMode
                         ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
                         : "border-slate-200 text-slate-500 hover:border-slate-300"
-                    }`}
+                      }`}
                   >
                     Fermer
                   </button>
@@ -15353,13 +15350,32 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     </div>
 
                     <div className="flex-1 w-full flex items-center justify-center overflow-auto rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800 bg-white dark:bg-transparent/50 p-2">
-                      {(editingExpense.lien || editingExpense.documentUrl) ? (
-                        (editingExpense.lien || editingExpense.documentUrl).endsWith(".pdf") ? (
-                          <iframe src={editingExpense.lien || editingExpense.documentUrl} className="w-full h-full min-h-[40vh] border-none rounded-xl" title="PDF Preview" />
+                      {(editingExpense.lien || editingExpense.documentUrl) ? (() => {
+                        const docUrl: string = editingExpense.lien || editingExpense.documentUrl || "";
+                        // Detect PDFs by: stored mimeType, URL ending, or Firebase Storage content-type hint
+                        const isPdf =
+                          editingExpense.mimeType === "application/pdf" ||
+                          docUrl.toLowerCase().endsWith(".pdf") ||
+                          docUrl.includes("%2F") && docUrl.toLowerCase().includes(".pdf") ||
+                          docUrl.includes("alt=media") && (editingExpense.fileName || "").toLowerCase().endsWith(".pdf");
+                        return isPdf ? (
+                          <object
+                            data={docUrl}
+                            type="application/pdf"
+                            className="w-full h-full min-h-[40vh] rounded-xl border-none"
+                            aria-label="Aperçu PDF"
+                          >
+                            {/* Fallback for browsers that can't embed PDFs inline */}
+                            <iframe
+                              src={docUrl}
+                              className="w-full h-full min-h-[40vh] border-none rounded-xl"
+                              title="PDF Preview"
+                            />
+                          </object>
                         ) : (
-                          <img src={editingExpense.lien || editingExpense.documentUrl} alt="Reçu scan" className="max-h-[50vh] xl:max-h-[70vh] object-contain rounded-xl" />
-                        )
-                      ) : (
+                          <img src={docUrl} alt="Reçu scan" className="max-h-[50vh] xl:max-h-[70vh] object-contain rounded-xl" />
+                        );
+                      })() : (
                         <div className="flex flex-col items-center justify-center space-y-3 opacity-50">
                           <FileText size={48} className="text-slate-400" />
                           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Aucun fichier</span>
