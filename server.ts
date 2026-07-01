@@ -148,7 +148,7 @@ async function startServer() {
 
       // Create Chat
       const chat = ai.chats.create({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         config: {
           systemInstruction: systemInstruction,
         }
@@ -335,7 +335,7 @@ JSON schema to return:
 
         try {
           const response = await ai.models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             contents: [{ parts: [documentPart, { text: extractionPrompt }] }],
           });
 
@@ -448,7 +448,7 @@ RÈGLES OBLIGATOIRES — applique-les dans cet ordre exact :
 IMPORTANT : Tu ne peux PAS retourner null. Si tu ne trouves pas de valeur, retourne 0.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: [{
           parts: [
             { inlineData: { mimeType: mimeType || "application/pdf", data: base64Data } },
@@ -469,7 +469,7 @@ IMPORTANT : Tu ne peux PAS retourner null. Si tu ne trouves pas de valeur, retou
       }
 
       const safeResult = {
-        superficie_totale:     safeInt(parsed.superficie_totale),
+        superficie_totale: safeInt(parsed.superficie_totale),
         superficie_personnelle: safeInt(parsed.superficie_personnelle),
       };
       console.log("[S.O.F.I. Dimensions] ✅ Safe result:", safeResult);
@@ -502,7 +502,7 @@ Si une valeur est introuvable, retourne null pour ce champ.
 Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerrain": number|null, "valeurBatiment": number|null }`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: [{
           parts: [
             { inlineData: { mimeType: mimeType || "application/pdf", data: base64Data } },

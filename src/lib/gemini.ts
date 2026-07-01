@@ -83,10 +83,11 @@ Output: valid JSON only. Data values in French (Quebec).`;
 
   // Model fallback chain — no -latest suffixes (they 404 on v1beta).
   // Each entry is tried in order; on a 404 / model-not-found error we move to the next.
+  // Google retired the whole gemini-1.0/1.5 family in 2025 — use current 2.5-series models.
   const MODEL_CHAIN = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.0-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
   ] as const;
 
   const contents = {
