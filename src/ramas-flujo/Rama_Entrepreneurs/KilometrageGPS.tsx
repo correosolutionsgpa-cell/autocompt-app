@@ -541,12 +541,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       {kilometrageComputedKm} km
                     </span>
                   </div>
-                  <div className="flex justify-between items-center border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 mt-3">
-                    <span className="text-[7.5px] font-black uppercase italic tracking-widest text-emerald-800/60 dark:text-emerald-500/60">
-                      Montant déductible (0.70$/km)
-                    </span>
-                    <span className="text-sm font-black text-emerald-900 dark:text-emerald-300">
-                      {(kilometrageComputedKm * 0.7).toFixed(2)} $
+                  {/* Pro-rata info — no flat rate */}
+                  <div className="flex items-center gap-2 border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 mt-3">
+                    <span className="text-base">📋</span>
+                    <span className="text-[7.5px] font-black uppercase italic tracking-widest text-emerald-700/70 dark:text-emerald-500/70 leading-snug">
+                      Ces km seront ajoutés à votre compteur de km d'affaires.
+                      La déduction monétaire sera calculée automatiquement
+                      dans Tenue de livres via le système pro‑rata.
                     </span>
                   </div>
                 </div>
@@ -584,11 +585,10 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
 
             {/* ── Live tracking dashboard (shown while tracking) ───────────── */}
             {isTrackingAuto && (
-              <div className={`p-6 rounded-[32px] border space-y-4 animate-in zoom-in-95 duration-300 ${
-                darkMode
+              <div className={`p-6 rounded-[32px] border space-y-4 animate-in zoom-in-95 duration-300 ${darkMode
                   ? "bg-[#059669]/10 border-[#059669]/40"
                   : "bg-emerald-50 border-emerald-200"
-              }`}>
+                }`}>
                 {/* Big odometer */}
                 <div className="text-center">
                   <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">
@@ -646,15 +646,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   <span>Verrouiller position de départ</span>
                 </button>
 
-                <div className={`${
-                  darkMode
+                <div className={`${darkMode
                     ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
                     : "bg-white border-slate-200"
-                } p-5 rounded-3xl border shadow-sm`}>
+                  } p-5 rounded-3xl border shadow-sm`}>
                   <div className="flex items-center space-x-3 mb-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"
-                    }`} />
+                    <div className={`w-2 h-2 rounded-full ${gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"
+                      }`} />
                     <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
                       Statut Télémétrique
                     </p>
@@ -706,20 +704,18 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   setIsTrackingAuto(true);
                 }
               }}
-              className={`w-full p-6 rounded-[32px] border-2 transition-all flex items-center justify-between active:scale-95 ${
-                isTrackingAuto
+              className={`w-full p-6 rounded-[32px] border-2 transition-all flex items-center justify-between active:scale-95 ${isTrackingAuto
                   ? "bg-rose-500/10 border-rose-500 text-rose-500 dark:text-rose-400"
                   : darkMode
                     ? "bg-[#059669]/10 border-[#059669]/50 text-emerald-400"
                     : "bg-slate-900 border-slate-900 text-white"
-              }`}
+                }`}
             >
               <div className="flex items-center space-x-3">
-                <div className={`p-3 rounded-2xl ${
-                  isTrackingAuto
+                <div className={`p-3 rounded-2xl ${isTrackingAuto
                     ? "bg-rose-500/20"
                     : darkMode ? "bg-zinc-900" : "bg-white/10"
-                }`}>
+                  }`}>
                   {isTrackingAuto
                     ? <Square size={20} fill="currentColor" />
                     : <Navigation size={20} />}
@@ -745,25 +741,43 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
 
             {/* ── Inline save form (replaces native prompt()) ──────────────── */}
             {showGpsSaveForm && !isTrackingAuto && (
-              <div className={`p-6 rounded-[28px] border space-y-4 animate-in slide-in-from-bottom duration-300 ${
-                darkMode
+              <div className={`p-6 rounded-[28px] border space-y-4 animate-in slide-in-from-bottom duration-300 ${darkMode
                   ? "bg-slate-900/60 border-white/[0.08] backdrop-blur-md"
                   : "bg-white border-slate-200"
-              }`}>
+                }`}>
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-[#059669] mb-0.5">
                     Confirmer le trajet
                   </p>
-                  <p className={`text-[8px] font-medium ${
-                    darkMode ? "text-zinc-400" : "text-slate-400"
-                  }`}>
+                  <p className={`text-[8px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-400"
+                    }`}>
                     Distance mesurée par le GPS embarqué. Ajustez si nécessaire.
                   </p>
                 </div>
+
+                {/* Business km info pill — replaces flat-rate preview */}
+                {parseFloat(gpsSaveKmInput) > 0 && (
+                  <div className={`flex items-center gap-2.5 p-3 rounded-2xl border ${darkMode
+                      ? "bg-emerald-950/30 border-emerald-900/50"
+                      : "bg-emerald-50 border-emerald-200"
+                    }`}>
+                    <span className="text-base leading-none">📋</span>
+                    <div className="flex-1">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400 mb-0.5">
+                        {parseFloat(gpsSaveKmInput).toFixed(2)} km d'affaires enregistrés
+                      </p>
+                      <p className={`text-[7px] font-medium leading-snug ${darkMode ? "text-zinc-400" : "text-slate-500"
+                        }`}>
+                        La déduction fiscale sera calculée automatiquement
+                        via le pro-rata dans Tenue de livres.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3">
-                  <div className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-2xl border ${
-                    darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"
-                  }`}>
+                  <div className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-2xl border ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"
+                    }`}>
                     <Navigation size={14} className="text-[#059669] shrink-0" />
                     <input
                       type="number"
@@ -771,14 +785,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       step="0.1"
                       value={gpsSaveKmInput}
                       onChange={(e) => setGpsSaveKmInput(e.target.value)}
-                      className={`flex-1 bg-transparent outline-none text-sm font-black tabular-nums ${
-                        darkMode ? "text-zinc-100" : "text-slate-900"
-                      }`}
+                      className={`flex-1 bg-transparent outline-none text-sm font-black tabular-nums ${darkMode ? "text-zinc-100" : "text-slate-900"
+                        }`}
                       placeholder="Distance (km)"
                     />
-                    <span className={`text-[9px] font-black uppercase ${
-                      darkMode ? "text-zinc-500" : "text-slate-400"
-                    }`}>km</span>
+                    <span className={`text-[9px] font-black uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"
+                      }`}>km</span>
                   </div>
                   <button
                     onClick={() => {
@@ -787,11 +799,10 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       setKilometrageComputedKm(0);
                       clearPersistedTrip();
                     }}
-                    className={`px-3 py-3 rounded-2xl border text-[8px] font-black uppercase transition-all ${
-                      darkMode
+                    className={`px-3 py-3 rounded-2xl border text-[8px] font-black uppercase transition-all ${darkMode
                         ? "border-zinc-800 text-zinc-500 hover:text-rose-400"
                         : "border-slate-200 text-slate-400 hover:text-rose-500"
-                    } cursor-pointer`}
+                      } cursor-pointer`}
                   >
                     Annuler
                   </button>
@@ -799,9 +810,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 {/* deductible preview */}
                 {parseFloat(gpsSaveKmInput) > 0 && (
                   <div className="flex justify-between items-center px-1">
-                    <span className={`text-[8px] font-black uppercase tracking-widest ${
-                      darkMode ? "text-zinc-500" : "text-slate-400"
-                    }`}>Montant déductible (0.70$/km)</span>
+                    <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"
+                      }`}>Montant déductible (0.70$/km)</span>
                     <span className="text-sm font-black text-[#059669]">
                       {(parseFloat(gpsSaveKmInput) * 0.70).toFixed(2)} $
                     </span>
@@ -829,7 +839,6 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               }
 
               const fecha = new Date().toISOString().split("T")[0];
-              const tripAmount = kmToSave * 0.7;
 
               // 1. Mettre à jour les logs kilométriques (null-safe)
               const newData = { ...safePartnerData };
@@ -852,47 +861,16 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 setPartnerData(newData);
               }
 
-              // 1b. Sync to vehicleRateService SSOT so the ledger rate auto-updates
+              // 2. Sync to vehicleRateService SSOT so the pro-rata % auto-updates in Tenue de livres.
+              // NOTE: We do NOT inject a monetary expense here.
+              // The deduction is calculated by Tenue de livres via (Business KM / Total KM) * Vehicle Expenses.
               if (primaryVehicle) {
-                // Running odometer = initial + sum of all logged business trips
                 const allLogs = safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
                 const previousBizKM = allLogs.reduce((acc: number, l: any) => acc + (l.distancia ?? 0), 0);
                 const runningOdometer = primaryVehicle.odometreInitial + previousBizKM + kmToSave;
                 recordBusinessTrip(primaryVehicle.id, kmToSave, runningOdometer);
               }
 
-              // 2. Injecter dans les dépenses globales
-              // Compute current vehicle rate for badge stamping on the ledger expense
-              const currentVehicleRate = primaryVehicle ? (() => {
-                try {
-                  const biz = JSON.parse(localStorage.getItem("autocompt_km_business") || "{}");
-                  const cur = JSON.parse(localStorage.getItem("autocompt_km_current")  || "{}");
-                  const bizKM  = (biz[primaryVehicle.id] ?? 0) + kmToSave; // include this trip
-                  const curOdo = cur[primaryVehicle.id]  ?? primaryVehicle.odometreInitial;
-                  const totalKM = curOdo - primaryVehicle.odometreInitial;
-                  return totalKM > 0 ? Math.min(bizKM / totalKM, 1) : 0;
-                } catch { return 0; }
-              })() : 0;
-
-              const newDepense = {
-                id: Date.now() + 1,
-                companyId: activeCompanyId,
-                fecha,
-                fournisseur: "Kilométrage",
-                cat: "Déplacements / Automobile",
-                description: `Trajet déductible (${activeKilometrageTab === "gps" ? "Télémétrie" : "Modélisé"})`,
-                subtotal: tripAmount,
-                tps: 0,
-                tvq: 0,
-                total: tripAmount,
-                lien: null,
-                partnerTag: activeUser,
-                // Vehicle pro-rata badge (read by Tenue de livres UI)
-                vehicleRateApplied: true,
-                ...(currentVehicleRate > 0 ? { tauxApplique: Number((currentVehicleRate * 100).toFixed(1)) } : {}),
-              };
-
-              setDepenses((prev) => [newDepense, ...prev]);
               if (typeof playNotificationSound === "function") {
                 playNotificationSound();
               }
@@ -908,9 +886,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               }
               if (typeof setDispatcherSuccessToast === "function") {
                 setDispatcherSuccessToast({
-                  text: "Synchronisation Réussie",
-                  channel: "Registre Unifié",
-                  customMessage: `Un trajet de ${kmToSave} km a été ajouté à votre livre de bord déductible.`,
+                  text: "Km d'affaires enregistrés",
+                  channel: "Journal kilométrique",
+                  customMessage: `${kmToSave} km ajoutés à votre compteur d'affaires. Le taux pro-rata se met à jour automatiquement dans Tenue de livres.`,
                 });
               }
             }}
