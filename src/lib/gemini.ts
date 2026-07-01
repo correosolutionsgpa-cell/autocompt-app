@@ -81,36 +81,61 @@ Output: valid JSON only. Data values in French (Quebec).`;
   );
   console.log("[gemini.ts] normalisedMime:", normalisedMime);
 
-  try {
-    const response = await ai.models.generateContent({
-      // Use the stable REST alias — bare 'gemini-1.5-flash' returns 404 on v1beta.
-      model: "gemini-1.5-flash-latest",
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: cleanBase64,
-              // Pass the normalised MIME type so PDFs are sent as application/pdf
-              // and handled by Gemini's Document Understanding pipeline.
-              mimeType: normalisedMime,
-            },
-          },
-          { text: "Extract the accounting data from this document following the schema." },
-        ],
-      },
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: EXTRACTION_SCHEMA as any,
-      },
-    });
+  // Model fallback chain — no -latest suffixes (they 404 on v1beta).
+  // Each entry is tried in order; on a 404 / model-not-found error we move to the next.
+  const MODEL_CHAIN = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro",
+  ] as const;
 
-    console.log("[gemini.ts] Raw API response text:", response.text?.slice(0, 200));
-    const result = JSON.parse(response.text || "{}");
-    console.log("[gemini.ts] Parsed result:", result);
-    return result as ExtractionResult;
-  } catch (error: any) {
-    console.error("[gemini.ts] Extraction failed:", error?.message ?? error);
-    throw new Error(`Failed to extract data: ${error?.message || "unknown error"}. Ensure the image is clear and VITE_GEMINI_API_KEY is valid.`);
+  const contents = {
+    parts: [
+      {
+        inlineData: {
+          data: cleanBase64,
+          // Pass the normalised MIME type so PDFs use Gemini's Document Understanding pipeline.
+          mimeType: normalisedMime,
+        },
+      },
+      { text: "Extract the accounting data from this document following the schema." },
+    ],
+  };
+
+  const config = {
+    systemInstruction,
+    responseMimeType: "application/json",
+    responseSchema: EXTRACTION_SCHEMA as any,
+  };
+
+  let lastError: any;
+
+  for (const model of MODEL_CHAIN) {
+    try {
+      console.log(`[gemini.ts] Trying model: ${model}`);
+      const response = await ai.models.generateContent({ model, contents, config });
+      console.log(`[gemini.ts] Success with model: ${model}`);
+      console.log("[gemini.ts] Raw API response text:", response.text?.slice(0, 200));
+      const result = JSON.parse(response.text || "{}");
+      console.log("[gemini.ts] Parsed result:", result);
+      return result as ExtractionResult;
+    } catch (err: any) {
+      lastError = err;
+      const msg: string = err?.message ?? String(err);
+      // Only continue to fallback if this looks like a model-not-found / unavailable error.
+      const isModelError =
+        msg.includes("404") ||
+        msg.toLowerCase().includes("not found") ||
+        msg.toLowerCase().includes("not supported") ||
+        msg.toLowerCase().includes("deprecated");
+      console.warn(`[gemini.ts] Model ${model} failed (${msg.slice(0, 120)}). ${isModelError ? "Trying next model..." : "Non-model error — aborting chain."}`);
+      if (!isModelError) break; // Don't retry on auth errors, quota errors, etc.
+    }
   }
+
+  console.error("[gemini.ts] All models in chain failed. Last error:", lastError?.message ?? lastError);
+  throw new Error(
+    `Failed to extract data: ${lastError?.message || "unknown error"}. ` +
+    `Ensure the image is clear and VITE_GEMINI_API_KEY is valid.`
+  );
 }
