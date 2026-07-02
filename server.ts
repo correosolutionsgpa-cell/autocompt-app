@@ -407,8 +407,23 @@ JSON schema to return:
     try {
       const { base64Data, mimeType, filename } = req.body;
       const apiKey = process.env.GEMINI_API_KEY ?? "";
+
+      // Shape returned by this endpoint — mirrors the Gemini prompt's JSON exactly.
+      const emptyResult = () => ({
+        adresse_propriete: "",
+        adresse_proprietaire: "",
+        proprietaires: [] as string[],
+        est_proprietaire_occupant: false,
+        nombre_unites_total: 0,
+        unites_identifiees: [] as string[],
+        superficie_totale_pi2: 0,
+        valeur_terrain: 0,
+        valeur_batiment: 0,
+        numero_lot: "",
+      });
+
       if (!apiKey || !base64Data) {
-        return res.status(200).json({ superficie_totale: 0, superficie_personnelle: 0 });
+        return res.status(200).json(emptyResult());
       }
 
       // safeInt: converts any value (number, string, null) to a rounded integer ≥ 0
@@ -421,31 +436,38 @@ JSON schema to return:
         return isFinite(n) && n > 0 ? Math.round(n) : 0;
       };
 
+      // safeStr: converts any value to a trimmed string, defaulting to "".
+      const safeStr = (val: any): string => (val == null ? "" : String(val).trim());
+
+      // safeStrArray: converts any value to a string[], filtering out empties.
+      const safeStrArray = (val: any): string[] =>
+        Array.isArray(val) ? val.map((v) => safeStr(v)).filter((v) => v.length > 0) : [];
+
       const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
-      const prompt = `Tu es un expert en fiscalité immobilière québécoise spécialisé dans la lecture de documents officiels.
-Analyse ce document (acte notarié, compte de taxes, évaluation municipale, certificat de localisation ou plan d'architecte).
-L'objectif est de trouver la superficie bâtie ou habitable de la propriété.
+      const prompt = `Tu es un expert en fiscalité immobilière québécoise spécialisé dans la lecture de rôles d'évaluation foncière et comptes de taxes.
+Analyse ce document pour extraire TOUTES les données nécessaires à la création d'une fiche immobilière complète et de son dossier comptable (Tenue de livres).
 
 RÈGLES OBLIGATOIRES — applique-les dans cet ordre exact :
 
-1. UNITÉS : Si la superficie est exprimée en mètres carrés (m², mètre carré, mètres 2, mètres²), tu DOIS la convertir en pieds carrés en multipliant par 10.764. Ne retourne JAMAIS une valeur en m².
+1. UNITÉS DE SURFACE : Si l'aire d'étages ou la superficie du bâtiment est exprimée en mètres carrés (m², mètres 2), tu DOIS la convertir en pieds carrés en multipliant par 10.764. Ne retourne JAMAIS une valeur en m².
+2. VIRGULE DÉCIMALE QUÉBÉCOISE : "402,100" = 402.1. "1 200,50" = 1200.5. Ne confonds pas la virgule avec un séparateur de milliers anglophone.
+3. PROPRIÉTAIRE OCCUPANT : Compare l'Adresse de l'unité d'évaluation (propriété) avec l'Adresse postale du propriétaire. Si elles sont identiques (ou partagent le même numéro principal), attribue true à "est_proprietaire_occupant". Sinon, false.
+4. UNITÉS ET PORTES : Trouve le "Nombre de logements" (ex: 3). Liste les numéros de portes/adresses explicitement visibles dans le document (ex: ["1841", "1843"]). S'il manque des portes par rapport au nombre total, le système s'en chargera plus tard.
+5. VALEURS FINANCIÈRES : Extrais les valeurs exactes en nombres entiers pour le terrain et le bâtiment. Retire les espaces et les signes $.
 
-2. VIRGULE DÉCIMALE QUÉBÉCOISE : Dans les documents du Québec, la virgule (,) est le séparateur décimal. Exemples de lecture obligatoire :
-   - "402,100 mètres 2"  →  402.1 m²  ×  10.764  =  4 328 pi²
-   - "1 200,50 mètres 2" →  1200.5 m²  ×  10.764  =  12 921 pi²
-   - "85,30 m²"          →  85.3 m²   ×  10.764  =  918 pi²
-   NE confonds PAS la virgule décimale avec un séparateur de milliers anglophone.
-
-3. PIEDS CARRÉS DIRECTS : Si la valeur est déjà en pieds carrés (pi², sq ft, square feet), utilise-la telle quelle sans conversion.
-
-4. superficie_totale = superficie totale habitable du bâtiment (toutes unités confondues).
-5. superficie_personnelle = superficie de l'unité occupée personnellement par le propriétaire.
-   → S'il s'agit d'une évaluation municipale pour une seule propriété, utilise la même valeur pour les deux champs.
-
-6. Retourne STRICTEMENT ce JSON (entiers arrondis, JAMAIS de décimales, pas de markdown, pas d'explication) :
-{ "superficie_totale": <integer>, "superficie_personnelle": <integer> }
-
-IMPORTANT : Tu ne peux PAS retourner null. Si tu ne trouves pas de valeur, retourne 0.`;
+Retourne STRICTEMENT ce JSON (entiers arrondis, JAMAIS de décimales, pas de markdown, pas d'explication) :
+{
+  "adresse_propriete": "string",
+  "adresse_proprietaire": "string",
+  "proprietaires": ["string"],
+  "est_proprietaire_occupant": boolean,
+  "nombre_unites_total": integer,
+  "unites_identifiees": ["string"],
+  "superficie_totale_pi2": integer,
+  "valeur_terrain": integer,
+  "valeur_batiment": integer,
+  "numero_lot": "string"
+}`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -465,18 +487,37 @@ IMPORTANT : Tu ne peux PAS retourner null. Si tu ne trouves pas de valeur, retou
         parsed = JSON.parse(raw);
       } catch {
         console.error("[S.O.F.I. Dimensions] ❌ JSON.parse failed on:", JSON.stringify(raw.slice(0, 200)));
-        return res.json({ superficie_totale: 0, superficie_personnelle: 0 });
+        return res.json(emptyResult());
       }
 
       const safeResult = {
-        superficie_totale: safeInt(parsed.superficie_totale),
-        superficie_personnelle: safeInt(parsed.superficie_personnelle),
+        adresse_propriete: safeStr(parsed.adresse_propriete),
+        adresse_proprietaire: safeStr(parsed.adresse_proprietaire),
+        proprietaires: safeStrArray(parsed.proprietaires),
+        est_proprietaire_occupant: parsed.est_proprietaire_occupant === true || parsed.est_proprietaire_occupant === "true",
+        nombre_unites_total: safeInt(parsed.nombre_unites_total),
+        unites_identifiees: safeStrArray(parsed.unites_identifiees),
+        superficie_totale_pi2: safeInt(parsed.superficie_totale_pi2),
+        valeur_terrain: safeInt(parsed.valeur_terrain),
+        valeur_batiment: safeInt(parsed.valeur_batiment),
+        numero_lot: safeStr(parsed.numero_lot),
       };
       console.log("[S.O.F.I. Dimensions] ✅ Safe result:", safeResult);
       return res.json(safeResult);
     } catch (e: any) {
       console.error("[S.O.F.I. Dimensions] Error:", e);
-      return res.json({ superficie_totale: 0, superficie_personnelle: 0 });
+      return res.json({
+        adresse_propriete: "",
+        adresse_proprietaire: "",
+        proprietaires: [],
+        est_proprietaire_occupant: false,
+        nombre_unites_total: 0,
+        unites_identifiees: [],
+        superficie_totale_pi2: 0,
+        valeur_terrain: 0,
+        valeur_batiment: 0,
+        numero_lot: "",
+      });
     }
   });
 

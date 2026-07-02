@@ -68,6 +68,11 @@ export interface BuildingLedger {
   ledgerId: string;
   ownerId: string;
   createdAt: string;
+  /** Fields below are populated from the S.O.F.I. rôle-foncier scanner, when available */
+  numeroLot?: string;
+  valeurTerrain?: number;
+  valeurBatiment?: number;
+  superficieTotalePi2?: number;
 }
 
 // ── PropertyDoc — Firestore `properties` collection ──────────────────────────

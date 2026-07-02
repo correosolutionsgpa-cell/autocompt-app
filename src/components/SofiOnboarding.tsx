@@ -12,6 +12,7 @@ import { SofiAvatarSVG } from "./SofiAvatarSVG";
 import { SofiPresence } from "./SofiPresence";
 import { useFiscal, BuildingLedger, CoOwner } from "../lib/FiscalContext";
 import { auth } from "../lib/firebase";
+import { dataService } from "../lib/dataService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,19 @@ export type OnboardingProfile =
 export interface CoOwnerEntry {
   name: string;
   percentage: string; // kept as string for input binding; validated at submit
+}
+
+/** Editable review state shown after a rôle-foncier scan, before anything is saved. */
+export interface TaxScanReview {
+  adresse: string;
+  doors: string[];
+  superficieTotale: string;
+  superficiePersonnelle: string;
+  numeroLot: string;
+  valeurTerrain: string;
+  valeurBatiment: string;
+  addressMismatch: boolean;
+  mismatchAcknowledged: boolean;
 }
 
 export type OnboardingAnswers = Record<string, string | string[] | CoOwnerEntry[]>;
@@ -488,7 +502,7 @@ export default function SofiOnboarding({
   // ── S.O.F.I. AI Tax Dimension Scanner state ────────────────────────────────
   const [taxScanLoading, setTaxScanLoading] = useState(false);
   const [taxScanError, setTaxScanError]     = useState<string | null>(null);
-  const [taxScanSuccess, setTaxScanSuccess] = useState(false);
+  const [taxScanReview, setTaxScanReview]   = useState<TaxScanReview | null>(null);
   const taxScanFileRef = useRef<HTMLInputElement>(null);
 
   // ── Derived — filter questions by showWhen ────────────────────────────────
@@ -620,10 +634,12 @@ export default function SofiOnboarding({
   };
 
   // ── S.O.F.I. AI Tax Dimension Scanner handler ─────────────────────────────
+  // Never auto-saves: the extraction always lands in `taxScanReview` (editable),
+  // and only the explicit "Confirmer" button in the review card persists it.
   const handleTaxDimensionScan = async (file: File) => {
     setTaxScanLoading(true);
     setTaxScanError(null);
-    setTaxScanSuccess(false);
+    setTaxScanReview(null);
     try {
       // Convert the uploaded document to base64 for Gemini Vision
       const toBase64 = (f: File): Promise<string> =>
@@ -635,10 +651,6 @@ export default function SofiOnboarding({
         });
       const base64 = await toBase64(file);
       const mimeType = file.type || "application/pdf";
-
-      // Gemini 2.0 Flash multimodal call
-      // Uses VITE_GEMINI_API_KEY if configured.
-      const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY?.trim() || "";
 
       // Route ALL Gemini calls through the backend proxy — never call Gemini directly
       // client-side. The VITE_GEMINI_API_KEY in .env.local is a short-lived OAuth token
@@ -671,40 +683,38 @@ export default function SofiOnboarding({
 
       if (parsed.error) throw new Error(parsed.error);
 
-      const totale    = Number(parsed.superficie_totale);
-      const perso     = Number(parsed.superficie_personnelle);
-
-      if (!totale || !perso || totale < 100 || perso < 1) {
-        throw new Error("Les superficies extraites semblent invalides. Veuillez saisir manuellement.");
+      // Reconcile detected doors against the declared unit count — pad with
+      // editable placeholders when the document names fewer doors than it counts.
+      const nbUnites: number = Number(parsed.nombre_unites_total) || 0;
+      const doors: string[] = Array.isArray(parsed.unites_identifiees) ? [...parsed.unites_identifiees] : [];
+      while (doors.length < nbUnites) {
+        doors.push(
+          lang === "FR" ? `Porte ${doors.length + 1}` : lang === "EN" ? `Door ${doors.length + 1}` : `Puerta ${doors.length + 1}`
+        );
       }
 
-      // ① Save the extracted dimensions into onboardingAnswers
-      const updated: OnboardingAnswers = {
-        ...onboardingAnswers,
-        superficie_totale:     String(totale),
-        superficie_personnelle: String(perso),
-        // ② Auto-select "Par superficie" for calcul_portion_personnelle
-        calcul_portion_personnelle: "superficie",
-      };
-      setOnboardingAnswers(updated);
-      setTaxScanSuccess(true);
-      playStepChime();
+      const superficieTotalePi2: number = Number(parsed.superficie_totale_pi2) || 0;
+      const doorCountForSplit = doors.length || nbUnites || 1;
+      const superficiePersonnelleEstimee = superficieTotalePi2 > 0
+        ? Math.round(superficieTotalePi2 / doorCountForSplit)
+        : 0;
 
-      // ③ Auto-advance to the next screen after a brief success moment
-      setTimeout(() => {
-        // Recompute filtered questions with updated answers to find correct next index
-        const allQs = selectedProfile ? QUESTIONS[selectedProfile] : [];
-        const filteredQs = allQs.filter((q) => {
-          if (!q.showWhen) return true;
-          return updated[q.showWhen.questionId] === q.showWhen.value;
-        });
-        if (currentQuestionIndex < filteredQs.length - 1) {
-          setCurrentQuestionIndex((i) => i + 1);
-        } else {
-          setStep("summary");
-        }
-        setTaxScanLoading(false);
-      }, 1200);
+      const addressMismatch =
+        onboardingAnswers["proprietaire_occupant"] === "oui" && parsed.est_proprietaire_occupant === false;
+
+      setTaxScanReview({
+        adresse: String(parsed.adresse_propriete || ""),
+        doors,
+        superficieTotale: superficieTotalePi2 > 0 ? String(superficieTotalePi2) : "",
+        superficiePersonnelle: superficiePersonnelleEstimee > 0 ? String(superficiePersonnelleEstimee) : "",
+        numeroLot: String(parsed.numero_lot || ""),
+        valeurTerrain: parsed.valeur_terrain ? String(parsed.valeur_terrain) : "",
+        valeurBatiment: parsed.valeur_batiment ? String(parsed.valeur_batiment) : "",
+        addressMismatch,
+        mismatchAcknowledged: false,
+      });
+      playStepChime();
+      setTaxScanLoading(false);
     } catch (err: any) {
       console.error("Tax Dimension Scan Error:", err);
       setTaxScanError(
@@ -713,6 +723,43 @@ export default function SofiOnboarding({
                         `Escaneo fallido: ${err.message}`
       );
       setTaxScanLoading(false);
+    }
+  };
+
+  // ── Confirms the reviewed scan data and advances the onboarding flow ──────
+  const handleConfirmTaxScanReview = () => {
+    if (!taxScanReview) return;
+    const updated: OnboardingAnswers = {
+      ...onboardingAnswers,
+      superficie_totale: taxScanReview.superficieTotale,
+      superficie_personnelle: taxScanReview.superficiePersonnelle,
+      adresse_propriete: taxScanReview.adresse,
+      unites_identifiees: taxScanReview.doors,
+      calcul_portion_personnelle: "superficie",
+      ...(taxScanReview.numeroLot ? { numero_lot: taxScanReview.numeroLot } : {}),
+      ...(taxScanReview.valeurTerrain ? { valeur_terrain: taxScanReview.valeurTerrain } : {}),
+      ...(taxScanReview.valeurBatiment ? { valeur_batiment: taxScanReview.valeurBatiment } : {}),
+    };
+    setOnboardingAnswers(updated);
+    setTaxScanReview(null);
+    playStepChime();
+
+    // Recompute filtered questions with updated answers, then skip past any question
+    // the confirmed scan already answered (e.g. the manual superficie_totale/
+    // superficie_personnelle fallback questions) instead of asking for it twice.
+    const allQs = selectedProfile ? QUESTIONS[selectedProfile] : [];
+    const filteredQs = allQs.filter((q) => {
+      if (!q.showWhen) return true;
+      return updated[q.showWhen.questionId] === q.showWhen.value;
+    });
+    let nextIdx = currentQuestionIndex + 1;
+    while (nextIdx < filteredQs.length && updated[filteredQs[nextIdx].id] !== undefined) {
+      nextIdx++;
+    }
+    if (nextIdx < filteredQs.length) {
+      setCurrentQuestionIndex(nextIdx);
+    } else {
+      setStep("summary");
     }
   };
 
@@ -757,11 +804,21 @@ export default function SofiOnboarding({
           }))
         : [];
 
+      // Scanned rôle-foncier data (if the user confirmed a scan) applies only to the
+      // first building — that's the one the residence question chain was about.
+      const scannedAddress       = String(onboardingAnswers["adresse_propriete"] ?? "");
+      const scannedNumeroLot     = String(onboardingAnswers["numero_lot"] ?? "");
+      const scannedValeurTerrain = String(onboardingAnswers["valeur_terrain"] ?? "");
+      const scannedValeurBatiment = String(onboardingAnswers["valeur_batiment"] ?? "");
+      const scannedDoors = Array.isArray(onboardingAnswers["unites_identifiees"])
+        ? (onboardingAnswers["unites_identifiees"] as string[])
+        : [];
+
       for (let i = 0; i < n; i++) {
         const isFirstOccupied = i === 0 && isOccupant;
         const ledger: BuildingLedger = {
           id:            `onboarding_building_${Date.now()}_${i}`,
-          address:       "",
+          address:       i === 0 ? scannedAddress : "",
           type:          isFirstOccupied ? "owner_occupied" : "full_rental",
           occupancyPct:  isFirstOccupied ? occupancyPct  : 0,
           deductiblePct: isFirstOccupied ? deductiblePct : 100,
@@ -770,8 +827,31 @@ export default function SofiOnboarding({
           // Required by BuildingLedger interface (dataService.ts §1)
           ownerId:       auth.currentUser?.uid ?? "",
           createdAt:     new Date().toISOString(),
+          // Firestore rejects `undefined` field values — only spread these keys when populated.
+          ...(i === 0 && scannedNumeroLot     ? { numeroLot: scannedNumeroLot } : {}),
+          ...(i === 0 && scannedValeurTerrain ? { valeurTerrain: Number(scannedValeurTerrain) } : {}),
+          ...(i === 0 && scannedValeurBatiment ? { valeurBatiment: Number(scannedValeurBatiment) } : {}),
+          ...(i === 0 && onboardingAnswers["superficie_totale"] ? { superficieTotalePi2: Number(onboardingAnswers["superficie_totale"]) } : {}),
         };
         upsertBuilding(ledger);
+
+        // Seed empty UnitDoc placeholders for the scanned doors of the residence building,
+        // so the gestion-immobiliaire module already shows every door once the user opens it.
+        if (i === 0 && scannedDoors.length > 0) {
+          const userId = auth.currentUser?.uid ?? "";
+          if (userId) {
+            scannedDoors.forEach((doorName, doorIdx) => {
+              dataService.saveUnit(userId, {
+                id: `onboarding_unit_${Date.now()}_${doorIdx}`,
+                buildingId: ledger.id,
+                unitName: doorName,
+                tenantName: "",
+                monthlyRent: 0,
+                isActive: true,
+              }).catch((e) => console.error("[Onboarding] saveUnit failed:", e));
+            });
+          }
+        }
       }
 
     }
@@ -1004,18 +1084,8 @@ export default function SofiOnboarding({
                             : "Suba su escritura, evaluación municipal o plano — S.O.F.I. extrae las superficies automáticamente."}
                         </p>
 
-                        {/* Success state */}
-                        {taxScanSuccess && (
-                          <div className={`mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${
-                            darkMode ? "text-emerald-400" : "text-emerald-700"
-                          }`}>
-                            <CheckCircle2 size={13} />
-                            {lang === "FR" ? "Dimensions extraites — passage automatique" : lang === "EN" ? "Dimensions extracted — advancing" : "Dimensiones extraídas — avanzando"}
-                          </div>
-                        )}
-
                         {/* Error state */}
-                        {taxScanError && !taxScanSuccess && (
+                        {taxScanError && (
                           <div className={`mt-2 flex items-start gap-2 text-[10px] font-semibold leading-snug ${
                             darkMode ? "text-rose-400" : "text-rose-600"
                           }`}>
@@ -1024,8 +1094,8 @@ export default function SofiOnboarding({
                           </div>
                         )}
 
-                        {/* Upload / scan button */}
-                        {!taxScanSuccess && (
+                        {/* Upload / scan button — hidden while a review is pending confirmation */}
+                        {!taxScanReview && (
                           <button
                             onClick={() => {
                               setTaxScanError(null);
@@ -1060,6 +1130,164 @@ export default function SofiOnboarding({
                             e.target.value = "";
                           }}
                         />
+
+                        {/* ── Review & confirm card — nothing is saved until "Confirmer" ── */}
+                        {taxScanReview && (
+                          <div className={`mt-3 space-y-3 rounded-xl border p-3 ${
+                            darkMode ? "bg-black/20 border-emerald-500/20" : "bg-white/70 border-emerald-300/50"
+                          }`}>
+                            {/* Detected address */}
+                            {taxScanReview.adresse && (
+                              <p className={`text-[11px] font-semibold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                                {lang === "FR" ? "Adresse détectée : " : lang === "EN" ? "Detected address: " : "Dirección detectada: "}
+                                <span className="font-black">{taxScanReview.adresse}</span>
+                              </p>
+                            )}
+
+                            {/* Missing-superficie notice (informational, not blocking) */}
+                            {!taxScanReview.superficieTotale && (
+                              <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug rounded-lg p-2 ${
+                                darkMode ? "bg-amber-950/30 text-amber-300 border border-amber-500/25" : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}>
+                                <Info size={12} className="mt-0.5 shrink-0" />
+                                <span>
+                                  {lang === "FR"
+                                    ? "Nous n'avons pas trouvé la superficie dans ce document — vous pouvez la saisir ci-dessous."
+                                    : lang === "EN"
+                                    ? "We couldn't find the square footage in this document — you can enter it below."
+                                    : "No encontramos la superficie en este documento — puedes ingresarla abajo."}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Address mismatch — floating warning requiring explicit acknowledgment */}
+                            {taxScanReview.addressMismatch && (
+                              <div className={`space-y-2 rounded-lg p-2 border ${
+                                darkMode ? "bg-rose-950/30 border-rose-500/30" : "bg-rose-50 border-rose-200"
+                              }`}>
+                                <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug ${darkMode ? "text-rose-300" : "text-rose-700"}`}>
+                                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                                  <span>
+                                    {lang === "FR"
+                                      ? "L'adresse postale du propriétaire ne correspond pas à l'adresse de la propriété. Confirmez-vous que vous y habitez ?"
+                                      : lang === "EN"
+                                      ? "The owner's mailing address doesn't match the property address. Do you confirm you live there?"
+                                      : "La dirección postal del propietario no coincide con la dirección de la propiedad. ¿Confirmas que vives ahí?"}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, mismatchAcknowledged: true } : prev)}
+                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
+                                      taxScanReview.mismatchAcknowledged
+                                        ? darkMode ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-emerald-100 border-emerald-400 text-emerald-700"
+                                        : darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {lang === "FR" ? "Oui, je confirme" : lang === "EN" ? "Yes, I confirm" : "Sí, confirmo"}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setTaxScanReview(null);
+                                      const backIdx = questions.findIndex((q) => q.id === "proprietaire_occupant");
+                                      if (backIdx >= 0) setCurrentQuestionIndex(backIdx);
+                                    }}
+                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
+                                      darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {lang === "FR" ? "Corriger ma réponse" : lang === "EN" ? "Fix my answer" : "Corregir mi respuesta"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editable door list */}
+                            <div className="space-y-1.5">
+                              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                {lang === "FR" ? "Portes détectées" : lang === "EN" ? "Detected doors" : "Puertas detectadas"}
+                              </p>
+                              {taxScanReview.doors.map((door, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={door}
+                                    onChange={(e) => setTaxScanReview((prev) => {
+                                      if (!prev) return prev;
+                                      const doors = [...prev.doors]; doors[idx] = e.target.value;
+                                      return { ...prev, doors };
+                                    })}
+                                    className={`flex-1 min-w-0 px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[11px] font-semibold ${
+                                      darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                    }`}
+                                  />
+                                  <button
+                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: prev.doors.filter((_, i) => i !== idx) } : prev)}
+                                    className="text-rose-400 hover:text-rose-300 shrink-0 cursor-pointer transition-colors"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                              <button
+                                onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: [...prev.doors, ""] } : prev)}
+                                className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors ${
+                                  darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"
+                                }`}
+                              >
+                                <Plus size={11} /> {lang === "FR" ? "Ajouter une porte" : lang === "EN" ? "Add a door" : "Agregar una puerta"}
+                              </button>
+                            </div>
+
+                            {/* Editable superficie inputs */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                  {lang === "FR" ? "Superficie totale (pi²)" : lang === "EN" ? "Total sq ft" : "Superficie total (pi²)"}
+                                </label>
+                                <input
+                                  type="number"
+                                  value={taxScanReview.superficieTotale}
+                                  onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, superficieTotale: e.target.value } : prev)}
+                                  className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
+                                    darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                  }`}
+                                />
+                              </div>
+                              <div>
+                                <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                  {lang === "FR" ? "Votre unité (pi², estimé)" : lang === "EN" ? "Your unit (sq ft, estimated)" : "Tu unidad (pi², estimado)"}
+                                </label>
+                                <input
+                                  type="number"
+                                  value={taxScanReview.superficiePersonnelle}
+                                  onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, superficiePersonnelle: e.target.value } : prev)}
+                                  className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
+                                    darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                  }`}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Confirm button — disabled until superficies are filled and any mismatch acknowledged */}
+                            <button
+                              onClick={handleConfirmTaxScanReview}
+                              disabled={
+                                !taxScanReview.superficieTotale.trim() ||
+                                !taxScanReview.superficiePersonnelle.trim() ||
+                                (taxScanReview.addressMismatch && !taxScanReview.mismatchAcknowledged)
+                              }
+                              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
+                                taxScanReview.superficieTotale.trim() && taxScanReview.superficiePersonnelle.trim() && (!taxScanReview.addressMismatch || taxScanReview.mismatchAcknowledged)
+                                  ? darkMode ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30" : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
+                                  : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
+                              }`}
+                            >
+                              <CheckCircle2 size={13} />
+                              {lang === "FR" ? "Confirmer" : lang === "EN" ? "Confirm" : "Confirmar"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
