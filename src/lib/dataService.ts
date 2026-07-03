@@ -887,7 +887,16 @@ export const dataService = {
     return { valid: true };
   },
 
-  /** Marks the code as redeemed and returns the trial window it grants. Caller must already be signed in as the code's email. */
+  /**
+   * Marks the code as redeemed and stamps the trial window onto `users/{uid}`.
+   * Caller must already be signed in as the code's email.
+   *
+   * Uses `setDoc(..., { merge: true })` on the user doc rather than plain
+   * `setDoc` — this runs concurrently with the `users/{uid}` profile-creation
+   * write in App.tsx's onAuthStateChanged (both fire right after
+   * createUserWithEmailAndPassword resolves), so whichever write lands second
+   * must not blow away the other's fields.
+   */
   async redeemBetaCode(code: string, uid: string): Promise<{ trialStartDate: string; trialValidDays: number }> {
     const normalizedCode = code.trim().toUpperCase();
     const codeRef = doc(db, 'betaCodes', normalizedCode);
@@ -900,10 +909,15 @@ export const dataService = {
       redeemedAt: trialStartDate,
       redeemedByUid: uid,
     });
+    await setDoc(doc(db, 'users', uid), {
+      betaCodeRedeemed: normalizedCode,
+      trialStartDate,
+      trialValidDays: data.validDays,
+    }, { merge: true });
     return { trialStartDate, trialValidDays: data.validDays };
   },
 
-  /** Lists every generated code — for the admin "Codes Beta" tab. Superadmin-only (enforced by firestore.rules on writes; reads use `get`, so this relies on the caller already being trusted). */
+  /** Lists every generated code — for the admin "Codes Beta" tab. Enforced superadmin-only by firestore.rules' `allow list`. */
   async fetchBetaCodes(): Promise<BetaCodeDoc[]> {
     const snap = await getDocs(collection(db, 'betaCodes'));
     return snap.docs.map((d) => d.data() as BetaCodeDoc);

@@ -131,9 +131,10 @@ import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
 import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
 import ReceiptPreviewModal from "./components/modals/ReceiptPreviewModal";
 import CorporatifModal from "./components/modals/CorporatifModal";
+import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, type UnitDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc } from "./lib/dataService";
 import { useToast } from "./lib/ToastContext";
 import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
@@ -1338,51 +1339,6 @@ const App = () => {
     return selectedTier as any;
   };
 
-  // --- ANTI-FRAUDE TRIAL_USED SYSTEM ---
-  const [trialStartDate, setTrialStartDate] = useState<string>(() => {
-    const saved = localStorage.getItem("Trial_Start_Date");
-    if (saved) return saved;
-    const currentIso = new Date().toISOString().split("T")[0];
-    localStorage.setItem("Trial_Start_Date", currentIso);
-    return currentIso;
-  });
-
-  const getTrialDaysLeft = () => {
-    const start = new Date(trialStartDate).getTime();
-    const now = new Date().getTime();
-    const diffTime = now - start;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const limit = selectedTier === "gratuit" ? 60 : 90;
-    return Math.max(0, limit - diffDays);
-  };
-
-  const isTrialUsed = (email: string, companyName: string): boolean => {
-    const adminEmail = email.toLowerCase().trim();
-    if (
-      adminEmail === "correo.solutionsgpa@gmail.com" ||
-      adminEmail === "solutionsgpa@gmail.com" ||
-      adminEmail.startsWith("fabiola") ||
-      adminEmail.includes("solutionsgpa") ||
-      adminEmail.endsWith("@autocompt.ca") ||     // ← info@, fabiola@, doculegal@autocompt.ca
-      activeCompanyId === "1"
-    ) {
-      return false; // SuperAdmin bypass
-    }
-    const emailKey = `Trial_Used_${adminEmail}`;
-    const companyKey = `Trial_Used_${companyName.toLowerCase().trim()}`;
-    return (
-      localStorage.getItem(emailKey) === "true" ||
-      localStorage.getItem(companyKey) === "true"
-    );
-  };
-
-  const markTrialAsUsed = (email: string, companyName: string) => {
-    const emailKey = `Trial_Used_${email.toLowerCase().trim()}`;
-    const companyKey = `Trial_Used_${companyName.toLowerCase().trim()}`;
-    localStorage.setItem(emailKey, "true");
-    localStorage.setItem(companyKey, "true");
-  };
-
   // --- COMPTABLE RAPPORT STATES ---
   const [comptablesConfig, setComptablesConfig] = useState<
     Record<
@@ -1481,6 +1437,12 @@ const App = () => {
       }, 50);
     }
   }, [vista]);
+
+  useEffect(() => {
+    if (vista === "superadmin_panel" && !isSuperAdmin) {
+      setVista("dashboard");
+    }
+  }, [vista, isSuperAdmin]);
 
   useEffect(() => {
     if (vista === "doculegal") {
@@ -2461,6 +2423,11 @@ const App = () => {
 
   // --- SESSION LOGIN CONTROLS ---
   const [loginEmail, setLoginEmail] = useState("");
+  // Beta access code — only required/checked when creating a brand-new account.
+  const [loginCode, setLoginCode] = useState("");
+  // --- BETA TRIAL STATUS (computed once per session in onAuthStateChanged) ---
+  const [trialStatus, setTrialStatus] = useState<{ expired: boolean; daysLeft: number } | null>(null);
+  const [trialModalDismissed, setTrialModalDismissed] = useState(false);
 
   // --- RECEIPT PREVIEW CONTROLS ---
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(
@@ -3510,7 +3477,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         if (saved.id && saved.id !== item.id) {
           _setDepenses(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to save expense:", err);
         // The item is only in local state at this point — it looked "saved" in the
         // UI but never reached Firestore. Roll it back and tell the user, instead
@@ -3520,10 +3487,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
           ? current.filter(c => c.id !== item.id)
           : current.map(c => c.id === item.id ? prev.find(p => p.id === item.id) : c)
         );
+        const isTrialExpiredError = err?.message === "TRIAL_EXPIRED";
         setDispatcherSuccessToast({
           text: "Erreur de sauvegarde ⚠️",
           channel: "Tenue de Livres",
-          customMessage: `« ${item.fournisseur || item.description || "Cette entrée"} » n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.`,
+          customMessage: isTrialExpiredError
+            ? `Votre période d'essai est terminée — « ${item.fournisseur || item.description || "cette entrée"} » n'a pas été enregistrée. Répondez au questionnaire pour un mois gratuit additionnel : ${TRIAL_EXTENSION_FORM_URL}`
+            : `« ${item.fournisseur || item.description || "Cette entrée"} » n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.`,
         });
         playErrorSound();
       }
@@ -7027,17 +6997,45 @@ Ceci est un message automatisé généré par AutoCompt.`;
           const userDocRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
-            role = userDoc.data().role || "admin";
+            const userData = userDoc.data();
+            role = userData.role || "admin";
             setUserRole(role);
-            setUserLevel(userDoc.data().level || "Gestion Immobilière");
+            setUserLevel(userData.level || "Gestion Immobilière");
+
+            // Beta trial status — same founder allowlist as getEffectiveTier().
+            const userEmail = (user.email ?? "").toLowerCase().trim();
+            const isFounder =
+              userEmail === "correo.solutionsgpa@gmail.com" ||
+              userEmail === "solutionsgpa@gmail.com" ||
+              userEmail.startsWith("fabiola") ||
+              userEmail.includes("solutionsgpa") ||
+              userEmail.endsWith("@autocompt.ca");
+            if (isFounder || !userData.trialStartDate) {
+              // Founder accounts, or accounts predating this feature — never blocked.
+              setTrialExpired(false);
+              setTrialStatus(null);
+            } else {
+              const validDays = userData.trialValidDays ?? 30;
+              const daysElapsed = (Date.now() - new Date(userData.trialStartDate).getTime()) / 86400000;
+              const expired = daysElapsed > validDays;
+              setTrialExpired(expired);
+              setTrialStatus({ expired, daysLeft: Math.max(0, Math.ceil(validDays - daysElapsed)) });
+            }
           } else {
+            // merge: true — this can race with redeemBetaCode's write to the same
+            // doc (both fire right after createUserWithEmailAndPassword resolves);
+            // neither write should stomp the other's fields.
             await setDoc(userDocRef, {
               email: user.email,
               role: "admin",
               level: "Gestion Immobilière",
               createdAt: new Date().toISOString()
-            });
+            }, { merge: true });
             setUserRole("admin");
+            // Brand-new account — trial fields are being written concurrently by
+            // redeemBetaCode; never block on this very first load.
+            setTrialExpired(false);
+            setTrialStatus(null);
           }
 
           // Fetch user's dynamic workspace list
@@ -7082,6 +7080,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
         }
       } else {
         setCurrentUserEmail(null);
+        setTrialExpired(false);
+        setTrialStatus(null);
         setVista((prev) => (prev === "splash" || prev === "welcome" || prev === "login" || prev === "benefits") ? prev : "welcome");
         setIsLoadingData(false);
       }
@@ -9047,8 +9047,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
       </div>
     );
   }
+  if (vista === "superadmin_panel") {
+    return (
+      <SuperAdminPanel
+        darkMode={darkMode}
+        onBack={() => setVista("dashboard")}
+        adminName="Fabiola Beatriz"
+        adminEmail={currentUserEmail ?? ""}
+      />
+    );
+  }
   if (vista === "login") {
-    const handleLoginSubmit = async (emailStr: string) => {
+    const handleLoginSubmit = async (emailStr: string, codeStr?: string) => {
       const email = emailStr.trim().toLowerCase();
       if (!email) {
         alert("Veuillez entrer votre adresse courriel.");
@@ -9061,7 +9071,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
           await signInWithEmailAndPassword(auth, email, "autocompt123");
         } catch (error: any) {
           if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.message.includes('INVALID_LOGIN_CREDENTIALS')) {
-            await createUserWithEmailAndPassword(auth, email, "autocompt123");
+            // Brand-new account — a valid, email-matched beta code is mandatory during this beta.
+            const code = (codeStr ?? loginCode).trim();
+            if (!code) {
+              throw new Error("Un code d'accès bêta est requis pour créer un compte.");
+            }
+            const { valid, reason } = await dataService.validateBetaCode(code, email);
+            if (!valid) {
+              throw new Error(reason ?? "Code d'accès invalide.");
+            }
+            const cred = await createUserWithEmailAndPassword(auth, email, "autocompt123");
+            await dataService.redeemBetaCode(code, cred.user.uid);
           } else {
             throw error;
           }
@@ -9162,9 +9182,31 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 </div>
               </div>
 
+              <div className="space-y-1 text-left">
+                <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                  Code d'accès bêta (nouveau compte seulement)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={loginCode}
+                    onChange={(e) => setLoginCode(e.target.value)}
+                    placeholder="Ex: AC-7F3K9X"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode);
+                    }}
+                    className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm uppercase"
+                  />
+                  <Lock
+                    size={13}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => handleLoginSubmit(loginEmail)}
+                onClick={() => handleLoginSubmit(loginEmail, loginCode)}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer"
               >
                 Se connecter à mon Espace
@@ -9383,6 +9425,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
       <div
         className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
+        <TrialExpiredModal
+          darkMode={darkMode}
+          show={!!trialStatus?.expired && !trialModalDismissed}
+          onClose={() => setTrialModalDismissed(true)}
+        />
         {/* Background gradient blooms for premium look */}
         {darkMode && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
@@ -9418,6 +9465,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
               >
                 <RotateCcw size={10} />
                 <span>Reset</span>
+              </button>
+              <div className="w-px h-4 self-center bg-slate-300 dark:bg-zinc-700"></div>
+              <button
+                onClick={() => setVista("superadmin_panel")}
+                className="px-2 py-1 flex items-center space-x-1 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded transition-colors"
+              >
+                <Shield size={10} />
+                <span>Super Admin</span>
               </button>
             </div>
             {/* Invisible hover area trigger sticking out below */}

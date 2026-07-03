@@ -61,12 +61,13 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
     }
 
-    // Beta access codes — read must work BEFORE the user is authenticated
-    // (redemption is checked during signup), but the collection can never be
-    // listed/enumerated, only fetched by exact code (doc ID).
+    // Beta access codes — `get` must work BEFORE the user is authenticated
+    // (redemption is checked during signup), so it's public by exact code
+    // (doc ID) only. `list` (enumerating every code) is superadmin-only,
+    // used by the admin "Codes Beta" tab.
     match /betaCodes/{code} {
       allow get: if true;
-      allow list: if false;
+      allow list: if isSuperAdmin();
       allow create: if isSuperAdmin();
       allow update: if isSignedIn()
         && resource.data.status == 'unused'

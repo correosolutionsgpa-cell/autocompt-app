@@ -11,6 +11,7 @@ import {
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { dataService, type BetaCodeDoc } from '../lib/dataService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -186,7 +187,11 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola Beatriz', adminEmail = '' }: SuperAdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'codes' | 'settings'>('overview');
+  const [betaCodes, setBetaCodes] = useState<BetaCodeDoc[]>([]);
+  const [loadingCodes, setLoadingCodes] = useState(false);
+  const [newCodeEmail, setNewCodeEmail] = useState('');
+  const [generatingCode, setGeneratingCode] = useState<'trial' | 'extension' | null>(null);
   const [users, setUsers] = useState<AdminUser[]>(SAMPLE_USERS);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,6 +227,23 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     };
     loadUsers();
   }, [refreshTick]);
+
+  // Load beta access codes (only once the tab has been opened — `list` is
+  // superadmin-gated by firestore.rules, cheap to skip until needed).
+  useEffect(() => {
+    if (activeTab !== 'codes') return;
+    const loadCodes = async () => {
+      setLoadingCodes(true);
+      try {
+        setBetaCodes(await dataService.fetchBetaCodes());
+      } catch {
+        // Rules will reject this for non-superadmin accounts — fail silently.
+      } finally {
+        setLoadingCodes(false);
+      }
+    };
+    loadCodes();
+  }, [activeTab, refreshTick]);
 
   const toast = (text: string, type: 'success' | 'error' = 'success') => {
     setNotification({ text, type });
@@ -564,6 +586,93 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     </div>
   );
 
+  // ── Tab: Beta access codes ──────────────────────────────────────────────────
+  const handleGenerateCode = async (kind: 'trial' | 'extension') => {
+    const email = newCodeEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      toast('Entrez une adresse courriel valide.', 'error');
+      return;
+    }
+    setGeneratingCode(kind);
+    try {
+      const code = await dataService.generateBetaCode(email, 30);
+      toast(`Code généré pour ${email} : ${code}`);
+      setNewCodeEmail('');
+      setBetaCodes(await dataService.fetchBetaCodes());
+    } catch (err: any) {
+      toast(`Échec de génération : ${err.message}`, 'error');
+    } finally {
+      setGeneratingCode(null);
+    }
+  };
+
+  const CodesTab = () => (
+    <div className="space-y-6">
+      <div className={card}>
+        <h3 className={`text-[10px] font-black uppercase tracking-widest mb-5 ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+          🎟️ Générer un code d'accès bêta
+        </h3>
+        <p className={`text-[10px] mb-4 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
+          Chaque code est valide 30 jours, à usage unique, et associé à une seule adresse courriel — le client doit l'entrer avant de pouvoir créer son compte.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="email"
+            value={newCodeEmail}
+            onChange={(e) => setNewCodeEmail(e.target.value)}
+            placeholder="client@exemple.com"
+            className={`flex-1 px-4 py-3 rounded-2xl text-[11px] font-semibold border outline-none focus:ring-1 focus:ring-emerald-500 ${
+              D ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
+          />
+          <button
+            onClick={() => handleGenerateCode('trial')}
+            disabled={generatingCode !== null}
+            className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap"
+          >
+            {generatingCode === 'trial' ? 'Génération…' : 'Code 30 jours'}
+          </button>
+          <button
+            onClick={() => handleGenerateCode('extension')}
+            disabled={generatingCode !== null}
+            className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap border ${
+              D ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            } disabled:opacity-50`}
+          >
+            {generatingCode === 'extension' ? 'Génération…' : "Code d'extension"}
+          </button>
+        </div>
+      </div>
+
+      <div className={card}>
+        <h3 className={`text-[10px] font-black uppercase tracking-widest mb-5 ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+          Codes déjà générés {loadingCodes && '· chargement…'}
+        </h3>
+        {betaCodes.length === 0 ? (
+          <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>Aucun code généré pour l'instant.</p>
+        ) : (
+          <div className="space-y-2">
+            {betaCodes.map((c) => (
+              <div key={c.code} className={`flex items-center gap-4 p-3.5 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[12px] font-black tracking-widest ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{c.code}</p>
+                  <p className={`text-[10px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{c.email} · {c.validDays} jours</p>
+                </div>
+                <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                  c.status === 'redeemed'
+                    ? (D ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+                    : (D ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700')
+                }`}>
+                  {c.status === 'redeemed' ? 'Utilisé' : 'Disponible'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // ── User detail modal ───────────────────────────────────────────────────────
   const UserModal = () => {
     if (!selectedUser) return null;
@@ -634,6 +743,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     { id: 'users',     label: 'Utilisateurs',    icon: <Users size={14} /> },
     { id: 'billing',   label: 'Facturation',      icon: <DollarSign size={14} /> },
     { id: 'doculegal', label: 'DocuLegal',        icon: <FileText size={14} /> },
+    { id: 'codes',     label: 'Codes Bêta',       icon: <Sparkles size={14} /> },
   ] as const;
 
   return (
@@ -709,6 +819,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
             {activeTab === 'users'     && <UsersTab />}
             {activeTab === 'billing'   && <BillingTab />}
             {activeTab === 'doculegal' && <DocuLegalTab />}
+            {activeTab === 'codes'     && <CodesTab />}
           </motion.div>
         </AnimatePresence>
       </main>
