@@ -1257,11 +1257,8 @@ const App = () => {
   const [tabReporte, setTabReporte] = useState("ventes");
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
 
-  useEffect(() => {
-    dataService.fetchJournalEntries()
-      .then(data => setJournalEntries(data))
-      .catch(err => console.error("Failed to load journal entries", err));
-  }, []);
+  // Journal entries are loaded per-user inside the onAuthStateChanged handler below
+  // (fetchJournalEntries now requires a userId and must not fire before auth resolves).
   const [expandedGavetas, setExpandedGavetas] = useState<
     Record<string, boolean>
   >({});
@@ -3527,6 +3524,19 @@ Ceci est un message automatisé généré par AutoCompt.`;
         }
       } catch (err) {
         console.error("Failed to save expense:", err);
+        // The item is only in local state at this point — it looked "saved" in the
+        // UI but never reached Firestore. Roll it back and tell the user, instead
+        // of silently losing it on the next reload.
+        const wasNew = !prev.some(p => p.id === item.id);
+        _setDepenses(current => wasNew
+          ? current.filter(c => c.id !== item.id)
+          : current.map(c => c.id === item.id ? prev.find(p => p.id === item.id) : c)
+        );
+        setDispatcherSuccessToast({
+          text: "Erreur de sauvegarde ⚠️",
+          channel: "Tenue de Livres",
+          customMessage: `« ${item.fournisseur || item.description || "Cette entrée"} » n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.`,
+        });
       }
     }
   };
@@ -6388,52 +6398,6 @@ Ceci est un message automatisé généré par AutoCompt.`;
     setPendingScanTempId(null);
   };
 
-  const handleSimulateScan = () => {
-    const mockExpense = {
-      id: Date.now(),
-      companyId: activeCompanyId,
-      fecha: new Date().toISOString().split("T")[0],
-      fournisseur: "Home Depot (Simulé)",
-      cat: "Réparations / Entretien",
-      partnerTag: activeUser,
-      subtotal: 0,
-      tps: 0,
-      tvq: 0,
-      total: 0,
-      lien: "https://drive.google.com/active_company_storage/simulation_vault/home_depot_invoice.jpg",
-      refacturableTriplex: activeCompanyId === "3",
-      status: "En attente",
-      déjàFacturé: false,
-    };
-
-    // Auto-insert row into bookkeeping expenses state
-    setDepenses((prev) => {
-      const updated = [mockExpense, ...prev];
-      console.log(
-        "AutoCompt Simulate Scan -> global state updated with row:",
-        mockExpense,
-      );
-      return updated;
-    });
-
-    // Pop custom visual toast notification as requested
-    setDispatcherSuccessToast({
-      text: "Facture traitée et ajoutée",
-      channel: "IA Scanner",
-      customMessage:
-        "Facture de Home Depot (Simulé) ajoutée — montants à valider dans le Tableau d'Audit.",
-      actionText: "Voir dans le registre",
-      onAction: () => {
-        setVista("reportes");
-        setTabReporte("taxes");
-      }
-    });
-
-    if (typeof playNotificationSound === "function") {
-      playNotificationSound();
-    }
-  };
-
   const handleSaveTrip = () => {
     const kmStr = prompt("Distance parcourue pour ce trajet (km)?", "10");
     if (!kmStr) return;
@@ -7074,6 +7038,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // Fetch tenants/loyers
           const loyers = await dataService.fetchLoyers(user.uid);
           setPlexLoyers(loyers);
+
+          // Fetch double-entry journal (accounting ledger)
+          const entries = await dataService.fetchJournalEntries(user.uid);
+          setJournalEntries(entries);
 
           setSetupComplet(true);
           setIsForfaitSelected(true);

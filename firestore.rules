@@ -32,5 +32,26 @@ service cloud.firestore {
     match /maintenance_components/{componentId} {
       allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
     }
+
+    match /buildings/{buildingId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    match /units/{unitId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    match /journalEntries/{entryId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    match /journalLines/{lineId} {
+      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    // Default deny — any collection not explicitly matched above is inaccessible.
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

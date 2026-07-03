@@ -619,6 +619,7 @@ export const dataService = {
       description: `Income: Rent collection from ${data.locataire || 'Unknown'} - Unit: ${data.uniteAdresse || 'Unknown'}`,
       documentReference: docId,
       createdAt: data.createdAt,
+      ownerId: userId,
     };
 
     const totalAmount = data.loyer || 0;
@@ -630,6 +631,7 @@ export const dataService = {
         accountId: "acc-bank", // Debiting Bank (Asset increase)
         type: 'Debit',
         amount: totalAmount,
+        ownerId: userId,
       },
       {
         id: `${docId}-credit`,
@@ -637,6 +639,7 @@ export const dataService = {
         accountId: "acc-revenue", // Crediting Revenue (Income increase)
         type: 'Credit',
         amount: totalAmount,
+        ownerId: userId,
       }
     ];
 
@@ -704,6 +707,7 @@ export const dataService = {
       description: `Expense: ${data.fournisseur || 'Unknown'} - ${data.cat || 'General'}`,
       documentReference: id,
       createdAt: data.createdAt,
+      ownerId: userId,
     };
 
     const totalAmount = data.total || 0;
@@ -715,6 +719,7 @@ export const dataService = {
         accountId: "acc-expense", // Debiting expense account
         type: 'Debit',
         amount: totalAmount,
+        ownerId: userId,
       },
       {
         id: `${id}-credit`,
@@ -722,6 +727,7 @@ export const dataService = {
         accountId: "acc-bank", // Crediting bank account
         type: 'Credit',
         amount: totalAmount,
+        ownerId: userId,
       }
     ];
 
@@ -789,27 +795,28 @@ export const dataService = {
 
   // ── General Ledger ──────────────────────────────────────────────────────────
 
-  async fetchJournalEntries() {
+  async fetchJournalEntries(userId: string) {
     try {
-      const entriesQuery = query(collection(db, 'journalEntries'), orderBy('date', 'desc'));
-      const entriesSnap = await getDocs(entriesQuery);
-      
-      const combinedEntries = await Promise.all(entriesSnap.docs.map(async (docSnap) => {
-        const entryData = docSnap.data();
-        const entryId = docSnap.id;
-        
-        const linesQuery = query(collection(db, 'journalLines'), where('journalEntryId', '==', entryId));
-        const linesSnap = await getDocs(linesQuery);
-        const linesData = linesSnap.docs.map(lineDoc => lineDoc.data());
-        
-        return {
-          ...entryData,
-          id: entryId,
-          lines: linesData
-        };
+      const entriesQuery = query(collection(db, 'journalEntries'), where('ownerId', '==', userId), orderBy('date', 'desc'));
+      const linesQuery = query(collection(db, 'journalLines'), where('ownerId', '==', userId));
+
+      // Two queries total (not one-per-entry): fetch every entry and every line
+      // for this user in parallel, then group lines by journalEntryId in memory.
+      const [entriesSnap, linesSnap] = await Promise.all([getDocs(entriesQuery), getDocs(linesQuery)]);
+
+      const linesByEntryId = new Map<string, any[]>();
+      linesSnap.docs.forEach((lineDoc) => {
+        const line = lineDoc.data();
+        const key = line.journalEntryId;
+        if (!linesByEntryId.has(key)) linesByEntryId.set(key, []);
+        linesByEntryId.get(key)!.push(line);
+      });
+
+      return entriesSnap.docs.map((docSnap) => ({
+        ...docSnap.data(),
+        id: docSnap.id,
+        lines: linesByEntryId.get(docSnap.id) ?? [],
       }));
-      
-      return combinedEntries;
     } catch (error) {
       console.error("Error fetching journal entries:", error);
       throw error;
