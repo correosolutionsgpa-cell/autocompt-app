@@ -134,6 +134,7 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService, type UnitDoc } from "./lib/dataService";
+import { useToast } from "./lib/ToastContext";
 import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -1465,13 +1466,9 @@ const App = () => {
 
   const [showRapportDispatcherModal, setShowRapportDispatcherModal] =
     useState(false);
-  const [dispatcherSuccessToast, setDispatcherSuccessToast] = useState<{
-    text: string;
-    channel: string;
-    customMessage?: string;
-    actionText?: string;
-    onAction?: () => void;
-  } | null>(null);
+  // Lives in ToastContext (mounted above <App /> in main.tsx) so it's visible
+  // regardless of which `vista` is active — see GlobalToastHost.
+  const { dispatcherSuccessToast, setDispatcherSuccessToast } = useToast();
   const [isTransmittingChannel, setIsTransmittingChannel] = useState<
     string | null
   >(null);
@@ -1484,15 +1481,6 @@ const App = () => {
       }, 50);
     }
   }, [vista]);
-
-  useEffect(() => {
-    if (dispatcherSuccessToast) {
-      const timer = setTimeout(() => {
-        setDispatcherSuccessToast(null);
-      }, 4500);
-      return () => clearTimeout(timer);
-    }
-  }, [dispatcherSuccessToast]);
 
   useEffect(() => {
     if (vista === "doculegal") {
@@ -3537,6 +3525,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           channel: "Tenue de Livres",
           customMessage: `« ${item.fournisseur || item.description || "Cette entrée"} » n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.`,
         });
+        playErrorSound();
       }
     }
   };
@@ -3587,6 +3576,41 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {
+      console.warn("Audio context not allowed yet or error:", e);
+    }
+  };
+
+  // Distinct descending tone for failures — deliberately not the same chime as
+  // playNotificationSound, so an error doesn't sound like a success confirmation.
+  const playErrorSound = () => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(330, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        220,
+        audioCtx.currentTime + 0.28,
+      );
+
+      gainNode.gain.setValueAtTime(0.09, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioCtx.currentTime + 0.32,
+      );
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.32);
     } catch (e) {
       console.warn("Audio context not allowed yet or error:", e);
     }
@@ -18124,7 +18148,6 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setShowPreview={setShowPreview}
         setReceiptPreviewUrl={setReceiptPreviewUrl}
         setReceiptPreviewName={setReceiptPreviewName}
-        dispatcherSuccessToast={dispatcherSuccessToast}
         setDispatcherSuccessToast={setDispatcherSuccessToast}
         validateDeposit={validateDeposit}
         playNotificationSound={playNotificationSound}

@@ -367,6 +367,34 @@ export const defaultLoyersSeed: LoyerDoc[] = [
   { id: 'loyer_2', uniteAdresse: 'Appt 2 (Étage) - 123 Rue Principale', locataire: 'Marie Dubois',  loyer: 950,  statut: 'En retard', ownerId: '', createdAt: '' },
 ];
 
+// ── BetaCodeDoc — Firestore `betaCodes` collection ───────────────────────────
+
+/**
+ * One beta access code. Doc ID === `code`. Tied to a single email and
+ * single-use — see firestore.rules for the enforcement of both.
+ */
+export interface BetaCodeDoc {
+  code: string;
+  email: string;
+  status: 'unused' | 'redeemed';
+  validDays: number;
+  createdAt: string;
+  createdBy: string;
+  redeemedAt?: string;
+  redeemedByUid?: string;
+}
+
+// ── Trial write-gate ──────────────────────────────────────────────────────────
+// Set once per session by App.tsx after reading the user's trial status —
+// avoids an extra Firestore read on every single save call.
+let trialExpired = false;
+export function setTrialExpired(expired: boolean): void {
+  trialExpired = expired;
+}
+function assertCanWrite(): void {
+  if (trialExpired) throw new Error('TRIAL_EXPIRED');
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §3 — DATA SERVICE
 // ══════════════════════════════════════════════════════════════════════════════
@@ -444,6 +472,7 @@ export const dataService = {
    * Computes `deductiblePct` automatically before writing.
    */
   async saveBuilding(userId: string, building: Omit<BuildingLedger, 'ownerId' | 'createdAt'>): Promise<BuildingLedger> {
+    assertCanWrite();
     const docId = `${userId}_building_${building.id}`;
     const now = new Date().toISOString();
     const data: BuildingLedger = {
@@ -505,6 +534,7 @@ export const dataService = {
   },
 
   async saveProperty(userId: string, propertyData: Omit<PropertyDoc, 'ownerId' | 'createdAt'>): Promise<PropertyDoc> {
+    assertCanWrite();
     const originalId = propertyData.id || `prop_${Date.now()}`;
     const docId = `${userId}_prop_${originalId}`;
     const data: PropertyDoc = {
@@ -531,6 +561,7 @@ export const dataService = {
    * Upsert a single unit (porte) document.
    */
   async saveUnit(userId: string, unit: Omit<UnitDoc, 'ownerId' | 'createdAt'>): Promise<UnitDoc> {
+    assertCanWrite();
     const originalId = unit.id || `unit_${Date.now()}`;
     const docId = `${userId}_unit_${originalId}`;
     const data: UnitDoc = {
@@ -609,6 +640,7 @@ export const dataService = {
   },
 
   async saveLoyer(userId: string, loyerData: Partial<LoyerDoc> & { id?: string }): Promise<LoyerDoc> {
+    assertCanWrite();
     const originalId = loyerData.id || `loyer_${Date.now()}`;
     const docId = `${userId}_loyer_${originalId}`;
     const data = { ...loyerData, id: docId, ownerId: userId, createdAt: loyerData.createdAt || new Date().toISOString() };
@@ -687,6 +719,7 @@ export const dataService = {
   },
 
   async saveExpense(userId: string, expenseData: Partial<ExpenseDoc> & { companyId: string }): Promise<ExpenseDoc> {
+    assertCanWrite();
     const originalCompanyId = expenseData.companyId;
     const docCompanyId = `${userId}_company_${originalCompanyId}`;
     const data = {
@@ -821,5 +854,58 @@ export const dataService = {
       console.error("Error fetching journal entries:", error);
       throw error;
     }
+  },
+
+  // ── Beta Access Codes ────────────────────────────────────────────────────────
+
+  /** Generates a single-use, email-bound beta access code. Superadmin-only (enforced by firestore.rules). */
+  async generateBetaCode(email: string, validDays = 30): Promise<string> {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids ambiguous codes
+    let suffix = '';
+    for (let i = 0; i < 6; i++) suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    const code = `AC-${suffix}`;
+    const data: BetaCodeDoc = {
+      code,
+      email: email.trim().toLowerCase(),
+      status: 'unused',
+      validDays,
+      createdAt: new Date().toISOString(),
+      createdBy: auth.currentUser?.email ?? '',
+    };
+    await setDoc(doc(db, 'betaCodes', code), data);
+    return code;
+  },
+
+  /** Checks a code exists, is unused, and belongs to this email — before account creation. */
+  async validateBetaCode(code: string, email: string): Promise<{ valid: boolean; reason?: string }> {
+    const normalizedCode = code.trim().toUpperCase();
+    const snap = await getDoc(doc(db, 'betaCodes', normalizedCode));
+    if (!snap.exists()) return { valid: false, reason: 'Code introuvable.' };
+    const data = snap.data() as BetaCodeDoc;
+    if (data.status !== 'unused') return { valid: false, reason: 'Ce code a déjà été utilisé.' };
+    if (data.email !== email.trim().toLowerCase()) return { valid: false, reason: "Ce code n'est pas associé à cette adresse courriel." };
+    return { valid: true };
+  },
+
+  /** Marks the code as redeemed and returns the trial window it grants. Caller must already be signed in as the code's email. */
+  async redeemBetaCode(code: string, uid: string): Promise<{ trialStartDate: string; trialValidDays: number }> {
+    const normalizedCode = code.trim().toUpperCase();
+    const codeRef = doc(db, 'betaCodes', normalizedCode);
+    const snap = await getDoc(codeRef);
+    if (!snap.exists()) throw new Error('Code introuvable.');
+    const data = snap.data() as BetaCodeDoc;
+    const trialStartDate = new Date().toISOString();
+    await updateDoc(codeRef, {
+      status: 'redeemed',
+      redeemedAt: trialStartDate,
+      redeemedByUid: uid,
+    });
+    return { trialStartDate, trialValidDays: data.validDays };
+  },
+
+  /** Lists every generated code — for the admin "Codes Beta" tab. Superadmin-only (enforced by firestore.rules on writes; reads use `get`, so this relies on the caller already being trusted). */
+  async fetchBetaCodes(): Promise<BetaCodeDoc[]> {
+    const snap = await getDocs(collection(db, 'betaCodes'));
+    return snap.docs.map((d) => d.data() as BetaCodeDoc);
   },
 };

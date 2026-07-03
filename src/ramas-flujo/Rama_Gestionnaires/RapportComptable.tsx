@@ -183,8 +183,8 @@ export interface RapportComptableProps {
   setReceiptPreviewUrl: (val: string | null) => void;
   setReceiptPreviewName: (val: string) => void;
 
-  // Toast système
-  dispatcherSuccessToast: any;
+  // Toast système — le rendu global vit dans GlobalToastHost (main.tsx);
+  // ce composant a seulement besoin du setter pour déclencher un toast.
   setDispatcherSuccessToast: (val: any) => void;
 
   // Fonctions utilitaires App
@@ -286,7 +286,6 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
   setShowPreview,
   setReceiptPreviewUrl,
   setReceiptPreviewName,
-  dispatcherSuccessToast,
   setDispatcherSuccessToast,
   validateDeposit,
   playNotificationSound,
@@ -1849,74 +1848,9 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
           )}
         </AnimatePresence>
 
-        {/* TRANSIENT DYNAMIC TRACEABILITY TOAST */}
-        <AnimatePresence>
-          {dispatcherSuccessToast && (
-            <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 50, scale: 0.95 }}
-              className="fixed bottom-6 right-6 z-[200] max-w-sm"
-            >
-              <div
-                className={`p-4 rounded-[22px] border shadow-2xl flex items-center space-x-3.5 ${darkMode
-                    ? "bg-zinc-950 border-emerald-950/45 text-white shadow-emerald-950/25"
-                    : "bg-[#FAF9F6] border-emerald-200 text-slate-805 shadow-emerald-950/10"
-                  }`}
-              >
-                <div className="p-2.5 bg-emerald-500/15 rounded-xl text-emerald-500 shrink-0">
-                  {dispatcherSuccessToast.channel === "Par Email" ? (
-                    <Mail size={16} />
-                  ) : dispatcherSuccessToast.channel === "Par WhatsApp" ? (
-                    <MessageSquare size={16} />
-                  ) : (
-                    <Folder size={16} />
-                  )}
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <span className="block text-[8px] font-black uppercase italic tracking-widest text-[#059669] leading-none">
-                    {dispatcherSuccessToast.customMessage
-                      ? "IA Document Scanner"
-                      : "Trazabilidad de Envío"}
-                  </span>
-                  <p className="text-[10px] font-bold mt-1.5 leading-relaxed tracking-tight text-slate-700 dark:text-zinc-200">
-                    {dispatcherSuccessToast.customMessage ? (
-                      dispatcherSuccessToast.customMessage
-                    ) : (
-                      <>
-                        Reporte del periodo{" "}
-                        <span className="font-extrabold italic text-[#059669]">
-                          {selectedRapportPeriod}
-                        </span>{" "}
-                        enviado exitosamente a través de{" "}
-                        <span className="font-black italic text-teal-500 dark:text-teal-400">
-                          {dispatcherSuccessToast.channel}
-                        </span>
-                      </>
-                    )}
-                  </p>
-                  {dispatcherSuccessToast.actionText && dispatcherSuccessToast.onAction && (
-                    <button
-                      onClick={() => {
-                        dispatcherSuccessToast.onAction!();
-                        setDispatcherSuccessToast(null);
-                      }}
-                      className="mt-2 text-[9px] font-black uppercase italic underline text-[#059669] hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
-                    >
-                      {dispatcherSuccessToast.actionText}
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={() => setDispatcherSuccessToast(null)}
-                  className="p-1 hover:bg-slate-200 dark:hover:bg-zinc-850 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer shrink-0"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Le rendu de ce toast vit maintenant dans GlobalToastHost (main.tsx),
+            visible peu importe le `vista` actif — voir setDispatcherSuccessToast
+            ci-dessus pour les déclencheurs (Email/WhatsApp/Drive). */}
       </div>
     );
 };

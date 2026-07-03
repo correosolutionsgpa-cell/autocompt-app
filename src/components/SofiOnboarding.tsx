@@ -1063,11 +1063,19 @@ export default function SofiOnboarding({
                     <div className="absolute top-[-20px] right-[-20px] w-24 h-24 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
 
                     <div className="flex items-start gap-3">
-                      <div className={`p-2.5 rounded-xl shrink-0 ${
-                        darkMode ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-emerald-100 border border-emerald-200"
-                      }`}>
-                        <Scan size={18} className="text-emerald-400" />
-                      </div>
+                      {taxScanLoading ? (
+                        <img
+                          src="/sofi/sofi Estado de pensando.jpeg"
+                          alt="S.O.F.I. — en train d'analyser le document"
+                          className="w-11 h-11 rounded-xl object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className={`p-2.5 rounded-xl shrink-0 ${
+                          darkMode ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-emerald-100 border border-emerald-200"
+                        }`}>
+                          <Scan size={18} className="text-emerald-400" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className={`text-[11px] font-black uppercase tracking-widest ${
                           darkMode ? "text-emerald-400" : "text-emerald-700"

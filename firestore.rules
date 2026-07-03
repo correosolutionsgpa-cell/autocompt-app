@@ -7,6 +7,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Founder/superadmin allowlist — mirrors the client-side check in
+    // App.tsx's getEffectiveTier().
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'correo.solutionsgpa@gmail.com' ||
+        request.auth.token.email == 'solutionsgpa@gmail.com' ||
+        request.auth.token.email.matches('.*solutionsgpa.*') ||
+        request.auth.token.email.matches('^fabiola.*') ||
+        request.auth.token.email.matches('.*@autocompt[.]ca$')
+      );
+    }
+
     // User profile document rules
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
@@ -47,6 +59,20 @@ service cloud.firestore {
 
     match /journalLines/{lineId} {
       allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    // Beta access codes — read must work BEFORE the user is authenticated
+    // (redemption is checked during signup), but the collection can never be
+    // listed/enumerated, only fetched by exact code (doc ID).
+    match /betaCodes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isSuperAdmin();
+      allow update: if isSignedIn()
+        && resource.data.status == 'unused'
+        && resource.data.email == request.auth.token.email
+        && request.resource.data.status == 'redeemed';
+      allow delete: if isSuperAdmin();
     }
 
     // Default deny — any collection not explicitly matched above is inaccessible.
