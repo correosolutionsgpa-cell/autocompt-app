@@ -32,6 +32,7 @@ interface AdminUser {
   docsSignedCount?: number;
   phone?: string;
   city?: string;
+  createdAt?: string;
 }
 
 interface SuperAdminPanelProps {
@@ -422,18 +423,20 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
             </thead>
             <tbody>
               {filteredUsers.map((u, i) => {
-                const planConf = PLAN_CONFIG[u.plan];
-                const statusConf = STATUS_CONFIG[u.status];
+                const displayName = u.name || u.email || '(sans nom)';
+                const planConf = PLAN_CONFIG[u.plan] || PLAN_CONFIG.beta;
+                const statusConf = STATUS_CONFIG[u.status] || STATUS_CONFIG.trial;
+                const mrr = u.mrr || 0;
                 return (
                   <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                     className={`border-b last:border-0 ${D ? 'border-zinc-800/50 hover:bg-zinc-900/40' : 'border-slate-50 hover:bg-slate-50/80'} transition-colors`}>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-black text-white">{u.name[0]}</span>
+                          <span className="text-[10px] font-black text-white">{displayName[0].toUpperCase()}</span>
                         </div>
                         <div>
-                          <p className={`text-[11px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{u.name}</p>
+                          <p className={`text-[11px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{displayName}</p>
                           <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.email}</p>
                           <p className={`text-[9px] ${u.phone ? (D ? 'text-emerald-500' : 'text-emerald-600') : (D ? 'text-zinc-600' : 'text-slate-300')}`}>
                             {u.phone || 'Téléphone non vérifié'}
@@ -442,7 +445,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className={`text-[11px] font-semibold ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{u.company}</p>
+                      <p className={`text-[11px] font-semibold ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{u.company || '—'}</p>
                       <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.industry}</p>
                     </td>
                     <td className="px-5 py-3.5">
@@ -457,12 +460,14 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                     </td>
                     <td className="px-5 py-3.5">
                       <p className={`text-[10px] font-semibold ${D ? 'text-zinc-400' : 'text-slate-600'}`}>
-                        {new Date(u.since).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {u.since || u.createdAt
+                          ? new Date(u.since || u.createdAt).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '—'}
                       </p>
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className={`text-[11px] font-black ${u.mrr > 0 ? 'text-emerald-600' : (D ? 'text-zinc-600' : 'text-slate-400')}`}>
-                        {u.mrr > 0 ? `${u.mrr} $` : '—'}
+                      <p className={`text-[11px] font-black ${mrr > 0 ? 'text-emerald-600' : (D ? 'text-zinc-600' : 'text-slate-400')}`}>
+                        {mrr > 0 ? `${mrr} $` : '—'}
                       </p>
                     </td>
                     <td className="px-5 py-3.5">
@@ -479,7 +484,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                         </button>
                         <button
                           title="Envoyer email"
-                          onClick={() => { window.open(`mailto:${u.email}?subject=AutoCompt%20—%20Votre%20abonnement&body=Bonjour%20${encodeURIComponent(u.name)},`); }}
+                          onClick={() => { window.open(`mailto:${u.email}?subject=AutoCompt%20—%20Votre%20abonnement&body=Bonjour%20${encodeURIComponent(displayName)},`); }}
                           className={`p-1.5 rounded-lg transition-colors ${D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'}`}>
                           <Mail size={13} />
                         </button>
