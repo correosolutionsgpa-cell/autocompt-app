@@ -137,7 +137,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService, setTrialExpired, type UnitDoc } from "./lib/dataService";
 import { useToast } from "./lib/ToastContext";
 import { auth, db } from "./lib/firebase";
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
@@ -674,6 +674,8 @@ const PolitiqueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           <p>Nous collectons les données que vous saisissez (nom, courriel, adresse, données financières) afin de vous fournir les services de comptabilité automatisée.</p>
           <h3 className="font-bold text-slate-800 dark:text-white mt-4">B. Utilisation et consentement</h3>
           <p>En utilisant nos services, vous consentez à ce que nous traitions vos données pour le maintien de vos dossiers et les communications internes sécurisées. Vos données ne sont jamais vendues à des tiers sans votre accord exprès.</p>
+          <h3 className="font-bold text-slate-800 dark:text-white mt-4">B.1 Numéro de téléphone</h3>
+          <p>Lors de votre première connexion, nous vous demandons de confirmer votre numéro de téléphone mobile par un code envoyé par SMS. Cette information est utilisée exclusivement pour la sécurité et la vérification de votre compte — jamais à des fins de marketing ni transmise à des tiers sans votre consentement exprès, distinct et spécifique.</p>
           <h3 className="font-bold text-slate-800 dark:text-white mt-4">C. Sécurité et hébergement</h3>
           <p>Les données sont chiffrées en transit et au repos, et hébergées sur des serveurs sécurisés au Canada. Nous appliquons les pratiques strictes certifiées par l'industrie.</p>
           <h3 className="font-bold text-slate-800 dark:text-white mt-4">D. Accès, rectification et suppression</h3>
@@ -726,6 +728,15 @@ const App = () => {
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState("admin");
+  // ── Mandatory phone verification (Loi 25 — explicit consent + SMS proof) ──
+  // null = not yet known (auth still resolving), true/false = confirmed from Firestore.
+  const [isPhoneVerified, setIsPhoneVerified] = useState<boolean | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneOtpInput, setPhoneOtpInput] = useState("");
+  const [phoneConsentChecked, setPhoneConsentChecked] = useState(false);
+  const [phoneConfirmationResult, setPhoneConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [phoneVerifyBusy, setPhoneVerifyBusy] = useState(false);
+  const [phoneVerifyError, setPhoneVerifyError] = useState("");
   const [onboardingStatus, setOnboardingStatus] = useState("welcome");
   const [selectedProfile, setSelectedProfile] = useState<string | null>(
     () => localStorage.getItem("autocompt_selected_profile") || null
@@ -1222,7 +1233,8 @@ const App = () => {
         // Other app views
         "plex", "meuble", "incident", "taxes_assurances", "accepter-invitation",
         "preview-email", "setup", "login", "welcome", "benefits",
-        "level_selection", "rental_model", "pricing", "portal", "sofi-onboarding"
+        "level_selection", "rental_model", "pricing", "portal", "sofi-onboarding",
+        "phone-verify", "superadmin_panel"
       ];
       if (!internalViews.includes(vista) && vista !== "splash") {
         setActiveUser("SuperAdmin");
@@ -1246,14 +1258,25 @@ const App = () => {
         const savedLevel = localStorage.getItem("autocompt_user_level");
         const savedProfile = localStorage.getItem("autocompt_selected_profile");
         if (savedProfile && (savedMode === "Syndic" || (savedMode === "Plex" && savedLevel))) {
-          setVista("dashboard");
+          // isPhoneVerified may still be null here if Firestore hasn't resolved
+          // yet — the corrective effect below catches that case once it does.
+          setVista(isPhoneVerified === false ? "phone-verify" : "dashboard");
         } else {
           setVista("sofi-onboarding");
         }
       }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [vista]);
+  }, [vista, isPhoneVerified]);
+
+  // Corrective redirect: if the splash-timer shortcut above already landed on
+  // "dashboard" before Firestore confirmed phone status, bounce to the
+  // mandatory verification screen as soon as we learn it's actually unverified.
+  useEffect(() => {
+    if (isPhoneVerified === false && vista === "dashboard") {
+      setVista("phone-verify");
+    }
+  }, [isPhoneVerified, vista]);
 
   const [subVistaFactura, setSubVistaFactura] = useState("liste");
   const [tabReporte, setTabReporte] = useState("ventes");
@@ -6994,6 +7017,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           // Get or create user profile in Firestore
           let role = "admin";
+          let phoneAlreadyVerified = false;
           const userDocRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -7001,6 +7025,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
             role = userData.role || "admin";
             setUserRole(role);
             setUserLevel(userData.level || "Gestion Immobilière");
+            phoneAlreadyVerified = !!userData.phoneVerified;
+            setIsPhoneVerified(phoneAlreadyVerified);
 
             // Beta trial status — same founder allowlist as getEffectiveTier().
             const userEmail = (user.email ?? "").toLowerCase().trim();
@@ -7036,6 +7062,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             // redeemBetaCode; never block on this very first load.
             setTrialExpired(false);
             setTrialStatus(null);
+            setIsPhoneVerified(false);
           }
 
           // Fetch user's dynamic workspace list
@@ -7067,11 +7094,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           setSetupComplet(true);
           setIsForfaitSelected(true);
-          // Only redirect to dashboard on initial login — preserve active module
-          // navigation if the auth token refreshes silently in the background.
+          // Only redirect on initial login — preserve active module navigation
+          // if the auth token refreshes silently in the background. A phone
+          // number verified via SMS is mandatory before reaching the dashboard.
           setVista((prev) => {
             const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal"];
-            return preAuthScreens.includes(prev) ? "dashboard" : prev;
+            if (!preAuthScreens.includes(prev)) return prev;
+            return phoneAlreadyVerified ? "dashboard" : "phone-verify";
           });
         } catch (err) {
           console.error("Error loading user data from Firestore:", err);
@@ -7082,6 +7111,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         setCurrentUserEmail(null);
         setTrialExpired(false);
         setTrialStatus(null);
+        setIsPhoneVerified(null);
         setVista((prev) => (prev === "splash" || prev === "welcome" || prev === "login" || prev === "benefits") ? prev : "welcome");
         setIsLoadingData(false);
       }
@@ -9057,6 +9087,182 @@ Ceci est un message automatisé généré par AutoCompt.`;
       />
     );
   }
+  if (vista === "phone-verify") {
+    const formatPhoneE164 = (raw: string): string => {
+      const digits = raw.replace(/[^\d+]/g, "");
+      if (digits.startsWith("+")) return digits;
+      if (digits.length === 10) return `+1${digits}`;
+      return `+${digits}`;
+    };
+
+    const handleSendPhoneCode = async () => {
+      setPhoneVerifyError("");
+      if (!phoneConsentChecked) {
+        setPhoneVerifyError("Veuillez accepter l'utilisation de votre numéro pour continuer.");
+        return;
+      }
+      const formatted = formatPhoneE164(phoneInput);
+      if (formatted.length < 8) {
+        setPhoneVerifyError("Veuillez entrer un numéro de téléphone valide.");
+        return;
+      }
+      setPhoneVerifyBusy(true);
+      try {
+        const win = window as any;
+        if (!win.__autocomptRecaptchaVerifier) {
+          win.__autocomptRecaptchaVerifier = new RecaptchaVerifier(auth, "phone-verify-recaptcha", { size: "invisible" });
+        }
+        if (!auth.currentUser) throw new Error("Session expirée — veuillez vous reconnecter.");
+        const confirmation = await linkWithPhoneNumber(auth.currentUser, formatted, win.__autocomptRecaptchaVerifier);
+        setPhoneConfirmationResult(confirmation);
+      } catch (err: any) {
+        if (err?.code === "auth/credential-already-in-use" || err?.code === "auth/phone-number-already-exists") {
+          setPhoneVerifyError("Ce numéro est déjà associé à un autre compte AutoCompt.");
+        } else if (err?.code === "auth/provider-already-linked") {
+          // Already linked from a previous attempt — treat as verified.
+          await setDoc(doc(db, "users", auth.currentUser!.uid), { phoneVerified: true, phoneVerifiedAt: new Date().toISOString() }, { merge: true });
+          setIsPhoneVerified(true);
+          setVista("dashboard");
+        } else if (err?.code === "auth/operation-not-allowed") {
+          setPhoneVerifyError("La vérification par téléphone n'est pas encore activée côté serveur (Firebase Authentication → Sign-in method → Téléphone).");
+        } else {
+          setPhoneVerifyError(err?.message || "Impossible d'envoyer le code. Réessayez.");
+        }
+      } finally {
+        setPhoneVerifyBusy(false);
+      }
+    };
+
+    const handleConfirmPhoneCode = async () => {
+      if (!phoneConfirmationResult) return;
+      setPhoneVerifyError("");
+      setPhoneVerifyBusy(true);
+      try {
+        await phoneConfirmationResult.confirm(phoneOtpInput.trim());
+        await setDoc(
+          doc(db, "users", auth.currentUser!.uid),
+          { phone: formatPhoneE164(phoneInput), phoneVerified: true, phoneVerifiedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        setIsPhoneVerified(true);
+        setVista("dashboard");
+      } catch (err: any) {
+        setPhoneVerifyError("Code invalide ou expiré. Réessayez.");
+      } finally {
+        setPhoneVerifyBusy(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 relative isolate bg-[#FAF9F6]">
+        <div id="phone-verify-recaptcha" />
+        <div className="absolute top-1/4 left-1/4 w-[280px] h-[280px] rounded-full blur-[90px] pointer-events-none select-none bg-emerald-500/10 -z-10" />
+        <div className="flex flex-col items-center space-y-3 text-center mb-8 relative z-10 w-full max-w-md animate-in slide-in-from-bottom-8">
+          <div className="p-4 rounded-[38%] border border-emerald-500/10 shadow-xl text-emerald-600 relative isolate">
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-md rounded-[38%] -z-10" />
+            <Shield size={32} />
+          </div>
+          <h1 className="text-2xl font-extrabold italic tracking-tighter text-slate-900 leading-none">
+            Vérification par SMS
+          </h1>
+          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.2em] font-sans text-center w-full mt-1">
+            Étape obligatoire — Sécurité du compte
+          </p>
+        </div>
+
+        <div className="w-full max-w-md p-6 sm:p-8 rounded-[32px] border border-white/40 shadow-xl relative isolate z-10 space-y-5 text-left animate-in slide-in-from-bottom-8 delay-100 bg-white/90 backdrop-blur-xl">
+          {!phoneConfirmationResult ? (
+            <>
+              <p className="text-[11px] font-medium text-slate-600 leading-relaxed">
+                Pour la sécurité de votre compte, AutoCompt doit confirmer votre numéro de téléphone une seule fois. Vous ne serez plus sollicité par la suite.
+              </p>
+              <div className="space-y-1 text-left">
+                <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                  Numéro de téléphone mobile
+                </label>
+                <input
+                  type="tel"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  placeholder="Ex: 514 555 1234"
+                  className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+                />
+              </div>
+              <label className="flex items-start space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={phoneConsentChecked}
+                  onChange={(e) => setPhoneConsentChecked(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-emerald-500 cursor-pointer"
+                />
+                <span className="text-[9.5px] font-medium text-slate-500 leading-relaxed">
+                  J'accepte que mon numéro de téléphone soit utilisé exclusivement pour la vérification de sécurité de mon compte AutoCompt.
+                </span>
+              </label>
+              {phoneVerifyError && (
+                <p className="text-[9.5px] font-bold text-red-600">{phoneVerifyError}</p>
+              )}
+              <button
+                type="button"
+                disabled={phoneVerifyBusy}
+                onClick={handleSendPhoneCode}
+                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer disabled:opacity-50"
+              >
+                {phoneVerifyBusy ? "Envoi en cours..." : "Envoyer le code"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] font-medium text-slate-600 leading-relaxed">
+                Entrez le code à 6 chiffres envoyé par SMS au {formatPhoneE164(phoneInput)}.
+              </p>
+              <div className="space-y-1 text-left">
+                <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                  Code de vérification
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={phoneOtpInput}
+                  onChange={(e) => setPhoneOtpInput(e.target.value)}
+                  placeholder="123456"
+                  className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm tracking-[0.3em]"
+                />
+              </div>
+              {phoneVerifyError && (
+                <p className="text-[9.5px] font-bold text-red-600">{phoneVerifyError}</p>
+              )}
+              <button
+                type="button"
+                disabled={phoneVerifyBusy}
+                onClick={handleConfirmPhoneCode}
+                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer disabled:opacity-50"
+              >
+                {phoneVerifyBusy ? "Vérification..." : "Confirmer"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPhoneConfirmationResult(null); setPhoneOtpInput(""); setPhoneVerifyError(""); }}
+                className="w-full text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+              >
+                Changer de numéro
+              </button>
+            </>
+          )}
+          <div className="border-t border-slate-100 pt-4 text-center">
+            <button
+              type="button"
+              onClick={() => signOut(auth)}
+              className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+            >
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (vista === "login") {
     const handleLoginSubmit = async (emailStr: string, codeStr?: string) => {
       const email = emailStr.trim().toLowerCase();
@@ -15946,30 +16152,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             ...(activeCompanyId === "1" ? { concilied: newTxData.concilied || false } : {}),
                           };
 
-                          // Instant local UI update
+                          // setDepenses triggers reconcileExpenses, which awaits the
+                          // Firestore write, rolls back on failure, and shows an error
+                          // toast — a second manual saveExpense here would duplicate
+                          // the write as a separate document (dataService.saveExpense
+                          // can't match this numeric id back to an existing doc).
                           setDepenses((prev) => [newTx, ...prev]);
-
-                          // Async Firestore write — fire-and-forget so UI isn't blocked
-                          const userId = auth.currentUser?.uid;
-                          if (userId) {
-                            dataService.saveExpense(userId, {
-                              id: String(expenseId),
-                              companyId: newTx.companyId,
-                              fecha: newTx.fecha,
-                              fournisseur: newTx.fournisseur,
-                              cat: newTx.cat,
-                              subtotal: newTx.subtotal,
-                              tps: newTx.tps,
-                              tvq: newTx.tvq,
-                              total: newTx.total,
-                              lien: null,
-                              partnerTag: newTx.partnerTag,
-                              noReceiptConfirmed: newTx.noReceiptConfirmed,
-                              ...(newTx.unitId ? { unitId: newTx.unitId, buildingId: newTx.buildingId } : {}),
-                            }).catch((e: unknown) =>
-                              console.error("[saveExpense] Firestore write failed — kept in local state:", e)
-                            );
-                          }
                         }
 
                         setShowAddTxModal(false);

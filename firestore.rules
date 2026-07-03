@@ -21,7 +21,8 @@ service cloud.firestore {
 
     // User profile document rules
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // General collection rules with multi-tenant isolation by ownerId

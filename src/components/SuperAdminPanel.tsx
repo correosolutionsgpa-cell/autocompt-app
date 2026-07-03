@@ -435,6 +435,9 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                         <div>
                           <p className={`text-[11px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{u.name}</p>
                           <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.email}</p>
+                          <p className={`text-[9px] ${u.phone ? (D ? 'text-emerald-500' : 'text-emerald-600') : (D ? 'text-zinc-600' : 'text-slate-300')}`}>
+                            {u.phone || 'Téléphone non vérifié'}
+                          </p>
                         </div>
                       </div>
                     </td>
