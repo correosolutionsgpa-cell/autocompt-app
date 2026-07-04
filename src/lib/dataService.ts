@@ -478,11 +478,14 @@ export const dataService = {
   },
 
   async saveWorkspace(userId: string, workspaceData: any): Promise<any> {
+    assertCanWrite();
     const originalId = workspaceData.id || `company_${Date.now()}`;
     const docId = `${userId}_company_${originalId}`;
     const data = { ...workspaceData, id: docId, ownerId: userId, createdAt: workspaceData.createdAt || new Date().toISOString() };
-    await setDoc(doc(db, 'companies', docId), data);
-    return { id: originalId, ...data };
+    // merge: true — callers often save a single changed field (e.g. partnerData)
+    // without the full company object; a plain setDoc would wipe everything else.
+    await setDoc(doc(db, 'companies', docId), data, { merge: true });
+    return { ...data, id: originalId };
   },
 
   // ── Buildings — Firestore `buildings` collection ───────────────────────────

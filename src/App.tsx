@@ -1495,7 +1495,7 @@ const App = () => {
       setPartners(empresa.partners || []);
       setIndustry(empresa.industry || "Immobilier");
       setLegalEntity(empresa.legalEntity);
-      setPartnerData(empresa.partnerData || {});
+      _setPartnerData(empresa.partnerData || {});
       setUserProfile(empresa.userProfile || {});
       setSelectedRapportProfile(empresa.nombre);
       setPropertyType(empresa.propertyType || "Triplex");
@@ -5047,7 +5047,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
     { companyId: "3", desc: "Loyer Unité 2", amt: 1100.0, date: "2026-05-01" },
   ]);
 
-  const [partnerData, setPartnerData] = useState<any>({
+  const [partnerData, _setPartnerData] = useState<any>({
     Fabiola: {
       homeOffice: {
         aireTotale: 1000,
@@ -5080,6 +5080,23 @@ Ceci est un message automatisé généré par AutoCompt.`;
       paradas: [""],
     },
   });
+  // Wrapped setter — persists GPS mileage logs and Bureau à Domicile settings
+  // to the company document in Firestore (as `partnerData`), instead of only
+  // living in local state. Loading partnerData FROM an already-fetched company
+  // (see the `empresa` sync effect above) uses the raw `_setPartnerData` so we
+  // don't immediately re-save data we just read.
+  const setPartnerData = (value: any | ((prev: any) => any)) => {
+    _setPartnerData((prev: any) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      const userId = auth.currentUser?.uid;
+      if (userId && activeCompanyId) {
+        dataService
+          .saveWorkspace(userId, { ...currentCompany, id: activeCompanyId, partnerData: next })
+          .catch((err: any) => console.error("Failed to save partnerData:", err));
+      }
+      return next;
+    });
+  };
 
   const [favorisAccounts, setFavorisAccounts] = useState<string[]>([]);
 
@@ -18541,6 +18558,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setDarkMode={setDarkMode}
         userProfile={userProfile}
         setUserProfile={setUserProfile}
+        partnerData={partnerData}
+        setPartnerData={setPartnerData}
         adminName={adminName}
         setAdminName={setAdminName}
         adminRole={adminRole}

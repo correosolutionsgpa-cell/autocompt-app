@@ -50,6 +50,10 @@ export interface SettingsViewProps {
   userProfile: any;
   setUserProfile: (fn: any | ((prev: any) => any)) => void;
 
+  // Véhicules enregistrés (persisté dans Firestore via partnerData/setPartnerData)
+  partnerData: any;
+  setPartnerData: (fn: any | ((prev: any) => any)) => void;
+
   // Profil administrateur
   adminName: string;
   setAdminName: (val: string) => void;
@@ -104,6 +108,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   setDarkMode,
   userProfile,
   setUserProfile,
+  partnerData,
+  setPartnerData,
   adminName,
   setAdminName,
   adminRole,
@@ -124,11 +130,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   setVista,
   WorkspaceSidebar,
 }) => {
-  // ── Registre Véhicules — état local persisté dans localStorage ───────────
-  const [vehicles, setVehicles] = useState<RegisteredVehicle[]>(() => {
+  // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
+  // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
+  // uniquement pour lire d'anciennes données locales lors de la migration ponctuelle
+  // ci-dessous, si jamais un utilisateur avait déjà des véhicules enregistrés.)
+  const vehicles: RegisteredVehicle[] = partnerData?.vehicles ?? (() => {
     try { return JSON.parse(localStorage.getItem(VEHICLES_STORAGE_KEY) || "[]"); }
     catch { return []; }
-  });
+  })();
   const [vehMarque, setVehMarque] = useState("");
   const [vehModele, setVehModele] = useState("");
   const [vehAnnee, setVehAnnee] = useState("");
@@ -147,17 +156,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       plaque: vehPlaque.trim().toUpperCase(),
       odometreInitial: parseFloat(vehOdometre) || 0,
     };
-    const updated = [...vehicles, newV];
-    setVehicles(updated);
-    localStorage.setItem(VEHICLES_STORAGE_KEY, JSON.stringify(updated));
+    setPartnerData((prev: any) => ({ ...prev, vehicles: [...(prev?.vehicles ?? vehicles), newV] }));
     playNotificationSound();
     setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre("");
   };
 
   const handleRemoveVehicle = (id: string) => {
-    const updated = vehicles.filter(v => v.id !== id);
-    setVehicles(updated);
-    localStorage.setItem(VEHICLES_STORAGE_KEY, JSON.stringify(updated));
+    setPartnerData((prev: any) => ({ ...prev, vehicles: (prev?.vehicles ?? vehicles).filter((v: RegisteredVehicle) => v.id !== id) }));
   };
 
   return (

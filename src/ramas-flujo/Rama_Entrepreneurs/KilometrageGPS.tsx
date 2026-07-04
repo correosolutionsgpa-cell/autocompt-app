@@ -296,15 +296,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const safeLogs: MileageLog[] =
     safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
 
-  // ÔöÇÔöÇ Registered vehicles ÔÇö Single Source of Truth (Settings ÔåÆ localStorage) ÔöÇÔöÇ
-  // Read the same key written by SettingsView (autocompt_vehicles).
+  // -- Registered vehicles -- Single Source of Truth (Firestore via partnerData) --
+  // Written by SettingsView through the same setPartnerData/saveWorkspace pipeline
+  // used for homeOffice settings and mileage logs -- no longer localStorage-only.
   const registeredVehicles: Array<{
     id: string; marque: string; modele: string;
     annee: string; plaque: string; odometreInitial: number;
-  }> = (() => {
-    try { return JSON.parse(localStorage.getItem("autocompt_vehicles") || "[]"); }
-    catch { return []; }
-  })();
+  }> = safeCurrentCompanyPartnerData?.vehicles ?? [];
   const primaryVehicle = registeredVehicles[0] ?? null;
   const primaryVehicleLabel = primaryVehicle
     ? [primaryVehicle.annee, primaryVehicle.marque, primaryVehicle.modele].filter(Boolean).join(" ")
