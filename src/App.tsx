@@ -3477,7 +3477,44 @@ Ceci est un message automatisé généré par AutoCompt.`;
   };
 
   // --- TENUE DE LIVRES (BASE DE DATOS) ---
-  const [historique, setHistorique] = useState<any[]>([]);
+  const [historique, _setHistorique] = useState<any[]>([]);
+  const reconcileHistorique = async (prev: any[], next: any[]) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    const deleted = prev.filter(p => !next.some(n => n.id === p.id));
+    for (const item of deleted) {
+      if (item.id && typeof item.id === 'string' && item.id.length > 5 && isNaN(Number(item.id))) {
+        await dataService.deleteInvoiceDoc(item.id);
+      }
+    }
+    const addedOrModified = next.filter(n => {
+      const p = prev.find(x => x.id === n.id);
+      if (!p) return true;
+      return p.total !== n.total || p.fecha !== n.fecha || p.cliente !== n.cliente || p.cat !== n.cat || p.status !== n.status;
+    });
+    for (const item of addedOrModified) {
+      try {
+        const saved = await dataService.saveInvoice(userId, item);
+        if (saved.id && saved.id !== item.id) {
+          _setHistorique(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
+        }
+      } catch (err: any) {
+        console.error("Failed to save invoice:", err);
+        const wasNew = !prev.some(p => p.id === item.id);
+        _setHistorique(current => wasNew
+          ? current.filter(c => c.id !== item.id)
+          : current.map(c => c.id === item.id ? prev.find(p => p.id === item.id) : c)
+        );
+      }
+    }
+  };
+  const setHistorique = (value: any[] | ((prev: any[]) => any[])) => {
+    _setHistorique((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      reconcileHistorique(prev, next);
+      return next;
+    });
+  };
 
   const [depenses, _setDepenses] = useState<any[]>([]);
   const reconcileExpenses = async (prev: any[], next: any[]) => {
@@ -7078,6 +7115,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // every item would just re-write each expense a second time on login.
           const exp = await dataService.fetchExpenses(user.uid);
           _setDepenses(exp);
+
+          // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
+          const invoices = await dataService.fetchInvoices(user.uid);
+          _setHistorique(invoices);
 
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid);
@@ -18431,6 +18472,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         csvInputRef={csvInputRef}
         handleCSVUpload={handleCSVUpload}
         setDepenses={setDepenses}
+        setHistorique={setHistorique}
         validateDeposit={validateDeposit}
         getEffectiveTier={getEffectiveTier}
         playNotificationSound={playNotificationSound}

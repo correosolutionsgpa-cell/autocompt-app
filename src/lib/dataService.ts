@@ -150,6 +150,26 @@ export interface LoyerDoc {
   createdAt: string;
 }
 
+// ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
+
+export interface InvoiceDoc {
+  id: string;
+  companyId: string;
+  fecha: string;
+  cliente: string;
+  cat: string;
+  subtotal: number;
+  tps: number;
+  tvq: number;
+  total: number;
+  status?: string;
+  noteComptable?: string;
+  unitId?: string;
+  buildingId?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §2 — SEED DATA
 // ══════════════════════════════════════════════════════════════════════════════
@@ -792,6 +812,74 @@ export const dataService = {
 
   async deleteExpense(expenseId: string): Promise<boolean> {
     await deleteDoc(doc(db, 'expenses', String(expenseId)));
+    return true;
+  },
+
+  // ── Invoices — Firestore `invoices` collection (revenue/ventes ledger) ─────
+
+  async fetchInvoices(userId: string): Promise<InvoiceDoc[]> {
+    try {
+      const q = query(collection(db, 'invoices'), where('ownerId', '==', userId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = data.companyId?.split('_company_');
+        const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
+        return { ...data, id: d.id, companyId: originalCompanyId } as InvoiceDoc;
+      });
+    } catch (e) {
+      console.error('fetchInvoices failed, returning local default:', e);
+      return [];
+    }
+  },
+
+  async saveInvoice(userId: string, invoiceData: Partial<InvoiceDoc> & { companyId: string }): Promise<InvoiceDoc> {
+    assertCanWrite();
+    const originalCompanyId = invoiceData.companyId;
+    const docCompanyId = `${userId}_company_${originalCompanyId}`;
+    const data = {
+      ...invoiceData,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: invoiceData.createdAt || new Date().toISOString(),
+    };
+
+    const id = invoiceData.id && String(invoiceData.id).length > 6 && isNaN(Number(invoiceData.id))
+      ? String(invoiceData.id)
+      : `inv_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    await setDoc(doc(db, 'invoices', id), data);
+
+    const entryData = {
+      id,
+      date: data.fecha || new Date().toISOString(),
+      description: `Revenue: ${data.cliente || 'Unknown'} - ${data.cat || 'Ventes'}`,
+      documentReference: id,
+      createdAt: data.createdAt,
+      ownerId: userId,
+    };
+    const totalAmount = data.total || 0;
+    const linesData = [
+      { id: `${id}-debit`, journalEntryId: id, accountId: 'acc-bank', type: 'Debit', amount: totalAmount, ownerId: userId },
+      { id: `${id}-credit`, journalEntryId: id, accountId: 'acc-revenue', type: 'Credit', amount: totalAmount, ownerId: userId },
+    ];
+
+    try {
+      if (!auth.currentUser) {
+        throw new Error("User not authenticated — cannot write to journalEntries/journalLines");
+      }
+      await postJournalEntry(entryData, linesData);
+      console.log(`Successfully converted flat invoice to double-entry journal (ID: ${id})`);
+    } catch (error: any) {
+      console.error("Double-entry validation failed:", error.message);
+      throw error;
+    }
+
+    return { id, ...data, companyId: originalCompanyId } as InvoiceDoc;
+  },
+
+  async deleteInvoiceDoc(invoiceId: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'invoices', String(invoiceId)));
     return true;
   },
 

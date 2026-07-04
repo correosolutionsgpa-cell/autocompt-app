@@ -72,6 +72,9 @@ export interface BanqueSyncViewProps {
   // Dépenses globales
   setDepenses: (fn: any[] | ((prev: any[]) => any[])) => void;
 
+  // Revenus / factures globaux (pour confirmer un dépôt bancaire comme revenu réel)
+  setHistorique: (fn: any[] | ((prev: any[]) => any[])) => void;
+
   // Fonctions utilitaires App
   validateDeposit: (txn: any) => { status: string; [key: string]: any };
   getEffectiveTier: () => string;
@@ -109,6 +112,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   csvInputRef,
   handleCSVUpload,
   setDepenses,
+  setHistorique,
   validateDeposit,
   getEffectiveTier,
   playNotificationSound,
@@ -482,12 +486,53 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                             </p>
                           </div>
                           {depValidation?.match?.locataire && (
-                            <button className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow">
+                            <button
+                              onClick={() => {
+                                const match = depValidation.match;
+                                setHistorique((prev) => [
+                                  {
+                                    id: `rev_${Date.now()}_${i}`,
+                                    companyId: activeCompanyId,
+                                    cliente: match.locataire,
+                                    fecha: txn.date,
+                                    cat: "Loyer",
+                                    subtotal: txn.amt,
+                                    tps: 0,
+                                    tvq: 0,
+                                    total: txn.amt,
+                                    status: "Payée",
+                                  },
+                                  ...prev,
+                                ]);
+                                playNotificationSound();
+                              }}
+                              className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
+                            >
                               Confirmer que ceci est le loyer de {depValidation.match.locataire}
                             </button>
                           )}
                           {!depValidation?.match?.locataire && (
-                            <button className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow">
+                            <button
+                              onClick={() => {
+                                setHistorique((prev) => [
+                                  {
+                                    id: `rev_${Date.now()}_${i}`,
+                                    companyId: activeCompanyId,
+                                    cliente: txn.desc,
+                                    fecha: txn.date,
+                                    cat: "Loyer",
+                                    subtotal: txn.amt,
+                                    tps: 0,
+                                    tvq: 0,
+                                    total: txn.amt,
+                                    status: "Payée",
+                                  },
+                                  ...prev,
+                                ]);
+                                playNotificationSound();
+                              }}
+                              className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
+                            >
                               Valider manuellement
                             </button>
                           )}
@@ -508,7 +553,10 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                           <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-red-200 dark:border-red-900/50">
                             <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">Assigner manuellement :</p>
-                            <select className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}>
+                            <select
+                              id={`auto-lier-select-${i}`}
+                              className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}
+                            >
                               <option value="">Sélectionner la porte...</option>
                               {plexManagementProperties.map(door => (
                                 <optgroup key={door.id} label={`Puerta: ${door.adresse}`}>
@@ -520,7 +568,46 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                 </optgroup>
                               ))}
                             </select>
-                            <button className="bg-red-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic shadow">Auto-Lier</button>
+                            <button
+                              onClick={(e) => {
+                                const select = (e.currentTarget.previousElementSibling as HTMLSelectElement | null);
+                                const selectedId = select?.value;
+                                if (!selectedId) {
+                                  alert("Veuillez sélectionner une porte.");
+                                  return;
+                                }
+                                let locataire = "";
+                                for (const door of plexManagementProperties) {
+                                  if (door.isContainer && door.chambres) {
+                                    const room = door.chambres.find((c: any) => c.id === selectedId);
+                                    if (room) { locataire = room.locataire; break; }
+                                  } else if (door.id === selectedId) {
+                                    locataire = door.locataire;
+                                    break;
+                                  }
+                                }
+                                setHistorique((prev) => [
+                                  {
+                                    id: `rev_${Date.now()}_${i}`,
+                                    companyId: activeCompanyId,
+                                    cliente: locataire || txn.desc,
+                                    fecha: txn.date,
+                                    cat: "Loyer",
+                                    subtotal: txn.amt,
+                                    tps: 0,
+                                    tvq: 0,
+                                    total: txn.amt,
+                                    status: "Payée",
+                                    unitId: selectedId,
+                                  },
+                                  ...prev,
+                                ]);
+                                playNotificationSound();
+                              }}
+                              className="bg-red-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
+                            >
+                              Auto-Lier
+                            </button>
                           </div>
                         </div>
                       ) : recoState === "need_receipt" ? (
