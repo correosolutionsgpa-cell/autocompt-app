@@ -7072,9 +7072,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
             setActiveCompanyId(workspaces[0].id);
           }
 
-          // Fetch user's expenses (depenses)
+          // Fetch user's expenses (depenses) — use the raw setter here, not the
+          // reconcile-wrapped setDepenses: this data already came FROM Firestore,
+          // so diffing it against the (empty) prior local state and re-saving
+          // every item would just re-write each expense a second time on login.
           const exp = await dataService.fetchExpenses(user.uid);
-          setDepenses(exp);
+          _setDepenses(exp);
 
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid);
@@ -7084,9 +7087,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
           const units = await dataService.fetchAllUnits(user.uid);
           setAllUnits(units);
 
-          // Fetch tenants/loyers
+          // Fetch tenants/loyers — raw setter, same reasoning as depenses above:
+          // this already came from Firestore, don't re-save it on every login.
           const loyers = await dataService.fetchLoyers(user.uid);
-          setPlexLoyers(loyers);
+          _setPlexLoyers(loyers);
 
           // Fetch double-entry journal (accounting ledger)
           const entries = await dataService.fetchJournalEntries(user.uid);

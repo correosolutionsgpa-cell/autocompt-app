@@ -675,6 +675,11 @@ export const dataService = {
       }
     ];
 
+    // Persist the flat document first — this is what fetchLoyers() reads back.
+    // (The double-entry journal below is a secondary ledger record; without this
+    // setDoc, the rent entry never actually survives a page reload.)
+    await setDoc(doc(db, 'loyers', docId), data);
+
     try {
       // Fix: guard against unauthenticated Firestore batch writes.
       // postJournalEntry writes to 'journalEntries' and 'journalLines';
@@ -763,6 +768,11 @@ export const dataService = {
         ownerId: userId,
       }
     ];
+
+    // Persist the flat document first — this is what fetchExpenses() reads back.
+    // (The double-entry journal below is a secondary ledger record; without this
+    // setDoc, the expense never actually survives a page reload.)
+    await setDoc(doc(db, 'expenses', id), data);
 
     try {
       // Fix: guard against unauthenticated Firestore batch writes.

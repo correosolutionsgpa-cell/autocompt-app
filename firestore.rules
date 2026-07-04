@@ -25,41 +25,70 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // General collection rules with multi-tenant isolation by ownerId
+    // General collection rules with multi-tenant isolation by ownerId.
+    // NOTE: `request.resource` only exists on writes — referencing it inside
+    // a combined `allow read, write` rule makes every read (get AND query)
+    // evaluate that clause too, which errors out and denies the read. Reads
+    // and writes are split below so each only references what's defined for it.
+    function isOwnerDoc() {
+      return isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+    function isOwnerWrite() {
+      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
     match /companies/{companyId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /expenses/{expenseId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /properties/{propertyId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /loyers/{loyerId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /maintenance_components/{componentId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /buildings/{buildingId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /units/{unitId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /journalEntries/{entryId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     match /journalLines/{lineId} {
-      allow read, write: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid) && (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
     }
 
     // Beta access codes — `get` must work BEFORE the user is authenticated
