@@ -100,8 +100,22 @@ interface PartnerEntry {
   [key: string]: unknown;
 }
 
+interface RegisteredVehicle {
+  id: string;
+  marque: string;
+  modele: string;
+  annee: string;
+  plaque: string;
+  odometreInitial: number;
+}
+
+// partnerData is keyed by partner name (e.g. "Fabiola") for per-partner settings,
+// plus a top-level `vehicles` array — the company-wide vehicle registry shared
+// across partners (written by SettingsView, read here).
+type PartnerDataMap = Record<string, PartnerEntry> & { vehicles?: RegisteredVehicle[] };
+
 interface Company {
-  partnerData: Record<string, PartnerEntry>;
+  partnerData: PartnerDataMap;
   [key: string]: unknown;
 }
 
@@ -117,14 +131,14 @@ export interface KilometrageGPSProps {
   activeUser: string;
   currentCompany: Company;
   activeCompanyId: string;
-  partnerData: Record<string, PartnerEntry>;
+  partnerData: PartnerDataMap;
   dashboardMode: string;
 
   // App setters
   setVista: (vista: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setDepenses: (fn: (prev: any[]) => any[]) => void;
-  setPartnerData: (data: Record<string, PartnerEntry>) => void;
+  setPartnerData: (data: PartnerDataMap | ((prev: PartnerDataMap) => PartnerDataMap)) => void;
   playNotificationSound?: () => void;
   setDispatcherSuccessToast?: (payload: ToastPayload) => void;
 
@@ -299,10 +313,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   // -- Registered vehicles -- Single Source of Truth (Firestore via partnerData) --
   // Written by SettingsView through the same setPartnerData/saveWorkspace pipeline
   // used for homeOffice settings and mileage logs -- no longer localStorage-only.
-  const registeredVehicles: Array<{
-    id: string; marque: string; modele: string;
-    annee: string; plaque: string; odometreInitial: number;
-  }> = safeCurrentCompanyPartnerData?.vehicles ?? [];
+  const registeredVehicles: RegisteredVehicle[] = safeCurrentCompanyPartnerData?.vehicles ?? [];
   const primaryVehicle = registeredVehicles[0] ?? null;
   const primaryVehicleLabel = primaryVehicle
     ? [primaryVehicle.annee, primaryVehicle.marque, primaryVehicle.modele].filter(Boolean).join(" ")
