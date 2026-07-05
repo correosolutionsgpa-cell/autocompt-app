@@ -355,6 +355,12 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           clientSignatureType: sigMode,
           clientHasInitials: needsInitials,
           clientSignedAt: new Date().toISOString(),
+          // ── Audit trail (legal non-repudiation) ─────────────────────────
+          auditConsentGiven: true,
+          auditConsentAt: new Date().toISOString(),
+          auditLinkOpenedAt,
+          auditSignIp: auditIp || 'unknown',
+          auditSignUA: navigator.userAgent.slice(0, 200),
         });
       } catch {}
 
