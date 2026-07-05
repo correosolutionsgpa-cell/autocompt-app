@@ -266,11 +266,15 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
    * Focus: Multi-tenant architecture and property administration.
    * Modules per .cursorrules: Multi-tenant Tenue de livres (1-click sharing),
    * Gestion Immobilière, Conciliation bancaire, Taxes & Assurances.
+   * DocuLegal added: leases (baux), mandat de gestion, contractor agreements.
+   * Heures & Paie added: concierges, building supers, maintenance workers.
    * + Universal: Dossiers Fiscaux, Assistant IA.
    */
   gestionnaire: [
     "tenue_livres",
+    "doculegal",          // Baux, mandats de gestion, contrats sous-traitance
     "dossiers_fiscaux",   // Universal
+    "heures_paie",        // Concierges, surintendants, entretien
     "conciliation",
     "gestion_immo",
     "taxes_assurances",
