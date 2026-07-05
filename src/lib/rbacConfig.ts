@@ -55,6 +55,7 @@ export type ModuleId =
   | "conciliation"
   | "gestion_immo"
   | "taxes_assurances"
+  | "fideicommis"         // Compte en Fidéicommis (gestionnaire only)
   | "assistant_ia"        // Universal (all Plex profiles)
   // ── Syndicat modules ──
   | "cotisations"
@@ -147,6 +148,12 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
     id: "assistant_ia",
     label: "Assistant IA",
     description: "Assistant fiscal Sofi — questions et analyses en temps réel",
+    dashboard: "Plex",
+  },
+  fideicommis: {
+    id: "fideicommis",
+    label: "Compte en Fidéicommis",
+    description: "Gestion OACIQ: dépôts, retraits, conciliation mensuelle, relevés propriétaires",
     dashboard: "Plex",
   },
   // ── Syndicat modules ──────────────────────────────────────────────────────
@@ -278,6 +285,7 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "conciliation",
     "gestion_immo",
     "taxes_assurances",
+    "fideicommis",        // Compte en fidéicommis OACIQ — gestion des fonds clients
     "assistant_ia",       // Universal
   ],
 

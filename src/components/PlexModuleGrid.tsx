@@ -32,6 +32,7 @@ import {
   Wallet,
   Building2,
   ShieldAlert,
+  Scale,
   Sparkles,
 } from "lucide-react";
 import { hasAccess, type ProfileId } from "../lib/rbacConfig";
@@ -347,6 +348,27 @@ export default function PlexModuleGrid({
             <br />
             Assurances
           </span>
+        </button>
+      )}
+
+      {/* Compte en Fidéicommis — gestionnaire only (OACIQ compliance) */}
+      {can("fideicommis") && (
+        <button
+          onClick={() => setVista("fideicommis")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-indigo-500/10", "text-indigo-600 dark:text-indigo-400")}>
+            <Scale size={22} />
+          </div>
+          <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+            Compte en
+            <br />
+            Fidéicommis
+          </span>
+          <span className="text-[7px] font-bold text-indigo-500/70 dark:text-indigo-400/60 uppercase tracking-wider">OACIQ</span>
         </button>
       )}
 

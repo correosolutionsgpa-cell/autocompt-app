@@ -566,7 +566,6 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         console.log("[S.O.F.I. Tax] ✅ Parsed:", parsed);
         return res.json(parsed);
       } catch (parseErr: any) {
-        console.error("[S.O.F.I. Tax] ❌ JSON.parse failed. cleanTax was:", JSON.stringify(cleanTax.slice(0, 300)));
         console.error("[S.O.F.I. Tax] Parse error:", parseErr?.message);
         return res.json({ adresse: null, numeroLot: null, valeurTerrain: null, valeurBatiment: null });
       }
@@ -580,9 +579,153 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── Fidéicommis: Send reçu de loyer officiel to tenant ──────────────
+  app.post("/api/send-recu-loyer", async (req, res) => {
+    try {
+      const {
+        to, numeroRecu, locataireName, propertyAddress, montant,
+        periode, gestionnaireName, companyName, adminEmail, pdfBase64,
+      } = req.body;
+      if (!to || !pdfBase64) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;">
+<div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 36px;">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:900;">Reçu de loyer</h1>
+    <p style="color:rgba(255,255,255,0.8);margin:6px 0 0;font-size:13px;">Réf. #${numeroRecu}</p>
+  </div>
+  <div style="padding:32px 36px;">
+    <p style="color:#374151;font-size:15px;">Bonjour <strong>${locataireName}</strong>,</p>
+    <p style="color:#6b7280;font-size:14px;">Voici votre reçu officiel enregistré par <strong>${gestionnaireName}</strong>.</p>
+    <div style="background:#f0f3ff;border-radius:12px;padding:20px;margin:20px 0;border-left:4px solid #6366f1;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase;padding:4px 0;">Propriété</td><td style="color:#111827;font-size:14px;font-weight:600;text-align:right;">${propertyAddress}</td></tr>
+        <tr><td style="color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase;padding:4px 0;">Période</td><td style="color:#111827;font-size:14px;font-weight:600;text-align:right;">${periode}</td></tr>
+        <tr><td style="color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase;padding:8px 0 4px;">Montant</td><td style="color:#6366f1;font-size:22px;font-weight:900;text-align:right;">${new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(montant)}</td></tr>
+      </table>
+    </div>
+    <div style="background:#f0fdf4;border-radius:10px;padding:14px;border:1px solid #bbf7d0;margin-bottom:24px;">
+      <p style="margin:0;color:#15803d;font-size:12px;font-weight:600;">&#10003; Cette somme a été déposée au compte en fidéicommis conformément à la Loi sur le courtage immobilier du Québec.</p>
+    </div>
+    <p style="color:#9ca3af;font-size:11px;">Le reçu PDF officiel est joint à cet email.</p>
+  </div>
+  <div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;">
+    <p style="color:#9ca3af;font-size:11px;margin:0;">${companyName || "Gestion Immobilière"} · Propulsé par AutoCompt</p>
+  </div>
+</div>
+</body></html>`;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to: [to],
+          subject: `Reçu de loyer #${numeroRecu} — ${propertyAddress}`,
+          html,
+          attachments: [{ filename: `Recu-${numeroRecu}.pdf`, content: pdfBase64 }],
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-recu-loyer]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fidéicommis: Send relevé mensuel to property owner ─────────────────
+  app.post("/api/send-releve-mensuel", async (req, res) => {
+    try {
+      const {
+        to, clientName, period, gestionnaireName,
+        companyName, adminEmail, pdfBase64,
+      } = req.body;
+      if (!to || !pdfBase64) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:22px;font-weight:900;">Relev\u00e9 de gestion immobili\u00e8re</h1><p style="color:rgba(255,255,255,0.8);margin:6px 0 0;font-size:13px;">${period}</p></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour <strong>${clientName}</strong>,</p><p style="color:#6b7280;font-size:14px;">Veuillez trouver ci-joint votre relev\u00e9 mensuel pour la p\u00e9riode <strong>${period}</strong>, pr\u00e9par\u00e9 par <strong>${gestionnaireName}</strong>.</p><div style="background:#eff6ff;border-radius:12px;padding:16px 20px;margin:20px 0;border-left:4px solid #6366f1;"><p style="margin:0;color:#4338ca;font-size:13px;font-weight:600;">Le document PDF officiel est joint. Conservez-le pour vos dossiers fiscaux (T776 / TP-128).</p></div><p style="color:#9ca3af;font-size:11px;">En cas de questions, r\u00e9pondez directement \u00e0 cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">${companyName || "Gestion Immobili\u00e8re"} \u00b7 Conformit\u00e9 OACIQ</p></div></div></body></html>`;
+
+      const safeClientName = (clientName || "client").replace(/\s+/g, "-");
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to: [to],
+          subject: `Relev\u00e9 de gestion \u2014 ${period}`,
+          html,
+          attachments: [{ filename: `Releve-${safeClientName}-${period}.pdf`, content: pdfBase64 }],
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-releve-mensuel]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fidéicommis: Send Mandat de Gestion to property owner ──────────────────
+  app.post("/api/send-mandat-gestion", async (req, res) => {
+    try {
+      const {
+        to, proprietaireName, gestionnaireName,
+        companyName, adminEmail, dateDebut, dateFin, pdfBase64,
+      } = req.body;
+      if (!to || !pdfBase64) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const fmtDate = (d: string) => {
+        try { return new Date(d + "T12:00:00").toLocaleDateString("fr-CA", { dateStyle: "long" }); } catch { return d; }
+      };
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:36px;"><div style="display:inline-block;background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-size:9px;font-weight:700;color:rgba(255,255,255,0.8);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">OACIQ 2024 · Conforme RLRQ c C-73.2</div><h1 style="color:#fff;margin:0;font-size:22px;font-weight:900;">Mandat de Gestion Immobilière</h1><p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:13px;">Votre gestionnaire vous soumet un mandat à examiner</p></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour <strong>${proprietaireName}</strong>,</p><p style="color:#6b7280;font-size:14px;line-height:1.6;"><strong>${gestionnaireName}</strong> vous soumet le <strong>Mandat de gestion immobilière</strong> pour la période du <strong>${fmtDate(dateDebut)}</strong> au <strong>${fmtDate(dateFin)}</strong>.</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">Veuillez lire attentivement le document PDF joint, qui détaille les conditions de gestion, les honoraires, les pouvoirs conférés et vos obligations respectives.</p><div style="background:#eff6ff;border-radius:12px;padding:20px;margin:20px 0;border-left:4px solid #6366f1;"><p style="margin:0 0 8px;color:#1e40af;font-size:13px;font-weight:700;">⚖️ Mandat conforme à l'OACIQ</p><p style="margin:0;color:#3730a3;font-size:12px;line-height:1.6;">Ce mandat est établi conformément à la Loi sur le courtage immobilier du Québec (RLRQ, c C-73.2, art. 95-99). Votre gestionnaire est titulaire d'un permis délivré par l'OACIQ. En cas de litige, vous pouvez contacter l'OACIQ au 1 800 440-7170.</p></div><p style="color:#9ca3af;font-size:11px;">Pour toute question, répondez directement à cet email. Le document signé doit être retourné par courriel ou via DocuLegal.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">${companyName || "Gestion Immobilière"} · Propulsé par AutoCompt · OACIQ</p></div></div></body></html>`;
+
+      const safeName = (proprietaireName || "proprietaire").replace(/\s+/g, "-");
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to: [to],
+          subject: `Mandat de gestion immobilière — ${gestionnaireName}`,
+          html,
+          attachments: [{ filename: `Mandat-Gestion-${safeName}.pdf`, content: pdfBase64 }],
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-mandat-gestion]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── DocuLegal: Send signature invitation email to signer ─────────────────────
   // Creates the legal audit chain: email delivery → link click → consent → signature
+
   app.post("/api/send-signature-invitation", async (req, res) => {
+
     try {
       const {
         signerEmail,      // Destination email (required)

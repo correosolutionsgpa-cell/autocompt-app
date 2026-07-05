@@ -127,6 +127,8 @@ import RapportComptable from "./ramas-flujo/Rama_Gestionnaires/RapportComptable"
 import BanqueSyncView from "./ramas-flujo/Rama_Gestionnaires/BanqueSyncView";
 import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceView";
 import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
+import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
+import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
 import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
 import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
 import ReceiptPreviewModal from "./components/modals/ReceiptPreviewModal";
@@ -19223,6 +19225,42 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         currentUserEmail={currentUserEmail}
         setVista={setVista}
         WorkspaceSidebar={WorkspaceSidebar}
+      />
+    );
+  }
+
+  // CompteFideicommis → src/ramas-flujo/Rama_Gestionnaires/CompteFideicommis.tsx
+  // Conformité OACIQ: dépôts, retraits, conciliation mensuelle, relevés propriétaires
+  if (vista === "fideicommis") {
+    return (
+      <CompteFideicommis
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        adminName={adminName}
+        adminEmail={adminEmail}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+        playNotificationSound={playNotificationSound}
+      />
+    );
+  }
+
+  // MandatDeGestionView → src/ramas-flujo/Rama_Gestionnaires/MandatDeGestionView.tsx
+  // Générateur OACIQ du mandat de gestion immobilière (PDF + email)
+  if (vista === "mandat_gestion") {
+    return (
+      <MandatDeGestionView
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        adminName={adminName}
+        adminEmail={adminEmail}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+        playNotificationSound={playNotificationSound}
       />
     );
   }

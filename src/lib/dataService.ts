@@ -300,6 +300,116 @@ export interface PropertyDocumentDoc {
   uploadedAt: string;
 }
 
+// ── Fidéicommis — 4 Firestore collections (OACIQ compliance) ─────────────────
+// §1 Note: These collections are SEPARATE from the operating account.
+// All funds received on behalf of clients MUST pass through fidéicommis first.
+
+/**
+ * FideicommisClientDoc — `fideicommisClients` collection
+ * One document per propriétaire-client managed by the gestionnaire.
+ * Document ID: `{userId}_fidclient_{id}`
+ */
+export interface FideicommisClientDoc {
+  id: string;
+  companyId: string;
+  /** Full name of the property owner (investisseur) */
+  nom: string;
+  email: string;
+  telephone?: string;
+  /** Address(es) of properties managed for this client */
+  proprietes: string[];
+  /** Taux d'honoraires de gestion (%) */
+  tauxHonoraires: number;
+  ownerId: string;
+  createdAt: string;
+}
+
+/**
+ * FideicommisDepotDoc — `fideicommisDepots` collection
+ * One deposit = one rent payment received on behalf of a client.
+ * Document ID: `{userId}_fiddepot_{id}`
+ */
+export interface FideicommisDepotDoc {
+  id: string;
+  companyId: string;
+  /** Sequential receipt number: YYYYMM-NNNN */
+  numeroRecu: string;
+  date: string;             // YYYY-MM-DD
+  /** Name of the tenant who paid */
+  locataireName: string;
+  /** Civic address of the rented property */
+  propertyAddress: string;
+  /** Rental period covered: YYYY-MM-DD */
+  periodeDebut: string;
+  periodeFin: string;
+  montant: number;
+  modePaiement: 'chèque' | 'virement' | 'espèce' | 'carte' | 'autre';
+  /** FK → FideicommisClientDoc.id */
+  clientId: string;
+  clientName: string;
+  /** URL of the generated reçu PDF (Firebase Storage) */
+  recuPdfUrl?: string;
+  notes?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
+/**
+ * FideicommisRetraitDoc — `fideicommisRetraits` collection
+ * One withdrawal from the fidéicommis account.
+ * Document ID: `{userId}_fidretrait_{id}`
+ */
+export interface FideicommisRetraitDoc {
+  id: string;
+  companyId: string;
+  date: string;             // YYYY-MM-DD
+  beneficiaire: string;
+  propertyAddress: string;
+  montant: number;
+  /** 'dépense' = expense paid on behalf | 'honoraires' = mgmt fees | 'remise_nette' = net remittance to owner */
+  type: 'dépense' | 'honoraires' | 'remise_nette';
+  description: string;
+  /** FK → FideicommisClientDoc.id */
+  clientId: string;
+  clientName: string;
+  notes?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
+/**
+ * FideicommisConciliationDoc — `fideicommisConciliations` collection
+ * Monthly reconciliation record (OACIQ requirement: done every month).
+ * Document ID: `{userId}_{companyId}_{YYYY-MM}`
+ */
+export interface FideicommisConciliationDoc {
+  id: string;
+  companyId: string;
+  /** YYYY-MM format */
+  period: string;
+  /** Sum of all deposits that month (calculated) */
+  totalDepots: number;
+  /** Sum of all withdrawals that month (calculated) */
+  totalRetraits: number;
+  /** Opening balance (closing of previous month) */
+  soldeOuverture: number;
+  /** Calculated: soldeOuverture + totalDepots - totalRetraits */
+  soldeAttendu: number;
+  /** Actual bank balance entered by user */
+  soldeBancaire: number;
+  /** soldeAttendu - soldeBancaire (0 = balanced) */
+  ecart: number;
+  /** 'équilibré' | 'écart' */
+  statut: 'équilibré' | 'écart';
+  notes?: string;
+  /** ISO timestamp of when the conciliation was completed */
+  completedAt?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
+
+
 // ── AiReportDoc — Firestore `aiReports` collection (SyndicAI generated reports) ──
 
 export interface AiReportDoc {
