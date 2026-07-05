@@ -19073,6 +19073,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         playNotificationSound={playNotificationSound}
         setVista={setVista}
         WorkspaceSidebar={WorkspaceSidebar}
+        dashboardMode={dashboardMode}
+        companyId={activeCompanyId}
       />
     );
   }

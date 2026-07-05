@@ -201,6 +201,23 @@ export interface CommunityPostDoc {
   createdAt: string;
 }
 
+export interface BoardMember {
+  name: string;
+  role: string;
+}
+
+export interface SyndicSettingsDoc {
+  companyId: string;
+  buildingName: string;
+  address: string;
+  totalUnits: number;
+  fiscalYearEnd: string;    // "31 décembre", etc.
+  reserveFundPercent: number;
+  boardMembers: BoardMember[];
+  ownerId: string;
+  updatedAt: string;
+}
+
 // ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
 
 export interface InvoiceDoc {
@@ -944,6 +961,34 @@ export const dataService = {
     };
     await setDoc(doc(db, 'communityPosts', docId), data);
     return { ...data, id: originalId, companyId: postData.companyId };
+  },
+
+  // ── Syndic settings — one config doc per company (Paramètres Syndicat) ──────
+
+  async fetchSyndicSettings(userId: string, companyId: string): Promise<SyndicSettingsDoc | null> {
+    try {
+      const docId = `${userId}_company_${companyId}`;
+      const snap = await getDoc(doc(db, 'syndicSettings', docId));
+      if (!snap.exists()) return null;
+      return { ...snap.data(), companyId } as SyndicSettingsDoc;
+    } catch (e) {
+      console.error('fetchSyndicSettings failed:', e);
+      return null;
+    }
+  },
+
+  async saveSyndicSettings(userId: string, settings: Omit<SyndicSettingsDoc, 'ownerId' | 'updatedAt'>): Promise<SyndicSettingsDoc> {
+    assertCanWrite();
+    const docId = `${userId}_company_${settings.companyId}`;
+    const docCompanyId = `${userId}_company_${settings.companyId}`;
+    const data: SyndicSettingsDoc = {
+      ...settings,
+      companyId: docCompanyId,
+      ownerId: userId,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'syndicSettings', docId), data);
+    return { ...data, companyId: settings.companyId };
   },
 
   // ── Expenses — Firestore `expenses` collection ─────────────────────────────

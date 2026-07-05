@@ -13,6 +13,7 @@
  */
 
 import React, { useState } from "react";
+import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import {
@@ -86,6 +87,10 @@ export interface SettingsViewProps {
 
   // Composant App
   WorkspaceSidebar: React.ComponentType;
+
+  // Section Paramètres de la Copropriété (visible seulement en mode Syndic)
+  dashboardMode?: "Plex" | "Syndic" | "Global";
+  companyId?: string;
 }
 
 // ── Registre Véhicules — Single Source of Truth ──────────────────────────────
@@ -129,6 +134,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   playNotificationSound,
   setVista,
   WorkspaceSidebar,
+  dashboardMode,
+  companyId,
 }) => {
   // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
   // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
@@ -214,6 +221,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       </header>
 
       <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+
+        {dashboardMode === "Syndic" && companyId && (
+          <SyndicSettingsPanel darkMode={darkMode} companyId={companyId} />
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════
               Phase 4: Section — Profil d'Entreprise Québec
