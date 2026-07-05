@@ -32,6 +32,7 @@ interface SignatureRequestDoc {
   adminSignatureDataUrl?: string;
   adminSignedDate?: string;
   requiresInitials?: boolean;  // true for real estate / promesse d'achat
+  customDocUrl?: string;       // Storage URL of a document generated from the admin's own Word template
 }
 
 type InputMode = 'draw' | 'type';
@@ -465,6 +466,16 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       pdf.line(M, y, W - M, y);
       y += 8;
 
+      // Reference link to the fully-formatted original document, when this
+      // signature request was generated from a custom uploaded template.
+      if (data.customDocUrl) {
+        pdf.setFont('Helvetica', 'italic');
+        pdf.setFontSize(8);
+        pdf.setTextColor(79, 70, 229);
+        pdf.textWithLink('Document original (format complet) : voir la pièce jointe transmise par courriel', M, y, { url: data.customDocUrl });
+        y += 7;
+      }
+
       // Document content — with automatic page breaks + initials stamp on each page
       pdf.setFont('Helvetica', 'normal');
       pdf.setFontSize(10);
@@ -792,6 +803,16 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 font-medium leading-relaxed">
             {docData?.docSummary}
           </div>
+          {docData?.customDocUrl && (
+            <a
+              href={docData.customDocUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-indigo-700 text-xs font-black uppercase tracking-widest hover:bg-indigo-100"
+            >
+              <FileText size={14} /> Lire le document complet avant de signer
+            </a>
+          )}
           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
             Envoyé par {docData?.adminName} · {docData?.companyName}
           </p>

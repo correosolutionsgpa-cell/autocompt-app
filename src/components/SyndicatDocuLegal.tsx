@@ -1,25 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Plus, 
-  ChevronDown, 
-  Download, 
-  CheckCircle2, 
-  Clock, 
-  FileText, 
-  PenTool, 
-  X, 
-  Trash2, 
-  ShieldCheck, 
+import {
+  Plus,
+  ChevronDown,
+  Download,
+  CheckCircle2,
+  Clock,
+  FileText,
+  PenTool,
+  X,
+  Trash2,
+  ShieldCheck,
   FileSignature,
   AlertTriangle,
   Send,
   Copy,
-  Link
+  Link,
+  Upload,
+  Layers,
+  Sparkles,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
-import { db } from '../lib/firebase';
+import { db, auth, storage } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { dataService, type DocTemplateDoc } from '../lib/dataService';
+import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from '../lib/docTemplateService';
+import { isCompanyDriveActive, uploadDocumentToDrive } from '../lib/driveService';
 
 interface LegalDocument {
   id: string;
@@ -32,6 +41,7 @@ interface LegalDocument {
   signedDate: string;
   signatureType?: 'draw' | 'type';
   signatureDataUrl?: string;
+  customDocUrl?: string; // Storage URL of a document generated from a user-uploaded template
 }
 
 interface SyndicatDocuLegalProps {
@@ -42,8 +52,22 @@ interface SyndicatDocuLegalProps {
 }
 
 export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminEmail = '', companyId = '' }: SyndicatDocuLegalProps) {
-  const [activeTab, setActiveTab] = useState<'externe' | 'interne'>('externe');
+  const [activeTab, setActiveTab] = useState<'externe' | 'interne' | 'modeles'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
+
+  // ── Mes Modèles (custom document templates) ────────────────────────────────
+  const [templates, setTemplates] = useState<DocTemplateDoc[]>([]);
+  const templateFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDetectingFields, setIsDetectingFields] = useState(false);
+  const [pendingTemplateFile, setPendingTemplateFile] = useState<File | null>(null);
+  const [pendingTemplateFields, setPendingTemplateFields] = useState<string[]>([]);
+  const [pendingTemplateConditions, setPendingTemplateConditions] = useState<string[]>([]);
+  const [pendingTemplateName, setPendingTemplateName] = useState('');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [fillingTemplate, setFillingTemplate] = useState<DocTemplateDoc | null>(null);
+  const [fillValues, setFillValues] = useState<Record<string, string>>({});
+  const [fillConditions, setFillConditions] = useState<Record<string, boolean>>({});
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
 
   // Dynamic States for Lists
   const [contrats, setContrats] = useState<LegalDocument[]>([
@@ -196,6 +220,171 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setTimeout(() => {
       setToast(null);
     }, 4000);
+  };
+
+  // ── Mes Modèles: load saved templates on mount ──────────────────────────────
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    dataService.fetchDocTemplates(uid).then(setTemplates).catch((err) => console.error('fetchDocTemplates failed:', err));
+  }, []);
+
+  // Reads the uploaded .docx, detects {{champs}}, and opens the naming/confirm step.
+  const handleTemplateFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      triggerToast("Veuillez sélectionner un fichier Word (.docx).", "error");
+      return;
+    }
+    setIsDetectingFields(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const { fields, conditions } = await analyzeTemplate(buf);
+      if (fields.length === 0 && conditions.length === 0) {
+        triggerToast("Aucun champ {{ }} détecté. Ouvrez votre Word et remplacez chaque espace variable par {{nom_du_champ}}, puis réimportez.", "error");
+        return;
+      }
+      setPendingTemplateFile(file);
+      setPendingTemplateFields(fields);
+      setPendingTemplateConditions(conditions);
+      setPendingTemplateName(file.name.replace(/\.docx$/i, ''));
+    } catch (err) {
+      console.error('Field detection failed:', err);
+      triggerToast("Impossible de lire ce fichier. Vérifiez qu'il s'agit bien d'un .docx Word valide.", "error");
+    } finally {
+      setIsDetectingFields(false);
+    }
+  };
+
+  const handleConfirmSaveTemplate = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !pendingTemplateFile) return;
+    if (!pendingTemplateName.trim()) {
+      triggerToast("Donnez un nom à votre modèle avant d'enregistrer.", "error");
+      return;
+    }
+    setIsSavingTemplate(true);
+    try {
+      const saved = await dataService.saveDocTemplate(uid, companyId, pendingTemplateName.trim(), pendingTemplateFields, pendingTemplateFile, pendingTemplateConditions);
+      setTemplates(prev => [...prev, saved]);
+      setPendingTemplateFile(null);
+      setPendingTemplateFields([]);
+      setPendingTemplateConditions([]);
+      setPendingTemplateName('');
+      triggerToast("Modèle enregistré ! Réutilisez-le à tout moment depuis « Mes Modèles ».", "success");
+    } catch (err) {
+      console.error('saveDocTemplate failed:', err);
+      triggerToast("Erreur lors de l'enregistrement du modèle.", "error");
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleOpenFillTemplate = (tpl: DocTemplateDoc) => {
+    const initial: Record<string, string> = {};
+    tpl.campos.forEach((c) => { initial[c] = ''; });
+    setFillValues(initial);
+    const initialConditions: Record<string, boolean> = {};
+    (tpl.condiciones || []).forEach((c) => { initialConditions[c] = false; });
+    setFillConditions(initialConditions);
+    setFillingTemplate(tpl);
+  };
+
+  const handleDeleteTemplate = async (tpl: DocTemplateDoc) => {
+    try {
+      await dataService.deleteDocTemplate(tpl.id, tpl.storagePath);
+      setTemplates(prev => prev.filter(t => t.id !== tpl.id));
+      triggerToast("Modèle supprimé.", "success");
+    } catch (err) {
+      console.error('deleteDocTemplate failed:', err);
+      triggerToast("Erreur lors de la suppression du modèle.", "error");
+    }
+  };
+
+  // Fills the template, produces a PDF (downloaded immediately for the admin),
+  // uploads a copy to Storage so its link can travel through the existing
+  // signature flow, then drops the result into "Contrats & Ententes" so it
+  // goes through the same signing ceremony as any other document.
+  const handleGenerateFromTemplate = async () => {
+    if (!fillingTemplate) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+
+    const missing = fillingTemplate.campos.filter((c) => !fillValues[c]?.trim());
+    if (missing.length > 0) {
+      triggerToast(`Veuillez remplir tous les champs (${missing.length} manquant${missing.length > 1 ? 's' : ''}).`, "error");
+      return;
+    }
+
+    setIsGeneratingDoc(true);
+    try {
+      const templateBuf = await dataService.fetchTemplateFile(fillingTemplate.storagePath);
+      const pdfBlob = await generateFilledDocumentPdf(templateBuf, fillValues, fillConditions);
+
+      const fileName = `${fillingTemplate.nombre.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+
+      // Immediate download for the admin
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+
+      // Best-effort upload so the client can view the fully-formatted original
+      // during the signature flow. Non-blocking if it fails.
+      // Prefer the user's own connected Google Drive over AutoCompt's Storage —
+      // AutoCompt shouldn't become the permanent host of a user's documents;
+      // Storage is only a fallback for accounts with no drive connected yet.
+      let customDocUrl = '';
+      if (isCompanyDriveActive(companyId)) {
+        try {
+          const base64 = await blobToRawBase64(pdfBlob);
+          const driveResult = await uploadDocumentToDrive(companyId, base64, fileName);
+          if (driveResult.success && driveResult.webViewLink) customDocUrl = driveResult.webViewLink;
+        } catch (err) {
+          console.error('Generated PDF upload to Drive failed (falling back to Storage):', err);
+        }
+      }
+      if (!customDocUrl) {
+        try {
+          const path = `generatedDocs/${uid}/${Date.now()}.pdf`;
+          const storageRef = ref(storage, path);
+          await uploadBytes(storageRef, pdfBlob);
+          customDocUrl = await getDownloadURL(storageRef);
+        } catch (err) {
+          console.error('Generated PDF upload to Storage failed (non-blocking):', err);
+        }
+      }
+
+      const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
+      const summaryText = Object.entries(fillValues).map(([k, v]) => `${k} : ${v}`).join('  ·  ');
+
+      setContrats(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        title: `${fillingTemplate.nombre} — ${todayStr}`,
+        date: todayStr,
+        status: "attente",
+        summary: summaryText || `Document généré à partir du modèle « ${fillingTemplate.nombre} ».`,
+        provider: "Modèle personnalisé",
+        signedBy: "",
+        signedDate: "",
+        customDocUrl,
+      }]);
+
+      setFillingTemplate(null);
+      setFillValues({});
+      setFillConditions({});
+      setActiveTab('externe');
+      triggerToast("Document généré et téléchargé ! Retrouvez-le dans « Contrats & Ententes » pour le signer.", "success");
+    } catch (err) {
+      console.error('Document generation from template failed:', err);
+      triggerToast("Erreur lors de la génération du document.", "error");
+    } finally {
+      setIsGeneratingDoc(false);
+    }
   };
 
   // Canvas Drawing Handlers (Mouse)
@@ -424,6 +613,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
       status: 'pending',
       createdAt: new Date().toISOString(),
+      customDocUrl: document.customDocUrl || '',
     };
 
     // Use URL-safe base64: replace +→-, /→_, strip trailing =
@@ -782,7 +972,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     }
   };
 
-  const currentList = activeTab === 'externe' ? contrats : resolutions;
+  const currentList = activeTab === 'externe' ? contrats : activeTab === 'interne' ? resolutions : [];
 
   return (
     <div className="relative font-sans text-left">
@@ -820,11 +1010,17 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
             >
               Contrats & Ententes
             </button>
-            <button 
+            <button
               onClick={() => { setActiveTab('interne'); setOpenDrawerId(null); }}
               className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'interne' ? (darkMode ? "bg-teal-500/15 border border-teal-500/40 text-teal-400 shadow-md backdrop-blur-md" : "bg-teal-500/10 border border-teal-500/25 text-teal-700 shadow-md backdrop-blur-md") : (darkMode ? "text-zinc-500 hover:text-zinc-300 border border-transparent" : "text-slate-500 hover:text-slate-700 border border-transparent")}`}
             >
               Registre de la Copropriété
+            </button>
+            <button
+              onClick={() => { setActiveTab('modeles'); setOpenDrawerId(null); }}
+              className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'modeles' ? (darkMode ? "bg-indigo-500/15 border border-indigo-500/40 text-indigo-400 shadow-md backdrop-blur-md" : "bg-indigo-500/10 border border-indigo-500/25 text-indigo-700 shadow-md backdrop-blur-md") : (darkMode ? "text-zinc-500 hover:text-zinc-300 border border-transparent" : "text-slate-500 hover:text-slate-700 border border-transparent")}`}
+            >
+              Mes Modèles
             </button>
           </div>
         </div>
@@ -838,7 +1034,50 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
             transition={{ duration: 0.2 }}
             className="space-y-4"
           >
-            {currentList.map((doc) => {
+            {activeTab === 'modeles' && (
+              <>
+                {templates.length === 0 && (
+                  <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"}`}>
+                    <Layers size={30} className="mx-auto mb-3 opacity-60" />
+                    <p className="text-xs font-black uppercase tracking-widest mb-1">Aucun modèle pour l'instant</p>
+                    <p className="text-[11px] font-medium max-w-sm mx-auto">
+                      Importez votre propre document Word (ex : votre promesse d'achat habituelle). Laissez des espaces du type <code className="px-1 rounded bg-indigo-500/10 text-indigo-500 font-mono">{'{{nom_champ}}'}</code> partout où une information doit être remplie — AutoCompt générera le formulaire automatiquement.
+                    </p>
+                  </div>
+                )}
+                {templates.map((tpl) => (
+                  <div key={tpl.id} className={`rounded-[28px] p-6 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? "bg-zinc-950/80 border-zinc-900/80" : "bg-white border-slate-200/80"}`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-2xl shrink-0 ${darkMode ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-indigo-100/90 text-indigo-700 border border-indigo-300/60"}`}>
+                        <FileSignature size={20} />
+                      </div>
+                      <div>
+                        <p className={`font-black text-sm tracking-tight ${darkMode ? "text-white" : "text-slate-900"}`}>{tpl.nombre}</p>
+                        <p className={`text-[10px] font-semibold mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          {tpl.campos.length} champ{tpl.campos.length > 1 ? 's' : ''} à remplir · {tpl.campos.slice(0, 3).join(', ')}{tpl.campos.length > 3 ? '…' : ''}
+                          {(tpl.condiciones?.length || 0) > 0 && <> · {tpl.condiciones.length} clause{tpl.condiciones.length > 1 ? 's' : ''} conditionnelle{tpl.condiciones.length > 1 ? 's' : ''}</>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleOpenFillTemplate(tpl)}
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border-none cursor-pointer bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/20"
+                      >
+                        <Sparkles size={14} /><span>Utiliser ce modèle</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTemplate(tpl)}
+                        className={`p-3 rounded-full border-none cursor-pointer ${darkMode ? "bg-rose-950/25 text-rose-400 hover:bg-rose-900/40" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            {activeTab !== 'modeles' && currentList.map((doc) => {
               const isOpen = openDrawerId === doc.id;
               
               // Determine colored translucent glassmorphic theme when selected/open
@@ -938,6 +1177,17 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                             {doc.summary}
                           </p>
 
+                          {doc.customDocUrl && (
+                            <a
+                              href={doc.customDocUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-2 mb-4 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${darkMode ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"}`}
+                            >
+                              <ExternalLink size={13} /><span>Voir le document complet (format original)</span>
+                            </a>
+                          )}
+
                           {doc.status === 'signe' && (
                             <div className="mb-6 p-4 rounded-2xl bg-teal-500/5 dark:bg-emerald-500/5 border border-teal-100/20 dark:border-emerald-500/10 text-left">
                               <p className="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-emerald-400 mb-1">
@@ -1000,11 +1250,26 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
           </motion.div>
         </AnimatePresence>
 
-        <button 
-          onClick={() => { setIsAddModalOpen(true); playSound('success'); }}
-          className={`w-full mt-8 py-5 rounded-[32px] border-2 border-dashed transition-all duration-300 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-sm bg-transparent cursor-pointer ${darkMode ? "border-zinc-700/50 text-zinc-400 hover:bg-zinc-900 hover:border-zinc-500 hover:text-zinc-200" : "border-slate-300 text-slate-500 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-700"}`}
+        <input
+          ref={templateFileInputRef}
+          type="file"
+          accept=".docx"
+          onChange={handleTemplateFileSelected}
+          className="hidden"
+        />
+
+        <button
+          onClick={() => {
+            if (activeTab === 'modeles') { templateFileInputRef.current?.click(); return; }
+            setIsAddModalOpen(true); playSound('success');
+          }}
+          disabled={isDetectingFields}
+          className={`w-full mt-8 py-5 rounded-[32px] border-2 border-dashed transition-all duration-300 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-sm bg-transparent cursor-pointer disabled:opacity-60 ${darkMode ? "border-zinc-700/50 text-zinc-400 hover:bg-zinc-900 hover:border-zinc-500 hover:text-zinc-200" : "border-slate-300 text-slate-500 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-700"}`}
         >
-          <Plus size={18} /> {activeTab === 'externe' ? 'Ajouter un nouveau contrat' : 'Créer une nouvelle résolution'}
+          {activeTab === 'modeles'
+            ? (isDetectingFields ? <><Loader2 size={18} className="animate-spin" /> Analyse du document...</> : <><Upload size={18} /> Importer un modèle Word (.docx)</>)
+            : <><Plus size={18} /> {activeTab === 'externe' ? 'Ajouter un nouveau contrat' : 'Créer une nouvelle résolution'}</>
+          }
         </button>
       </div>
 
@@ -1210,6 +1475,173 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CONFIRM & NAME NEW TEMPLATE (after {{fields}} are detected) */}
+      <AnimatePresence>
+        {pendingTemplateFile && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`w-full max-w-lg rounded-[40px] border shadow-2xl p-6 sm:p-8 flex flex-col relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+            >
+              <button
+                onClick={() => { setPendingTemplateFile(null); setPendingTemplateFields([]); setPendingTemplateConditions([]); setPendingTemplateName(''); }}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-all border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="bg-indigo-500/10 text-indigo-500 p-2.5 rounded-2xl">
+                  <Layers size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest leading-none">Enregistrer le modèle</h3>
+                  <p className="text-[8px] font-black uppercase text-indigo-500 tracking-wider mt-1.5 leading-none">
+                    {pendingTemplateFields.length} champ{pendingTemplateFields.length > 1 ? 's' : ''} · {pendingTemplateConditions.length} clause{pendingTemplateConditions.length > 1 ? 's' : ''} conditionnelle{pendingTemplateConditions.length > 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1 mb-4">
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Nom du modèle</label>
+                <input
+                  type="text"
+                  value={pendingTemplateName}
+                  onChange={(e) => setPendingTemplateName(e.target.value)}
+                  placeholder="Ex: Promesse d'achat — Standard"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                />
+              </div>
+
+              {pendingTemplateFields.length > 0 && (
+                <div className={`p-4 rounded-2xl border mb-4 ${darkMode ? "bg-zinc-900/50 border-zinc-800/80" : "bg-slate-50 border-slate-200"}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Champs qui seront demandés à chaque utilisation</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingTemplateFields.map((f) => (
+                      <span key={f} className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${darkMode ? "bg-indigo-500/10 text-indigo-400" : "bg-indigo-100 text-indigo-700"}`}>
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pendingTemplateConditions.length > 0 && (
+                <div className={`p-4 rounded-2xl border mb-6 ${darkMode ? "bg-amber-950/20 border-amber-800/30" : "bg-amber-50/60 border-amber-200/80"}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-amber-500" : "text-amber-600"}`}>Clauses conditionnelles (à cocher/décocher à chaque utilisation)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingTemplateConditions.map((c) => (
+                      <span key={c} className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${darkMode ? "bg-amber-500/10 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setPendingTemplateFile(null); setPendingTemplateFields([]); setPendingTemplateConditions([]); setPendingTemplateName(''); }}
+                  className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleConfirmSaveTemplate}
+                  disabled={isSavingTemplate}
+                  className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {isSavingTemplate ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <>Enregistrer le modèle</>}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: FILL TEMPLATE → GENERATE DOCUMENT */}
+      <AnimatePresence>
+        {fillingTemplate && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-[40px] border shadow-2xl p-6 sm:p-8 flex flex-col relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+            >
+              <button
+                onClick={() => { setFillingTemplate(null); setFillValues({}); setFillConditions({}); }}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-all border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="bg-indigo-500/10 text-indigo-500 p-2.5 rounded-2xl">
+                  <Sparkles size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest leading-none">{fillingTemplate.nombre}</h3>
+                  <p className="text-[8px] font-black uppercase text-indigo-500 tracking-wider mt-1.5 leading-none">
+                    Remplissez les champs pour générer le document
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                {fillingTemplate.campos.map((champ) => (
+                  <div key={champ} className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">{champ}</label>
+                    <input
+                      type="text"
+                      value={fillValues[champ] || ''}
+                      onChange={(e) => setFillValues(prev => ({ ...prev, [champ]: e.target.value }))}
+                      placeholder={`Valeur pour ${champ}`}
+                      className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {(fillingTemplate.condiciones?.length || 0) > 0 && (
+                <div className={`p-4 rounded-2xl border mb-6 space-y-2 ${darkMode ? "bg-amber-950/20 border-amber-800/30" : "bg-amber-50/60 border-amber-200/80"}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-amber-500" : "text-amber-600"}`}>Clauses à inclure dans ce document</p>
+                  {fillingTemplate.condiciones.map((cond) => (
+                    <label key={cond} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!fillConditions[cond]}
+                        onChange={(e) => setFillConditions(prev => ({ ...prev, [cond]: e.target.checked }))}
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                      />
+                      <span className={`text-[11px] font-bold font-mono ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{cond}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setFillingTemplate(null); setFillValues({}); setFillConditions({}); }}
+                  className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleGenerateFromTemplate}
+                  disabled={isGeneratingDoc}
+                  className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {isGeneratingDoc ? <><Loader2 size={14} className="animate-spin" /> Génération...</> : <><FileText size={14} /> Générer le document</>}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

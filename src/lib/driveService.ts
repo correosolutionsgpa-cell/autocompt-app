@@ -7,8 +7,17 @@
  * Routing always follows the active workspace's authenticated token.
  */
 
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { doc, getDoc, setDoc, deleteField, updateDoc } from 'firebase/firestore';
+
+// `companyId` here is the app's internal workspace id (e.g. "1", "2") — every
+// AutoCompt account gets the same seeded ids, so a Firestore doc keyed by the
+// raw companyId alone would collide across different users' accounts. Scope
+// it by owner, matching the `companies` collection's own doc-id convention.
+function driveConfigDocId(companyId: string): string | null {
+  const uid = auth.currentUser?.uid;
+  return uid ? `${uid}_company_${companyId}` : null;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,21 +131,25 @@ export async function connectCompanyDrive(
         tokenCache.set(companyId, config);
 
         // Persist to Firestore (token cached for session; Firestore for metadata)
-        try {
-          await setDoc(
-            doc(db, 'companyDriveConfig', companyId),
-            {
-              folderId,
-              folderName: AUTOCOMPT_FOLDER_NAME,
-              connectedEmail,
-              connectedAt: config.connectedAt,
-              // NOTE: We do NOT persist the access_token to Firestore for security.
-              // The token is kept in memory only for this session.
-            },
-            { merge: true }
-          );
-        } catch {
-          // Firestore save failed — token still works for this session
+        const docId = driveConfigDocId(companyId);
+        if (docId) {
+          try {
+            await setDoc(
+              doc(db, 'companyDriveConfig', docId),
+              {
+                folderId,
+                folderName: AUTOCOMPT_FOLDER_NAME,
+                connectedEmail,
+                connectedAt: config.connectedAt,
+                ownerId: auth.currentUser?.uid,
+                // NOTE: We do NOT persist the access_token to Firestore for security.
+                // The token is kept in memory only for this session.
+              },
+              { merge: true }
+            );
+          } catch {
+            // Firestore save failed — token still works for this session
+          }
         }
 
         onSuccess?.(config);
@@ -161,8 +174,10 @@ export async function getCompanyDriveConfig(companyId: string): Promise<DriveCon
   }
 
   // Check Firestore for metadata (no token — user needs to re-auth if token expired)
+  const docId = driveConfigDocId(companyId);
+  if (!docId) return null;
   try {
-    const snap = await getDoc(doc(db, 'companyDriveConfig', companyId));
+    const snap = await getDoc(doc(db, 'companyDriveConfig', docId));
     if (snap.exists()) {
       const data = snap.data();
       // Return metadata without token — caller knows token is expired
@@ -209,8 +224,10 @@ export async function uploadDocumentToDrive(
  */
 export async function disconnectCompanyDrive(companyId: string): Promise<void> {
   tokenCache.delete(companyId);
+  const docId = driveConfigDocId(companyId);
+  if (!docId) return;
   try {
-    await updateDoc(doc(db, 'companyDriveConfig', companyId), {
+    await updateDoc(doc(db, 'companyDriveConfig', docId), {
       connectedEmail: deleteField(),
       connectedAt: deleteField(),
       folderId: deleteField(),

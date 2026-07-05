@@ -24,6 +24,8 @@ import {
 interface SyndicModuleGridProps {
   darkMode: boolean;
   setVista: (vista: string) => void;
+  setShowFiscalChat: (show: boolean) => void;
+  playNotificationSound: () => void;
 }
 
 // ── design_system_rules.md §2 — 3D Glass Card Base ────────────────────────────
@@ -49,7 +51,12 @@ const hoverShadow = (rgb: string) =>
 const restShadow = "inset 0 1px 1px rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.35)";
 const restShadowLight = "inset 0 1px 1px rgba(255,255,255,0.6), 0 4px 24px rgba(0,0,0,0.04)";
 
-export default function SyndicModuleGrid({ darkMode, setVista }: SyndicModuleGridProps) {
+export default function SyndicModuleGrid({
+  darkMode,
+  setVista,
+  setShowFiscalChat,
+  playNotificationSound,
+}: SyndicModuleGridProps) {
   // ── §4 Standard Card: near-invisible glass, NOT an opaque block ────────────
   const cardBase = [
     "p-5 rounded-[32px] border flex flex-col items-start space-y-2 text-left",
@@ -236,6 +243,61 @@ export default function SyndicModuleGrid({ darkMode, setVista }: SyndicModuleGri
         {/* CTA pill — glass, NOT solid purple-600 */}
         <div className="shrink-0 px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest bg-purple-500/15 dark:bg-purple-500/20 border border-purple-500/40 text-purple-700 dark:text-purple-300 transition-colors duration-300">
           Ouvrir →
+        </div>
+      </button>
+
+      {/* Assistant IA — Universal (all profiles) */}
+      {/* Styled in purple for the Syndicat dashboard */}
+      <button
+        onClick={() => {
+          setShowFiscalChat(true);
+          playNotificationSound();
+        }}
+        className={[
+          "col-span-2 md:col-span-3",
+          "p-5 rounded-[32px] border",
+          "flex items-center gap-5 text-left",
+          "transition-all duration-300 active:scale-[0.99] cursor-pointer relative",
+          // Glass with purple-tinted base
+          "bg-purple-500/[0.06] dark:bg-purple-500/[0.06]",
+          "backdrop-blur-xl",
+          "border-purple-500/30 dark:border-purple-500/25",
+          "text-slate-800 dark:text-zinc-100",
+        ].join(" ")}
+        style={{ boxShadow: darkMode ? restShadow : restShadowLight }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.boxShadow = hoverShadow(SYNDICAT_RGB);
+          (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${SYNDICAT_RGB},0.55)`;
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.boxShadow = darkMode ? restShadow : restShadowLight;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "";
+        }}
+      >
+        {/* Icon — glass badge containing Sofi Face */}
+        <div className="bg-purple-500/10 border border-purple-500/30 p-1.5 rounded-2xl shrink-0 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
+            <img
+              src="/sofi/La_pose__Sofi_con_exito.jpeg"
+              alt="Sofi"
+              className="w-full h-full object-cover"
+              style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <span className="text-[11px] font-black uppercase italic tracking-tighter block">
+            Assistant IA Expert (S.O.F.I.)
+          </span>
+          <p className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug mt-1">
+            Posez vos questions sur la gestion de copropriété, règlements d'immeuble et obligations légales au Québec.
+          </p>
+        </div>
+
+        {/* CTA pill */}
+        <div className="shrink-0 px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest bg-purple-500/15 dark:bg-purple-500/20 border border-purple-500/40 text-purple-700 dark:text-purple-300 transition-colors duration-300">
+          Clavarder →
         </div>
       </button>
 

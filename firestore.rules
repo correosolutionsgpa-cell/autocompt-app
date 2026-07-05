@@ -36,9 +36,15 @@ service cloud.firestore {
     function isOwnerWrite() {
       return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
     }
+    // A business partner added to a company's collaboratorUIDs (e.g. via a
+    // future invite flow) — read-only for now. `.get(key, default)` avoids an
+    // error on older docs saved before this field existed.
+    function isCollaboratorDoc() {
+      return isSignedIn() && request.auth.uid in resource.data.get('collaboratorUIDs', []);
+    }
 
     match /companies/{companyId} {
-      allow read: if isOwnerDoc();
+      allow read: if isOwnerDoc() || isCollaboratorDoc();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }
@@ -50,6 +56,22 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    match /docTemplates/{templateId} {
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    // Per-company Google Drive connection metadata (folder id, connected
+    // email — never the OAuth token itself). Doc id is `{ownerId}_company_{id}`,
+    // scoped the same way as `companies`, since the app's internal company ids
+    // ("1", "2"...) repeat across every account.
+    match /companyDriveConfig/{configId} {
       allow read: if isOwnerDoc();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();

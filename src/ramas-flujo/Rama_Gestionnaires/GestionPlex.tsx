@@ -42,7 +42,10 @@ export interface GestionPlexProps {
 
   // États globaux partagés (non encapsulables)
   plexManagementForm: any;
+  /** Every property across every company the account owns — never filter this array itself when adding/removing (see `visibleProperties` inside the component); doing so would make the reconcile diff in App.tsx delete every other company's properties. */
   plexManagementProperties: any[];
+  /** Which company/workspace is currently active — used to show only its properties and to tag newly-created ones. */
+  activeCompanyId: string;
   /** All units for the current user, fetched from Firestore `units` collection */
   allUnits: UnitDoc[];
   expandedDoors: Record<string | number, boolean>;
@@ -75,6 +78,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   darkMode,
   plexManagementForm,
   plexManagementProperties,
+  activeCompanyId,
   allUnits,
   expandedDoors,
   showLimitModal,
@@ -90,6 +94,13 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   sofiPrefillMessage,
 }) => {
   const taxScanInputRef = useRef<HTMLInputElement>(null);
+
+  // Only show this company's properties. Untagged (`companyId` missing) entries
+  // are properties saved before this feature existed — keep showing them until
+  // they're next edited/re-saved, instead of silently hiding real data.
+  const visibleProperties = plexManagementProperties.filter(
+    (p) => !p.companyId || p.companyId === activeCompanyId
+  );
 
   return (
   <div
@@ -713,6 +724,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   {
                     ...plexManagementForm,
                     id: newId,
+                    companyId: activeCompanyId,
                     isContainer: formUnits.length > 1,
                     units: formUnits,
                   },
@@ -756,7 +768,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
       </div>
 
       {/* Liste des propriétés enregistrées */}
-      {plexManagementProperties.length > 0 && (
+      {visibleProperties.length > 0 && (
         <div
           className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
         >
@@ -768,21 +780,21 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             </h4>
             <div className="flex space-x-3 text-[10px] font-black uppercase tracking-widest">
               <span className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md">
-                {plexManagementProperties.filter((p) => p.status === "Actif").length} Unités Actives
+                {visibleProperties.filter((p) => p.status === "Actif").length} Unités Actives
               </span>
               <span className="bg-slate-400/10 text-slate-500 px-2 py-1 rounded-md">
-                {plexManagementProperties.filter((p) => p.status === "Vacant").length} Vacantes
+                {visibleProperties.filter((p) => p.status === "Vacant").length} Vacantes
               </span>
-              {plexManagementProperties.filter((p) => p.status === "Entretien").length > 0 && (
+              {visibleProperties.filter((p) => p.status === "Entretien").length > 0 && (
                 <span className="bg-rose-500/10 text-rose-500 px-2 py-1 rounded-md">
-                  {plexManagementProperties.filter((p) => p.status === "Entretien").length} En Entretien
+                  {visibleProperties.filter((p) => p.status === "Entretien").length} En Entretien
                 </span>
               )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {plexManagementProperties.map((p) => {
+            {visibleProperties.map((p) => {
               // ── Fetch units for this building from the allUnits prop ──────────────────
               const buildingUnits = allUnits.filter(u => u.buildingId === p.id);
               const isContainer = buildingUnits.length > 1 || p.isContainer;

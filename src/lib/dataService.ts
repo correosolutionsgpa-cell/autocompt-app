@@ -29,7 +29,8 @@ import {
   where,
   orderBy,
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
+import { db, auth, storage } from './firebase';
 import { postJournalEntry } from '../services/ledgerService';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -56,6 +57,8 @@ export type BuildingType = 'full_rental' | 'owner_occupied' | 'mixed';
  */
 export interface BuildingLedger {
   id: string;
+  /** Which company/workspace manages this building. */
+  companyId: string;
   /** Civic address — used as display label and ledger title */
   address: string;
   type: BuildingType;
@@ -85,6 +88,8 @@ export interface BuildingLedger {
  */
 export interface PropertyDoc {
   id: string;
+  /** Which company/workspace this property belongs to — a property is managed BY one company (e.g. a Triplex managed through a property-management business), never shared across companies. */
+  companyId: string;
   /** FK → BuildingLedger.id (links property to its fiscal ledger) */
   buildingId?: string;
   typeLocation: string;   // "Appartement/Maison" | "Immeuble à revenus" | etc.
@@ -103,6 +108,8 @@ export interface PropertyDoc {
  */
 export interface UnitDoc {
   id: string;
+  /** Which company/workspace this unit belongs to — mirrors its parent PropertyDoc.companyId. */
+  companyId: string;
   /** FK → BuildingLedger.id (or PropertyDoc.id for legacy data) */
   buildingId: string;
   /** Human-readable unit label, e.g. "Appt 1 (RDC)", "Habitation 3" */
@@ -142,6 +149,8 @@ export interface ExpenseDoc {
 
 export interface LoyerDoc {
   id: string;
+  /** Which company/workspace this rent entry belongs to. */
+  companyId: string;
   uniteAdresse: string;
   locataire: string;
   loyer: number;
@@ -170,6 +179,22 @@ export interface InvoiceDoc {
   createdAt: string;
 }
 
+// ── DocTemplateDoc — Firestore `docTemplates` collection ─────────────────────
+// The .docx file itself lives in Firebase Storage (docTemplates are metadata
+// only — Firestore documents have a 1MB limit, unsuitable for file blobs).
+
+export interface DocTemplateDoc {
+  id: string;
+  companyId: string;
+  nombre: string;
+  storagePath: string;
+  campos: string[];
+  /** {{#clause}}...{{/clause}} conditional sections detected in the .docx — shown as checkboxes when filling. */
+  condiciones: string[];
+  ownerId: string;
+  createdAt: string;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §2 — SEED DATA
 // ══════════════════════════════════════════════════════════════════════════════
@@ -179,6 +204,10 @@ export const defaultWorkspaces = [
     id: '1',
     nombre: 'Solutions GPA Inc.',
     industry: 'Gestionnaire de Bâtiments',
+    // Which dashboard shell this company opens into. This was previously
+    // hardcoded by id ("1"/"2" → Syndic, "3" → Plex, "4"/"5" unhandled) — an
+    // explicit field per company is the source of truth now.
+    dashboardMode: 'Syndic' as const,
     legalEntity: 'Incorporée',
     partners: ['Fabiola'],
     googleEmail: 'solutionsgpa@gmail.com',
@@ -209,6 +238,7 @@ export const defaultWorkspaces = [
     id: '2',
     nombre: 'Achat Direct Inc.',
     industry: 'Prospecteur & Flip',
+    dashboardMode: 'Plex' as const,
     legalEntity: 'Incorporée',
     partners: ['Fabiola', 'Natalia'],
     googleEmail: 'achatdirectqc@gmail.com',
@@ -245,6 +275,7 @@ export const defaultWorkspaces = [
     id: '3',
     nombre: 'Triplex - Immobilier',
     industry: 'Propriétaire de Plex',
+    dashboardMode: 'Plex' as const,
     legalEntity: 'Co-propriété (Individus)',
     partners: ['Fabiola', 'Eric'],
     googleEmail: 'solutionsgpa@gmail.com',
@@ -283,6 +314,7 @@ export const defaultWorkspaces = [
     id: '4',
     nombre: 'Gonzalo Real Estate',
     industry: 'Courtier Immobilier',
+    dashboardMode: 'Plex' as const,
     legalEntity: 'Travailleur Autonome',
     partners: ['Gonzalo', 'Fabiola'],
     driveConfig: { folderId: 'brokerage_courtier_vault', connected: true },
@@ -310,6 +342,7 @@ export const defaultWorkspaces = [
     id: '5',
     nombre: 'Entrepreneur Général',
     industry: 'Construction & Rénovations',
+    dashboardMode: 'Plex' as const,
     legalEntity: 'Incorporée',
     partners: ['Fabiola'],
     driveConfig: { folderId: 'entrepreneur_construction_vault', connected: true },
@@ -348,9 +381,12 @@ export const defaultDepenses: ExpenseDoc[] = [
  * Seed properties — address-level records only.
  * NOTE: No `chambres[]` nesting. Units are in `defaultUnitsSeed` below.
  */
+// Seeded as belonging to company "1" (Solutions GPA Inc.) — the Triplex is an
+// asset managed through that property-management business, not its own company.
 export const defaultPropertiesSeed: PropertyDoc[] = [
   {
     id: 'prop_1',
+    companyId: '1',
     buildingId: 'building_triplex_main',
     typeLocation: 'Appartement/Maison',
     adresse: '123 Rue Principale, Montréal, QC',
@@ -360,6 +396,7 @@ export const defaultPropertiesSeed: PropertyDoc[] = [
   },
   {
     id: 'prop_2',
+    companyId: '1',
     buildingId: 'building_triplex_main',
     typeLocation: 'Immeuble à revenus (Triplex)',
     adresse: '123 Rue Principale, Montréal, QC',
@@ -374,17 +411,17 @@ export const defaultPropertiesSeed: PropertyDoc[] = [
  * Each unit carries a `buildingId` FK to its parent building.
  */
 export const defaultUnitsSeed: UnitDoc[] = [
-  { id: 'unit_1', buildingId: 'building_triplex_main', unitName: 'Appt 1 (RDC)',   tenantName: 'Jean Tremblay', monthlyRent: 1200, isActive: true,  ownerId: '', createdAt: '' },
-  { id: 'unit_2', buildingId: 'building_triplex_main', unitName: 'Appt 2 (Étage)', tenantName: 'Marie Dubois',  monthlyRent: 950,  isActive: false, ownerId: '', createdAt: '' },
-  { id: 'unit_3', buildingId: 'building_triplex_main', unitName: 'Habitation 1',   tenantName: 'Alice Roy',     monthlyRent: 450,  isActive: true,  ownerId: '', createdAt: '' },
-  { id: 'unit_4', buildingId: 'building_triplex_main', unitName: 'Habitation 2',   tenantName: 'Marc Coté',     monthlyRent: 400,  isActive: false, ownerId: '', createdAt: '' },
-  { id: 'unit_5', buildingId: 'building_triplex_main', unitName: 'Habitation 3',   tenantName: 'Julie Martin',  monthlyRent: 425,  isActive: true,  ownerId: '', createdAt: '' },
-  { id: 'unit_6', buildingId: 'building_triplex_main', unitName: 'Habitation 4',   tenantName: 'Luc Lavoie',    monthlyRent: 450,  isActive: true,  ownerId: '', createdAt: '' },
+  { id: 'unit_1', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Appt 1 (RDC)',   tenantName: 'Jean Tremblay', monthlyRent: 1200, isActive: true,  ownerId: '', createdAt: '' },
+  { id: 'unit_2', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Appt 2 (Étage)', tenantName: 'Marie Dubois',  monthlyRent: 950,  isActive: false, ownerId: '', createdAt: '' },
+  { id: 'unit_3', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Habitation 1',   tenantName: 'Alice Roy',     monthlyRent: 450,  isActive: true,  ownerId: '', createdAt: '' },
+  { id: 'unit_4', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Habitation 2',   tenantName: 'Marc Coté',     monthlyRent: 400,  isActive: false, ownerId: '', createdAt: '' },
+  { id: 'unit_5', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Habitation 3',   tenantName: 'Julie Martin',  monthlyRent: 425,  isActive: true,  ownerId: '', createdAt: '' },
+  { id: 'unit_6', companyId: '1', buildingId: 'building_triplex_main', unitName: 'Habitation 4',   tenantName: 'Luc Lavoie',    monthlyRent: 450,  isActive: true,  ownerId: '', createdAt: '' },
 ];
 
 export const defaultLoyersSeed: LoyerDoc[] = [
-  { id: 'loyer_1', uniteAdresse: 'Appt 1 (RDC) - 123 Rue Principale',   locataire: 'Jean Tremblay', loyer: 1200, statut: 'Payé',      ownerId: '', createdAt: '' },
-  { id: 'loyer_2', uniteAdresse: 'Appt 2 (Étage) - 123 Rue Principale', locataire: 'Marie Dubois',  loyer: 950,  statut: 'En retard', ownerId: '', createdAt: '' },
+  { id: 'loyer_1', companyId: '1', uniteAdresse: 'Appt 1 (RDC) - 123 Rue Principale',   locataire: 'Jean Tremblay', loyer: 1200, statut: 'Payé',      ownerId: '', createdAt: '' },
+  { id: 'loyer_2', companyId: '1', uniteAdresse: 'Appt 2 (Étage) - 123 Rue Principale', locataire: 'Marie Dubois',  loyer: 950,  statut: 'En retard', ownerId: '', createdAt: '' },
 ];
 
 // ── BetaCodeDoc — Firestore `betaCodes` collection ───────────────────────────
@@ -415,6 +452,13 @@ function assertCanWrite(): void {
   if (trialExpired) throw new Error('TRIAL_EXPIRED');
 }
 
+/** Strips the `{userId}_company_` prefix off a stored companyId, for display/comparison against `activeCompanyId`. */
+function unprefixCompanyId(companyId: string | undefined): string {
+  if (!companyId) return '';
+  const parts = companyId.split('_company_');
+  return parts.length > 1 ? parts[1] : companyId;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §3 — DATA SERVICE
 // ══════════════════════════════════════════════════════════════════════════════
@@ -430,7 +474,7 @@ export const dataService = {
 
     for (const comp of defaultWorkspaces) {
       const docId = `${userId}_company_${comp.id}`;
-      await setDoc(doc(db, 'companies', docId), { ...comp, id: docId, ownerId: userId, createdAt: new Date().toISOString() });
+      await setDoc(doc(db, 'companies', docId), { ...comp, id: docId, ownerId: userId, collaboratorUIDs: [], createdAt: new Date().toISOString() });
     }
 
     for (const dep of defaultDepenses) {
@@ -446,17 +490,20 @@ export const dataService = {
 
     for (const prop of defaultPropertiesSeed) {
       const docId = `${userId}_prop_${prop.id}`;
-      await setDoc(doc(db, 'properties', docId), { ...prop, id: docId, ownerId: userId, createdAt: new Date().toISOString() });
+      const docCompanyId = `${userId}_company_${prop.companyId}`;
+      await setDoc(doc(db, 'properties', docId), { ...prop, id: docId, companyId: docCompanyId, ownerId: userId, createdAt: new Date().toISOString() });
     }
 
     for (const unit of defaultUnitsSeed) {
       const docId = `${userId}_unit_${unit.id}`;
-      await setDoc(doc(db, 'units', docId), { ...unit, id: docId, ownerId: userId, createdAt: new Date().toISOString() });
+      const docCompanyId = `${userId}_company_${unit.companyId}`;
+      await setDoc(doc(db, 'units', docId), { ...unit, id: docId, companyId: docCompanyId, ownerId: userId, createdAt: new Date().toISOString() });
     }
 
     for (const loyer of defaultLoyersSeed) {
       const docId = `${userId}_loyer_${loyer.id}`;
-      await setDoc(doc(db, 'loyers', docId), { ...loyer, id: docId, ownerId: userId, createdAt: new Date().toISOString() });
+      const docCompanyId = `${userId}_company_${loyer.companyId}`;
+      await setDoc(doc(db, 'loyers', docId), { ...loyer, id: docId, companyId: docCompanyId, ownerId: userId, createdAt: new Date().toISOString() });
     }
   },
 
@@ -464,13 +511,25 @@ export const dataService = {
 
   async fetchWorkspaces(userId: string): Promise<any[]> {
     try {
-      const q = query(collection(db, 'companies'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      // Companies the user owns, plus companies they've been added to as a
+      // collaborator (e.g. a business partner invited into a shared company).
+      // Firestore has no OR-across-fields query, so this runs as two queries
+      // merged client-side, deduped by doc id (a user can't be both on the
+      // same doc, but this guards against it anyway).
+      const ownedQ = query(collection(db, 'companies'), where('ownerId', '==', userId));
+      const collabQ = query(collection(db, 'companies'), where('collaboratorUIDs', 'array-contains', userId));
+      const [ownedSnap, collabSnap] = await Promise.all([getDocs(ownedQ), getDocs(collabQ)]);
+
+      const seen = new Set<string>();
+      const results: any[] = [];
+      for (const d of [...ownedSnap.docs, ...collabSnap.docs]) {
+        if (seen.has(d.id)) continue;
+        seen.add(d.id);
         const data = d.data();
         const idParts = d.id.split('_company_');
-        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id };
-      });
+        results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id });
+      }
+      return results;
     } catch (e) {
       console.error('fetchWorkspaces failed, returning local default:', e);
       return defaultWorkspaces;
@@ -498,14 +557,16 @@ export const dataService = {
     assertCanWrite();
     const docId = `${userId}_building_${building.id}`;
     const now = new Date().toISOString();
+    const docCompanyId = `${userId}_company_${building.companyId}`;
     const data: BuildingLedger = {
       ...building,
+      companyId: docCompanyId,
       deductiblePct: 100 - building.occupancyPct,   // enforce invariant
       ownerId: userId,
       createdAt: now,
     };
     await setDoc(doc(db, 'buildings', docId), data);
-    return data;
+    return { ...data, companyId: building.companyId };
   },
 
   /**
@@ -515,7 +576,10 @@ export const dataService = {
     try {
       const q = query(collection(db, 'buildings'), where('ownerId', '==', userId));
       const snap = await getDocs(q);
-      return snap.docs.map((d) => d.data() as BuildingLedger);
+      return snap.docs.map((d) => {
+        const data = d.data() as BuildingLedger;
+        return { ...data, companyId: unprefixCompanyId(data.companyId) };
+      });
     } catch (e) {
       console.error('fetchBuildings failed:', e);
       return [];
@@ -548,7 +612,7 @@ export const dataService = {
       return snap.docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_prop_');
-        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as PropertyDoc;
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as PropertyDoc;
       });
     } catch (e) {
       console.error('fetchProperties failed, returning local default:', e);
@@ -560,14 +624,16 @@ export const dataService = {
     assertCanWrite();
     const originalId = propertyData.id || `prop_${Date.now()}`;
     const docId = `${userId}_prop_${originalId}`;
+    const docCompanyId = `${userId}_company_${propertyData.companyId}`;
     const data: PropertyDoc = {
       ...propertyData,
       id: docId,
+      companyId: docCompanyId,
       ownerId: userId,
       createdAt: new Date().toISOString(),   // service generates timestamp (not in Omit)
     };
     await setDoc(doc(db, 'properties', docId), data);
-    return { ...data, id: originalId };
+    return { ...data, id: originalId, companyId: propertyData.companyId };
   },
 
 
@@ -587,14 +653,16 @@ export const dataService = {
     assertCanWrite();
     const originalId = unit.id || `unit_${Date.now()}`;
     const docId = `${userId}_unit_${originalId}`;
+    const docCompanyId = `${userId}_company_${unit.companyId}`;
     const data: UnitDoc = {
       ...unit,
       id: originalId,
+      companyId: docCompanyId,
       ownerId: userId,
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'units', docId), { ...data, id: docId });
-    return data;
+    return { ...data, companyId: unit.companyId };
   },
 
   /**
@@ -611,7 +679,7 @@ export const dataService = {
       return snap.docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_unit_');
-        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as UnitDoc;
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as UnitDoc;
       });
     } catch (e) {
       console.error(`fetchUnitsByBuilding(${buildingId}) failed:`, e);
@@ -629,7 +697,7 @@ export const dataService = {
       return snap.docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_unit_');
-        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as UnitDoc;
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as UnitDoc;
       });
     } catch (e) {
       console.error('fetchAllUnits failed:', e);
@@ -654,7 +722,7 @@ export const dataService = {
       return snap.docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_loyer_');
-        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as LoyerDoc;
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as LoyerDoc;
       });
     } catch (e) {
       console.error('fetchLoyers failed, returning local default:', e);
@@ -666,7 +734,8 @@ export const dataService = {
     assertCanWrite();
     const originalId = loyerData.id || `loyer_${Date.now()}`;
     const docId = `${userId}_loyer_${originalId}`;
-    const data = { ...loyerData, id: docId, ownerId: userId, createdAt: loyerData.createdAt || new Date().toISOString() };
+    const docCompanyId = loyerData.companyId ? `${userId}_company_${loyerData.companyId}` : undefined;
+    const data = { ...loyerData, id: docId, companyId: docCompanyId, ownerId: userId, createdAt: loyerData.createdAt || new Date().toISOString() };
     
     const entryData = {
       id: docId,
@@ -718,7 +787,7 @@ export const dataService = {
       throw error;
     }
 
-    return { ...data, id: originalId } as LoyerDoc;
+    return { ...data, id: originalId, companyId: loyerData.companyId } as LoyerDoc;
   },
 
   async deleteLoyer(loyerId: string): Promise<boolean> {
@@ -883,6 +952,62 @@ export const dataService = {
 
   async deleteInvoiceDoc(invoiceId: string): Promise<boolean> {
     await deleteDoc(doc(db, 'invoices', String(invoiceId)));
+    return true;
+  },
+
+  // ── Document templates — Firestore `docTemplates` + Storage (DocuLegal) ────
+
+  async fetchDocTemplates(userId: string): Promise<DocTemplateDoc[]> {
+    try {
+      const q = query(collection(db, 'docTemplates'), where('ownerId', '==', userId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ ...(d.data() as DocTemplateDoc), id: d.id }));
+    } catch (e) {
+      console.error('fetchDocTemplates failed:', e);
+      return [];
+    }
+  },
+
+  /** Uploads the raw .docx to Storage and saves its metadata (name + detected fields/conditions) to Firestore. */
+  async saveDocTemplate(
+    userId: string,
+    companyId: string,
+    nombre: string,
+    campos: string[],
+    docxFile: File | Blob,
+    condiciones: string[] = []
+  ): Promise<DocTemplateDoc> {
+    assertCanWrite();
+    const templateId = `tpl_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const storagePath = `templates/${userId}/${templateId}.docx`;
+    await uploadBytes(ref(storage, storagePath), docxFile);
+
+    const data: DocTemplateDoc = {
+      id: templateId,
+      companyId,
+      nombre,
+      storagePath,
+      campos,
+      condiciones,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'docTemplates', templateId), data);
+    return data;
+  },
+
+  /** Downloads a saved template's raw .docx bytes from Storage, for filling client-side. */
+  async fetchTemplateFile(storagePath: string): Promise<ArrayBuffer> {
+    return getBytes(ref(storage, storagePath));
+  },
+
+  async deleteDocTemplate(templateId: string, storagePath: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'docTemplates', templateId));
+    try {
+      await deleteObject(ref(storage, storagePath));
+    } catch (e) {
+      console.error('deleteDocTemplate: Storage file deletion failed (Firestore doc already removed):', e);
+    }
     return true;
   },
 

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -134,11 +134,14 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, setTrialExpired, type UnitDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc } from "./lib/dataService";
 import { useToast } from "./lib/ToastContext";
-import { auth, db } from "./lib/firebase";
+import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
+import { isCompanyDriveActive, uploadDocumentToDrive } from "./lib/driveService";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
@@ -796,7 +799,7 @@ const App = () => {
     });
     for (const item of addedOrModified) {
       try {
-        const saved = await dataService.saveLoyer(userId, item);
+        const saved = await dataService.saveLoyer(userId, { ...item, companyId: item.companyId || activeCompanyId });
         if (saved.id && saved.id !== item.id) {
           _setPlexLoyers(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
         }
@@ -874,6 +877,7 @@ const App = () => {
         // Those fields are injected by the service itself — do NOT pass them here.
         const saved = await dataService.saveProperty(userId, {
           id: item.id,
+          companyId: item.companyId || activeCompanyId,
           buildingId: item.buildingId,
           typeLocation: item.typeLocation || "Logement entier",
           adresse: item.adresse,
@@ -887,6 +891,7 @@ const App = () => {
         for (const u of unitList) {
           const savedUnit = await dataService.saveUnit(userId, {
             id: u.id || `unit_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            companyId: item.companyId || activeCompanyId,
             buildingId: resolvedPropId,
             unitName: u.unitName || u.identifiantChambre || "Unité",
             tenantName: u.tenantName || u.locataire || "",
@@ -1159,14 +1164,6 @@ const App = () => {
     localStorage.setItem("autocompt_user_level", userLevel);
   }, [userLevel]);
   const [activeCompanyId, setActiveCompanyId] = useState("1");
-
-  useEffect(() => {
-    if (activeCompanyId === "1" || activeCompanyId === "2") {
-      setDashboardMode("Syndic");
-    } else if (activeCompanyId === "3") {
-      setDashboardMode("Plex");
-    }
-  }, [activeCompanyId]);
   const [darkMode, setDarkMode] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     const saved = localStorage.getItem("autocompt_sound");
@@ -1192,6 +1189,19 @@ const App = () => {
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+
+  // Which dashboard shell (Plex vs Syndic) the active company opens into.
+  // Reads the company's own `dashboardMode` field (set in defaultWorkspaces)
+  // instead of hardcoding by id — that previous scheme only handled ids
+  // "1"/"2"/"3" and mis-classified "Achat Direct Inc." (id "2", a Plex-type
+  // Prospecteur & Flip business) as Syndic. Companies saved before this field
+  // existed fall back to the same id "1" == Syndic assumption, since that's
+  // the only company every seeded account actually intends as its Syndic.
+  useEffect(() => {
+    const company = listaEmpresas.find((e) => e.id === activeCompanyId);
+    const mode = company?.dashboardMode ?? (activeCompanyId === "1" ? "Syndic" : "Plex");
+    setDashboardMode(mode);
+  }, [activeCompanyId, listaEmpresas]);
 
   const isSuperAdmin =
     currentUserEmail ? (
@@ -1275,6 +1285,16 @@ const App = () => {
   useEffect(() => {
     if (isPhoneVerified === false && vista === "dashboard") {
       setVista("phone-verify");
+    }
+  }, [isPhoneVerified, vista]);
+
+  // Inverse correction: if some race landed on "phone-verify" before Firestore
+  // confirmed the phone was already verified, move on to the dashboard as soon
+  // as that confirmation arrives — otherwise an already-verified account can
+  // get stuck on this screen indefinitely.
+  useEffect(() => {
+    if (isPhoneVerified === true && vista === "phone-verify") {
+      setVista("dashboard");
     }
   }, [isPhoneVerified, vista]);
 
@@ -1667,6 +1687,26 @@ const App = () => {
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
+    // ── RBAC module-id → vista-id mapping for plexNavItems filtering ────────
+    // Items mapped to `null` have no corresponding rbacConfig ModuleId (e.g.
+    // Meublé/Airbnb, GPS, Notre Équipe are treated as always-on, matching how
+    // they're handled elsewhere per .cursorrules "handled by parent").
+    const PLEX_ITEM_RBAC: Record<string, import("./lib/rbacConfig").ModuleId | null> = {
+      plex: "gestion_immo",
+      meuble: null,
+      dossiers: "dossiers_fiscaux",
+      taxes_assurances: "taxes_assurances",
+      banque: "conciliation",
+      reportes: "tenue_livres",
+      facturas: "facturation",
+      homeoffice: "bureau_domicile",
+      kilometraje: null,
+      taxes: "tps_tvq",
+      doculegal: "doculegal",
+      equipe: null,
+      "heures-paie": "heures_paie",
+    };
+
     // ── RBAC module-id → vista-id mapping for syndicNavItems filtering ──────
     // Keeps only the items whose rbacConfig moduleId is accessible to the profile.
     const SYNDIC_ITEM_RBAC: Record<string, import("./lib/rbacConfig").ModuleId | null> = {
@@ -1712,7 +1752,13 @@ const App = () => {
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
-    const navItems = [...baseNavItems, ...plexNavItems];
+    const plexNavItemsFiltered = plexNavItems.filter((item) => {
+      const moduleId = PLEX_ITEM_RBAC[item.id];
+      if (moduleId === null || moduleId === undefined) return true; // always-on
+      return hasAccess(sidebarProfile, moduleId);
+    });
+
+    const navItems = [...baseNavItems, ...plexNavItemsFiltered];
 
     // activeProfile is derived at outer App scope — available here via closure.
 
@@ -2654,6 +2700,23 @@ const App = () => {
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
+
+  // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
+  // Flippeur/Gestionnaire DocuLegal. Each account's templates are private
+  // (isolated by ownerId) so one user's own Promesse d'Achat never shows up
+  // for another user — they each mount their own exclusive template.
+  const [docTemplates, setDocTemplates] = useState<DocTemplateDoc[]>([]);
+  const docTemplateFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isDetectingDocFields, setIsDetectingDocFields] = useState(false);
+  const [pendingDocTemplateFile, setPendingDocTemplateFile] = useState<File | null>(null);
+  const [pendingDocTemplateFields, setPendingDocTemplateFields] = useState<string[]>([]);
+  const [pendingDocTemplateConditions, setPendingDocTemplateConditions] = useState<string[]>([]);
+  const [pendingDocTemplateName, setPendingDocTemplateName] = useState("");
+  const [isSavingDocTemplate, setIsSavingDocTemplate] = useState(false);
+  const [fillingDocTemplate, setFillingDocTemplate] = useState<DocTemplateDoc | null>(null);
+  const [docFillValues, setDocFillValues] = useState<Record<string, string>>({});
+  const [docFillConditions, setDocFillConditions] = useState<Record<string, boolean>>({});
+  const [isGeneratingDocFromTemplate, setIsGeneratingDocFromTemplate] = useState(false);
   const [docPlacedFields, setDocPlacedFields] = useState<any[]>([
     {
       id: "field-1",
@@ -3573,6 +3636,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
   );
   const filteredDepenses = depenses.filter(
     (d) => d.companyId === activeCompanyId,
+  );
+  // Untagged (`companyId` missing) properties predate this scoping feature —
+  // keep showing them everywhere until they're next saved, instead of hiding real data.
+  const visiblePlexManagementProperties = plexManagementProperties.filter(
+    (p) => !p.companyId || p.companyId === activeCompanyId,
   );
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -7136,6 +7204,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
           // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
           const invoices = await dataService.fetchInvoices(user.uid);
           _setHistorique(invoices);
+
+          // Fetch user's own DocuLegal document templates (private, per-account).
+          dataService.fetchDocTemplates(user.uid).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
 
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid);
@@ -10717,7 +10788,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   </div>
                 </div>
 
-                {/* ── Floating SOFI — half-body waving asset (sofimediocuerpoblanco.png) ── */}
+                {/* ── Floating SOFI — success pose image (La_pose__Sofi_con_exito.jpeg) ── */}
                 <div
                   className="self-end cursor-pointer"
                   onClick={() => {
@@ -10729,12 +10800,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 >
                   {/* Online indicator dot */}
                   <div className="relative">
-                    <SofiPresence
-                      variant="halfbody"
-                      height={140}
-                      className="relative z-10"
+                    <img
+                      src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                      alt="Sofi Success"
+                      className="h-[150px] w-auto object-contain rounded-2xl border border-cyan-500/30 dark:border-cyan-400/20 shadow-lg relative z-10"
                     />
-                    <span className="absolute bottom-2 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)] z-20" />
+                    <span className="absolute bottom-2 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)] z-20 animate-pulse" />
                   </div>
                 </div>
               </motion.div>
@@ -10745,6 +10816,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
             <SyndicModuleGrid
               darkMode={darkMode}
               setVista={setVista}
+              setShowFiscalChat={setShowFiscalChat}
+              playNotificationSound={playNotificationSound}
             />
           ) : (
             <PlexModuleGrid
@@ -10752,7 +10825,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
               activeProfile={activeProfile}
               setVista={setVista}
               getEffectiveTier={getEffectiveTier}
-              plexManagementProperties={plexManagementProperties}
+              plexManagementProperties={visiblePlexManagementProperties}
               setDispatcherSuccessToast={setDispatcherSuccessToast}
               playNotificationSound={playNotificationSound}
               setShowFiscalChat={setShowFiscalChat}
@@ -10775,17 +10848,28 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   className={`p-6 border-b flex items-center justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="bg-emerald-600 p-2 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
-                      <Sparkles size={20} />
-                    </div>
+                    {dashboardMode === "Syndic" ? (
+                      <div className="w-10 h-10 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950">
+                        <img
+                          src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                          alt="Sofi"
+                          className="w-full h-full object-cover"
+                          style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-600 p-2 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
+                        <Sparkles size={20} />
+                      </div>
+                    )}
                     <div>
                       <h3
                         className={`text-xs font-black uppercase italic tracking-tighter leading-none ${darkMode ? "text-white" : "text-slate-900"}`}
                       >
-                        Assistant IA Expert
+                        {dashboardMode === "Syndic" ? "Assistante IA Sofi" : "Assistant IA Expert"}
                       </h3>
-                      <p className="text-[7px] font-black uppercase text-emerald-500 tracking-widest mt-1">
-                        Soutien Fiscal en Direct
+                      <p className={`text-[7px] font-black uppercase tracking-widest mt-1 ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"}`}>
+                        {dashboardMode === "Syndic" ? "Conseils Copropriété en Direct" : "Soutien Fiscal en Direct"}
                       </p>
                     </div>
                   </div>
@@ -10807,16 +10891,27 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       >
                         <div
                           className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${isUser
-                            ? "bg-[#059669] text-white rounded-tr-none border-[#059669]"
+                            ? `${dashboardMode === "Syndic" ? "bg-purple-600 border-purple-600" : "bg-[#059669] border-[#059669]"} text-white rounded-tr-none`
                             : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
                             }`}
                         >
                           <div className="flex items-center space-x-2 mb-2 opacity-80">
                             {!isUser && (
-                              <Sparkles
-                                size={14}
-                                className="text-emerald-500 animate-pulse"
-                              />
+                              dashboardMode === "Syndic" ? (
+                                <div className="w-5.5 h-5.5 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 mr-1">
+                                  <img
+                                    src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                                    alt="Sofi"
+                                    className="w-full h-full object-cover"
+                                    style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+                                  />
+                                </div>
+                              ) : (
+                                <Sparkles
+                                  size={14}
+                                  className="text-emerald-500 animate-pulse"
+                                />
+                              )
                             )}
                             <p className="text-[10px] font-black uppercase italic tracking-tighter">
                               {isUser
@@ -10838,18 +10933,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         className={`max-w-[85%] ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-450" : "bg-slate-100 border-slate-250 text-slate-500"} p-4 rounded-[32px] rounded-tl-none border shadow-sm flex items-center space-x-2`}
                       >
                         <span
-                          className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"
+                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
                           style={{ animationDelay: "0ms" }}
                         ></span>
                         <span
-                          className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"
+                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
                           style={{ animationDelay: "150ms" }}
                         ></span>
                         <span
-                          className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"
+                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
                           style={{ animationDelay: "300ms" }}
                         ></span>
-                        <span className="text-[9px] font-black uppercase tracking-wider italic text-emerald-500 ml-1">
+                        <span className={`text-[9px] font-black uppercase tracking-wider italic ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"} ml-1`}>
                           Sofi analyse...
                         </span>
                       </div>
@@ -10871,7 +10966,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     </div>
                   )}
                   <div
-                    className={`flex items-center space-x-3 p-3 rounded-3xl border transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 focus-within:border-emerald-500" : "bg-white border-slate-200 shadow-inner focus-within:border-[#059669]"}`}
+                    className={`flex items-center space-x-3 p-3 rounded-3xl border transition-all ${darkMode ? `bg-zinc-950 border-zinc-800 ${dashboardMode === "Syndic" ? "focus-within:border-purple-500" : "focus-within:border-emerald-500"}` : `bg-white border-slate-200 shadow-inner ${dashboardMode === "Syndic" ? "focus-within:border-purple-600" : "focus-within:border-[#059669]"}`}`}
                   >
                     <input
                       type="text"
@@ -10883,13 +10978,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         }
                       }}
                       disabled={isChatLoading}
-                      placeholder="Tapez votre question fiscale..."
+                      placeholder={dashboardMode === "Syndic" ? "Posez votre question sur la copropriété..." : "Tapez votre question fiscale..."}
                       className="flex-1 bg-transparent border-none outline-none text-xs font-bold px-2 text-gray-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500"
                     />
                     <button
                       onClick={handleSendChatMessage}
                       disabled={isChatLoading || !chatInput.trim()}
-                      className="bg-[#059669] text-white p-3 rounded-2xl shadow-lg shadow-emerald-900/20 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                      className={`text-white p-3 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50 cursor-pointer ${dashboardMode === "Syndic" ? "bg-purple-600 shadow-purple-900/20" : "bg-[#059669] shadow-emerald-900/20"}`}
                     >
                       <Send size={18} />
                     </button>
@@ -11559,6 +11654,141 @@ Ceci est un message automatisé généré par AutoCompt.`;
       };
     };
 
+    // ── Mes Modèles: real .docx upload → {{champs}} detection → per-account
+    // template (private via ownerId, never shared between users) ────────────
+
+    const handleDocTemplateFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (e.target) e.target.value = "";
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith(".docx")) {
+        alert("Veuillez sélectionner un fichier Word (.docx).");
+        return;
+      }
+      setIsDetectingDocFields(true);
+      try {
+        const buf = await file.arrayBuffer();
+        const { fields, conditions } = await analyzeTemplate(buf);
+        if (fields.length === 0 && conditions.length === 0) {
+          alert("Aucun champ {{ }} détecté. Ouvrez votre Word et remplacez chaque espace variable par {{nom_du_champ}}, puis réimportez.");
+          return;
+        }
+        setPendingDocTemplateFile(file);
+        setPendingDocTemplateFields(fields);
+        setPendingDocTemplateConditions(conditions);
+        setPendingDocTemplateName(file.name.replace(/\.docx$/i, ""));
+      } catch (err) {
+        console.error("Field detection failed:", err);
+        alert("Impossible de lire ce fichier. Vérifiez qu'il s'agit bien d'un .docx Word valide.");
+      } finally {
+        setIsDetectingDocFields(false);
+      }
+    };
+
+    const handleConfirmSaveDocTemplate = async () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid || !pendingDocTemplateFile) return;
+      if (!pendingDocTemplateName.trim()) {
+        alert("Donnez un nom à votre modèle avant d'enregistrer.");
+        return;
+      }
+      setIsSavingDocTemplate(true);
+      try {
+        const saved = await dataService.saveDocTemplate(uid, activeCompanyId, pendingDocTemplateName.trim(), pendingDocTemplateFields, pendingDocTemplateFile, pendingDocTemplateConditions);
+        setDocTemplates((prev) => [...prev, saved]);
+        setPendingDocTemplateFile(null);
+        setPendingDocTemplateFields([]);
+        setPendingDocTemplateConditions([]);
+        setPendingDocTemplateName("");
+        alert("Modèle enregistré ! Réutilisez-le à tout moment depuis « Mes Modèles ».");
+      } catch (err) {
+        console.error("saveDocTemplate failed:", err);
+        alert("Erreur lors de l'enregistrement du modèle.");
+      } finally {
+        setIsSavingDocTemplate(false);
+      }
+    };
+
+    const handleOpenFillDocTemplate = (tpl: DocTemplateDoc) => {
+      const initial: Record<string, string> = {};
+      tpl.campos.forEach((c) => { initial[c] = ""; });
+      setDocFillValues(initial);
+      const initialConditions: Record<string, boolean> = {};
+      (tpl.condiciones || []).forEach((c) => { initialConditions[c] = false; });
+      setDocFillConditions(initialConditions);
+      setFillingDocTemplate(tpl);
+    };
+
+    const handleDeleteDocTemplate = async (tpl: DocTemplateDoc) => {
+      try {
+        await dataService.deleteDocTemplate(tpl.id, tpl.storagePath);
+        setDocTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
+      } catch (err) {
+        console.error("deleteDocTemplate failed:", err);
+        alert("Erreur lors de la suppression du modèle.");
+      }
+    };
+
+    const handleGenerateFromDocTemplate = async () => {
+      if (!fillingDocTemplate) return;
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+
+      const missing = fillingDocTemplate.campos.filter((c) => !docFillValues[c]?.trim());
+      if (missing.length > 0) {
+        alert(`Veuillez remplir tous les champs (${missing.length} manquant${missing.length > 1 ? "s" : ""}).`);
+        return;
+      }
+
+      setIsGeneratingDocFromTemplate(true);
+      try {
+        const templateBuf = await dataService.fetchTemplateFile(fillingDocTemplate.storagePath);
+        const pdfBlob = await generateFilledDocumentPdf(templateBuf, docFillValues, docFillConditions);
+
+        const fileName = `${fillingDocTemplate.nombre.replace(/[^a-z0-9]/gi, "_")}.pdf`;
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+
+        // Prefer the user's own connected Google Drive over AutoCompt's Storage —
+        // AutoCompt shouldn't become the permanent host of a user's documents;
+        // Storage is only a fallback for accounts with no drive connected yet.
+        let savedToDrive = false;
+        if (isCompanyDriveActive(activeCompanyId)) {
+          try {
+            const base64 = await blobToRawBase64(pdfBlob);
+            const driveResult = await uploadDocumentToDrive(activeCompanyId, base64, fileName);
+            savedToDrive = !!driveResult.success;
+          } catch (err) {
+            console.error("Generated PDF upload to Drive failed (falling back to Storage):", err);
+          }
+        }
+        if (!savedToDrive) {
+          try {
+            const path = `generatedDocs/${uid}/${Date.now()}.pdf`;
+            const storageRef = ref(storage, path);
+            await uploadBytes(storageRef, pdfBlob);
+            await getDownloadURL(storageRef);
+          } catch (err) {
+            console.error("Generated PDF upload to Storage failed (non-blocking):", err);
+          }
+        }
+
+        setFillingDocTemplate(null);
+        setDocFillValues({});
+        setDocFillConditions({});
+        alert("Document généré et téléchargé à partir de votre modèle !");
+      } catch (err) {
+        console.error("Document generation from template failed:", err);
+        alert("Erreur lors de la génération du document.");
+      } finally {
+        setIsGeneratingDocFromTemplate(false);
+      }
+    };
+
     // Filter documents by active company ID
     const companyDocs = docuLegalList.filter(
       (d) => d.companyId === activeCompanyId,
@@ -11634,6 +11864,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
       const lower = folderName.toLowerCase();
       if (lower.includes("bail") || lower.includes("baux")) {
         return `CONTRAT DE BAIL COMMERCIAL & RÉSIDENTIEL\n\nEntre:\n[Nom du Propriétaire], ci-après le bailleur,\nEt:\n[Nom du Client/Locataire], ci-après le preneur.\n\nPAR LES PRÉSENTES, les parties s'entendent pour un bail mensuel d'un montant de 1,200 $ payable le 1er de chaque mois pour le logement mentionné. Le bailleur s'engage à livrer le logement en bon état d'habitabilité et de propreté. Le locataire s'engage à maintenir les lieux propres et en bon état général.\n\nFait et signé en toute bonne foi d'AutoCompt BYOS.`;
+      }
+      if ((lower.includes("promesse") || lower.includes("achat")) && !isSuperAdmin) {
+        // This exact Promesse d'Achat is Fabiola's own AchatDirect entity
+        // (9559-0766 Québec inc.) hardcoded as the buyer — it must never be
+        // handed to other accounts. Everyone else builds their own via
+        // "Mes Modèles" instead.
+        return "Ce modèle de Promesse d'Achat est réservé au compte propriétaire. Pour créer votre propre Promesse d'Achat (avec le nom de votre propre entreprise), utilisez « Mes Modèles » ci-dessus : importez votre document Word avec des espaces {{champ}}, et si vous voulez des clauses conditionnelles selon le type de propriété, marquez-les {{#clause}}...{{/clause}} dans le Word — un formulaire à cocher sera généré automatiquement.";
       }
       if (lower.includes("promesse") || lower.includes("achat")) {
         return [
@@ -11954,6 +12191,259 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           );
                         })}
                       </div>
+
+                      {/* MES MODÈLES — chaque compte monte et garde son propre
+                          modèle exclusif de Promesse d'Achat (ou tout autre
+                          document récurrent). Privé par ownerId : jamais visible
+                          par un autre utilisateur d'AutoCompt. */}
+                      <div
+                        className={`p-5 rounded-[28px] border space-y-4 ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"} shadow-sm`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-[7.5px] font-black uppercase tracking-widest text-[#7c3aed]">
+                              Mes Modèles
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                              Vos propres documents Word, réutilisables à chaque client
+                            </p>
+                          </div>
+                          <Layers size={22} className="text-[#7c3aed] opacity-60" />
+                        </div>
+
+                        {docTemplates.length === 0 ? (
+                          <p className={`text-[10px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                            Aucun modèle importé. Utilisez le bouton ci-dessous pour monter votre propre Promesse d'Achat (ou autre document) avec des espaces {"{{"}nom_champ{"}}"}  — vous serez le seul à le voir et à l'utiliser.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {docTemplates.map((tpl) => (
+                              <div
+                                key={tpl.id}
+                                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-violet-500/15 text-violet-400" : "bg-violet-100 text-violet-700"}`}>
+                                    <FileSignature size={16} />
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] font-black">{tpl.nombre}</p>
+                                    <p className={`text-[9px] font-bold uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                      {tpl.campos.length} champ{tpl.campos.length > 1 ? "s" : ""} à remplir
+                                      {(tpl.condiciones?.length || 0) > 0 && <> · {tpl.condiciones.length} clause{tpl.condiciones.length > 1 ? "s" : ""} conditionnelle{tpl.condiciones.length > 1 ? "s" : ""}</>}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenFillDocTemplate(tpl)}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border-none cursor-pointer bg-[#7c3aed] text-white hover:bg-violet-600"
+                                  >
+                                    <Sparkles size={12} /><span>Utiliser</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDocTemplate(tpl)}
+                                    className={`p-2 rounded-xl border-none cursor-pointer ${darkMode ? "bg-rose-950/25 text-rose-400 hover:bg-rose-900/40" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <input
+                          ref={docTemplateFileInputRef}
+                          type="file"
+                          accept=".docx"
+                          onChange={handleDocTemplateFileSelected}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => docTemplateFileInputRef.current?.click()}
+                          disabled={isDetectingDocFields}
+                          className="w-full py-3.5 rounded-2xl border-2 border-dashed text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60 border-violet-500/30 text-[#7c3aed] hover:bg-violet-500/5 bg-transparent cursor-pointer"
+                        >
+                          {isDetectingDocFields ? <><Loader2 size={15} className="animate-spin" /> Analyse du document...</> : <><Upload size={15} /> Importer mon propre modèle Word (.docx)</>}
+                        </button>
+                      </div>
+
+                      {/* MODAL: confirm & name a newly-uploaded template */}
+                      <AnimatePresence>
+                        {pendingDocTemplateFile && (
+                          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <motion.div
+                              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                              animate={{ scale: 1, opacity: 1, y: 0 }}
+                              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                              className={`w-full max-w-lg rounded-[32px] border shadow-2xl p-6 sm:p-8 relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => { setPendingDocTemplateFile(null); setPendingDocTemplateFields([]); setPendingDocTemplateConditions([]); setPendingDocTemplateName(""); }}
+                                className={`absolute top-6 right-6 p-2 rounded-xl border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+                              >
+                                <X size={20} />
+                              </button>
+
+                              <div className="flex items-center space-x-3 mb-6">
+                                <div className="bg-[#7c3aed]/10 text-[#7c3aed] p-2.5 rounded-2xl">
+                                  <Layers size={22} />
+                                </div>
+                                <div>
+                                  <h3 className="text-sm font-black uppercase tracking-widest leading-none">Enregistrer mon modèle</h3>
+                                  <p className="text-[8px] font-black uppercase text-[#7c3aed] tracking-wider mt-1.5 leading-none">
+                                    {pendingDocTemplateFields.length} champ{pendingDocTemplateFields.length > 1 ? "s" : ""} · {pendingDocTemplateConditions.length} clause{pendingDocTemplateConditions.length > 1 ? "s" : ""} conditionnelle{pendingDocTemplateConditions.length > 1 ? "s" : ""}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1 mb-4">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Nom du modèle</label>
+                                <input
+                                  type="text"
+                                  value={pendingDocTemplateName}
+                                  onChange={(e) => setPendingDocTemplateName(e.target.value)}
+                                  placeholder="Ex: Promesse d'Achat — AchatDirect"
+                                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                                />
+                              </div>
+
+                              {pendingDocTemplateFields.length > 0 && (
+                                <div className={`p-4 rounded-2xl border mb-4 ${darkMode ? "bg-zinc-900/50 border-zinc-800/80" : "bg-slate-50 border-slate-200"}`}>
+                                  <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Champs qui seront demandés à chaque utilisation</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {pendingDocTemplateFields.map((f) => (
+                                      <span key={f} className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${darkMode ? "bg-violet-500/10 text-violet-400" : "bg-violet-100 text-violet-700"}`}>
+                                        {f}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {pendingDocTemplateConditions.length > 0 && (
+                                <div className={`p-4 rounded-2xl border mb-6 ${darkMode ? "bg-amber-950/20 border-amber-800/30" : "bg-amber-50/60 border-amber-200/80"}`}>
+                                  <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-amber-500" : "text-amber-600"}`}>Clauses conditionnelles (à cocher/décocher à chaque utilisation)</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {pendingDocTemplateConditions.map((c) => (
+                                      <span key={c} className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${darkMode ? "bg-amber-500/10 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                                        {c}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => { setPendingDocTemplateFile(null); setPendingDocTemplateFields([]); setPendingDocTemplateConditions([]); setPendingDocTemplateName(""); }}
+                                  className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleConfirmSaveDocTemplate}
+                                  disabled={isSavingDocTemplate}
+                                  className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest border-none bg-[#7c3aed] hover:bg-violet-600 text-white shadow-lg shadow-violet-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                                >
+                                  {isSavingDocTemplate ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <>Enregistrer le modèle</>}
+                                </button>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* MODAL: fill a saved template → generate the final PDF */}
+                      <AnimatePresence>
+                        {fillingDocTemplate && (
+                          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <motion.div
+                              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                              animate={{ scale: 1, opacity: 1, y: 0 }}
+                              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                              className={`w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-[32px] border shadow-2xl p-6 sm:p-8 relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => { setFillingDocTemplate(null); setDocFillValues({}); setDocFillConditions({}); }}
+                                className={`absolute top-6 right-6 p-2 rounded-xl border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+                              >
+                                <X size={20} />
+                              </button>
+
+                              <div className="flex items-center space-x-3 mb-6">
+                                <div className="bg-[#7c3aed]/10 text-[#7c3aed] p-2.5 rounded-2xl">
+                                  <Sparkles size={22} />
+                                </div>
+                                <div>
+                                  <h3 className="text-sm font-black uppercase tracking-widest leading-none">{fillingDocTemplate.nombre}</h3>
+                                  <p className="text-[8px] font-black uppercase text-[#7c3aed] tracking-wider mt-1.5 leading-none">
+                                    Remplissez les champs pour générer le document
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4 mb-6">
+                                {fillingDocTemplate.campos.map((champ) => (
+                                  <div key={champ} className="space-y-1">
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">{champ}</label>
+                                    <input
+                                      type="text"
+                                      value={docFillValues[champ] || ""}
+                                      onChange={(e) => setDocFillValues((prev) => ({ ...prev, [champ]: e.target.value }))}
+                                      placeholder={`Valeur pour ${champ}`}
+                                      className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              {(fillingDocTemplate.condiciones?.length || 0) > 0 && (
+                                <div className={`p-4 rounded-2xl border mb-6 space-y-2 ${darkMode ? "bg-amber-950/20 border-amber-800/30" : "bg-amber-50/60 border-amber-200/80"}`}>
+                                  <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-amber-500" : "text-amber-600"}`}>Clauses à inclure dans ce document</p>
+                                  {fillingDocTemplate.condiciones.map((cond) => (
+                                    <label key={cond} className="flex items-center gap-3 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!docFillConditions[cond]}
+                                        onChange={(e) => setDocFillConditions((prev) => ({ ...prev, [cond]: e.target.checked }))}
+                                        className="w-4 h-4 rounded accent-[#7c3aed] cursor-pointer shrink-0"
+                                      />
+                                      <span className={`text-[11px] font-bold font-mono ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{cond}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => { setFillingDocTemplate(null); setDocFillValues({}); setDocFillConditions({}); }}
+                                  className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleGenerateFromDocTemplate}
+                                  disabled={isGeneratingDocFromTemplate}
+                                  className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest border-none bg-[#7c3aed] hover:bg-violet-600 text-white shadow-lg shadow-violet-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                                >
+                                  {isGeneratingDocFromTemplate ? <><Loader2 size={14} className="animate-spin" /> Génération...</> : <><FileText size={14} /> Générer le document</>}
+                                </button>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
+                      </AnimatePresence>
 
                       {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -12825,7 +13315,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           </div>
 
                           {/* ── Quick Fill PA V2 — Accordéon 3 sections ── */}
-                          {(docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
+                          {/* Réservé au compte propriétaire (9559-0766 Québec inc. est hardcodé
+                              comme ACHETEUR) — les autres comptes utilisent "Mes Modèles". */}
+                          {isSuperAdmin && (docFormFolder.toLowerCase().includes('promesse') || docFormFolder.toLowerCase().includes('achat') || docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}') || docFormContent.includes('{{VENDEUR_NOM}}')) && (
                             <div className={`rounded-[24px] border overflow-hidden ${darkMode ? 'bg-violet-950/20 border-violet-800/30' : 'bg-violet-50/60 border-violet-200/80'}`}>
 
                               {/* ── Header + Bouton Appliquer ── */}
@@ -18262,6 +18754,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         darkMode={darkMode}
         plexManagementForm={plexManagementForm}
         plexManagementProperties={plexManagementProperties}
+        activeCompanyId={activeCompanyId}
         allUnits={allUnits}
         expandedDoors={expandedDoors}
         showLimitModal={showLimitModal}

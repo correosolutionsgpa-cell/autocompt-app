@@ -416,4 +416,75 @@ export function SofiAvatarSVG({
   );
 }
 
+export function SofiFace({ size = 32, className = "" }: { size?: number; className?: string }) {
+  const uid   = React.useId().replace(/:/g, "");
+  const fBodyId = `sofiFaceBody-${uid}`;
+  const fAccentId = `sofiFaceAccent-${uid}`;
+  const fGlowId = `sofiFaceGlow-${uid}`;
+
+  return (
+    <div style={{ width: size, height: size }} className={`relative select-none ${className}`}>
+      <svg
+        viewBox="30 10 100 90"
+        width={size}
+        height={size}
+        className="overflow-visible"
+        aria-label="SOFI Face"
+        role="img"
+      >
+        <defs>
+          <linearGradient id={fBodyId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="50%" stopColor="#F8F8F8" />
+            <stop offset="100%" stopColor="#E0E0E2" />
+          </linearGradient>
+          <linearGradient id={fAccentId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#00D4B2" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#00B89A" stopOpacity="0.7" />
+          </linearGradient>
+          <filter id={fGlowId} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.2" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        {/* Head shell */}
+        <rect x="33" y="13" width="94" height="76" rx="32" ry="32"
+          fill={`url(#${fBodyId})`} stroke="#D4D4D8" strokeWidth="0.6" />
+        {/* Crown accent strip */}
+        <rect x="50" y="13" width="60" height="4" rx="2"
+          fill={`url(#${fAccentId})`} />
+        {/* Chassis rim */}
+        <rect x="33" y="13" width="94" height="76" rx="32" ry="32"
+          fill="none" stroke="#000000" strokeWidth="1.2" />
+        {/* Face screen bezel */}
+        <rect x="42" y="22" width="76" height="56" rx="20" ry="20"
+          fill="#000000" stroke="#000000" strokeWidth="1.5" />
+        {/* Face screen display */}
+        <rect x="44" y="24" width="72" height="52" rx="19" ry="19"
+          fill="#001A12" />
+        {/* Eyes */}
+        <g style={{ transformOrigin: "62px 46px" }}>
+          <rect x="57" y="37" width="10" height="18" rx="5"
+            fill="#00FF88" filter={`url(#${fGlowId})`} />
+          <rect x="59" y="39" width="3" height="4" rx="1.5"
+            fill="#FFFFFF" opacity="0.4" />
+        </g>
+        <g style={{ transformOrigin: "98px 46px" }}>
+          <rect x="93" y="37" width="10" height="18" rx="5"
+            fill="#00FF88" filter={`url(#${fGlowId})`} />
+          <rect x="95" y="39" width="3" height="4" rx="1.5"
+            fill="#FFFFFF" opacity="0.4" />
+        </g>
+        {/* Smile */}
+        <path d="M 67 62 Q 80 72 93 62"
+          fill="none" stroke="#00FF88" strokeWidth="2.8" strokeLinecap="round"
+          filter={`url(#${fGlowId})`} />
+        {/* Cheek accent dots */}
+        <circle cx="50" cy="52" r="2.5" fill="#00D4B2" opacity="0.6" />
+        <circle cx="110" cy="52" r="2.5" fill="#00D4B2" opacity="0.6" />
+      </svg>
+    </div>
+  );
+}
+
 export default SofiAvatarSVG;

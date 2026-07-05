@@ -818,6 +818,10 @@ export default function SofiOnboarding({
         const isFirstOccupied = i === 0 && isOccupant;
         const ledger: BuildingLedger = {
           id:            `onboarding_building_${Date.now()}_${i}`,
+          // Onboarding runs before the user has picked/switched a workspace,
+          // so this always seeds into the account's first company (matches
+          // the same "1" default used by the rest of the seed data).
+          companyId:     "1",
           address:       i === 0 ? scannedAddress : "",
           type:          isFirstOccupied ? "owner_occupied" : "full_rental",
           occupancyPct:  isFirstOccupied ? occupancyPct  : 0,
@@ -843,6 +847,7 @@ export default function SofiOnboarding({
             scannedDoors.forEach((doorName, doorIdx) => {
               dataService.saveUnit(userId, {
                 id: `onboarding_unit_${Date.now()}_${doorIdx}`,
+                companyId: "1",
                 buildingId: ledger.id,
                 unitName: doorName,
                 tenantName: "",
