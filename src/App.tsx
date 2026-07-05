@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -1187,6 +1188,10 @@ const App = () => {
   const [listaEmpresas, setListaEmpresas] = useState<any[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [partnerInviteEmail, setPartnerInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
@@ -2033,11 +2038,103 @@ const App = () => {
                             Ajouter / Créer
                           </span>
                         </button>
+                        {currentCompany?.ownerId === auth.currentUser?.uid && (
+                          <button
+                            onClick={() => {
+                              setShowWorkspaceDropdown(false);
+                              setPartnerInviteEmail("");
+                              setInviteSuccessMsg(null);
+                              setShowInviteModal(true);
+                              playNotificationSound();
+                            }}
+                            className={`w-full mt-1.5 flex items-center justify-center space-x-2 p-3 rounded-xl transition-all border border-dashed text-left ${darkMode ? "border-zinc-800 hover:bg-zinc-800/40 text-indigo-400 bg-zinc-900/50" : "border-indigo-200 hover:bg-indigo-50 hover:border-indigo-400 text-indigo-600 bg-indigo-50/30"}`}
+                          >
+                            <Users size={12} strokeWidth={3} />
+                            <span className="text-[9px] font-black uppercase tracking-widest">
+                              Inviter un associé
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* INVITE A PARTNER — real invite flow (Phase 4/5)
+                  Rendered via portal straight into <body>: this component lives
+                  inside <aside>, which has a Tailwind `transform` class (even
+                  at identity value) — that makes it the containing block for
+                  any `position: fixed` descendant, so without the portal this
+                  modal would be clipped to the sidebar's own box instead of
+                  covering the full viewport. */}
+              {showInviteModal && createPortal(
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60"
+                  onClick={() => setShowInviteModal(false)}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-full max-w-sm p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                        <Users size={16} className="text-indigo-500" />
+                        Inviter un associé
+                      </h3>
+                      <button onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <p className={`text-xs mb-4 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                      La personne invitée pourra voir et gérer les données de{" "}
+                      <strong>{currentCompany?.nombre}</strong> dès sa connexion avec cette adresse courriel.
+                    </p>
+                    {inviteSuccessMsg ? (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold text-center">
+                        {inviteSuccessMsg}
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          type="email"
+                          value={partnerInviteEmail}
+                          onChange={(e) => setPartnerInviteEmail(e.target.value)}
+                          placeholder="courriel@exemple.com"
+                          className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
+                        />
+                        <button
+                          disabled={!partnerInviteEmail.trim() || inviteSending}
+                          onClick={async () => {
+                            if (!auth.currentUser || !currentCompany?._companyDocId) return;
+                            setInviteSending(true);
+                            try {
+                              await dataService.createCompanyInvite(
+                                auth.currentUser.uid,
+                                adminName,
+                                currentCompany._companyDocId,
+                                currentCompany.nombre,
+                                partnerInviteEmail.trim()
+                              );
+                              setInviteSuccessMsg(`Invitation envoyée à ${partnerInviteEmail.trim()}.`);
+                              playNotificationSound();
+                            } catch (err) {
+                              console.error("Failed to send invite:", err);
+                              alert("Erreur lors de l'envoi de l'invitation.");
+                            } finally {
+                              setInviteSending(false);
+                            }
+                          }}
+                          className="w-full py-2.5 bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-wider text-[10px]"
+                        >
+                          {inviteSending ? "Envoi..." : "Envoyer l'invitation"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>,
+                document.body
+              )}
 
               {/* DYNAMIC CO-OPERATION OPERATOR SWITCH (Achat Direct ONLY) */}
               {activeCompanyId === "2" && (
@@ -7188,37 +7285,61 @@ Ceci est un message automatisé généré par AutoCompt.`;
           }
 
           // Fetch user's dynamic workspace list
-          const workspaces = await dataService.fetchWorkspaces(user.uid);
+          let workspaces = await dataService.fetchWorkspaces(user.uid);
+
+          // Real invite flow: auto-accept any pending invite addressed to this
+          // email (the owner already deliberately entered it — joining needs
+          // no further confirmation beyond logging in). Re-fetch afterward so
+          // the newly-shared company shows up immediately.
+          if (user.email) {
+            try {
+              const pendingInvites = await dataService.fetchPendingInvitesForEmail(user.email);
+              if (pendingInvites.length > 0) {
+                await Promise.all(pendingInvites.map((invite) => dataService.acceptCompanyInvite(user.uid, invite)));
+                workspaces = await dataService.fetchWorkspaces(user.uid);
+              }
+            } catch (err) {
+              console.error("Failed to process pending company invites:", err);
+            }
+          }
+
           setListaEmpresas(workspaces);
           if (workspaces.length > 0) {
             setActiveCompanyId(workspaces[0].id);
           }
 
+          // Companies shared with this user by a partner (not owned by them) —
+          // the fetch* calls below need this so they also pull that company's
+          // records, since those docs' ownerId is the partner's, not ours.
+          const collaboratorCompanyDocIds: string[] = workspaces
+            .filter((w: any) => w.ownerId && w.ownerId !== user.uid && w._companyDocId)
+            .map((w: any) => w._companyDocId);
+
           // Fetch user's expenses (depenses) — use the raw setter here, not the
           // reconcile-wrapped setDepenses: this data already came FROM Firestore,
           // so diffing it against the (empty) prior local state and re-saving
           // every item would just re-write each expense a second time on login.
-          const exp = await dataService.fetchExpenses(user.uid);
+          const exp = await dataService.fetchExpenses(user.uid, collaboratorCompanyDocIds);
           _setDepenses(exp);
 
           // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
-          const invoices = await dataService.fetchInvoices(user.uid);
+          const invoices = await dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds);
           _setHistorique(invoices);
 
           // Fetch user's own DocuLegal document templates (private, per-account).
-          dataService.fetchDocTemplates(user.uid).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
+          dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
 
           // Fetch properties
-          const props = await dataService.fetchProperties(user.uid);
+          const props = await dataService.fetchProperties(user.uid, collaboratorCompanyDocIds);
           setPlexManagementProperties(props);
 
           // Fetch all units (independent collection)
-          const units = await dataService.fetchAllUnits(user.uid);
+          const units = await dataService.fetchAllUnits(user.uid, collaboratorCompanyDocIds);
           setAllUnits(units);
 
           // Fetch tenants/loyers — raw setter, same reasoning as depenses above:
           // this already came from Firestore, don't re-save it on every login.
-          const loyers = await dataService.fetchLoyers(user.uid);
+          const loyers = await dataService.fetchLoyers(user.uid, collaboratorCompanyDocIds);
           _setPlexLoyers(loyers);
 
           // Fetch double-entry journal (accounting ledger)
@@ -10802,9 +10923,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   {/* Online indicator dot */}
                   <div className="relative">
                     <img
-                      src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                      src="/sofi/sofi_transparente.png"
                       alt="Sofi Success"
-                      className="h-[150px] w-auto object-contain rounded-2xl border border-cyan-500/30 dark:border-cyan-400/20 shadow-lg relative z-10"
+                      className="h-[150px] w-auto object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(6,182,212,0.25)] dark:drop-shadow-[0_10px_20px_rgba(6,182,212,0.45)] hover:scale-105 transition-transform duration-300 ease-out"
                     />
                     <span className="absolute bottom-2 right-1 w-3 h-3 bg-cyan-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-[0_0_6px_rgba(6,182,212,0.8)] z-20 animate-pulse" />
                   </div>

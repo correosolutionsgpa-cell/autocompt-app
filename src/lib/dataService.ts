@@ -28,6 +28,7 @@ import {
   query,
   where,
   orderBy,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 import { db, auth, storage } from './firebase';
@@ -216,6 +217,21 @@ export interface SyndicSettingsDoc {
   boardMembers: BoardMember[];
   ownerId: string;
   updatedAt: string;
+}
+
+// ── CompanyInviteDoc — real partner-sharing invite flow ─────────────────────
+// Doc id is deterministic: `{companyDocId}_invite_{invitedEmail}` — lets the
+// Firestore rule check "does a pending invite exist for this email" with a
+// direct `exists()` lookup instead of a query.
+export interface CompanyInviteDoc {
+  id: string;
+  companyDocId: string;    // the `companies` collection's own (prefixed) doc id
+  companyName: string;
+  invitedEmail: string;
+  invitedByUid: string;
+  invitedByName: string;
+  status: 'pending' | 'accepted';
+  createdAt: string;
 }
 
 // ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
@@ -518,6 +534,37 @@ function unprefixCompanyId(companyId: string | undefined): string {
   return parts.length > 1 ? parts[1] : companyId;
 }
 
+/**
+ * Fetches every doc in `collectionName` the user can see: their own (by
+ * ownerId) plus any doc belonging to a company they've been added to as a
+ * collaborator (by companyId — since those docs' ownerId is the ORIGINAL
+ * owner, not the collaborator). `collaboratorCompanyDocIds` is the list of
+ * `_companyDocId`s from `fetchWorkspaces` where `ownerId !== userId`.
+ * Mirrors the owned+collaborator merge pattern already used by fetchWorkspaces.
+ */
+async function fetchOwnedAndShared(
+  collectionName: string,
+  userId: string,
+  collaboratorCompanyDocIds: string[] = []
+): Promise<QueryDocumentSnapshot[]> {
+  const ownedQ = query(collection(db, collectionName), where('ownerId', '==', userId));
+  const queries = [getDocs(ownedQ)];
+  for (const companyDocId of collaboratorCompanyDocIds) {
+    queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
+  }
+  const snaps = await Promise.all(queries);
+  const seen = new Set<string>();
+  const docs: QueryDocumentSnapshot[] = [];
+  for (const snap of snaps) {
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      docs.push(d);
+    }
+  }
+  return docs;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §3 — DATA SERVICE
 // ══════════════════════════════════════════════════════════════════════════════
@@ -586,7 +633,11 @@ export const dataService = {
         seen.add(d.id);
         const data = d.data();
         const idParts = d.id.split('_company_');
-        results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id });
+        // `_companyDocId` (the raw prefixed Firestore doc id) lets callers
+        // identify which accessible companies are shared (ownerId !== userId)
+        // so they can fetch that company's records by companyId instead of
+        // by ownerId — see `fetchOwnedAndShared` below.
+        results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id, _companyDocId: d.id });
       }
       return results;
     } catch (e) {
@@ -604,6 +655,66 @@ export const dataService = {
     // without the full company object; a plain setDoc would wipe everything else.
     await setDoc(doc(db, 'companies', docId), data, { merge: true });
     return { ...data, id: originalId };
+  },
+
+  // ── Company invites — real partner-sharing flow ─────────────────────────────
+
+  /** Owner invites a partner by email to collaborate on one of their companies. */
+  async createCompanyInvite(
+    invitedByUid: string,
+    invitedByName: string,
+    companyDocId: string,
+    companyName: string,
+    invitedEmail: string
+  ): Promise<CompanyInviteDoc> {
+    assertCanWrite();
+    const normalizedEmail = invitedEmail.trim().toLowerCase();
+    const docId = `${companyDocId}_invite_${normalizedEmail}`;
+    const data: CompanyInviteDoc = {
+      id: docId,
+      companyDocId,
+      companyName,
+      invitedEmail: normalizedEmail,
+      invitedByUid,
+      invitedByName,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'companyInvites', docId), data);
+    return data;
+  },
+
+  /** Invites waiting for the currently signed-in user's email — checked once at login. */
+  async fetchPendingInvitesForEmail(email: string): Promise<CompanyInviteDoc[]> {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const q = query(
+        collection(db, 'companyInvites'),
+        where('invitedEmail', '==', normalizedEmail),
+        where('status', '==', 'pending')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as CompanyInviteDoc);
+    } catch (e) {
+      console.error('fetchPendingInvitesForEmail failed:', e);
+      return [];
+    }
+  },
+
+  /**
+   * Accepts a pending invite: adds the current user to the company's
+   * collaboratorUIDs (allowed by the `isAcceptingOwnInvite` Firestore rule,
+   * which checks this exact invite doc is 'pending' before permitting it),
+   * then marks the invite 'accepted'.
+   */
+  async acceptCompanyInvite(userId: string, invite: CompanyInviteDoc): Promise<void> {
+    const companyRef = doc(db, 'companies', invite.companyDocId);
+    const companySnap = await getDoc(companyRef);
+    const existingUIDs: string[] = companySnap.exists() ? (companySnap.data().collaboratorUIDs || []) : [];
+    if (!existingUIDs.includes(userId)) {
+      await updateDoc(companyRef, { collaboratorUIDs: [...existingUIDs, userId] });
+    }
+    await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted' });
   },
 
   // ── Buildings — Firestore `buildings` collection ───────────────────────────
@@ -664,11 +775,10 @@ export const dataService = {
 
   // ── Properties — Firestore `properties` collection ─────────────────────────
 
-  async fetchProperties(userId: string): Promise<PropertyDoc[]> {
+  async fetchProperties(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<PropertyDoc[]> {
     try {
-      const q = query(collection(db, 'properties'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      const docs = await fetchOwnedAndShared('properties', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_prop_');
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as PropertyDoc;
@@ -749,11 +859,10 @@ export const dataService = {
   /**
    * Fetch all units for a user across all buildings.
    */
-  async fetchAllUnits(userId: string): Promise<UnitDoc[]> {
+  async fetchAllUnits(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<UnitDoc[]> {
     try {
-      const q = query(collection(db, 'units'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      const docs = await fetchOwnedAndShared('units', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_unit_');
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as UnitDoc;
@@ -774,11 +883,10 @@ export const dataService = {
 
   // ── Loyers — Firestore `loyers` collection ─────────────────────────────────
 
-  async fetchLoyers(userId: string): Promise<LoyerDoc[]> {
+  async fetchLoyers(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<LoyerDoc[]> {
     try {
-      const q = query(collection(db, 'loyers'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      const docs = await fetchOwnedAndShared('loyers', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
         const data = d.data();
         const idParts = d.id.split('_loyer_');
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as LoyerDoc;
@@ -993,11 +1101,10 @@ export const dataService = {
 
   // ── Expenses — Firestore `expenses` collection ─────────────────────────────
 
-  async fetchExpenses(userId: string): Promise<ExpenseDoc[]> {
+  async fetchExpenses(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<ExpenseDoc[]> {
     try {
-      const q = query(collection(db, 'expenses'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      const docs = await fetchOwnedAndShared('expenses', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
         const data = d.data();
         const idParts = data.companyId?.split('_company_');
         const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
@@ -1083,11 +1190,10 @@ export const dataService = {
 
   // ── Invoices — Firestore `invoices` collection (revenue/ventes ledger) ─────
 
-  async fetchInvoices(userId: string): Promise<InvoiceDoc[]> {
+  async fetchInvoices(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<InvoiceDoc[]> {
     try {
-      const q = query(collection(db, 'invoices'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
+      const docs = await fetchOwnedAndShared('invoices', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
         const data = d.data();
         const idParts = data.companyId?.split('_company_');
         const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
@@ -1151,11 +1257,10 @@ export const dataService = {
 
   // ── Document templates — Firestore `docTemplates` + Storage (DocuLegal) ────
 
-  async fetchDocTemplates(userId: string): Promise<DocTemplateDoc[]> {
+  async fetchDocTemplates(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<DocTemplateDoc[]> {
     try {
-      const q = query(collection(db, 'docTemplates'), where('ownerId', '==', userId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => ({ ...(d.data() as DocTemplateDoc), id: d.id }));
+      const docs = await fetchOwnedAndShared('docTemplates', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => ({ ...(d.data() as DocTemplateDoc), id: d.id }));
     } catch (e) {
       console.error('fetchDocTemplates failed:', e);
       return [];
