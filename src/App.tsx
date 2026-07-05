@@ -129,6 +129,8 @@ import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceVie
 import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
 import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
+import PortefeuilleClientView from "./ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView";
+
 import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
 import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
 import ReceiptPreviewModal from "./components/modals/ReceiptPreviewModal";
@@ -19265,8 +19267,27 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     );
   }
 
+  // PortefeuilleClientView → src/ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView.tsx
+  // Vue du portefeuille complet par propriétaire-client : immeubles, portes, KPIs, livre
+  if (vista === "portefeuille_client") {
+    return (
+      <PortefeuilleClientView
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        adminName={adminName}
+        adminEmail={adminEmail}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+      />
+    );
+  }
+
+
   // MuroTransparencia → extraído a src/ramas-flujo/MuroTransparencia.tsx (Fase 3)
   if (vista === "transparence") {
+
     return (
       <MuroTransparencia
         darkMode={darkMode}

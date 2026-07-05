@@ -60,7 +60,12 @@ interface DocuLegalPdfEditorProps {
   pdfFile: File;
   docTitle: string;
   onClose: () => void;
-  onSendForSignature: (fields: SignatureField[], pdfStorageUrl: string) => void;
+  onSendForSignature: (
+    fields: SignatureField[],
+    pdfStorageUrl: string,
+    signerName: string,
+    signerEmail: string,
+  ) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -77,6 +82,13 @@ export default function DocuLegalPdfEditor({
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [draggingType, setDraggingType] = useState<string | null>(null);
+  // Which field type the user has "selected" in the toolbar for click-to-place
+  const [clickPlaceType, setClickPlaceType] = useState<SignatureField['type'] | null>(null);
+  const [showInstructions, setShowInstructions] = useState(true);
+  // Step 2 — signer info
+  const [step, setStep] = useState<1 | 2>(1);
+  const [signerName, setSignerName] = useState('');
+  const [signerEmail, setSignerEmail] = useState('');
 
   // Refs — page containers & canvases
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -188,7 +200,33 @@ export default function DocuLegalPdfEditor({
     return () => window.removeEventListener('keydown', handler);
   }, [selectedId]);
 
-  // ── Drop from toolbar ─────────────────────────────────────────────────────
+  // ── Click-to-place on canvas ──────────────────────────────────────────────
+  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>, pageIndex: number) => {
+    if (!clickPlaceType) return;
+    const def = FIELD_DEFS.find(d => d.type === clickPlaceType);
+    if (!def) return;
+    const container = pageRefs.current[pageIndex];
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    const newField: SignatureField = {
+      id: `${clickPlaceType}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      page: pageIndex + 1,
+      type: clickPlaceType,
+      xPct: Math.max(0, Math.min(100 - def.defaultW, xPct - def.defaultW / 2)),
+      yPct: Math.max(0, Math.min(100 - def.defaultH, yPct - def.defaultH / 2)),
+      wPct: def.defaultW,
+      hPct: def.defaultH,
+      required: true,
+      label: def.label,
+    };
+    setFields(p => [...p, newField]);
+    setSelectedId(newField.id);
+    setShowInstructions(false);
+    // Don't reset clickPlaceType — user probably wants to place multiple
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, pageIndex: number) => {
     e.preventDefault();
     const type = dragTypeRef.current as SignatureField['type'] | null;
@@ -233,12 +271,10 @@ export default function DocuLegalPdfEditor({
     setSelectedId(field.id);
   };
 
-  // ── Upload PDF + emit ─────────────────────────────────────────────────────
+  // ── Click-to-place: register on field add ─────────────────────────────────
+  // (see handleCanvasClick below which is the real click handler)
   const handleSend = async () => {
-    if (fields.length === 0) {
-      alert("Ajoutez au moins un champ de signature avant d'envoyer.");
-      return;
-    }
+    if (fields.length === 0 || !signerEmail.includes('@') || !signerName.trim()) return;
     const uid = auth.currentUser?.uid;
     if (!uid) { alert('Session requise pour envoyer un document.'); return; }
     setIsUploading(true);
@@ -249,7 +285,7 @@ export default function DocuLegalPdfEditor({
       const sRef = storageRef(storage, path);
       await uploadBytes(sRef, new Uint8Array(buf), { contentType: 'application/pdf' });
       const url = await getDownloadURL(sRef);
-      onSendForSignature(fields, url);
+      onSendForSignature(fields, url, signerName.trim(), signerEmail.trim());
     } catch (e) {
       console.error('[DocuLegalPdfEditor] Upload error:', e);
       alert('Erreur lors du téléversement du PDF. Vérifiez votre connexion et réessayez.');
@@ -279,7 +315,7 @@ export default function DocuLegalPdfEditor({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: dm ? '#52525b' : '#94a3b8', marginBottom: 2 }}>
-                DocuLegal — Éditeur
+                DocuLegal — Éditeur de signature
               </p>
               <p style={{ fontSize: 12, fontWeight: 900, color: dm ? '#f4f4f5' : '#0f172a', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {docTitle || pdfFile.name}
@@ -323,29 +359,35 @@ export default function DocuLegalPdfEditor({
 
         {/* Field palette */}
         <div style={{ padding: '12px 16px', borderBottom: dm ? '1px solid #27272a' : '1px solid #f1f5f9' }}>
-          <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: dm ? '#52525b' : '#94a3b8', marginBottom: 4 }}>
-            Champs de signature
+          <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6366f1', marginBottom: 2 }}>
+            Étape 1 — Choisir un champ
           </p>
-          <p style={{ fontSize: 8, color: dm ? '#52525b' : '#94a3b8', marginBottom: 10 }}>
-            Glissez un champ sur la page du PDF
+          <p style={{ fontSize: 9, color: dm ? '#71717a' : '#64748b', marginBottom: 10, lineHeight: 1.4 }}>
+            <strong>Cliquez</strong> sur un type ci-dessous, puis <strong>cliquez sur le PDF</strong> pour le placer. Ou glissez-déposez directement.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {FIELD_DEFS.map(def => {
               const c = COLORS[def.color];
-              const isActive = draggingType === def.type;
+              const isActive = draggingType === def.type || clickPlaceType === def.type;
               return (
                 <div
                   key={def.type}
                   draggable
                   onDragStart={() => { dragTypeRef.current = def.type; setDraggingType(def.type); }}
                   onDragEnd={() => { dragTypeRef.current = null; setDraggingType(null); }}
+                  onClick={() => {
+                    setClickPlaceType(prev => prev === def.type ? null : def.type as SignatureField['type']);
+                    setShowInstructions(false);
+                  }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '8px 10px', borderRadius: 12, cursor: 'grab',
+                    padding: '8px 10px', borderRadius: 12,
+                    cursor: 'pointer',
                     userSelect: 'none',
-                    border: isActive ? `1.5px solid ${c.border}` : dm ? '1.5px solid #27272a' : '1.5px solid #e2e8f0',
+                    border: isActive ? `2px solid ${c.border}` : dm ? '1.5px solid #27272a' : '1.5px solid #e2e8f0',
                     background: isActive ? c.bg : dm ? '#27272a' : '#f8fafc',
-                    opacity: isActive ? 0.7 : 1,
+                    boxShadow: isActive ? `0 0 0 3px ${c.ring}40` : 'none',
+                    opacity: 1,
                     transition: 'all 0.15s',
                   }}
                 >
@@ -355,11 +397,21 @@ export default function DocuLegalPdfEditor({
                   <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.06em', color: dm ? '#d4d4d8' : '#475569', flex: 1 }}>
                     {def.label}
                   </span>
-                  <GripVertical size={11} style={{ color: dm ? '#52525b' : '#cbd5e1' }} />
+                  {isActive
+                    ? <span style={{ fontSize: 8, fontWeight: 900, color: c.text, background: c.bg, padding: '2px 6px', borderRadius: 99, border: `1px solid ${c.border}` }}>Sélectionné</span>
+                    : <GripVertical size={11} style={{ color: dm ? '#52525b' : '#cbd5e1' }} />}
                 </div>
               );
             })}
           </div>
+          {clickPlaceType && (
+            <div style={{ marginTop: 10, padding: '6px 10px', borderRadius: 10, background: '#6366f120', border: '1px solid #6366f140', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 16 }}>👆</span>
+              <p style={{ fontSize: 9, color: '#6366f1', fontWeight: 700, margin: 0 }}>
+                Cliquez n'importe où sur le PDF pour placer le champ
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Placed fields list */}
@@ -375,9 +427,9 @@ export default function DocuLegalPdfEditor({
             </div>
           ) : (
             <>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: dm ? '#52525b' : '#94a3b8', marginBottom: 8 }}>
-                {fields.length} champ{fields.length > 1 ? 's' : ''} placé{fields.length > 1 ? 's' : ''}
-              </p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: fields.length > 0 ? '#6366f1' : (dm ? '#3f3f46' : '#cbd5e1'), marginBottom: 8 }}>
+            Étape 2 — {fields.length} champ{fields.length > 1 ? 's' : ''} placé{fields.length > 1 ? 's' : ''}
+          </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {fields.map(f => {
                   const def = FIELD_DEFS.find(d => d.type === f.type)!;
@@ -420,34 +472,129 @@ export default function DocuLegalPdfEditor({
 
         {/* Actions */}
         <div style={{ padding: '12px 16px', borderTop: dm ? '1px solid #27272a' : '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button
-            onClick={handleSend}
-            disabled={isUploading || fields.length === 0}
-            style={{
-              width: '100%', padding: '12px 0', borderRadius: 16, border: 'none',
-              background: (isUploading || fields.length === 0) ? '#6ee7b7' : '#059669',
-              color: '#fff', fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-              letterSpacing: '0.1em', cursor: (isUploading || fields.length === 0) ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              boxShadow: fields.length > 0 ? '0 4px 14px rgba(5,150,105,0.25)' : 'none',
-              opacity: (isUploading || fields.length === 0) ? 0.6 : 1,
-              transition: 'all 0.2s',
-            }}
-          >
-            {isUploading ? <><Loader2 size={13} className="animate-spin" />Chargement...</> : <><Send size={13} />Envoyer pour Signature</>}
-          </button>
-          <button
-            onClick={onClose}
-            style={{
-              width: '100%', padding: '10px 0', borderRadius: 16,
-              border: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
-              background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
-              fontSize: 9, fontWeight: 900, textTransform: 'uppercase',
-              letterSpacing: '0.1em', cursor: 'pointer',
-            }}
-          >
-            Annuler
-          </button>
+
+          {step === 1 ? (
+            // ─ Step 1: continuer button
+            <>
+              <div title={fields.length === 0 ? 'Placez d\'abord au moins 1 champ de signature sur le document' : ''}>
+                <button
+                  onClick={() => { if (fields.length > 0) setStep(2); }}
+                  disabled={fields.length === 0}
+                  style={{
+                    width: '100%', padding: '12px 0', borderRadius: 16, border: 'none',
+                    background: fields.length === 0 ? (dm ? '#27272a' : '#e2e8f0') : '#6366f1',
+                    color: fields.length === 0 ? (dm ? '#52525b' : '#94a3b8') : '#fff',
+                    fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
+                    letterSpacing: '0.1em', cursor: fields.length === 0 ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    boxShadow: fields.length > 0 ? '0 4px 14px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {fields.length === 0
+                    ? '← Placez un champ d\'abord'
+                    : `Continuer — ${fields.length} champ${fields.length > 1 ? 's' : ''} →`}
+                </button>
+              </div>
+              <button
+                onClick={onClose}
+                style={{
+                  width: '100%', padding: '10px 0', borderRadius: 16,
+                  border: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
+                  background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
+                  fontSize: 9, fontWeight: 900, textTransform: 'uppercase',
+                  letterSpacing: '0.1em', cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+            </>
+          ) : (
+            // ─ Step 2: signer name + email + send
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <button
+                  onClick={() => setStep(1)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: dm ? '#71717a' : '#94a3b8', padding: 0, fontSize: 16 }}
+                >
+                  ←
+                </button>
+                <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#10b981', margin: 0 }}>
+                  Étape 3 — Infos du signataire
+                </p>
+              </div>
+
+              {/* Signer name */}
+              <div>
+                <label style={{ display: 'block', fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: dm ? '#71717a' : '#94a3b8', marginBottom: 4 }}>
+                  Nom complet du signataire *
+                </label>
+                <input
+                  type="text"
+                  value={signerName}
+                  onChange={e => setSignerName(e.target.value)}
+                  placeholder="Ex: Jean Tremblay"
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 12,
+                    border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
+                    background: dm ? '#18181b' : '#f8fafc',
+                    color: dm ? '#f4f4f5' : '#0f172a',
+                    fontSize: 12, fontWeight: 600, outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Signer email */}
+              <div>
+                <label style={{ display: 'block', fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: dm ? '#71717a' : '#94a3b8', marginBottom: 4 }}>
+                  Email du signataire *
+                </label>
+                <input
+                  type="email"
+                  value={signerEmail}
+                  onChange={e => setSignerEmail(e.target.value)}
+                  placeholder="jean@exemple.com"
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 12,
+                    border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
+                    background: dm ? '#18181b' : '#f8fafc',
+                    color: dm ? '#f4f4f5' : '#0f172a',
+                    fontSize: 12, fontWeight: 600, outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <p style={{ fontSize: 8, color: dm ? '#52525b' : '#94a3b8', marginTop: 4 }}>
+                  Le signataire recevra un email avec le lien de signature. L’acceptation de signer
+                  par email constitue une preuve légale.
+                </p>
+              </div>
+
+              {/* Send button */}
+              <button
+                onClick={handleSend}
+                disabled={isUploading || !signerEmail.includes('@') || !signerName.trim()}
+                style={{
+                  width: '100%', padding: '12px 0', borderRadius: 16, border: 'none',
+                  background: (isUploading || !signerEmail.includes('@') || !signerName.trim())
+                    ? (dm ? '#27272a' : '#e2e8f0')
+                    : '#059669',
+                  color: (isUploading || !signerEmail.includes('@') || !signerName.trim())
+                    ? (dm ? '#52525b' : '#94a3b8') : '#fff',
+                  fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  cursor: (isUploading || !signerEmail.includes('@') || !signerName.trim()) ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  boxShadow: (signerEmail.includes('@') && signerName.trim()) ? '0 4px 14px rgba(5,150,105,0.25)' : 'none',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {isUploading
+                  ? <><Loader2 size={13} className="animate-spin" />Envoi en cours...</>
+                  : <><Send size={13} />Envoyer pour Signature</>}
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -481,14 +628,55 @@ export default function DocuLegalPdfEditor({
                   {/* Drop zone wrapper */}
                   <div
                     ref={el => { pageRefs.current[pi] = el; }}
-                    onClick={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); handleCanvasClick(e, pi); }}
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => handleDrop(e, pi)}
-                    style={{ position: 'relative', boxShadow: '0 8px 40px rgba(0,0,0,0.22)', borderRadius: 4, overflow: 'hidden' }}
+                    style={{
+                      position: 'relative',
+                      boxShadow: '0 8px 40px rgba(0,0,0,0.22)',
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                      cursor: clickPlaceType ? 'crosshair' : 'default',
+                      outline: clickPlaceType ? '3px solid #6366f1' : 'none',
+                      outlineOffset: 2,
+                    }}
                   >
                     <canvas ref={el => { canvasRefs.current[pi] = el; }} style={{ display: 'block' }} />
 
-                    {/* Field overlays */}
+                    {/* First-page onboarding overlay — shown when no fields placed yet */}
+                    {pi === 0 && fields.length === 0 && !isLoading && showInstructions && (
+                      <div
+                        style={{
+                          position: 'absolute', inset: 0,
+                          background: 'rgba(99,102,241,0.08)',
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center',
+                          gap: 12, pointerEvents: 'none',
+                        }}
+                      >
+                        <div style={{
+                          padding: '20px 28px', borderRadius: 20,
+                          background: dm ? 'rgba(9,9,11,0.9)' : 'rgba(255,255,255,0.92)',
+                          border: '2px dashed #6366f1',
+                          textAlign: 'center', maxWidth: 320,
+                          backdropFilter: 'blur(8px)',
+                        }}>
+                          <div style={{ fontSize: 32, marginBottom: 8 }}>✍️</div>
+                          <p style={{ fontSize: 13, fontWeight: 900, color: '#6366f1', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                            Ajoutez des zones de signature
+                          </p>
+                          <p style={{ fontSize: 11, color: dm ? '#a1a1aa' : '#64748b', margin: 0, lineHeight: 1.5 }}>
+                            Dans le panneau gauche :<br/>
+                            <strong>1.</strong> Cliquez sur un type de champ<br/>
+                            <strong>2.</strong> Cliquez ici où vous voulez le placer
+                          </p>
+                          <p style={{ fontSize: 9, color: '#6366f180', margin: '8px 0 0', fontStyle: 'italic' }}>
+                            Ou glissez-déposez directement sur le PDF
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {pageFields.map(f => {
                       const def = FIELD_DEFS.find(d => d.type === f.type)!;
                       const c = COLORS[def.color];

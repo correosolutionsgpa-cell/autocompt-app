@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GestionPlex.tsx
  * ─────────────────────────────────────────────────────────────────────────────
  * Rama: Rama_Gestionnaires
@@ -70,6 +70,9 @@ export interface GestionPlexProps {
   onTaxScan: (file: File) => Promise<void>;
   /** Set by App when S.O.F.I. has pre-filled the form; cleared on next edit */
   sofiPrefillMessage: string;
+  /** Fidéicommis clients managed by this gestionnaire.
+   *  Used to link a building to its owner-client (fideicommisClientId). */
+  fideicommisClients?: Array<{ id: string; nom: string }>;
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -92,6 +95,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   WorkspaceSidebar,
   onTaxScan,
   sofiPrefillMessage,
+  fideicommisClients = [],
 }) => {
   const taxScanInputRef = useRef<HTMLInputElement>(null);
 
@@ -650,6 +654,35 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             </div>
           </div>
 
+          {/* Propriétaire-client (Gestionnaire Immobilier) */}
+          {fideicommisClients.length > 0 && (
+            <div>
+              <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                Propriétaire-client (optionnel)
+              </label>
+              <select
+                value={plexManagementForm.fideicommisClientId || ""}
+                onChange={e => {
+                  const client = fideicommisClients.find(c => c.id === e.target.value);
+                  setPlexManagementForm({
+                    ...plexManagementForm,
+                    fideicommisClientId: e.target.value || undefined,
+                    fideicommisClientName: client?.nom || undefined,
+                  });
+                }}
+                className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-indigo-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+              >
+                <option value="">— Immeuble géré en propre —</option>
+                {fideicommisClients.map(c => (
+                  <option key={c.id} value={c.id}>{c.nom}</option>
+                ))}
+              </select>
+              <p className={`text-[9px] mt-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                Lier cet immeuble à un propriétaire-client vous permettra de voir son portefeuille complet dans le Compte en fidéicommis.
+              </p>
+            </div>
+          )}
+
           {/* Bouton Enregistrer */}
           <div className="mt-6 flex justify-end">
             <button
@@ -740,6 +773,8 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   nombreChambres: 1,
                   estMeuble: false,
                   isContainer: false,
+                  fideicommisClientId: undefined,
+                  fideicommisClientName: undefined,
                   units: [
                     {
                       id: `unit_${Date.now() + 1}`,

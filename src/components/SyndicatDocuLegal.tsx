@@ -988,7 +988,12 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   };
 
   // ── Handler: PDF editor result ─────────────────────────────────────────────
-  const handlePdfEditorSend = async (fields: SignatureField[], pdfStorageUrl: string) => {
+  const handlePdfEditorSend = async (
+    fields: SignatureField[],
+    pdfStorageUrl: string,
+    signerName: string,
+    signerEmail: string,
+  ) => {
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
     const fileName = pdfEditorFile?.name?.replace(/\.pdf$/i, '') || 'Document PDF importé';
     const newDoc: LegalDocument = {
@@ -996,7 +1001,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       title: fileName,
       date: todayStr,
       status: 'attente',
-      summary: `Document PDF importé pour signature électronique. ${fields.length} zone${fields.length > 1 ? 's' : ''} de signature définie${fields.length > 1 ? 's' : ''}.`,
+      summary: `Document PDF importé pour signature électronique. Signataire : ${signerName}. ${fields.length} zone${fields.length > 1 ? 's' : ''} de signature définie${fields.length > 1 ? 's' : ''}.`,
       provider: companyName,
       signedBy: '',
       signedDate: '',
@@ -1004,9 +1009,13 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     };
     setContrats(prev => [newDoc, ...prev]);
     setPdfEditorFile(null);
+    // Pre-fill the signer email so the share modal is ready
+    setSignerEmailForInvite(signerEmail);
     setActiveTab('externe');
+    // Generate the shareable link then immediately send the invitation email
     await handleSendForSignature(newDoc, undefined, fields, pdfStorageUrl);
   };
+
 
   const currentList = activeTab === 'externe' ? contrats : activeTab === 'interne' ? resolutions : [];
 

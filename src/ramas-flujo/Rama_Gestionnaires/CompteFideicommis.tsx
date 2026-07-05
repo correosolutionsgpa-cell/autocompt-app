@@ -34,7 +34,10 @@ import type {
   FideicommisDepotDoc,
   FideicommisRetraitDoc,
   FideicommisConciliationDoc,
+  BuildingLedger,
+  UnitDoc,
 } from "../../lib/dataService";
+
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 const fmtCAD = (n: number) =>
@@ -288,6 +291,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const [depots, setDepots] = useState<FideicommisDepotDoc[]>([]);
   const [retraits, setRetraits] = useState<FideicommisRetraitDoc[]>([]);
   const [conciliations, setConciliations] = useState<FideicommisConciliationDoc[]>([]);
+  const [buildings, setBuildings] = useState<BuildingLedger[]>([]);
+  const [units, setUnits] = useState<UnitDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Selected period filter (YYYY-MM)
@@ -305,7 +310,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     date: today(), locataireName: "", propertyAddress: "",
     periodeDebut: selectedPeriod + "-01",
     periodeFin: selectedPeriod + "-30",
-    montant: "", modePaiement: "virement" as const, clientId: "", notes: "",
+    montant: "", modePaiement: "virement" as const,
+    clientId: "", buildingId: "", unitId: "", notes: "",
   });
   const [depotForm, setDepotForm] = useState(emptyDepot());
 
@@ -334,16 +340,20 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     if (!uid || !activeCompanyId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const [cSnap, dSnap, rSnap, conSnap] = await Promise.all([
+      const [cSnap, dSnap, rSnap, conSnap, bSnap, uSnap] = await Promise.all([
         getDocs(query(collection(db, "fideicommisClients"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
         getDocs(query(collection(db, "fideicommisDepots"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
         getDocs(query(collection(db, "fideicommisRetraits"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
         getDocs(query(collection(db, "fideicommisConciliations"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
+        getDocs(query(collection(db, "buildings"), where("ownerId", "==", uid))),
+        getDocs(query(collection(db, "units"), where("ownerId", "==", uid))),
       ]);
       setClients(cSnap.docs.map(d => d.data() as FideicommisClientDoc));
       setDepots(dSnap.docs.map(d => d.data() as FideicommisDepotDoc));
       setRetraits(rSnap.docs.map(d => d.data() as FideicommisRetraitDoc));
       setConciliations(conSnap.docs.map(d => d.data() as FideicommisConciliationDoc));
+      setBuildings(bSnap.docs.map(d => d.data() as BuildingLedger));
+      setUnits(uSnap.docs.map(d => d.data() as UnitDoc));
     } catch (e) { console.error("[Fidéicommis] load error:", e); }
     finally { setIsLoading(false); }
   }, [activeCompanyId]);
@@ -377,15 +387,21 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     try {
       const id = `${uid}_fiddepot_${Date.now()}`;
       const client = clients.find(c => c.id === depotForm.clientId);
+      const selectedBuilding = buildings.find(b => b.id === depotForm.buildingId);
+      const selectedUnit = units.find(u => u.id === depotForm.unitId);
       const numeroRecu = generateReceiptNumber(depots);
       const newDepot: FideicommisDepotDoc = {
         id, companyId: activeCompanyId, numeroRecu,
         date: depotForm.date, locataireName: depotForm.locataireName,
-        propertyAddress: depotForm.propertyAddress,
+        propertyAddress: depotForm.propertyAddress || selectedBuilding?.address || "",
         periodeDebut: depotForm.periodeDebut, periodeFin: depotForm.periodeFin,
         montant: parseFloat(depotForm.montant),
         modePaiement: depotForm.modePaiement,
         clientId: depotForm.clientId, clientName: client?.nom || "",
+        buildingId: depotForm.buildingId || undefined,
+        buildingAddress: selectedBuilding?.address || undefined,
+        unitId: depotForm.unitId || undefined,
+        unitName: selectedUnit?.unitName || undefined,
         notes: depotForm.notes, ownerId: uid,
         createdAt: new Date().toISOString(),
       };
@@ -674,7 +690,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                   </div>
 
                   {/* Quick actions */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <button onClick={() => setActiveTab("depots")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-emerald-400/50 ${glass}`}>
                       <ArrowDownCircle size={18} className="text-emerald-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest">Nouveau dépôt</span>
@@ -682,6 +698,13 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     <button onClick={() => setActiveTab("retraits")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-rose-400/50 ${glass}`}>
                       <ArrowUpCircle size={18} className="text-rose-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest">Nouveau retrait</span>
+                    </button>
+                    <button onClick={() => setVista("portefeuille_client")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-violet-400/50 ${glass}`}>
+                      <Building2 size={18} className="text-violet-500" />
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest block">Portefeuille</span>
+                        <span className={`text-[8px] font-bold uppercase tracking-wider ${darkMode ? "text-violet-400/60" : "text-violet-500/60"}`}>Par client</span>
+                      </div>
                     </button>
                     <button onClick={() => setVista("mandat_gestion")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-indigo-400/50 ${glass}`}>
                       <FileText size={18} className="text-indigo-500" />
@@ -775,10 +798,35 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
                               <input type="date" value={depotForm.date} onChange={e => setDepotForm(p => ({ ...p, date: e.target.value }))} className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Propriétaire-client *</label>
-                              <select value={depotForm.clientId} onChange={e => setDepotForm(p => ({ ...p, clientId: e.target.value }))} className={inputCls}>
+                              <select value={depotForm.clientId} onChange={e => setDepotForm(p => ({ ...p, clientId: e.target.value, buildingId: "", unitId: "" }))} className={inputCls}>
                                 <option value="">— Sélectionner —</option>
                                 {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                               </select></div>
+                            {/* Building selector — filtered by client */}
+                            {depotForm.clientId && (() => {
+                              const clientBuildings = buildings.filter(b => b.fideicommisClientId === depotForm.clientId);
+                              return clientBuildings.length > 0 ? (
+                                <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Immeuble</label>
+                                  <select value={depotForm.buildingId} onChange={e => setDepotForm(p => ({ ...p, buildingId: e.target.value, unitId: "", propertyAddress: buildings.find(b => b.id === e.target.value)?.address || p.propertyAddress }))} className={inputCls}>
+                                    <option value="">— Sélectionner l’immeuble —</option>
+                                    {clientBuildings.map(b => <option key={b.id} value={b.id}>{b.address}</option>)}
+                                  </select></div>
+                              ) : null;
+                            })()}
+                            {/* Unit selector — filtered by building */}
+                            {depotForm.buildingId && (() => {
+                              const buildingUnits = units.filter(u => u.buildingId === depotForm.buildingId);
+                              return buildingUnits.length > 0 ? (
+                                <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Porte / Unité</label>
+                                  <select value={depotForm.unitId} onChange={e => {
+                                    const u = units.find(u => u.id === e.target.value);
+                                    setDepotForm(p => ({ ...p, unitId: e.target.value, locataireName: u?.tenantName || p.locataireName }));
+                                  }} className={inputCls}>
+                                    <option value="">— Sélectionner l’unité —</option>
+                                    {buildingUnits.map(u => <option key={u.id} value={u.id}>{u.unitName} {u.tenantName ? `(${u.tenantName})` : ""}</option>)}
+                                  </select></div>
+                              ) : null;
+                            })()}
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Locataire (payeur) *</label>
                               <input type="text" value={depotForm.locataireName} onChange={e => setDepotForm(p => ({ ...p, locataireName: e.target.value }))} placeholder="Nom du locataire" className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
@@ -798,6 +846,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                                 <option value="autre">Autre</option>
                               </select></div>
                           </div>
+
                           <div className="flex gap-3 pt-2">
                             <button onClick={handleSaveDepot} disabled={isSaving || !depotForm.clientId || !depotForm.montant} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
                               {isSaving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}

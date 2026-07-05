@@ -77,7 +77,15 @@ export interface BuildingLedger {
   valeurTerrain?: number;
   valeurBatiment?: number;
   superficieTotalePi2?: number;
+  // ── Gestionnaire Immobilier ──
+  /** FK → FideicommisClientDoc.id
+   *  Present only when this building belongs to a client managed by the
+   *  gestionnaire. Null/absent for buildings owned directly by the account. */
+  fideicommisClientId?: string;
+  /** Denormalised display name for fast render without a join. */
+  fideicommisClientName?: string;
 }
+
 
 // ── PropertyDoc — Firestore `properties` collection ──────────────────────────
 
@@ -347,12 +355,21 @@ export interface FideicommisDepotDoc {
   /** FK → FideicommisClientDoc.id */
   clientId: string;
   clientName: string;
+  /** FK → BuildingLedger.id — which building this loyer comes from */
+  buildingId?: string;
+  /** Denormalised building address for display */
+  buildingAddress?: string;
+  /** FK → UnitDoc.id — which unit/porte specifically */
+  unitId?: string;
+  /** Denormalised unit name for display */
+  unitName?: string;
   /** URL of the generated reçu PDF (Firebase Storage) */
   recuPdfUrl?: string;
   notes?: string;
   ownerId: string;
   createdAt: string;
 }
+
 
 /**
  * FideicommisRetraitDoc — `fideicommisRetraits` collection
