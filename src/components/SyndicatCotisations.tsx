@@ -313,6 +313,19 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
 
       <div className={`rounded-[32px] p-6 sm:p-8 shadow-sm ${darkMode ? "bg-zinc-900/40 border border-zinc-800" : "bg-white border border-slate-200"}`}>
         
+        {/* Warning session banner */}
+        {!auth.currentUser?.uid && (
+          <div className={`mb-6 p-4 rounded-2xl flex items-start gap-3 border ${darkMode ? "bg-amber-950/20 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase tracking-wider">Mode Démo — Session Volatile</p>
+              <p className="text-[9px] font-bold mt-1 leading-normal uppercase">
+                Aucune session active détectée. Vos modifications (paiements ou unités) ne persisteront pas en base de données et seront perdues au rechargement.
+              </p>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
           <div>

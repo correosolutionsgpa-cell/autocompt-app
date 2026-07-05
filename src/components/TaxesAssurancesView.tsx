@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { ArrowLeft, Building2, MapPin, Search, Plus, FileText, ChevronRight, Calculator, CheckCircle2, ShieldCheck, Download, FolderOpen } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ArrowLeft, Building2, MapPin, Search, Plus, FileText, ChevronRight, Calculator, CheckCircle2, ShieldCheck, Download, FolderOpen, Loader2, Trash2, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { dataService, type PropertyDoc, type PropertyDocumentDoc } from "../lib/dataService";
+import { auth, storage } from "../lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-interface Propriete {
-  id: string;
-  adresse: string;
+interface Propriete extends PropertyDoc {
   documentsCount: number;
 }
 
@@ -28,24 +29,158 @@ export const TaxesAssurancesView = ({
   const [showAddPropModal, setShowAddPropModal] = useState(false);
   const [newPropAddress, setNewPropAddress] = useState("");
   
-  const [proprietes, setProprietes] = useState<Propriete[]>([
-    { id: "1", adresse: "4500 Blvd. de la Concorde", documentsCount: 5 },
-    { id: "2", adresse: "123 Rue Principale", documentsCount: 2 },
-    { id: "3", adresse: "890 Avenue des Pins", documentsCount: 0 },
-  ]);
+  const [proprietes, setProprietes] = useState<Propriete[]>([]);
+  const [documents, setDocuments] = useState<PropertyDocumentDoc[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleAddPropriete = () => {
-    if (newPropAddress.trim()) {
-      setProprietes([
-        ...proprietes,
-        {
-          id: Date.now().toString(),
+  // Load properties on mount / companyId change
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    dataService.fetchProperties(uid)
+      .then(async (realProps) => {
+        // Filter properties by active workspace companyId
+        const filtered = realProps.filter(p => p.companyId === companyId);
+        
+        // Fetch document counts for each property
+        const propsWithCounts = await Promise.all(filtered.map(async (p) => {
+          const docs = await dataService.fetchPropertyDocuments(uid, p.id);
+          return {
+            ...p,
+            documentsCount: docs.length
+          };
+        }));
+        setProprietes(propsWithCounts);
+      })
+      .catch((err) => console.error("fetchProperties failed:", err))
+      .finally(() => setIsLoading(false));
+  }, [companyId]);
+
+  // Load documents for selected property
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !selectedPropriete) {
+      setDocuments([]);
+      return;
+    }
+    dataService.fetchPropertyDocuments(uid, selectedPropriete.id)
+      .then((docs) => setDocuments(docs))
+      .catch((err) => console.error("fetchPropertyDocuments failed:", err));
+  }, [selectedPropriete]);
+
+  const handleAddPropriete = async () => {
+    if (!newPropAddress.trim()) return;
+    const uid = auth.currentUser?.uid;
+    const compId = companyId || "1";
+
+    try {
+      if (!uid) {
+        // Offline/Mock fallback
+        const mockProp: Propriete = {
+          id: `mock_${Date.now()}`,
+          companyId: compId,
+          typeLocation: "Appartement/Maison",
           adresse: newPropAddress.trim(),
-          documentsCount: 0
-        }
-      ]);
+          status: 'Actif',
+          documentsCount: 0,
+          ownerId: "",
+          createdAt: new Date().toISOString()
+        };
+        setProprietes(prev => [...prev, mockProp]);
+        setNewPropAddress("");
+        setShowAddPropModal(false);
+        return;
+      }
+
+      const saved = await dataService.saveProperty(uid, {
+        id: "",
+        companyId: compId,
+        typeLocation: "Appartement/Maison",
+        adresse: newPropAddress.trim(),
+        status: 'Actif',
+      });
+      setProprietes(prev => [...prev, { ...saved, documentsCount: 0 }]);
       setNewPropAddress("");
       setShowAddPropModal(false);
+      if (playNotificationSound) playNotificationSound();
+    } catch (err) {
+      console.error("Failed to add property:", err);
+      alert("Erreur lors de la création de la propriété.");
+    }
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedPropriete) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      alert("Session non active. Impossible d'importer le document.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const storagePath = `properties/${selectedPropriete.id}/${activeTab}/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, file);
+      const fileUrl = await getDownloadURL(storageRef);
+
+      const savedDoc = await dataService.savePropertyDocument(uid, {
+        id: "",
+        propertyId: selectedPropriete.id,
+        type: activeTab,
+        name: file.name,
+        fileUrl,
+        storagePath,
+      });
+
+      setDocuments(prev => [savedDoc, ...prev]);
+
+      // Update property documentsCount locally
+      setProprietes(prev => prev.map(p => 
+        p.id === selectedPropriete.id 
+          ? { ...p, documentsCount: p.documentsCount + 1 }
+          : p
+      ));
+
+      if (playNotificationSound) playNotificationSound();
+      if (setDispatcherSuccessToast) {
+        setDispatcherSuccessToast({
+          text: "Document importé",
+          channel: "Taxes & Assurances",
+          customMessage: `Le document ${file.name} a été enregistré avec succès.`,
+        });
+      }
+    } catch (err) {
+      console.error("File upload failed:", err);
+      alert("Erreur lors du téléversement du fichier.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, storagePath: string) => {
+    if (!confirm("Voulez-vous supprimer ce document ?")) return;
+    try {
+      await dataService.deletePropertyDocument(docId, storagePath);
+      setDocuments(prev => prev.filter(d => d.id !== docId));
+
+      // Update property documentsCount locally
+      setProprietes(prev => prev.map(p => 
+        p.id === selectedPropriete?.id 
+          ? { ...p, documentsCount: Math.max(0, p.documentsCount - 1) }
+          : p
+      ));
+
+      if (playNotificationSound) playNotificationSound();
+    } catch (err) {
+      console.error("Failed to delete document:", err);
+      alert("Erreur lors de la suppression du document.");
     }
   };
 
@@ -106,163 +241,247 @@ export const TaxesAssurancesView = ({
     }
   ];
 
-  const renderFolderGrid = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-      {proprietes.map((prop, idx) => {
-        const theme = FOLDER_COLORS[idx % FOLDER_COLORS.length];
-        return (
+  const renderFolderGrid = () => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+        {proprietes.map((prop, idx) => {
+          const theme = FOLDER_COLORS[idx % FOLDER_COLORS.length];
+          return (
+          <button
+            key={prop.id}
+            onClick={() => setSelectedPropriete(prop)}
+            className={`relative p-6 rounded-[32px] border ${
+              darkMode 
+                ? "bg-zinc-950 border-zinc-900 " + theme.hoverBorderDark
+                : "bg-white border-slate-200 " + theme.hoverBorderLight
+            } shadow-sm group hover:shadow-xl transition-all duration-300 transform active:scale-95 text-left flex flex-col justify-between min-h-[160px] cursor-pointer`}
+          >
+            {/* Decorative folder tab visual */}
+            <div className={`absolute top-0 right-10 w-24 h-3 rounded-b-xl opacity-20 ${theme.tabColor}`}></div>
+
+            <div className="flex items-start justify-between">
+              <div className={`p-4 rounded-2xl ${darkMode ? theme.bgIconDark : theme.bgIconLight} transition-colors`}>
+                <FolderOpen size={28} />
+              </div>
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                darkMode ? "bg-zinc-900 text-slate-400" : "bg-slate-100 text-slate-500"
+              }`}>
+                <FileText size={12} />
+                <span>{prop.documentsCount} docs</span>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex flex-col items-start">
+              <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest mb-1 ${darkMode ? theme.textDark : theme.textLight}`}>
+                <MapPin size={12} />
+                Propriété
+              </div>
+              <h3 className={`text-lg font-black tracking-tight line-clamp-1 ${darkMode ? "text-white" : "text-slate-900"}`}>
+                {prop.adresse}
+              </h3>
+            </div>
+          </button>
+        )})}
+
+        {/* Button Add Folder */}
         <button
-          key={prop.id}
-          onClick={() => setSelectedPropriete(prop)}
+          onClick={() => setShowAddPropModal(true)}
           className={`relative p-6 rounded-[32px] border ${
             darkMode 
-              ? "bg-zinc-950 border-zinc-900 " + theme.hoverBorderDark
-              : "bg-white border-slate-200 " + theme.hoverBorderLight
-          } shadow-sm group hover:shadow-xl transition-all duration-300 transform active:scale-95 text-left flex flex-col justify-between min-h-[160px] cursor-pointer`}
+              ? "bg-zinc-950 border-zinc-900 text-white" 
+              : "bg-white border-slate-200 text-slate-900"
+          } shadow-sm group hover:shadow-xl hover:border-emerald-500/50 transition-all duration-300 transform active:scale-95 text-left flex flex-col justify-between min-h-[160px] cursor-pointer`}
         >
-          {/* Decorative folder tab visual */}
-          <div className={`absolute top-0 right-10 w-24 h-3 rounded-b-xl opacity-20 ${theme.tabColor}`}></div>
-
           <div className="flex items-start justify-between">
-            <div className={`p-4 rounded-2xl ${darkMode ? theme.bgIconDark : theme.bgIconLight} transition-colors`}>
-              <FolderOpen size={28} />
-            </div>
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-              darkMode ? "bg-zinc-900 text-slate-400" : "bg-slate-100 text-slate-500"
-            }`}>
-              <FileText size={12} />
-              <span>{prop.documentsCount} docs</span>
+            <div className={`p-4 rounded-2xl ${darkMode ? "bg-slate-800 text-slate-400 group-hover:bg-emerald-900/20 group-hover:text-emerald-500" : "bg-slate-100 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-600"} transition-colors`}>
+              <Plus size={28} />
             </div>
           </div>
           
           <div className="mt-6 flex flex-col items-start">
-            <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest mb-1 ${darkMode ? theme.textDark : theme.textLight}`}>
-              <MapPin size={12} />
-              Propriété
-            </div>
-            <h3 className={`text-lg font-black tracking-tight line-clamp-1 ${darkMode ? "text-white" : "text-slate-900"}`}>
-              {prop.adresse}
+            <h3 className={`text-lg font-black tracking-tight ${darkMode ? "text-slate-400 group-hover:text-white" : "text-slate-500 group-hover:text-slate-900"} transition-colors`}>
+              Ajouter
             </h3>
+            <span className={`text-xs font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-600 group-hover:text-emerald-500/70" : "text-slate-400 group-hover:text-emerald-600/70"} transition-colors`}>
+              Nouvelle Propriété
+            </span>
           </div>
         </button>
-      )})}
-
-      {/* Button Add Folder */}
-      <button
-        onClick={() => setShowAddPropModal(true)}
-        className={`relative p-6 rounded-[32px] border ${
-          darkMode 
-            ? "bg-zinc-950 border-zinc-900 text-white" 
-            : "bg-white border-slate-200 text-slate-900"
-        } shadow-sm group hover:shadow-xl hover:border-emerald-500/50 transition-all duration-300 transform active:scale-95 text-left flex flex-col justify-between min-h-[160px] cursor-pointer`}
-      >
-        <div className="flex items-start justify-between">
-          <div className={`p-4 rounded-2xl ${darkMode ? "bg-slate-800 text-slate-400 group-hover:bg-emerald-900/20 group-hover:text-emerald-500" : "bg-slate-100 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-600"} transition-colors`}>
-            <Plus size={28} />
-          </div>
-        </div>
-        
-        <div className="mt-6 flex flex-col items-start">
-          <h3 className={`text-lg font-black tracking-tight ${darkMode ? "text-slate-400 group-hover:text-white" : "text-slate-500 group-hover:text-slate-900"} transition-colors`}>
-            Ajouter
-          </h3>
-          <span className={`text-xs font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-600 group-hover:text-emerald-500/70" : "text-slate-400 group-hover:text-emerald-600/70"} transition-colors`}>
-            Nouvelle Propriété
-          </span>
-        </div>
-      </button>
-    </div>
-  );
-
-  const renderDetailView = () => (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`p-6 sm:p-8 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} flex flex-col space-y-8`}>
-        
-        {/* Header Propriété */}
-        <div className="flex items-center gap-4">
-          <div className={`p-4 rounded-2xl ${darkMode ? "bg-emerald-900/20 text-emerald-500" : "bg-emerald-100 text-emerald-600"}`}>
-            <Building2 size={32} />
-          </div>
-          <div>
-            <h3 className={`text-2xl font-black tracking-tighter ${darkMode ? "text-white" : "text-slate-900"}`}>
-              {selectedPropriete?.adresse}
-            </h3>
-            <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
-              Gestion des relevés officiels
-            </p>
-          </div>
-        </div>
-
-        {/* Colorful Category Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <button
-             onClick={() => setActiveTab("Municipales")}
-             className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Municipales" ? (darkMode ? "border-emerald-500/50 ring-1 ring-emerald-500/30" : "border-emerald-500/50 ring-1 ring-emerald-500/30") : ""}`}
-          >
-             <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Municipales" ? (darkMode ? "bg-emerald-900/40 text-emerald-500" : "bg-emerald-100 text-emerald-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-emerald-500")} transition-colors`}>
-               <Building2 size={24} />
-             </div>
-             <div className="text-left w-full">
-               <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Municipales" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
-                 Taxes
-                 <br />
-                 Municipales
-               </span>
-             </div>
-          </button>
-          
-          <button
-             onClick={() => setActiveTab("Scolaires")}
-             className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Scolaires" ? (darkMode ? "border-blue-500/50 ring-1 ring-blue-500/30" : "border-blue-500/50 ring-1 ring-blue-500/30") : ""}`}
-          >
-             <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Scolaires" ? (darkMode ? "bg-blue-900/40 text-blue-500" : "bg-blue-100 text-blue-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-blue-500")} transition-colors`}>
-               <Calculator size={24} />
-             </div>
-             <div className="text-left w-full">
-               <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Scolaires" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
-                 Taxes
-                 <br />
-                 Scolaires
-               </span>
-             </div>
-          </button>
-
-          <button
-             onClick={() => setActiveTab("Assurances")}
-             className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Assurances" ? (darkMode ? "border-amber-500/50 ring-1 ring-amber-500/30" : "border-amber-500/50 ring-1 ring-amber-500/30") : ""}`}
-          >
-             <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Assurances" ? (darkMode ? "bg-amber-900/40 text-amber-500" : "bg-amber-100 text-amber-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-amber-500")} transition-colors`}>
-               <ShieldCheck size={24} />
-             </div>
-             <div className="text-left w-full">
-               <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Assurances" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
-                 Polices
-                 <br />
-                 d'Assurances
-               </span>
-             </div>
-          </button>
-        </div>
-
-        {/* Contenu Vide (Simulé) */}
-        <div className={`flex flex-col items-center justify-center p-12 text-center rounded-3xl border border-dashed ${darkMode ? "border-zinc-800 bg-zinc-900/20" : "border-slate-200 bg-slate-50"} min-h-[300px]`}>
-           <div className={`mb-4 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>
-              {activeTab === "Assurances" ? <ShieldCheck size={64} /> : <Calculator size={64} />}
-           </div>
-           <p className={`text-sm font-bold max-w-sm mx-auto ${darkMode ? "text-slate-400" : "text-slate-600"}`}>
-             Aucun document enregistré pour 
-             <span className={`block mt-2 font-black uppercase tracking-widest ${darkMode ? "text-white" : "text-slate-900"}`}>
-                {activeTab === "Assurances" ? "les assurances" : `les taxes ${activeTab.toLowerCase()}`}
-             </span>
-           </p>
-           <p className={`text-[10px] uppercase font-bold tracking-widest mt-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-             Utilisez le bouton ci-dessus pour importer.
-           </p>
-        </div>
-
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderDetailView = () => {
+    const activeDocs = documents.filter(d => d.type === activeTab);
+
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className={`p-6 sm:p-8 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"} flex flex-col space-y-8`}>
+          
+          {/* Header Propriété */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className={`p-4 rounded-2xl ${darkMode ? "bg-emerald-900/20 text-emerald-500" : "bg-emerald-100 text-emerald-600"}`}>
+                <Building2 size={32} />
+              </div>
+              <div>
+                <h3 className={`text-2xl font-black tracking-tighter ${darkMode ? "text-white" : "text-slate-900"}`}>
+                  {selectedPropriete?.adresse}
+                </h3>
+                <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
+                  Gestion des relevés officiels
+                </p>
+              </div>
+            </div>
+
+            {/* Upload Area Button */}
+            <div className="relative">
+              <label className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 cursor-pointer transition-all duration-150">
+                {isUploading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Importation...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} />
+                    <span>Importer un document</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  onChange={handleUploadFile}
+                  accept="application/pdf, image/jpeg, image/png, image/webp"
+                  disabled={isUploading}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Colorful Category Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <button
+               onClick={() => setActiveTab("Municipales")}
+               className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Municipales" ? (darkMode ? "border-emerald-500/50 ring-1 ring-emerald-500/30" : "border-emerald-500/50 ring-1 ring-emerald-500/30") : ""}`}
+            >
+               <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Municipales" ? (darkMode ? "bg-emerald-900/40 text-emerald-500" : "bg-emerald-100 text-emerald-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-emerald-500")} transition-colors`}>
+                 <Building2 size={24} />
+               </div>
+               <div className="text-left w-full">
+                 <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Municipales" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
+                   Taxes
+                   <br />
+                   Municipales
+                 </span>
+               </div>
+            </button>
+            
+            <button
+               onClick={() => setActiveTab("Scolaires")}
+               className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Scolaires" ? (darkMode ? "border-blue-500/50 ring-1 ring-blue-500/30" : "border-blue-500/50 ring-1 ring-blue-500/30") : ""}`}
+            >
+               <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Scolaires" ? (darkMode ? "bg-blue-900/40 text-blue-500" : "bg-blue-100 text-blue-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-blue-500")} transition-colors`}>
+                 <Calculator size={24} />
+               </div>
+               <div className="text-left w-full">
+                 <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Scolaires" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
+                   Taxes
+                   <br />
+                   Scolaires
+                 </span>
+               </div>
+            </button>
+
+            <button
+               onClick={() => setActiveTab("Assurances")}
+               className={`flex flex-col items-start p-6 rounded-[32px] border shadow-sm hover:shadow-xl transition-all active:scale-95 ${darkMode ? "bg-zinc-950 border-zinc-900 text-white" : "bg-white border-slate-200 text-slate-900"} ${activeTab === "Assurances" ? (darkMode ? "border-amber-500/50 ring-1 ring-amber-500/30" : "border-amber-500/50 ring-1 ring-amber-500/30") : ""}`}
+            >
+               <div className={`p-4 rounded-2xl mb-4 ${activeTab === "Assurances" ? (darkMode ? "bg-amber-900/40 text-amber-500" : "bg-amber-100 text-amber-600") : (darkMode ? "bg-zinc-900 text-zinc-500" : "bg-slate-50 text-slate-400 group-hover:text-amber-500")} transition-colors`}>
+                 <ShieldCheck size={24} />
+               </div>
+               <div className="text-left w-full">
+                 <span className={`block text-[11px] font-black uppercase tracking-widest leading-tight ${activeTab === "Assurances" ? "" : (darkMode ? "text-zinc-400" : "text-slate-500")}`}>
+                   Polices
+                   <br />
+                   d'Assurances
+                 </span>
+               </div>
+            </button>
+          </div>
+
+          {/* List of Documents */}
+          {activeDocs.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center p-12 text-center rounded-3xl border border-dashed ${darkMode ? "border-zinc-800 bg-zinc-900/20" : "border-slate-200 bg-slate-50"} min-h-[300px]`}>
+               <div className={`mb-4 ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>
+                  {activeTab === "Assurances" ? <ShieldCheck size={64} /> : <Calculator size={64} />}
+               </div>
+               <p className={`text-sm font-bold max-w-sm mx-auto ${darkMode ? "text-slate-400" : "text-slate-600"}`}>
+                 Aucun document enregistré pour 
+                 <span className={`block mt-2 font-black uppercase tracking-widest ${darkMode ? "text-white" : "text-slate-900"}`}>
+                    {activeTab === "Assurances" ? "les assurances" : `les taxes ${activeTab.toLowerCase()}`}
+                 </span>
+               </p>
+               <p className={`text-[10px] uppercase font-bold tracking-widest mt-4 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                 Utilisez le bouton ci-dessus pour importer.
+               </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activeDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+                    darkMode ? "bg-zinc-900/50 border-zinc-800 text-white" : "bg-slate-50/50 border-slate-100 text-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3 truncate">
+                    <div className={`p-2.5 rounded-xl ${darkMode ? "bg-zinc-800 text-emerald-400" : "bg-white text-emerald-600 border border-slate-200"} shrink-0`}>
+                      <FileText size={18} />
+                    </div>
+                    <div className="truncate text-left">
+                      <p className="text-xs font-black uppercase tracking-tight truncate max-w-md">{doc.name}</p>
+                      <p className={`text-[9px] font-bold text-slate-400 mt-0.5`}>
+                        Importé le {new Date(doc.uploadedAt).toLocaleDateString("fr-CA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`p-2 rounded-xl border ${
+                        darkMode ? "border-zinc-850 hover:bg-zinc-800 text-zinc-300" : "border-slate-200 hover:bg-slate-100 text-slate-600"
+                      } transition-colors`}
+                    >
+                      <Download size={14} />
+                    </a>
+                    <button
+                      onClick={() => handleDeleteDocument(doc.id, doc.storagePath)}
+                      className={`p-2 rounded-xl border ${
+                        darkMode ? "border-zinc-850 hover:bg-rose-950 text-rose-400" : "border-slate-200 hover:bg-rose-50 text-rose-600"
+                      } transition-colors`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 w-full max-w-6xl mx-auto flex flex-col h-full overflow-hidden">

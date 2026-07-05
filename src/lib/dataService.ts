@@ -30,7 +30,7 @@ import {
   orderBy,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getBytes, deleteObject, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from './firebase';
 import { postJournalEntry } from '../services/ledgerService';
 
@@ -268,6 +268,48 @@ export interface DocTemplateDoc {
   condiciones: string[];
   ownerId: string;
   createdAt: string;
+}
+
+// ── PaieRecordDoc — Firestore `paieRecords` collection (Payroll) ──────────────
+
+export interface PaieRecordDoc {
+  id: string;
+  companyId: string;
+  nom: string;
+  frequence: string;
+  montantBase: number;
+  deductions: number;
+  neto: number;
+  statut: string;
+  date: string;
+  fileUrl?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
+// ── PropertyDocumentDoc — Firestore `propertyDocuments` collection (Taxes & Assurances Docs) ──
+
+export interface PropertyDocumentDoc {
+  id: string;
+  propertyId: string;
+  type: 'Municipales' | 'Scolaires' | 'Assurances';
+  name: string;
+  fileUrl: string;
+  storagePath: string;
+  ownerId: string;
+  uploadedAt: string;
+}
+
+// ── AiReportDoc — Firestore `aiReports` collection (SyndicAI generated reports) ──
+
+export interface AiReportDoc {
+  id: string;
+  companyId: string;
+  type: string; // 'financier' | 'convocation' | 'legal' | 'inspection' | 'budget'
+  period: string;
+  text: string;
+  ownerId: string;
+  generatedAt: string;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1446,5 +1488,164 @@ export const dataService = {
   async fetchBetaCodes(): Promise<BetaCodeDoc[]> {
     const snap = await getDocs(collection(db, 'betaCodes'));
     return snap.docs.map((d) => d.data() as BetaCodeDoc);
+  },
+
+  // ── Heures & Paie (Payroll) ────────────────────────────────────────────────
+
+  async fetchPaieRecords(userId: string, companyId: string): Promise<PaieRecordDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'paieRecords'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_paie_');
+        return {
+          ...data,
+          id: idParts.length > 1 ? idParts[1] : d.id,
+          companyId,
+        } as PaieRecordDoc;
+      });
+    } catch (e) {
+      console.error('fetchPaieRecords failed:', e);
+      return [];
+    }
+  },
+
+  async savePaieRecord(
+    userId: string,
+    recordData: Omit<PaieRecordDoc, 'ownerId' | 'createdAt'>
+  ): Promise<PaieRecordDoc> {
+    assertCanWrite();
+    const originalId = recordData.id || `paie_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const docId = `${userId}_paie_${originalId}`;
+    const docCompanyId = `${userId}_company_${recordData.companyId}`;
+    const data: PaieRecordDoc = {
+      ...recordData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'paieRecords', docId), data);
+    return { ...data, id: originalId, companyId: recordData.companyId };
+  },
+
+  async deletePaieRecord(recordId: string): Promise<boolean> {
+    const userId = auth.currentUser?.uid;
+    const docId = userId ? `${userId}_paie_${recordId}` : recordId;
+    await deleteDoc(doc(db, 'paieRecords', docId));
+    return true;
+  },
+
+  // ── Taxes & Assurances Documents ───────────────────────────────────────────
+
+  async fetchPropertyDocuments(userId: string, propertyId: string): Promise<PropertyDocumentDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'propertyDocuments'),
+        where('ownerId', '==', userId),
+        where('propertyId', '==', propertyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_propdoc_');
+        return {
+          ...data,
+          id: idParts.length > 1 ? idParts[1] : d.id,
+        } as PropertyDocumentDoc;
+      });
+    } catch (e) {
+      console.error('fetchPropertyDocuments failed:', e);
+      return [];
+    }
+  },
+
+  async savePropertyDocument(
+    userId: string,
+    docData: Omit<PropertyDocumentDoc, 'ownerId' | 'uploadedAt'>
+  ): Promise<PropertyDocumentDoc> {
+    assertCanWrite();
+    const originalId = docData.id || `doc_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const docId = `${userId}_propdoc_${originalId}`;
+    const data: PropertyDocumentDoc = {
+      ...docData,
+      id: docId,
+      ownerId: userId,
+      uploadedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'propertyDocuments', docId), data);
+    return { ...data, id: originalId };
+  },
+
+  async deletePropertyDocument(docId: string, storagePath?: string): Promise<boolean> {
+    const userId = auth.currentUser?.uid;
+    const dbId = userId ? `${userId}_propdoc_${docId}` : docId;
+    await deleteDoc(doc(db, 'propertyDocuments', dbId));
+    if (storagePath) {
+      try {
+        await deleteObject(ref(storage, storagePath));
+      } catch (e) {
+        console.error('deletePropertyDocument: Storage file deletion failed:', e);
+      }
+    }
+    return true;
+  },
+
+  // ── AI Reports (SyndicAI) ──────────────────────────────────────────────────
+
+  async fetchAiReports(userId: string, companyId: string): Promise<AiReportDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'aiReports'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_aireport_');
+        return {
+          ...data,
+          id: idParts.length > 1 ? idParts[1] : d.id,
+          companyId,
+        } as AiReportDoc;
+      });
+    } catch (e) {
+      console.error('fetchAiReports failed:', e);
+      return [];
+    }
+  },
+
+  async saveAiReport(
+    userId: string,
+    reportData: Omit<AiReportDoc, 'ownerId' | 'generatedAt'>
+  ): Promise<AiReportDoc> {
+    assertCanWrite();
+    const originalId = reportData.id || `rep_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const docId = `${userId}_aireport_${originalId}`;
+    const docCompanyId = `${userId}_company_${reportData.companyId}`;
+    const data: AiReportDoc = {
+      ...reportData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      generatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'aiReports', docId), data);
+    return { ...data, id: originalId, companyId: reportData.companyId };
+  },
+
+  async deleteAiReport(reportId: string): Promise<boolean> {
+    const userId = auth.currentUser?.uid;
+    const docId = userId ? `${userId}_aireport_${reportId}` : reportId;
+    await deleteDoc(doc(db, 'aiReports', docId));
+    return true;
   },
 };

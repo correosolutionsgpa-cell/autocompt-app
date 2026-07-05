@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { dataService } from '../lib/dataService';
+import { auth } from '../lib/firebase';
 import {
   Sparkles,
   Download,
@@ -123,6 +125,25 @@ export default function SyndicAiReporter({
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
 
+  // Load reports history from Firestore
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    dataService.fetchAiReports(uid, activeCompanyId)
+      .then((reports) => {
+        // Map to GeneratedReport type expected by the UI
+        const mapped = reports.map((r) => ({
+          id: r.id,
+          type: r.type as DocType,
+          period: r.period,
+          text: r.text,
+          generatedAt: new Date(r.generatedAt).toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }),
+        }));
+        setHistory(mapped);
+      })
+      .catch((err) => console.error("fetchAiReports failed:", err));
+  }, [activeCompanyId]);
+
   // Compute real financial data from depenses
   const condoExpenses = depenses.filter((d) => d.companyId === activeCompanyId);
   const totalDepenses = condoExpenses.reduce((sum, d) => sum + (Number(d.total) || 0), 0);
@@ -243,12 +264,29 @@ Ton professionnel, chiffré, avec des projections réalistes pour une coproprié
         const data = await response.json();
         const text = data.reply || data.message || 'Document généré avec succès.';
         setGeneratedText(text);
+
+        const uid = auth.currentUser?.uid;
+        let savedReport: any = null;
+        if (uid) {
+          try {
+            savedReport = await dataService.saveAiReport(uid, {
+              id: "",
+              companyId: activeCompanyId,
+              type: docType,
+              period,
+              text,
+            });
+          } catch (e) {
+            console.error("Failed to save report to Firestore:", e);
+          }
+        }
+
         const entry: GeneratedReport = {
-          id: Date.now().toString(),
+          id: savedReport?.id || Date.now().toString(),
           type: docType,
           period,
           text,
-          generatedAt: new Date().toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }),
+          generatedAt: new Date(savedReport?.generatedAt || new Date()).toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }),
         };
         setHistory((prev) => [entry, ...prev].slice(0, 10));
       } else {
@@ -258,12 +296,29 @@ Ton professionnel, chiffré, avec des projections réalistes pour une coproprié
       // Rich fallback text
       const fallback = buildFallback();
       setGeneratedText(fallback);
+
+      const uid = auth.currentUser?.uid;
+      let savedReport: any = null;
+      if (uid) {
+        try {
+          savedReport = await dataService.saveAiReport(uid, {
+            id: "",
+            companyId: activeCompanyId,
+            type: docType,
+            period,
+            text: fallback,
+          });
+        } catch (e) {
+          console.error("Failed to save report fallback to Firestore:", e);
+        }
+      }
+
       const entry: GeneratedReport = {
-        id: Date.now().toString(),
+        id: savedReport?.id || Date.now().toString(),
         type: docType,
         period,
         text: fallback,
-        generatedAt: new Date().toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }),
+        generatedAt: new Date(savedReport?.generatedAt || new Date()).toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }),
       };
       setHistory((prev) => [entry, ...prev].slice(0, 10));
     } finally {

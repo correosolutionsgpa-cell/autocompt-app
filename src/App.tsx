@@ -105,7 +105,6 @@ import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
-import AdminDashboard from "./components/AdminDashboard";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
@@ -1555,6 +1554,14 @@ const App = () => {
       ) {
         setActiveUser(empresa.partners[0]);
       }
+
+      // Fetch payroll records (Heures & Paie) dynamically
+      const uid = auth.currentUser?.uid;
+      if (uid && activeCompanyId) {
+        dataService.fetchPaieRecords(uid, activeCompanyId)
+          .then((records) => setPaieRecords(records))
+          .catch((err) => console.error("fetchPaieRecords failed in useEffect:", err));
+      }
     }
   }, [activeCompanyId]);
 
@@ -2417,7 +2424,7 @@ const App = () => {
                   {isSuperAdmin && (
                     <button
                       onClick={() => {
-                        setVista("admin");
+                        setVista("superadmin_panel");
                         if (typeof window !== "undefined" && typeof (window as any).playNotificationSound === "function") {
                           (window as any).playNotificationSound();
                         } else if (typeof playNotificationSound === "function") {
@@ -19200,15 +19207,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     );
   }
 
-  if (vista === "admin") {
-    return (
-      <AdminDashboard
-        darkMode={darkMode}
-        onBack={() => setVista("dashboard")}
-        adminName={adminName}
-      />
-    );
-  }
+
 
 
   // ContratsDLShell → extraído a src/ramas-flujo/Rama_Gestionnaires/ContratsDLShell.tsx (Fase 13)

@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bell, ChevronDown, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown, Send, Loader2, AlertCircle } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService, type CommunityPostDoc } from "../../lib/dataService";
 
@@ -177,6 +177,19 @@ const MuroCommunication: React.FC<MuroCommunicationProps> = ({
       </header>
 
       <main className="flex-1 max-w-3xl w-full p-4 sm:p-6 mx-auto space-y-6">
+        {/* Warning session banner */}
+        {!auth.currentUser?.uid && (
+          <div className={`p-4 rounded-2xl flex items-start gap-3 border ${darkMode ? "bg-amber-950/20 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase tracking-wider">Mode Démo — Bouton Publier Inactif</p>
+              <p className="text-[9px] font-bold mt-1 leading-normal uppercase">
+                Aucun compte connecté. Le botón de publication restera bloqué car la publication d'avis officiels nécessite une authentification active.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Zone de publication */}
         <div
           className={`rounded-[32px] p-6 shadow-sm border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"}`}

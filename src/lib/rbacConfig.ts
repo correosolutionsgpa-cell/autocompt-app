@@ -62,7 +62,6 @@ export type ModuleId =
   | "transparence"
   | "loi16"
   | "mur_communication"
-  | "parametres_syndicat"
   | "rapport_ia";
 
 // ─── Profile union type ─────────────────────────────────────────────────────
@@ -181,12 +180,6 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
     description: "Messagerie et annonces interne au syndicat",
     dashboard: "Syndic",
   },
-  parametres_syndicat: {
-    id: "parametres_syndicat",
-    label: "Paramètres Syndicat",
-    description: "Configuration du syndicat, unités, administrateurs",
-    dashboard: "Syndic",
-  },
   rapport_ia: {
     id: "rapport_ia",
     label: "Rapport IA",
@@ -297,7 +290,6 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "transparence",
     "loi16",
     "mur_communication",
-    "parametres_syndicat",
     "rapport_ia",
   ],
 };
