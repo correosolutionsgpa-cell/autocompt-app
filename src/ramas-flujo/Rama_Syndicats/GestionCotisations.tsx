@@ -20,6 +20,7 @@ export interface GestionCotisationsProps {
   adminPhoto: string;
   setVista: (vista: string) => void;
   WorkspaceSidebar: React.ComponentType;
+  companyId: string;
 }
 
 const GestionCotisations: React.FC<GestionCotisationsProps> = ({
@@ -29,6 +30,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
   adminPhoto,
   setVista,
   WorkspaceSidebar,
+  companyId,
 }) => (
   <div
     className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}
@@ -94,7 +96,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
     </header>
 
     <main className="flex-1 w-full bg-slate-50 dark:bg-transparent p-4 sm:p-6">
-      <SyndicatCotisations setVista={setVista} darkMode={darkMode} />
+      <SyndicatCotisations setVista={setVista} darkMode={darkMode} companyId={companyId} />
     </main>
   </div>
 );

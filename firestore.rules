@@ -89,6 +89,18 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    match /condoUnits/{unitId} {
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    match /cotisationPayments/{paymentId} {
+      allow read: if isOwnerDoc();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /maintenance_components/{componentId} {
       allow read: if isOwnerDoc();
       allow create: if isOwnerWrite();

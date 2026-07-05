@@ -423,6 +423,7 @@ interface SofiOnboardingProps {
   setDarkMode: (dark: boolean) => void;
   onComplete: (profile: string, lang: "FR" | "EN" | "ES", answers?: OnboardingAnswers) => void;
   playNotificationSound?: () => void;
+  onLoginClick?: () => void;
 }
 
 // ─── Translations (shared UI strings) ────────────────────────────────────────
@@ -436,6 +437,7 @@ const T = {
     finish: "Lancer AutoCompt",
     stepLabel: (cur: number, tot: number) => `Étape ${cur} sur ${tot}`,
     selectAll: "Sélectionnez tout ce qui s'applique",
+    alreadyHaveAccount: "J'ai déjà un compte, accès sécurisé",
     profiles: {
       prospecteur:  { label: "Prospecteur Immobilier",  desc: "Outils DocuLégal intégrés pour simplifier votre travail sur le terrain." },
       investisseur: { label: "Investisseur Immobilier", desc: "Tenue de livres automatisée et distincte pour chacun de vos immeubles." },
@@ -453,6 +455,7 @@ const T = {
     finish: "Launch AutoCompt",
     stepLabel: (cur: number, tot: number) => `Step ${cur} of ${tot}`,
     selectAll: "Select all that apply",
+    alreadyHaveAccount: "I already have an account, secure access",
     profiles: {
       prospecteur:  { label: "Property Finder",         desc: "Integrated DocuLégal tools to simplify your field work." },
       investisseur: { label: "Real Estate Investor",    desc: "Automated and separate bookkeeping for each of your properties." },
@@ -470,6 +473,7 @@ const T = {
     finish: "Lanzar AutoCompt",
     stepLabel: (cur: number, tot: number) => `Paso ${cur} de ${tot}`,
     selectAll: "Selecciona todo lo que aplique",
+    alreadyHaveAccount: "Ya tengo una cuenta, acceso seguro",
     profiles: {
       prospecteur:  { label: "Buscador de Inmuebles",          desc: "Herramientas de DocuLégal integradas para simplificar tu trabajo de campo." },
       investisseur: { label: "Inversor Inmobiliario",          desc: "Contabilidad automatizada e independiente para cada uno de tus edificios." },
@@ -482,7 +486,7 @@ const T = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SofiOnboarding({
-  darkMode, setDarkMode, onComplete, playNotificationSound,
+  darkMode, setDarkMode, onComplete, playNotificationSound, onLoginClick,
 }: SofiOnboardingProps) {
   const [lang, setLang]       = useState<"FR" | "EN" | "ES">("FR");
   const [audioPlayed, setAudioPlayed] = useState(false);
@@ -977,6 +981,15 @@ export default function SofiOnboarding({
                 {t.profileHeading}
               </h2>
               <p className={`text-xs font-medium ${darkMode ? "text-zinc-450" : "text-slate-500"}`}>{t.subtitle}</p>
+              {onLoginClick && (
+                <button
+                  type="button"
+                  onClick={onLoginClick}
+                  className={`text-[10px] font-bold uppercase tracking-wider underline underline-offset-2 bg-transparent border-none cursor-pointer p-0 ${darkMode ? "text-zinc-400 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+                >
+                  {t.alreadyHaveAccount}
+                </button>
+              )}
             </div>
 
             {/* Language selector */}

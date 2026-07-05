@@ -1,23 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ArrowLeft, 
-  Search, 
-  CheckCircle2, 
-  AlertCircle, 
-  ChevronDown, 
-  Bell, 
-  DollarSign, 
+import {
+  ArrowLeft,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  Bell,
+  DollarSign,
   History,
   X,
   Send,
   TrendingUp,
-  Clock
+  Clock,
+  Plus,
+  Loader2
 } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import { dataService, type CondoUnitDoc, type CotisationPaymentDoc } from '../lib/dataService';
 
 export interface SyndicatCotisationsProps {
   setVista: (v: string) => void;
   darkMode: boolean;
+  companyId: string;
 }
 
 interface PaymentHistory {
@@ -37,7 +42,9 @@ interface CondoUnit {
   history: PaymentHistory[];
 }
 
-export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCotisationsProps) {
+const CURRENT_MONTH_LABEL = new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
+
+export default function SyndicatCotisations({ setVista, darkMode, companyId }: SyndicatCotisationsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'mois_en_cours' | 'tous_les_mois'>('mois_en_cours');
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
@@ -54,45 +61,43 @@ export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCoti
   // Reminders loading state
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
 
-  // Mock data for demo purposes (now reactive)
-  const [units, setUnits] = useState<CondoUnit[]>([
-    {
-      id: '1',
-      unit: 'Unité 101',
-      owner: 'Jean Tremblay',
-      amountDue: 250,
-      status: 'paye',
-      history: [
-        { id: 'h1', month: 'Mai 2026', amount: 250, date: '01/05/2026', status: 'paye' },
-        { id: 'h2', month: 'Avril 2026', amount: 250, date: '02/04/2026', status: 'paye' },
-        { id: 'h3', month: 'Mars 2026', amount: 250, date: '01/03/2026', status: 'paye' },
-      ],
-    },
-    {
-      id: '2',
-      unit: 'Unité 102',
-      owner: 'Marie Dubois',
-      amountDue: 300,
-      status: 'en_retard',
-      history: [
-        { id: 'h4', month: 'Mai 2026', amount: 300, date: '-', status: 'en_retard' },
-        { id: 'h5', month: 'Avril 2026', amount: 300, date: '05/04/2026', status: 'paye' },
-        { id: 'h6', month: 'Mars 2026', amount: 300, date: '03/03/2026', status: 'paye' },
-      ],
-    },
-    {
-      id: '3',
-      unit: 'Unité 201',
-      owner: 'Luc Lavoie',
-      amountDue: 250,
-      status: 'paye',
-      history: [
-        { id: 'h7', month: 'Mai 2026', amount: 250, date: '02/05/2026', status: 'paye' },
-        { id: 'h8', month: 'Avril 2026', amount: 250, date: '01/04/2026', status: 'paye' },
-        { id: 'h9', month: 'Mars 2026', amount: 250, date: '01/03/2026', status: 'paye' },
-      ],
-    },
-  ]);
+  // Real Firestore-backed data (condoUnits + cotisationPayments)
+  const [rawUnits, setRawUnits] = useState<CondoUnitDoc[]>([]);
+  const [rawPayments, setRawPayments] = useState<CotisationPaymentDoc[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Add-unit modal
+  const [isAddUnitModalOpen, setIsAddUnitModalOpen] = useState(false);
+  const [newUnitLabel, setNewUnitLabel] = useState('');
+  const [newUnitOwner, setNewUnitOwner] = useState('');
+  const [newUnitAmount, setNewUnitAmount] = useState('');
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) { setIsLoading(false); return; }
+    Promise.all([
+      dataService.fetchCondoUnits(uid, companyId),
+      dataService.fetchCotisationPayments(uid, companyId),
+    ]).then(([units, payments]) => {
+      setRawUnits(units);
+      setRawPayments(payments);
+    }).catch((err) => console.error('Failed to load cotisations data:', err))
+      .finally(() => setIsLoading(false));
+  }, [companyId]);
+
+  // Derive the same shape the rest of this component already expects
+  // (a CondoUnit with its payment history nested) from the two flat Firestore collections.
+  const units: CondoUnit[] = rawUnits.map((u) => ({
+    id: u.id,
+    unit: u.unit,
+    owner: u.owner,
+    amountDue: u.amountDue,
+    status: u.status,
+    history: rawPayments
+      .filter((p) => p.unitId === u.id)
+      .sort((a, b) => new Date(b.date.split('/').reverse().join('-')).getTime() - new Date(a.date.split('/').reverse().join('-')).getTime())
+      .map((p) => ({ id: p.id, month: p.month, amount: p.amount, date: p.date, status: p.status })),
+  }));
 
   // Web Audio API Sound Generator
   const playSound = (type: 'cash' | 'swoop' | 'error') => {
@@ -198,41 +203,47 @@ export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCoti
   };
 
   // Register Transaction Payment
-  const handleRegisterPayment = () => {
+  const handleRegisterPayment = async () => {
     if (!selectedUnit) return;
     if (paymentAmount <= 0) {
       triggerToast("Veuillez entrer un montant valide.", "error");
       return;
     }
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
 
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const monthStr = 'Mai 2026';
+    const monthStr = CURRENT_MONTH_LABEL;
 
-    setUnits(prev => prev.map(u => {
-      if (u.id === selectedUnit.id) {
-        // Build history verifications
-        const cleanHistory = u.history.filter(h => h.month !== monthStr);
-        const newHistoryRecord: PaymentHistory = {
-          id: Math.random().toString(36).substr(2, 9),
-          month: monthStr,
-          amount: paymentAmount,
-          date: todayStr,
-          status: 'paye'
-        };
+    try {
+      const savedPayment = await dataService.saveCotisationPayment(uid, {
+        id: '',
+        companyId,
+        unitId: selectedUnit.id,
+        month: monthStr,
+        amount: paymentAmount,
+        date: todayStr,
+        status: 'paye',
+      });
+      setRawPayments((prev) => [
+        savedPayment,
+        ...prev.filter((p) => !(p.unitId === selectedUnit.id && p.month === monthStr)),
+      ]);
 
-        return {
-          ...u,
-          status: 'paye',
-          history: [newHistoryRecord, ...cleanHistory]
-        };
+      const unitDoc = rawUnits.find((u) => u.id === selectedUnit.id);
+      if (unitDoc) {
+        await dataService.saveCondoUnit(uid, { ...unitDoc, status: 'paye' });
+        setRawUnits((prev) => prev.map((u) => (u.id === selectedUnit.id ? { ...u, status: 'paye' } : u)));
       }
-      return u;
-    }));
 
-    setIsPaymentModalOpen(false);
-    setSelectedUnit(null);
-    playSound('cash');
-    triggerToast(`Paiement de ${paymentAmount.toFixed(2)} $ enregistré pour ${selectedUnit.unit} !`, 'success');
+      setIsPaymentModalOpen(false);
+      setSelectedUnit(null);
+      playSound('cash');
+      triggerToast(`Paiement de ${paymentAmount.toFixed(2)} $ enregistré pour ${selectedUnit.unit} !`, 'success');
+    } catch (err) {
+      console.error('Failed to save cotisation payment:', err);
+      triggerToast("Erreur lors de l'enregistrement du paiement.", 'error');
+    }
   };
 
   // Send interactive reminder
@@ -243,6 +254,35 @@ export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCoti
       setSendingReminderId(null);
       triggerToast(`Rappel de cotisation envoyé par courriel & SMS à ${unit.owner} !`, 'success');
     }, 1500);
+  };
+
+  const handleAddUnit = async () => {
+    if (!newUnitLabel.trim() || !newUnitOwner.trim()) {
+      triggerToast("Veuillez remplir l'unité et le nom du copropriétaire.", 'error');
+      return;
+    }
+    const amount = parseFloat(newUnitAmount) || 0;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    try {
+      const saved = await dataService.saveCondoUnit(uid, {
+        id: '',
+        companyId,
+        unit: newUnitLabel.trim(),
+        owner: newUnitOwner.trim(),
+        amountDue: amount,
+        status: 'en_retard',
+      });
+      setRawUnits((prev) => [...prev, saved]);
+      setIsAddUnitModalOpen(false);
+      setNewUnitLabel('');
+      setNewUnitOwner('');
+      setNewUnitAmount('');
+      triggerToast('Unité ajoutée avec succès !', 'success');
+    } catch (err) {
+      console.error('Failed to save condo unit:', err);
+      triggerToast("Erreur lors de l'ajout de l'unité.", 'error');
+    }
   };
 
   return (
@@ -283,13 +323,36 @@ export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCoti
               Suivi et encaissement des charges de copropriété
             </p>
           </div>
+          <button
+            onClick={() => setIsAddUnitModalOpen(true)}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border-none cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 shrink-0"
+          >
+            <Plus size={14} /><span>Ajouter une unité</span>
+          </button>
         </div>
 
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-16 text-slate-400 dark:text-zinc-500">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Chargement des cotisations...</span>
+          </div>
+        )}
+
+        {!isLoading && units.length === 0 && (
+          <div className="text-center py-16 px-6 bg-white dark:bg-zinc-950/80 rounded-[32px] border border-dashed border-slate-200 dark:border-zinc-900 mb-8">
+            <p className="text-slate-400 dark:text-zinc-650 font-bold text-xs uppercase tracking-wider">
+              Aucune unité enregistrée pour l'instant. Cliquez « Ajouter une unité » pour commencer.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && units.length > 0 && (
+        <>
         {/* Dashboard Financial Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
           <div className={`rounded-3xl p-6 border backdrop-blur-md ${darkMode ? "bg-zinc-950/80 border-zinc-900/60 shadow-[0_0_20px_rgba(16,185,129,0.02)]" : "bg-white border-slate-200/80 shadow-sm"}`}>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 mb-2 flex items-center gap-1.5">
-              <CheckCircle2 size={12} className="text-emerald-500" /> Total Collecté (Mai 2026)
+              <CheckCircle2 size={12} className="text-emerald-500" /> Total Collecté ({CURRENT_MONTH_LABEL})
             </p>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
@@ -537,7 +600,87 @@ export default function SyndicatCotisations({ setVista, darkMode }: SyndicatCoti
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
+
+      {/* MODAL: ADD A NEW UNIT */}
+      <AnimatePresence>
+        {isAddUnitModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`w-full max-w-md rounded-[40px] border shadow-2xl p-6 sm:p-8 flex flex-col relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+            >
+              <button
+                onClick={() => setIsAddUnitModalOpen(false)}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-all border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="bg-emerald-500/10 text-emerald-500 p-2.5 rounded-2xl">
+                  <Plus size={22} />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-widest leading-none">Ajouter une unité</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Unité</label>
+                  <input
+                    type="text"
+                    value={newUnitLabel}
+                    onChange={(e) => setNewUnitLabel(e.target.value)}
+                    placeholder="Ex: Unité 103"
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Copropriétaire</label>
+                  <input
+                    type="text"
+                    value={newUnitOwner}
+                    onChange={(e) => setNewUnitOwner(e.target.value)}
+                    placeholder="Ex: Jean Tremblay"
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Cotisation mensuelle ($)</label>
+                  <input
+                    type="number"
+                    value={newUnitAmount}
+                    onChange={(e) => setNewUnitAmount(e.target.value)}
+                    placeholder="250.00"
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddUnitModalOpen(false)}
+                    className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddUnit}
+                    className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-emerald-600 hover:bg-emerald-750 text-white shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* TRANSACTION MODAL: REGISTER PAYMENT */}
       <AnimatePresence>

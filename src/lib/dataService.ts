@@ -159,6 +159,35 @@ export interface LoyerDoc {
   createdAt: string;
 }
 
+// ── CondoUnitDoc — Firestore `condoUnits` collection (Síndico cotisations) ───
+// Document ID: `{userId}_condounit_{id}`
+
+export interface CondoUnitDoc {
+  id: string;
+  companyId: string;
+  unit: string;             // "Unité 101"
+  owner: string;             // "Jean Tremblay"
+  amountDue: number;         // monthly cotisation amount
+  status: 'paye' | 'en_retard';
+  ownerId: string;
+  createdAt: string;
+}
+
+// ── CotisationPaymentDoc — Firestore `cotisationPayments` collection ────────
+// One record per month/payment, FK → CondoUnitDoc.id. Document ID: `{userId}_cotisationpay_{id}`
+
+export interface CotisationPaymentDoc {
+  id: string;
+  companyId: string;
+  unitId: string;
+  month: string;             // "Mai 2026"
+  amount: number;
+  date: string;
+  status: 'paye' | 'en_retard';
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
 
 export interface InvoiceDoc {
@@ -795,6 +824,79 @@ export const dataService = {
     const docId = userId ? `${userId}_loyer_${loyerId}` : loyerId;
     await deleteDoc(doc(db, 'loyers', docId));
     return true;
+  },
+
+  // ── Condo units & cotisation payments — Síndico "Gestion des Cotisations" ──
+
+  async fetchCondoUnits(userId: string, companyId: string): Promise<CondoUnitDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(collection(db, 'condoUnits'), where('ownerId', '==', userId), where('companyId', '==', docCompanyId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_condounit_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as CondoUnitDoc;
+      });
+    } catch (e) {
+      console.error('fetchCondoUnits failed:', e);
+      return [];
+    }
+  },
+
+  async saveCondoUnit(userId: string, unitData: Omit<CondoUnitDoc, 'ownerId' | 'createdAt'>): Promise<CondoUnitDoc> {
+    assertCanWrite();
+    const originalId = unitData.id || `unit_${Date.now()}`;
+    const docId = `${userId}_condounit_${originalId}`;
+    const docCompanyId = `${userId}_company_${unitData.companyId}`;
+    const data: CondoUnitDoc = {
+      ...unitData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'condoUnits', docId), data);
+    return { ...data, id: originalId, companyId: unitData.companyId };
+  },
+
+  async deleteCondoUnit(unitId: string): Promise<boolean> {
+    const userId = auth.currentUser?.uid;
+    const docId = userId ? `${userId}_condounit_${unitId}` : unitId;
+    await deleteDoc(doc(db, 'condoUnits', docId));
+    return true;
+  },
+
+  async fetchCotisationPayments(userId: string, companyId: string): Promise<CotisationPaymentDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(collection(db, 'cotisationPayments'), where('ownerId', '==', userId), where('companyId', '==', docCompanyId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_cotisationpay_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as CotisationPaymentDoc;
+      });
+    } catch (e) {
+      console.error('fetchCotisationPayments failed:', e);
+      return [];
+    }
+  },
+
+  async saveCotisationPayment(userId: string, paymentData: Omit<CotisationPaymentDoc, 'ownerId' | 'createdAt'>): Promise<CotisationPaymentDoc> {
+    assertCanWrite();
+    const originalId = paymentData.id || `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const docId = `${userId}_cotisationpay_${originalId}`;
+    const docCompanyId = `${userId}_company_${paymentData.companyId}`;
+    const data: CotisationPaymentDoc = {
+      ...paymentData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'cotisationPayments', docId), data);
+    return { ...data, id: originalId, companyId: paymentData.companyId };
   },
 
   // ── Expenses — Firestore `expenses` collection ─────────────────────────────

@@ -7310,6 +7310,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         playNotificationSound={playNotificationSound}
+        onLoginClick={() => setVista("login")}
         onComplete={(profile, lang, answers) => {
           localStorage.setItem("autocompt_selected_profile", profile);
           if (answers) {
@@ -19130,6 +19131,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminPhoto={adminPhoto}
         setVista={setVista}
         WorkspaceSidebar={WorkspaceSidebar}
+        companyId={activeCompanyId}
       />
     );
   }
