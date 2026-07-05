@@ -695,13 +695,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         return res.status(502).json({ success: false, error: "Email delivery failed", details: errBody });
       }
 
-      // Persist invitation metadata to Firestore for audit trail
-      try {
-        const { db: adminDb } = await import("firebase-admin/firestore").catch(() => ({ db: null }));
-        if (adminDb) {
-          // Only if firebase-admin is configured server-side
-        }
-      } catch { /* firebase-admin optional — client-side will update */ }
+      // Note: invitationSentAt / invitationSentTo are persisted to Firestore by the client
+      // in SyndicatDocuLegal.tsx after this API responds successfully.
 
       return res.json({ success: true, sentTo: signerEmail, sentAt: new Date().toISOString() });
 
