@@ -665,6 +665,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setGeneratedLink(signUrl);
     setSendLinkDoc(document);
     setIsGeneratingLink(false);
+    return signUrl;  // Return so callers can use the URL directly
   };
 
   // Handle Add Document
@@ -1010,11 +1011,40 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     };
     setContrats(prev => [newDoc, ...prev]);
     setPdfEditorFile(null);
-    // Pre-fill the signer email so the share modal is ready
     setSignerEmailForInvite(signerEmail);
     setActiveTab('externe');
-    // Generate the shareable link then immediately send the invitation email
-    await handleSendForSignature(newDoc, undefined, fields, pdfStorageUrl);
+
+    // 1. Generate the signing link (sets generatedLink + opens share modal)
+    const signUrl = await handleSendForSignature(newDoc, undefined, fields, pdfStorageUrl);
+
+    // 2. Auto-send the invitation email immediately — no second click needed
+    if (signUrl) {
+      try {
+        const resp = await fetch('/api/send-signature-invitation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            signerEmail,
+            signerName,
+            signUrl,
+            docTitle: newDoc.title,
+            docSummary: newDoc.summary,
+            companyName,
+            adminName: adminEmail || companyName,
+            adminEmail,
+            token: signUrl.split('sign=')[1]?.split('&')[0] || newDoc.id,
+          }),
+        });
+        if (resp.ok) {
+          triggerToast(`✉️ Invitation envoyée à ${signerEmail}`, 'success');
+          setInviteSent(true);
+        } else {
+          triggerToast('Document prêt. Envoyez le lien manuellement depuis le modal.', 'success');
+        }
+      } catch {
+        // Non-blocking — user can still send manually from the share modal
+      }
+    }
   };
 
 
