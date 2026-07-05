@@ -188,6 +188,19 @@ export interface CotisationPaymentDoc {
   createdAt: string;
 }
 
+export interface CommunityPostDoc {
+  id: string;
+  companyId: string;
+  authorName: string;
+  authorRole: string;
+  type: 'annonce' | 'incident';
+  content: string;
+  adminReply?: string;
+  adminReplyAt?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
 
 export interface InvoiceDoc {
@@ -897,6 +910,40 @@ export const dataService = {
     };
     await setDoc(doc(db, 'cotisationPayments', docId), data);
     return { ...data, id: originalId, companyId: paymentData.companyId };
+  },
+
+  // ── Community posts — Síndico "Mur de Communication" ────────────────────────
+
+  async fetchCommunityPosts(userId: string, companyId: string): Promise<CommunityPostDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(collection(db, 'communityPosts'), where('ownerId', '==', userId), where('companyId', '==', docCompanyId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_communitypost_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as CommunityPostDoc;
+      });
+    } catch (e) {
+      console.error('fetchCommunityPosts failed:', e);
+      return [];
+    }
+  },
+
+  async saveCommunityPost(userId: string, postData: Omit<CommunityPostDoc, 'ownerId' | 'createdAt'> & { createdAt?: string }): Promise<CommunityPostDoc> {
+    assertCanWrite();
+    const originalId = postData.id || `post_${Date.now()}`;
+    const docId = `${userId}_communitypost_${originalId}`;
+    const docCompanyId = `${userId}_company_${postData.companyId}`;
+    const data: CommunityPostDoc = {
+      ...postData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: postData.createdAt || new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'communityPosts', docId), data);
+    return { ...data, id: originalId, companyId: postData.companyId };
   },
 
   // ── Expenses — Firestore `expenses` collection ─────────────────────────────

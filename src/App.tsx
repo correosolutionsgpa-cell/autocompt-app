@@ -19146,6 +19146,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminPhoto={adminPhoto}
         setVista={setVista}
         WorkspaceSidebar={WorkspaceSidebar}
+        companyId={activeCompanyId}
       />
     );
   }
