@@ -286,9 +286,15 @@ export default function DocuLegalPdfEditor({
       await uploadBytes(sRef, new Uint8Array(buf), { contentType: 'application/pdf' });
       const url = await getDownloadURL(sRef);
       onSendForSignature(fields, url, signerName.trim(), signerEmail.trim());
-    } catch (e) {
+    } catch (e: any) {
       console.error('[DocuLegalPdfEditor] Upload error:', e);
-      alert('Erreur lors du téléversement du PDF. Vérifiez votre connexion et réessayez.');
+      const code = e?.code || '';
+      const msg = code === 'storage/unauthorized'
+        ? 'Accès refusé au stockage Firebase. Les règles storage.rules doivent être déployées (firebase deploy --only storage).'
+        : code === 'storage/unknown' || code === 'storage/object-not-found'
+          ? `Erreur Firebase Storage (${code}). Vérifiez la connexion et les règles.`
+          : `Erreur lors du téléversement : ${e?.message || code || 'inconnue'}`;
+      alert(msg);
     } finally {
       setIsUploading(false);
     }
