@@ -299,6 +299,14 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
       currentCompany;
     const profileId = profileSelected ? profileSelected.id : activeCompanyId;
 
+    // Only offer units from the currently active company in the "add a rent
+    // entry" dropdown — not whichever company the report view is filtered to
+    // (`profileId`, above). Untagged (`companyId` missing) units predate this
+    // scoping feature and are kept visible everywhere until re-saved.
+    const visibleUnits = allUnits.filter(
+      (u) => !u.companyId || u.companyId === activeCompanyId,
+    );
+
     const compFilteredInvoices = historique.filter(
       (h) => h.companyId === profileId,
     );
@@ -1037,11 +1045,11 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                       Unité locative
                     </label>
-                    {allUnits.length > 0 ? (
+                    {visibleUnits.length > 0 ? (
                       <select
                         value={loyerForm.unitId || ""}
                         onChange={(e) => {
-                          const selectedUnit = allUnits.find(u => u.id === e.target.value);
+                          const selectedUnit = visibleUnits.find(u => u.id === e.target.value);
                           setLoyerForm({
                             ...loyerForm,
                             unitId:     e.target.value,
@@ -1056,7 +1064,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                         className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                       >
                         <option value="">-- Sélectionner une unité --</option>
-                        {allUnits.map(u => (
+                        {visibleUnits.map(u => (
                           <option key={u.id} value={u.id}>
                             {u.unitName}{u.tenantName ? ` — ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
                           </option>
