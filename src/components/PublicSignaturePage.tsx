@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, AlertTriangle, Loader2, PenTool, X,
-  ShieldCheck, FileText, Check, Stamp, Pen, Type,
+  ShieldCheck, FileText, Check, Stamp, Pen, Type, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
@@ -33,6 +33,19 @@ interface SignatureRequestDoc {
   adminSignedDate?: string;
   requiresInitials?: boolean;  // true for real estate / promesse d'achat
   customDocUrl?: string;       // Storage URL of a document generated from the admin's own Word template
+  // DocuLegal PDF-import fields
+  pdfStorageUrl?: string;      // Firebase Storage URL for the original PDF
+  signatureFields?: Array<{    // Placed signature zones
+    id: string;
+    page: number;
+    type: 'signature' | 'initials' | 'date' | 'name';
+    xPct: number;
+    yPct: number;
+    wPct: number;
+    hPct: number;
+    required: boolean;
+    label: string;
+  }>;
 }
 
 type InputMode = 'draw' | 'type';
@@ -135,6 +148,22 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [signerName, setSignerName] = useState('');
   const [signerEmail, setSignerEmail] = useState('');
 
+  // Saved signature state
+  const [savedSig, setSavedSig] = useState<{ dataUrl: string; sigType: string; fontFamily?: string } | null>(null);
+  const [savedSigLoaded, setSavedSigLoaded] = useState(false);
+  const [useSavedSig, setUseSavedSig] = useState(false);
+  const [saveSigForNextTime, setSaveSigForNextTime] = useState(true);
+
+  // Progress tracking for field-based signing
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({}); // fieldId -> dataUrl or text
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null)   ; // field being signed
+  const [showProgress, setShowProgress] = useState(true);
+
+  // Legal consent & audit trail
+  const [hasConsented, setHasConsented] = useState(false);
+  const [auditLinkOpenedAt, setAuditLinkOpenedAt] = useState('');
+  const [auditIp, setAuditIp] = useState('');
+
   // Initials (paraphes — every page)
   const [initialMode, setInitialMode] = useState<InputMode>('type');
   const [typedInitials, setTypedInitials] = useState('');
@@ -199,6 +228,38 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     load();
   }, [token]);
 
+  // ── Record link-open event (IP + timestamp) for audit trail ─────────────────
+  useEffect(() => {
+    if (!docData || alreadySigned) return;
+    const openedAt = new Date().toISOString();
+    setAuditLinkOpenedAt(openedAt);
+    // Prefill signer email if invitation was sent to a specific address
+    if ((docData as any).invitationSentTo && !signerEmail) {
+      setSignerEmail((docData as any).invitationSentTo);
+    }
+    // Fetch IP (best-effort, non-blocking)
+    fetch('https://api.ipify.org?format=json')
+      .then(r => r.json())
+      .then(d => {
+        setAuditIp(d.ip || '');
+        // Persist link-open event to Firestore
+        setDoc(doc(db, 'pendingSignatures', token), {
+          linkOpenedAt: openedAt,
+          linkOpenedIp: d.ip || 'unknown',
+          linkOpenedUA: navigator.userAgent.slice(0, 200),
+        }, { merge: true }).catch(() => {});
+      })
+      .catch(() => {
+        // IP fetch failed — still record the timestamp
+        setDoc(doc(db, 'pendingSignatures', token), {
+          linkOpenedAt: openedAt,
+          linkOpenedIp: 'unknown',
+          linkOpenedUA: navigator.userAgent.slice(0, 200),
+        }, { merge: true }).catch(() => {});
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!docData]);
+
   // Auto-fill initials from signer name
   useEffect(() => {
     if (signerName.trim() && !typedInitials) {
@@ -208,11 +269,36 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     }
   }, [signerName]);
 
+  // ── Saved signature detection (by email) ───────────────────────────────────
+  useEffect(() => {
+    if (!signerEmail.includes('@')) { setSavedSig(null); setSavedSigLoaded(false); return; }
+    const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    let cancelled = false;
+    getDoc(doc(db, 'savedSignatures', key)).then(snap => {
+      if (cancelled) return;
+      if (snap.exists()) {
+        const d = snap.data();
+        setSavedSig({ dataUrl: d.sigDataUrl, sigType: d.sigType, fontFamily: d.fontFamily });
+        setUseSavedSig(true);
+      } else {
+        setSavedSig(null);
+        setUseSavedSig(false);
+      }
+      setSavedSigLoaded(true);
+    }).catch(() => setSavedSigLoaded(true));
+    return () => { cancelled = true; };
+  }, [signerEmail]);
+
   // ── Sign handler ──────────────────────────────────────────────────────────────
 
   const handleSign = async () => {
     if (!docData) return;
     if (!signerName.trim()) { alert("Veuillez saisir votre nom complet."); return; }
+
+    if (!hasConsented) {
+      alert("Vous devez cocher la case de consentement électronique avant de signer.");
+      return;
+    }
 
     const needsInitials = !!(initialMode === 'draw' ? sigInitials.hasDrawn : typedInitials.trim());
     const hasSignature = sigMode === 'draw' ? sigFull.hasDrawn : typedSignature.trim().length > 0;
@@ -271,6 +357,24 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           clientSignedAt: new Date().toISOString(),
         });
       } catch {}
+
+      // ── Persist signature for next time ──────────────────────────────────
+      if (saveSigForNextTime && signerEmail.includes('@')) {
+        const finalSigDataUrl = sigMode === 'draw' ? sigDataUrl : typedSigDataUrl;
+        if (finalSigDataUrl) {
+          const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+          try {
+            await setDoc(doc(db, 'savedSignatures', key), {
+              email: signerEmail,
+              sigDataUrl: finalSigDataUrl,
+              sigType: sigMode,
+              fontFamily: sigMode === 'type' ? FONT_OPTIONS[selectedSigFont].family : undefined,
+              savedAt: new Date().toISOString(),
+              usedCount: 1,
+            });
+          } catch {}
+        }
+      }
 
       let emailResult = { admin: false, client: false };
       if (pdfBase64) {
@@ -840,7 +944,120 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           </div>
         </div>
 
-        {/* ── SECTION 2: INITIALES ──────────────────────────────────────────────── */}
+        {/* ── Saved Signature Banner ───────────────────────────────────────── */}
+        {savedSig && savedSigLoaded && (
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="bg-white rounded-[24px] border-2 border-emerald-300 shadow-sm p-5 space-y-3"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <span className="text-[10px]">✦</span>
+                </div>
+                <h2 className="text-[9px] font-black uppercase tracking-widest text-emerald-700">
+                  Signature enregistrée détectée
+                </h2>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex-1 p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                  <img
+                    src={savedSig.dataUrl}
+                    alt="Signature enregistrée"
+                    className="h-12 object-contain mx-auto"
+                  />
+                  <p className="text-[8px] text-emerald-600 font-black uppercase tracking-widest text-center mt-1">Votre signature enregistrée</p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setUseSavedSig(true)}
+                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border-2 ${
+                      useSavedSig
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-200'
+                        : 'border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {useSavedSig ? <>✓ Utilisée</> : <>Utiliser cette signature</>}
+                  </button>
+                  <button
+                    onClick={() => setUseSavedSig(false)}
+                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border-2 ${
+                      !useSavedSig
+                        ? 'bg-slate-700 border-slate-700 text-white'
+                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                    }`}
+                  >
+                    Signer autrement
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+
+        {/* ── Progress Indicator (field-based signing) ───────────────────── */}
+        {docData?.signatureFields && docData.signatureFields.length > 0 && (
+          <div className="bg-white rounded-[24px] border-2 border-indigo-200 shadow-sm p-5 space-y-3">
+            <button
+              onClick={() => setShowProgress(p => !p)}
+              className="w-full flex items-center justify-between gap-2"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <span className="text-[10px]">📋</span>
+                </div>
+                <h2 className="text-[9px] font-black uppercase tracking-widest text-indigo-700">
+                  Progression de la signature
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-black text-indigo-600">
+                  {Object.keys(fieldValues).length} / {docData.signatureFields.filter(f => f.required).length} champs
+                </span>
+                {showProgress ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+              </div>
+            </button>
+
+            {/* Progress bar */}
+            <div className="w-full bg-indigo-100 rounded-full h-2">
+              <div
+                className="bg-indigo-500 h-2 rounded-full transition-all duration-500"
+                style={{
+                  width: `${docData.signatureFields.length > 0
+                    ? (Object.keys(fieldValues).length / docData.signatureFields.filter(f => f.required).length) * 100
+                    : 0}%`
+                }}
+              />
+            </div>
+
+            {showProgress && (
+              <div className="space-y-1.5">
+                {docData.signatureFields.map(f => {
+                  const isDone = !!fieldValues[f.id];
+                  return (
+                    <div key={f.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[9px] font-bold transition-all ${
+                      isDone ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'
+                    }`}>
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{
+                        background: isDone ? '#10b981' : '#e2e8f0'
+                      }}>
+                        {isDone ? <Check size={9} className="text-white" /> : null}
+                      </span>
+                      <span className="flex-1 uppercase tracking-wide">
+                        {f.label} — Page {f.page}
+                      </span>
+                      {f.required && !isDone && (
+                        <span className="text-[7px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase">Requis</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <div className="bg-white rounded-[24px] border-2 border-amber-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1048,16 +1265,53 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           </motion.div>
         )}
 
-        {/* Legal notice */}
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-700 font-medium space-y-1">
-          <p className="font-black uppercase tracking-wider text-[9px]">📋 Avis légal</p>
-          <p>En cliquant sur "Signer et Valider", vous confirmez avoir lu et accepté les termes du document ci-dessus. La signature électronique bipartite (initiales + signature) est juridiquement contraignante conformément aux lois applicables au Québec.</p>
-        </div>
+        {/* Save-for-next-time toggle (shown when user has typed their signature) */}
+        {signerEmail.includes('@') && !savedSig && (sigFull.hasDrawn || typedSignature.trim()) && (
+          <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            <input
+              type="checkbox"
+              checked={saveSigForNextTime}
+              onChange={e => setSaveSigForNextTime(e.target.checked)}
+              className="w-4 h-4 accent-emerald-600 rounded"
+            />
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-700">Sauvegarder ma signature pour la prochaine fois</p>
+              <p className="text-[8px] text-slate-400 font-medium">Elle sera reconnue automatiquement via votre courriel</p>
+            </div>
+          </label>
+        )}
+
+        {/* ── Mandatory Legal Consent Checkbox ─────────────────────────────── */}
+        <label className={`flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 transition-all ${
+          hasConsented
+            ? 'border-emerald-400 bg-emerald-50'
+            : 'border-amber-300 bg-amber-50'
+        }`}>
+          <input
+            type="checkbox"
+            checked={hasConsented}
+            onChange={e => setHasConsented(e.target.checked)}
+            className="w-5 h-5 accent-emerald-600 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${hasConsented ? 'text-emerald-800' : 'text-amber-800'}`}>
+              ⚖️ Consentement électronique obligatoire
+            </p>
+            <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+              Je confirme avoir reçu l&apos;invitation à signer et j&apos;ai lu le document ci-dessus.
+              Je consens à apposer ma signature électronique, laquelle constitue un engagement légalement contraignant
+              conformément à la <strong>LCCJTI du Québec</strong> et au <strong>Code civil, art. 2827</strong>.
+            </p>
+            {!hasConsented && (
+              <p className="text-[9px] text-amber-700 font-bold mt-1.5">← Veuillez cocher cette case pour continuer</p>
+            )}
+          </div>
+        </label>
 
         {/* Sign button */}
         <button
           onClick={handleSign}
-          disabled={isSigning || !signerName.trim()}
+          disabled={isSigning || !signerName.trim() || !hasConsented}
           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.99] shadow-lg shadow-emerald-600/20"
         >
           {isSigning

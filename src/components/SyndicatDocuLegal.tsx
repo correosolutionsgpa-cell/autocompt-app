@@ -22,6 +22,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import DocuLegalPdfEditor, { type SignatureField } from './DocuLegalPdfEditor';
 import jsPDF from 'jspdf';
 import { db, auth, storage } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
@@ -144,6 +145,9 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [signerEmailForInvite, setSignerEmailForInvite] = useState('');
+  const [isInviteSending, setIsInviteSending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
 
   // Modals States
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -160,6 +164,10 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
+
+  // PDF Editor State (DocuLegal PDF import flow)
+  const [pdfEditorFile, setPdfEditorFile] = useState<File | null>(null);
+  const pdfFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sound generator (Web Audio API)
   const playSound = (type: 'success' | 'error') => {
@@ -597,7 +605,12 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   // IMPORTANT: adminSignatureDataUrl is intentionally excluded from the URL payload
   // because PNG images (~100KB+) make URLs too long for email clients to handle.
   // The admin name is used as text signature on the PDF. Full data is saved to Firestore only.
-  const handleSendForSignature = async (document: LegalDocument, adminSigDataUrl?: string) => {
+  const handleSendForSignature = async (
+    document: LegalDocument,
+    adminSigDataUrl?: string,
+    signatureFields?: SignatureField[],
+    pdfStorageUrl?: string,
+  ) => {
     setIsGeneratingLink(true);
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${document.id.slice(0, 6)}`;
 
@@ -614,6 +627,8 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       status: 'pending',
       createdAt: new Date().toISOString(),
       customDocUrl: document.customDocUrl || '',
+      pdfStorageUrl: pdfStorageUrl || '',
+      signatureFields: signatureFields || [],
     };
 
     // Use URL-safe base64: replace +→-, /→_, strip trailing =
@@ -972,10 +987,54 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     }
   };
 
+  // ── Handler: PDF editor result ─────────────────────────────────────────────
+  const handlePdfEditorSend = async (fields: SignatureField[], pdfStorageUrl: string) => {
+    const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
+    const fileName = pdfEditorFile?.name?.replace(/\.pdf$/i, '') || 'Document PDF importé';
+    const newDoc: LegalDocument = {
+      id: `pdf_${Date.now().toString(36)}`,
+      title: fileName,
+      date: todayStr,
+      status: 'attente',
+      summary: `Document PDF importé pour signature électronique. ${fields.length} zone${fields.length > 1 ? 's' : ''} de signature définie${fields.length > 1 ? 's' : ''}.`,
+      provider: companyName,
+      signedBy: '',
+      signedDate: '',
+      customDocUrl: pdfStorageUrl,
+    };
+    setContrats(prev => [newDoc, ...prev]);
+    setPdfEditorFile(null);
+    setActiveTab('externe');
+    await handleSendForSignature(newDoc, undefined, fields, pdfStorageUrl);
+  };
+
   const currentList = activeTab === 'externe' ? contrats : activeTab === 'interne' ? resolutions : [];
 
   return (
     <div className="relative font-sans text-left">
+      {/* ── PDF Editor Overlay ──────────────────────────────────────────────── */}
+      {pdfEditorFile && (
+        <DocuLegalPdfEditor
+          darkMode={darkMode}
+          pdfFile={pdfEditorFile}
+          docTitle={pdfEditorFile.name.replace(/\.pdf$/i, '')}
+          onClose={() => setPdfEditorFile(null)}
+          onSendForSignature={handlePdfEditorSend}
+        />
+      )}
+
+      {/* Hidden PDF file input */}
+      <input
+        ref={pdfFileInputRef}
+        type="file"
+        accept="application/pdf"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file) setPdfEditorFile(file);
+          e.target.value = '';
+        }}
+      />
       {/* Toast Alert popup */}
       <AnimatePresence>
         {toast && (
@@ -1010,6 +1069,20 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
             >
               Contrats & Ententes
             </button>
+            {/* PDF Import button — visible only on Contrats tab */}
+            {activeTab === 'externe' && (
+              <button
+                onClick={() => pdfFileInputRef.current?.click()}
+                className={`hidden sm:flex items-center gap-2 px-5 py-3.5 rounded-full text-[10px] font-black uppercase tracking-widest ml-2 transition-all duration-300 border ${
+                  darkMode
+                    ? 'border-emerald-600/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                    : 'border-emerald-400/50 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                }`}
+              >
+                <Upload size={12} />
+                <span>Importer un PDF à signer</span>
+              </button>
+            )}
             <button
               onClick={() => { setActiveTab('interne'); setOpenDrawerId(null); }}
               className={`px-6 sm:px-10 py-3.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'interne' ? (darkMode ? "bg-teal-500/15 border border-teal-500/40 text-teal-400 shadow-md backdrop-blur-md" : "bg-teal-500/10 border border-teal-500/25 text-teal-700 shadow-md backdrop-blur-md") : (darkMode ? "text-zinc-500 hover:text-zinc-300 border border-transparent" : "text-slate-500 hover:text-slate-700 border border-transparent")}`}
@@ -1672,7 +1745,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                   </div>
                 </div>
                 <button
-                  onClick={() => { setGeneratedLink(null); setSendLinkDoc(null); setLinkCopied(false); }}
+                  onClick={() => { setGeneratedLink(null); setSendLinkDoc(null); setLinkCopied(false); setSignerEmailForInvite(''); setInviteSent(false); }}
                   className={`p-2 rounded-xl border-none ${darkMode ? 'text-zinc-400 hover:bg-zinc-900' : 'text-slate-400 hover:bg-slate-100'}`}
                 >
                   <X size={18} />
@@ -1707,21 +1780,94 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                 </button>
               </div>
 
-              {/* Email option */}
-              <div className="mt-4 space-y-3">
-                <a
-                  href={`mailto:?subject=Signature requise - ${sendLinkDoc.title}&body=Bonjour,%0A%0AVeuillez signer le document suivant en cliquant sur le lien ci-dessous:%0A%0A${generatedLink}%0A%0ACe lien est sécurisé et vous permettra de signer électroniquement depuis votre navigateur.%0A%0ACordialement,%0A${companyName}`}
-                  className={`w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${darkMode ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              {/* Email invitation section */}
+              <div className="mt-5 space-y-3">
+                <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                  ✉️ Envoyer l&apos;invitation directement par courriel
+                </p>
+                <p className={`text-[10px] font-medium ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                  Le signataire recevra un email avec un bouton &quot;Accepter et Signer&quot;. L&apos;envoi crée une preuve légale d&apos;invitation.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={signerEmailForInvite}
+                    onChange={e => { setSignerEmailForInvite(e.target.value); setInviteSent(false); }}
+                    placeholder="jean.tremblay@example.com"
+                    className={`flex-1 px-4 py-3 rounded-2xl border text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                      darkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                </div>
+                <button
+                  disabled={!signerEmailForInvite.includes('@') || isInviteSending || inviteSent}
+                  onClick={async () => {
+                    if (!generatedLink || !sendLinkDoc) return;
+                    setIsInviteSending(true);
+                    try {
+                      // 1. Call invitation API
+                      const resp = await fetch('/api/send-signature-invitation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          signerEmail: signerEmailForInvite,
+                          signUrl: generatedLink,
+                          docTitle: sendLinkDoc.title,
+                          docSummary: sendLinkDoc.summary,
+                          companyName,
+                          adminName: adminEmail || companyName,
+                          adminEmail,
+                          token: generatedLink.split('sign=')[1]?.split('&')[0] || '',
+                        }),
+                      });
+                      const data = await resp.json();
+                      if (!data.success) throw new Error(data.error || 'Erreur');
+                      // 2. Update Firestore with invitation metadata
+                      const tokenVal = generatedLink.split('sign=')[1]?.split('&')[0] || '';
+                      if (tokenVal) {
+                        try {
+                          const { setDoc: fsSet, doc: fsDoc } = await import('firebase/firestore');
+                          const { db: fsDb } = await import('../lib/firebase');
+                          await fsSet(fsDoc(fsDb, 'pendingSignatures', tokenVal), {
+                            invitationSentAt: new Date().toISOString(),
+                            invitationSentTo: signerEmailForInvite,
+                          }, { merge: true });
+                        } catch {}
+                      }
+                      setInviteSent(true);
+                      triggerToast(`Invitation envoyée à ${signerEmailForInvite} ✓`, 'success');
+                    } catch (err: any) {
+                      triggerToast(`Erreur: ${err.message}`, 'error');
+                    } finally {
+                      setIsInviteSending(false);
+                    }
+                  }}
+                  className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                    inviteSent
+                      ? 'bg-emerald-500 text-white cursor-default'
+                      : (!signerEmailForInvite.includes('@') || isInviteSending)
+                        ? 'bg-emerald-200 text-emerald-800 cursor-not-allowed opacity-60'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 cursor-pointer'
+                  }`}
                 >
-                  <Send size={14} />
-                  <span>Envoyer par Courriel</span>
-                </a>
+                  {isInviteSending
+                    ? <><Loader2 size={13} className="animate-spin" />Envoi en cours...</>
+                    : inviteSent
+                      ? <><CheckCircle2 size={13} />Invitation envoyée !</>
+                      : <><Send size={13} />Envoyer l&apos;invitation par courriel</>
+                  }
+                </button>
+                {inviteSent && (
+                  <p className="text-[9px] text-emerald-600 font-bold text-center">
+                    📬 {signerEmailForInvite} recevra un email avec un bouton &quot;Accepter et Signer&quot; ainsi qu&apos;une note légale de consentement.
+                  </p>
+                )}
               </div>
 
               {/* Security note */}
               <p className="text-[8px] font-bold text-slate-400 text-center mt-4 flex items-center justify-center gap-1.5">
                 <ShieldCheck size={10} />
-                Ce lien est unique et sécurisé. Le signataire n'a pas besoin de compte AutoCompt.
+                Ce lien est unique et sécurisé. Le signataire n&apos;a pas besoin de compte AutoCompt.
               </p>
             </motion.div>
           </div>
