@@ -48,11 +48,12 @@ interface LegalDocument {
 interface SyndicatDocuLegalProps {
   darkMode: boolean;
   companyName?: string;
+  adminName?: string;
   adminEmail?: string;
   companyId?: string;  // Workspace ID — routed into signed doc for Drive upload
 }
 
-export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminEmail = '', companyId = '' }: SyndicatDocuLegalProps) {
+export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminName = '', adminEmail = '', companyId = '' }: SyndicatDocuLegalProps) {
   const [activeTab, setActiveTab] = useState<'externe' | 'interne' | 'modeles'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
@@ -560,7 +561,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     }
 
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
-    const signerName = signatureType === 'type' ? typedSignature : "Fabiola Beatriz (Signé à la main)";
+    const signerName = signatureType === 'type' ? typedSignature : `${adminName || adminEmail || 'Administrateur'} (Signé à la main)`;
 
     // Get visual signature image if drawn
     let signatureImgDataUrl = '';
@@ -715,8 +716,15 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   };
 
   // Generate and Download PDF using jsPDF
-  const handleDownloadPdf = (doc: LegalDocument) => {
+  const handleDownloadPdf = async (doc: LegalDocument) => {
     try {
+      // Real SHA-256 of the document's actual fields — previously this was
+      // Math.random() dressed up as a hash on a seal claiming legal proof of
+      // signature, which fabricated a security guarantee that didn't exist.
+      const hashInput = `${doc.id}|${doc.title}|${doc.signedBy || ''}|${doc.signedDate || ''}|${doc.status}|${companyId}`;
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hashInput));
+      const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
       const docPdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -951,7 +959,9 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       docPdf.text("Ce document PDF officiel a été validé et scellé électroniquement par DocuLegal, une solution AutoCompt.", 25, sealY + 13);
       docPdf.text("Il constitue une preuve légale d'approbation et d'engagement de copropriété enregistrée dans nos registres sécurisés.", 25, sealY + 17);
 
-      const hashStr = `SHA-256: ${Math.random().toString(16).substr(2, 8).toUpperCase()}${Math.random().toString(16).substr(2, 8).toUpperCase()}E99A${doc.id.toUpperCase()}E9F4C${isSigned ? '1B' : '00'}`;
+      // Truncated to a 32-char fingerprint so it still fits the seal box width
+      // (the full 64-char digest is real but too long for this layout).
+      const hashStr = `SHA-256: ${hashHex.slice(0, 32)}…`;
       docPdf.setFont('Courier', 'bold');
       docPdf.setFontSize(7.5);
       docPdf.setTextColor(71, 85, 105);

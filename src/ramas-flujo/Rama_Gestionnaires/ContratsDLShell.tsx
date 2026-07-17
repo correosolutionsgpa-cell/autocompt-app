@@ -99,6 +99,7 @@ const ContratsDLShell: React.FC<ContratsDLShellProps> = ({
         <SyndicatDocuLegal
           darkMode={darkMode}
           companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+          adminName={adminName || ''}
           adminEmail={currentUserEmail || ''}
           companyId={activeCompanyId || ''}
         />
