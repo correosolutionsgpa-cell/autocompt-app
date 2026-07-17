@@ -33,7 +33,6 @@ export interface TaxScanReview {
   adresse: string;
   doors: string[];
   superficieTotale: string;
-  superficiePersonnelle: string;
   numeroLot: string;
   valeurTerrain: string;
   valeurBatiment: string;
@@ -55,7 +54,7 @@ type QuestionType =
   | "text_input"
   | "number_input"
   | "co_owner_split" // dynamic co-owner rows with % validation
-  | "common_expense_split"; // owner-occupant common-expense deduction (rooms or square footage prorata)
+  | "unit_room_split"; // per-unit room count using Quebec "grandeur" (X½) convention
 
 interface QuestionOption {
   value: string;
@@ -203,9 +202,9 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       titleFR: "Comment souhaitez-vous calculer votre portion personnelle ?",
       titleEN: "How would you like to calculate your personal portion?",
       titleES: "¿Cómo deseas calcular tu porción personal?",
-      subtitleFR: "L'ARC recommande le calcul par superficie (pieds carrés) pour plus de précision. S.O.F.I. peut extraire ces dimensions automatiquement depuis votre acte notarié ou évaluation municipale.",
-      subtitleEN: "The CRA recommends calculating by square footage for better accuracy. S.O.F.I. can extract these dimensions automatically from your deed or municipal assessment.",
-      subtitleES: "La ARC recomienda el cálculo por pies cuadrados para mayor precisión. S.O.F.I. puede extraer estas dimensiones automáticamente desde tu escritura o evaluación municipal.",
+      subtitleFR: "Par pièces (grandeur habituelle de vos logements) est le plus rapide. Par superficie est ce que l'ARC recommande pour plus de précision, mais demande de connaître les pi² exacts.",
+      subtitleEN: "By rooms (your units' usual size) is the fastest. By square footage is what the CRA recommends for accuracy, but requires knowing the exact sq ft.",
+      subtitleES: "Por habitaciones (tamaño habitual de tus unidades) es lo más rápido. Por superficie es lo que recomienda la ARC para mayor precisión, pero requiere conocer los pies cuadrados exactos.",
       showWhen: { questionId: "proprietaire_occupant", value: "oui" },
       options: [
         { value: "pieces",      labelFR: "Par nombre de pièces",                labelEN: "By number of rooms",         labelES: "Por número de habitaciones"        },
@@ -214,30 +213,15 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       ],
     },
     {
-      id: "pieces_totales",
-      type: "number_input",
-      titleFR: "Quel est le nombre total de pièces dans l'immeuble ? (ex: 14.5)",
-      titleEN: "What is the total number of rooms in the building? (e.g. 14.5)",
-      titleES: "¿Cuál es el número total de habitaciones en el edificio? (ej: 14.5)",
-      subtitleFR: "Incluez toutes les unités — la vôtre ET celles des locataires.",
-      subtitleEN: "Include all units — yours AND the tenants'.",
-      subtitleES: "Incluye todas las unidades — la tuya Y las de los inquilinos.",
+      id: "pieces_par_logement",
+      type: "unit_room_split",
+      titleFR: "Combien de pièces a chaque logement de votre immeuble ?",
+      titleEN: "How many rooms does each unit of your building have?",
+      titleES: "¿Cuántas habitaciones tiene cada unidad de tu edificio?",
+      subtitleFR: "Utilisez la grandeur habituelle de vos logements (ex : 5½, 3½) — c'est déjà le nombre de pièces exact que Revenu Québec demande.",
+      subtitleEN: "Use your units' usual size (e.g. 5½, 3½) — that's already the exact room count Revenu Québec asks for.",
+      subtitleES: "Usa el tamaño habitual de tus unidades (ej: 5½, 3½) — ya es el número exacto de habitaciones que pide Revenu Québec.",
       showWhen: { questionId: "calcul_portion_personnelle", value: "pieces" },
-      min: 1, max: 999,
-      placeholder: { FR: "Ex : 14.5", EN: "E.g. 14.5", ES: "Ej.: 14.5" },
-    },
-    {
-      id: "pieces_personnelles",
-      type: "number_input",
-      titleFR: "Combien de pièces composent l'unité que VOUS occupez ? (ex: 5.5)",
-      titleEN: "How many rooms make up the unit YOU occupy? (e.g. 5.5)",
-      titleES: "¿Cuántas habitaciones componen la unidad que TÚ ocupas? (ej: 5.5)",
-      subtitleFR: "AutoCompt calculera automatiquement votre % déductible (portion locative) avec la formule : ((Total - Personnel) ÷ Total) * 100.",
-      subtitleEN: "AutoCompt will automatically calculate your deductible % (rental portion) using the formula: ((Total - Personal) ÷ Total) * 100.",
-      subtitleES: "AutoCompt calculará automáticamente tu % deducible (porción de alquiler) con la fórmula: ((Total - Personal) ÷ Total) * 100.",
-      showWhen: { questionId: "calcul_portion_personnelle", value: "pieces" },
-      min: 1, max: 999,
-      placeholder: { FR: "Ex : 5.5", EN: "E.g. 5.5", ES: "Ej.: 5.5" },
     },
     {
       id: "superficie_totale",
@@ -288,16 +272,6 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       subtitleFR: "Structure la répartition automatique des gains/pertes nettes pour les déclarations d'impôts.",
       subtitleEN: "Structures automated split of net income/losses for tax declarations.",
       subtitleES: "Estructura el reparto automático de ingresos/pérdidas para las declaraciones.",
-    },
-    {
-      id: "frais_communs_deduction",
-      type: "common_expense_split",
-      titleFR: "Déduction des frais communs (propriétaire-occupant)",
-      titleEN: "Common expense deduction (owner-occupant)",
-      titleES: "Deducción de gastos comunes (propietario-ocupante)",
-      subtitleFR: "Détermine la portion déductible de tes factures de frais communs (taxes, déneigement, etc.).",
-      subtitleEN: "Determines the deductible portion of your common expense invoices (taxes, snow removal, etc.).",
-      subtitleES: "Determina la porción deducible de tus facturas de gastos comunes (impuestos, remoción de nieve, etc.).",
     },
   ],
 
@@ -522,6 +496,41 @@ const T = {
   },
 };
 
+// ─── Owner-occupant deductible % — single source of truth ────────────────────
+// Resolves the occupancy/deductible % from whichever method the user chose in
+// calcul_portion_personnelle. Shared by handleFinish (persists to BuildingLedger)
+// and the summary screen (shows the friendly confirmation) so this is computed
+// once from the answers already collected — never re-asked.
+function computeOccupancyDeductible(answers: OnboardingAnswers): { occupancyPct: number; deductiblePct: number } {
+  const isOccupant = answers["proprietaire_occupant"] === "oui";
+  let occupancyPct = 0;
+  if (isOccupant) {
+    const method = answers["calcul_portion_personnelle"];
+    if (method === "pieces") {
+      const total    = parseFloat(String(answers["pieces_totales"]      ?? "0"));
+      const personal = parseFloat(String(answers["pieces_personnelles"] ?? "0"));
+      occupancyPct   = (total > 0 && personal > 0)
+        ? Math.min(99, Math.max(1, Math.round((personal / total) * 10000) / 100))
+        : 0;
+    } else if (method === "superficie") {
+      const total    = parseFloat(String(answers["superficie_totale"]    ?? "0"));
+      const personal = parseFloat(String(answers["superficie_personnelle"] ?? "0"));
+      occupancyPct   = (total > 0 && personal > 0)
+        ? Math.min(99, Math.max(1, Math.round((personal / total) * 10000) / 100))
+        : 0;
+    } else if (method === "pourcentage") {
+      const raw    = parseFloat(String(answers["proportion_occupee_exacte"] ?? "0"));
+      occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
+    } else {
+      // Legacy fallback (proportion_occupee from old flow)
+      const raw    = parseFloat(String(answers["proportion_occupee"] ?? "0"));
+      occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
+    }
+  }
+  const deductiblePct = Math.round((100 - occupancyPct) * 100) / 100;
+  return { occupancyPct, deductiblePct };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SofiOnboarding({
   darkMode, setDarkMode, onComplete, playNotificationSound, onLoginClick,
@@ -541,11 +550,14 @@ export default function SofiOnboarding({
   const [coOwners, setCoOwners]             = useState<CoOwnerEntry[]>([{ name: "", percentage: "" }]);
   const [numberInputVal, setNumberInputVal] = useState<string>("");
 
-  // ── Common-expense deduction sub-step (propriétaire-occupant) ─────────────
-  const [ceOccupant, setCeOccupant] = useState<"" | "oui" | "non">("");
-  const [ceMethod, setCeMethod]     = useState<"" | "pieces" | "superficie">("");
-  const [ceTotal, setCeTotal]       = useState<string>("");
-  const [cePersonal, setCePersonal] = useState<string>("");
+  // ── Per-unit room split (Quebec "grandeur" X½ convention) ─────────────────
+  // `quantity` lets one row represent several identical units (e.g. "2 logements de 5½")
+  // instead of forcing a separate row per physical unit.
+  const [unitRooms, setUnitRooms] = useState<{ label: string; pieces: string; quantity: string }[]>([
+    { label: "Rez-de-chaussée (RDC)", pieces: "", quantity: "1" },
+    { label: "2e étage", pieces: "", quantity: "1" },
+  ]);
+  const [personalUnitIdx, setPersonalUnitIdx] = useState<number | null>(null);
 
   // ── S.O.F.I. AI Tax Dimension Scanner state ────────────────────────────────
   const [taxScanLoading, setTaxScanLoading] = useState(false);
@@ -568,12 +580,15 @@ export default function SofiOnboarding({
   const coOwnerTotal = coOwners.reduce((s, o) => s + (parseFloat(o.percentage) || 0), 0);
   const coOwnerValid = Math.abs(coOwnerTotal - 100) < 0.01 && coOwners.every((o) => o.name.trim() !== "");
 
-  // Common-expense deduction — real-time calculation as the user types
-  const ceTotalNum    = parseFloat(ceTotal);
-  const cePersonalNum = parseFloat(cePersonal);
-  const ceValidInputs = !isNaN(ceTotalNum) && !isNaN(cePersonalNum) && ceTotalNum > 0 && cePersonalNum >= 0 && cePersonalNum <= ceTotalNum;
-  const ceDeductiblePct = ceValidInputs ? Math.round(((ceTotalNum - cePersonalNum) / ceTotalNum) * 10000) / 100 : 0;
-  const cePersonalPct   = ceValidInputs ? Math.round((cePersonalNum / ceTotalNum) * 10000) / 100 : 0;
+  // Per-unit room split — sum of each unit's "grandeur" (X½ = X.5 pièces) × quantity, real-time.
+  // Only ONE physical unit is personal, even when its row's quantity is >1 (e.g. "2 logements de 5½"
+  // where you live in one of them) — so the personal portion uses `pieces` alone, never × quantity.
+  const unitRoomsTotal = unitRooms.reduce((s, u) => s + (parseFloat(u.pieces) || 0) * (parseFloat(u.quantity) || 0), 0);
+  const unitRoomsValid = unitRooms.every((u) => (parseFloat(u.pieces) || 0) > 0 && (parseFloat(u.quantity) || 0) > 0) && personalUnitIdx !== null;
+  const unitRoomsPersonalPieces = personalUnitIdx !== null ? (parseFloat(unitRooms[personalUnitIdx].pieces) || 0) : 0;
+  const unitRoomsDeductiblePct = unitRoomsValid && unitRoomsTotal > 0
+    ? Math.round(((unitRoomsTotal - unitRoomsPersonalPieces) / unitRoomsTotal) * 10000) / 100
+    : 0;
 
   // ── Audio ─────────────────────────────────────────────────────────────────
   const playGreetingChime = React.useCallback(() => {
@@ -637,7 +652,7 @@ export default function SofiOnboarding({
     setOnboardingAnswers({});
     setCoOwners([{ name: "", percentage: "" }]);
     setNumberInputVal("");
-    setCeOccupant(""); setCeMethod(""); setCeTotal(""); setCePersonal("");
+    setUnitRooms([{ label: "Rez-de-chaussée (RDC)", pieces: "", quantity: "1" }, { label: "2e étage", pieces: "", quantity: "1" }]); setPersonalUnitIdx(null);
     const hasQs = QUESTIONS[profile].length > 0;
     if (hasQs) { setStep("questions"); } else { onComplete(profile, lang, {}); }
     playStepChime();
@@ -678,16 +693,13 @@ export default function SofiOnboarding({
     playStepChime();
   };
 
-  // ── Common-expense deduction sub-step confirm — saves the deductible % and advances ──
-  const handleCommonExpenseConfirm = (deductiblePct: number) => {
+  // ── Per-unit room split confirm — sums pieces, saves as pieces_totales/pieces_personnelles ──
+  const handleUnitRoomsConfirm = () => {
+    if (!unitRoomsValid) return;
     setOnboardingAnswers((prev) => ({
       ...prev,
-      frais_communs_deduction: String(deductiblePct),
-      ...(ceOccupant === "oui" ? {
-        frais_communs_methode: ceMethod,
-        frais_communs_total: ceTotal,
-        frais_communs_personnel: cePersonal,
-      } : {}),
+      pieces_totales: String(unitRoomsTotal),
+      pieces_personnelles: String(unitRoomsPersonalPieces),
     }));
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex((i) => i + 1);
@@ -769,11 +781,14 @@ export default function SofiOnboarding({
       }
 
       const superficieTotalePi2: number = Number(parsed.superficie_totale_pi2) || 0;
-      const doorCountForSplit = doors.length || nbUnites || 1;
-      const superficiePersonnelleEstimee = superficieTotalePi2 > 0
-        ? Math.round(superficieTotalePi2 / doorCountForSplit)
-        : 0;
 
+      // Note: no per-unit ("superficie personnelle") extraction here — a rôle
+      // d'évaluation / acte notarié only ever states the BUILDING's total area,
+      // never the individual units' sizes or which one is owner-occupied. Any
+      // estimate we could compute (e.g. an even split) would misrepresent
+      // unequal units (a 5½ + 5½ + 3½ triplex is not three equal shares) and
+      // can never know which unit the owner actually lives in — that's always
+      // a manual answer.
       const addressMismatch =
         onboardingAnswers["proprietaire_occupant"] === "oui" && parsed.est_proprietaire_occupant === false;
 
@@ -781,7 +796,6 @@ export default function SofiOnboarding({
         adresse: String(parsed.adresse_propriete || ""),
         doors,
         superficieTotale: superficieTotalePi2 > 0 ? String(superficieTotalePi2) : "",
-        superficiePersonnelle: superficiePersonnelleEstimee > 0 ? String(superficiePersonnelleEstimee) : "",
         numeroLot: String(parsed.numero_lot || ""),
         valeurTerrain: parsed.valeur_terrain ? String(parsed.valeur_terrain) : "",
         valeurBatiment: parsed.valeur_batiment ? String(parsed.valeur_batiment) : "",
@@ -802,40 +816,30 @@ export default function SofiOnboarding({
   };
 
   // ── Confirms the reviewed scan data and advances the onboarding flow ──────
+  // Lives on the superficie_totale question specifically — a scan can only ever
+  // reliably supply the BUILDING's total area and administrative details, never
+  // the personal portion or which method the user wants, so it behaves exactly
+  // like manually typing that one field and clicking Continuer: it fills only
+  // superficie_totale (+ admin side-data) and advances a single step. The next
+  // question (superficie_personnelle) is always answered manually.
   const handleConfirmTaxScanReview = () => {
     if (!taxScanReview) return;
-    const updated: OnboardingAnswers = {
-      ...onboardingAnswers,
+    setOnboardingAnswers((prev) => ({
+      ...prev,
       superficie_totale: taxScanReview.superficieTotale,
-      superficie_personnelle: taxScanReview.superficiePersonnelle,
       adresse_propriete: taxScanReview.adresse,
       unites_identifiees: taxScanReview.doors,
-      calcul_portion_personnelle: "superficie",
       ...(taxScanReview.numeroLot ? { numero_lot: taxScanReview.numeroLot } : {}),
       ...(taxScanReview.valeurTerrain ? { valeur_terrain: taxScanReview.valeurTerrain } : {}),
       ...(taxScanReview.valeurBatiment ? { valeur_batiment: taxScanReview.valeurBatiment } : {}),
-    };
-    setOnboardingAnswers(updated);
+    }));
     setTaxScanReview(null);
-    playStepChime();
-
-    // Recompute filtered questions with updated answers, then skip past any question
-    // the confirmed scan already answered (e.g. the manual superficie_totale/
-    // superficie_personnelle fallback questions) instead of asking for it twice.
-    const allQs = selectedProfile ? QUESTIONS[selectedProfile] : [];
-    const filteredQs = allQs.filter((q) => {
-      if (!q.showWhen) return true;
-      return updated[q.showWhen.questionId] === q.showWhen.value;
-    });
-    let nextIdx = currentQuestionIndex + 1;
-    while (nextIdx < filteredQs.length && updated[filteredQs[nextIdx].id] !== undefined) {
-      nextIdx++;
-    }
-    if (nextIdx < filteredQs.length) {
-      setCurrentQuestionIndex(nextIdx);
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex((i) => i + 1);
     } else {
       setStep("summary");
     }
+    playStepChime();
   };
 
   // ── Data Bridge — seeds BuildingLedger[] into FiscalContext on finish ────
@@ -849,33 +853,7 @@ export default function SofiOnboarding({
       const nbRaw      = String(onboardingAnswers["nb_immeubles"] ?? "1");
       const n          = Math.max(1, Math.min(99, parseInt(nbRaw, 10) || 1));
       const isOccupant = onboardingAnswers["proprietaire_occupant"] === "oui";
-
-      // Resolve occupancy % from whichever calculation method the user chose
-      let occupancyPct = 0;
-      if (isOccupant) {
-        const method = onboardingAnswers["calcul_portion_personnelle"];
-        if (method === "pieces") {
-          const total    = parseFloat(String(onboardingAnswers["pieces_totales"]      ?? "0"));
-          const personal = parseFloat(String(onboardingAnswers["pieces_personnelles"] ?? "0"));
-          occupancyPct   = (total > 0 && personal > 0)
-            ? Math.min(99, Math.max(1, Math.round((personal / total) * 10000) / 100))
-            : 0;
-        } else if (method === "superficie") {
-          const total    = parseFloat(String(onboardingAnswers["superficie_totale"]    ?? "0"));
-          const personal = parseFloat(String(onboardingAnswers["superficie_personnelle"] ?? "0"));
-          occupancyPct   = (total > 0 && personal > 0)
-            ? Math.min(99, Math.max(1, Math.round((personal / total) * 10000) / 100))
-            : 0;
-        } else if (method === "pourcentage") {
-          const raw    = parseFloat(String(onboardingAnswers["proportion_occupee_exacte"] ?? "0"));
-          occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
-        } else {
-          // Legacy fallback (proportion_occupee from old flow)
-          const raw    = parseFloat(String(onboardingAnswers["proportion_occupee"] ?? "0"));
-          occupancyPct = isNaN(raw) ? 0 : Math.min(99, Math.max(0, raw));
-        }
-      }
-      const deductiblePct = Math.round((100 - occupancyPct) * 100) / 100;
+      const { occupancyPct, deductiblePct } = computeOccupancyDeductible(onboardingAnswers);
 
       const rawCoOwners = onboardingAnswers["nb_coproprietaires"];
       const coOwners: CoOwner[] = Array.isArray(rawCoOwners)
@@ -1147,268 +1125,6 @@ export default function SofiOnboarding({
             {currentQuestion.type === "single_choice" && (
               <div className="flex flex-col gap-3 animate-fade-in">
 
-                {/* ── S.O.F.I. AI Tax Scanner — shown only on calcul_portion_personnelle ── */}
-                {currentQuestion.id === "calcul_portion_personnelle" && (
-                  <div className={`relative overflow-hidden rounded-2xl border p-4 ${
-                    darkMode
-                      ? "bg-gradient-to-br from-emerald-950/50 to-cyan-950/40 border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.08)]"
-                      : "bg-gradient-to-br from-emerald-50 to-cyan-50 border-emerald-400/40 shadow-[0_4px_20px_rgba(16,185,129,0.08)]"
-                  }`}>
-                    {/* Decorative glow orb */}
-                    <div className="absolute top-[-20px] right-[-20px] w-24 h-24 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
-
-                    <div className="flex items-start gap-3">
-                      {taxScanLoading ? (
-                        <img
-                          src="/sofi/sofi Estado de pensando.jpeg"
-                          alt="S.O.F.I. — en train d'analyser le document"
-                          className="w-11 h-11 rounded-xl object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className={`p-2.5 rounded-xl shrink-0 ${
-                          darkMode ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-emerald-100 border border-emerald-200"
-                        }`}>
-                          <Scan size={18} className="text-emerald-400" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[11px] font-black uppercase tracking-widest ${
-                          darkMode ? "text-emerald-400" : "text-emerald-700"
-                        }`}>
-                          {lang === "FR" ? "✦ S.O.F.I. Scan Fiscal AI" : lang === "EN" ? "✦ S.O.F.I. AI Tax Scan" : "✦ S.O.F.I. Escaneo Fiscal IA"}
-                        </p>
-                        <p className={`text-[11px] font-medium mt-0.5 leading-relaxed ${
-                          darkMode ? "text-zinc-400" : "text-slate-500"
-                        }`}>
-                          {lang === "FR"
-                            ? "Importez votre acte notarié, évaluation municipale ou plan — S.O.F.I. extrait les superficies automatiquement."
-                            : lang === "EN"
-                            ? "Upload your deed, municipal assessment or blueprint — S.O.F.I. extracts square footage automatically."
-                            : "Suba su escritura, evaluación municipal o plano — S.O.F.I. extrae las superficies automáticamente."}
-                        </p>
-
-                        {/* Error state */}
-                        {taxScanError && (
-                          <div className={`mt-2 flex items-start gap-2 text-[10px] font-semibold leading-snug ${
-                            darkMode ? "text-rose-400" : "text-rose-600"
-                          }`}>
-                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                            <span>{taxScanError}</span>
-                          </div>
-                        )}
-
-                        {/* Upload / scan button — hidden while a review is pending confirmation */}
-                        {!taxScanReview && (
-                          <button
-                            onClick={() => {
-                              setTaxScanError(null);
-                              taxScanFileRef.current?.click();
-                            }}
-                            disabled={taxScanLoading}
-                            className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 cursor-pointer border ${
-                              taxScanLoading
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            } ${
-                              darkMode
-                                ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:border-emerald-400/60 shadow-[0_0_16px_rgba(16,185,129,0.1)]"
-                                : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
-                            }`}
-                          >
-                            {taxScanLoading
-                              ? <><Loader2 size={12} className="animate-spin" />{lang === "FR" ? "Analyse en cours…" : lang === "EN" ? "Scanning…" : "Analizando…"}</>
-                              : <><Camera size={12} />{lang === "FR" ? "Analyser un document" : lang === "EN" ? "Scan a document" : "Escanear documento"}</>}
-                          </button>
-                        )}
-
-                        {/* Hidden file input */}
-                        <input
-                          ref={taxScanFileRef}
-                          type="file"
-                          accept="application/pdf, image/jpeg, image/png, image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleTaxDimensionScan(file);
-                            e.target.value = "";
-                          }}
-                        />
-
-                        {/* ── Review & confirm card — nothing is saved until "Confirmer" ── */}
-                        {taxScanReview && (
-                          <div className={`mt-3 space-y-3 rounded-xl border p-3 ${
-                            darkMode ? "bg-black/20 border-emerald-500/20" : "bg-white/70 border-emerald-300/50"
-                          }`}>
-                            {/* Detected address */}
-                            {taxScanReview.adresse && (
-                              <p className={`text-[11px] font-semibold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
-                                {lang === "FR" ? "Adresse détectée : " : lang === "EN" ? "Detected address: " : "Dirección detectada: "}
-                                <span className="font-black">{taxScanReview.adresse}</span>
-                              </p>
-                            )}
-
-                            {/* Missing-superficie notice (informational, not blocking) */}
-                            {!taxScanReview.superficieTotale && (
-                              <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug rounded-lg p-2 ${
-                                darkMode ? "bg-amber-950/30 text-amber-300 border border-amber-500/25" : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}>
-                                <Info size={12} className="mt-0.5 shrink-0" />
-                                <span>
-                                  {lang === "FR"
-                                    ? "Nous n'avons pas trouvé la superficie dans ce document — vous pouvez la saisir ci-dessous."
-                                    : lang === "EN"
-                                    ? "We couldn't find the square footage in this document — you can enter it below."
-                                    : "No encontramos la superficie en este documento — puedes ingresarla abajo."}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Address mismatch — floating warning requiring explicit acknowledgment */}
-                            {taxScanReview.addressMismatch && (
-                              <div className={`space-y-2 rounded-lg p-2 border ${
-                                darkMode ? "bg-rose-950/30 border-rose-500/30" : "bg-rose-50 border-rose-200"
-                              }`}>
-                                <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug ${darkMode ? "text-rose-300" : "text-rose-700"}`}>
-                                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                                  <span>
-                                    {lang === "FR"
-                                      ? "L'adresse postale du propriétaire ne correspond pas à l'adresse de la propriété. Confirmez-vous que vous y habitez ?"
-                                      : lang === "EN"
-                                      ? "The owner's mailing address doesn't match the property address. Do you confirm you live there?"
-                                      : "La dirección postal del propietario no coincide con la dirección de la propiedad. ¿Confirmas que vives ahí?"}
-                                  </span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, mismatchAcknowledged: true } : prev)}
-                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
-                                      taxScanReview.mismatchAcknowledged
-                                        ? darkMode ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-emerald-100 border-emerald-400 text-emerald-700"
-                                        : darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
-                                    }`}
-                                  >
-                                    {lang === "FR" ? "Oui, je confirme" : lang === "EN" ? "Yes, I confirm" : "Sí, confirmo"}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setTaxScanReview(null);
-                                      const backIdx = questions.findIndex((q) => q.id === "proprietaire_occupant");
-                                      if (backIdx >= 0) setCurrentQuestionIndex(backIdx);
-                                    }}
-                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
-                                      darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
-                                    }`}
-                                  >
-                                    {lang === "FR" ? "Corriger ma réponse" : lang === "EN" ? "Fix my answer" : "Corregir mi respuesta"}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Editable door list */}
-                            <div className="space-y-1.5">
-                              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                                {lang === "FR" ? "Portes détectées" : lang === "EN" ? "Detected doors" : "Puertas detectadas"}
-                              </p>
-                              {taxScanReview.doors.map((door, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={door}
-                                    onChange={(e) => setTaxScanReview((prev) => {
-                                      if (!prev) return prev;
-                                      const doors = [...prev.doors]; doors[idx] = e.target.value;
-                                      return { ...prev, doors };
-                                    })}
-                                    className={`flex-1 min-w-0 px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[11px] font-semibold ${
-                                      darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
-                                    }`}
-                                  />
-                                  <button
-                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: prev.doors.filter((_, i) => i !== idx) } : prev)}
-                                    className="text-rose-400 hover:text-rose-300 shrink-0 cursor-pointer transition-colors"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              ))}
-                              <button
-                                onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: [...prev.doors, ""] } : prev)}
-                                className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors ${
-                                  darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"
-                                }`}
-                              >
-                                <Plus size={11} /> {lang === "FR" ? "Ajouter une porte" : lang === "EN" ? "Add a door" : "Agregar una puerta"}
-                              </button>
-                            </div>
-
-                            {/* Editable superficie inputs */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                                  {lang === "FR" ? "Superficie totale (pi²)" : lang === "EN" ? "Total sq ft" : "Superficie total (pi²)"}
-                                </label>
-                                <input
-                                  type="number"
-                                  value={taxScanReview.superficieTotale}
-                                  onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, superficieTotale: e.target.value } : prev)}
-                                  className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
-                                    darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
-                                  }`}
-                                />
-                              </div>
-                              <div>
-                                <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                                  {lang === "FR" ? "Votre unité (pi², estimé)" : lang === "EN" ? "Your unit (sq ft, estimated)" : "Tu unidad (pi², estimado)"}
-                                </label>
-                                <input
-                                  type="number"
-                                  value={taxScanReview.superficiePersonnelle}
-                                  onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, superficiePersonnelle: e.target.value } : prev)}
-                                  className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
-                                    darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
-                                  }`}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Confirm button — disabled until superficies are filled and any mismatch acknowledged */}
-                            <button
-                              onClick={handleConfirmTaxScanReview}
-                              disabled={
-                                !taxScanReview.superficieTotale.trim() ||
-                                !taxScanReview.superficiePersonnelle.trim() ||
-                                (taxScanReview.addressMismatch && !taxScanReview.mismatchAcknowledged)
-                              }
-                              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
-                                taxScanReview.superficieTotale.trim() && taxScanReview.superficiePersonnelle.trim() && (!taxScanReview.addressMismatch || taxScanReview.mismatchAcknowledged)
-                                  ? darkMode ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30" : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
-                                  : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
-                              }`}
-                            >
-                              <CheckCircle2 size={13} />
-                              {lang === "FR" ? "Confirmer" : lang === "EN" ? "Confirm" : "Confirmar"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Divider */}
-                    <div className={`mt-4 flex items-center gap-3 ${
-                      darkMode ? "text-zinc-600" : "text-slate-300"
-                    }`}>
-                      <div className="flex-1 h-px bg-current opacity-30" />
-                      <span className={`text-[9px] font-black uppercase tracking-widest ${
-                        darkMode ? "text-zinc-500" : "text-slate-400"
-                      }`}>
-                        {lang === "FR" ? "ou choisissez manuellement" : lang === "EN" ? "or choose manually" : "o elija manualmente"}
-                      </span>
-                      <div className="flex-1 h-px bg-current opacity-30" />
-                    </div>
-                  </div>
-                )}
-
                 {/* Choices */}
                 <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
                   {currentQuestion.options?.map((opt) => {
@@ -1551,6 +1267,236 @@ export default function SofiOnboarding({
             {/* ── number_input ────────────────────────────────────────────── */}
             {currentQuestion.type === "number_input" && (
               <div className="space-y-3 animate-fade-in">
+
+                {/* ── S.O.F.I. AI Tax Scanner — a prefill helper for THIS field only, not an ──
+                    alternative way to calculate your personal portion. It can only ever supply
+                    the building's total area (and admin details); which unit is yours always
+                    stays a separate, manual question below. */}
+                {currentQuestion.id === "superficie_totale" && (
+                  <div className={`relative overflow-hidden rounded-2xl border p-4 ${
+                    darkMode
+                      ? "bg-gradient-to-br from-emerald-950/50 to-cyan-950/40 border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.08)]"
+                      : "bg-gradient-to-br from-emerald-50 to-cyan-50 border-emerald-400/40 shadow-[0_4px_20px_rgba(16,185,129,0.08)]"
+                  }`}>
+                    <div className="absolute top-[-20px] right-[-20px] w-24 h-24 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
+
+                    <div className="flex items-start gap-3">
+                      {taxScanLoading ? (
+                        <img
+                          src="/sofi/sofi Estado de pensando.jpeg"
+                          alt="S.O.F.I. — en train d'analyser le document"
+                          className="w-11 h-11 rounded-xl object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className={`p-2.5 rounded-xl shrink-0 ${
+                          darkMode ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-emerald-100 border border-emerald-200"
+                        }`}>
+                          <Scan size={18} className="text-emerald-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${
+                          darkMode ? "text-emerald-400" : "text-emerald-700"
+                        }`}>
+                          {lang === "FR" ? "✦ S.O.F.I. Scan Fiscal AI" : lang === "EN" ? "✦ S.O.F.I. AI Tax Scan" : "✦ S.O.F.I. Escaneo Fiscal IA"}
+                        </p>
+                        <p className={`text-[11px] font-medium mt-0.5 leading-relaxed ${
+                          darkMode ? "text-zinc-400" : "text-slate-500"
+                        }`}>
+                          {lang === "FR"
+                            ? "Importez votre acte notarié ou évaluation municipale — S.O.F.I. remplit ce champ (superficie totale de l'immeuble) automatiquement. Vous devrez ensuite nous indiquer vous-même la superficie de votre logement, à l'étape suivante."
+                            : lang === "EN"
+                            ? "Upload your deed or municipal assessment — S.O.F.I. fills in this field (the building's total square footage) automatically. You'll still tell us your own unit's square footage yourself on the next step."
+                            : "Sube tu escritura o evaluación municipal — S.O.F.I. rellena este campo (la superficie total del edificio) automáticamente. En el siguiente paso igual nos dirás tú mismo la superficie de tu unidad."}
+                        </p>
+
+                        {taxScanError && (
+                          <div className={`mt-2 flex items-start gap-2 text-[10px] font-semibold leading-snug ${
+                            darkMode ? "text-rose-400" : "text-rose-600"
+                          }`}>
+                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                            <span>{taxScanError}</span>
+                          </div>
+                        )}
+
+                        {!taxScanReview && (
+                          <button
+                            onClick={() => {
+                              setTaxScanError(null);
+                              taxScanFileRef.current?.click();
+                            }}
+                            disabled={taxScanLoading}
+                            className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 cursor-pointer border ${
+                              taxScanLoading
+                                ? "opacity-60 cursor-not-allowed"
+                                : ""
+                            } ${
+                              darkMode
+                                ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:border-emerald-400/60 shadow-[0_0_16px_rgba(16,185,129,0.1)]"
+                                : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
+                            }`}
+                          >
+                            {taxScanLoading
+                              ? <><Loader2 size={12} className="animate-spin" />{lang === "FR" ? "Analyse en cours…" : lang === "EN" ? "Scanning…" : "Analizando…"}</>
+                              : <><Camera size={12} />{lang === "FR" ? "Analyser un document" : lang === "EN" ? "Scan a document" : "Escanear documento"}</>}
+                          </button>
+                        )}
+
+                        <input
+                          ref={taxScanFileRef}
+                          type="file"
+                          accept="application/pdf, image/jpeg, image/png, image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleTaxDimensionScan(file);
+                            e.target.value = "";
+                          }}
+                        />
+
+                        {/* ── Review & confirm card — nothing is saved until "Confirmer" ── */}
+                        {taxScanReview && (
+                          <div className={`mt-3 space-y-3 rounded-xl border p-3 ${
+                            darkMode ? "bg-black/20 border-emerald-500/20" : "bg-white/70 border-emerald-300/50"
+                          }`}>
+                            {taxScanReview.adresse && (
+                              <p className={`text-[11px] font-semibold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                                {lang === "FR" ? "Adresse détectée : " : lang === "EN" ? "Detected address: " : "Dirección detectada: "}
+                                <span className="font-black">{taxScanReview.adresse}</span>
+                              </p>
+                            )}
+
+                            {!taxScanReview.superficieTotale && (
+                              <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug rounded-lg p-2 ${
+                                darkMode ? "bg-amber-950/30 text-amber-300 border border-amber-500/25" : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}>
+                                <Info size={12} className="mt-0.5 shrink-0" />
+                                <span>
+                                  {lang === "FR"
+                                    ? "Nous n'avons pas trouvé la superficie dans ce document — vous pouvez la saisir ci-dessous."
+                                    : lang === "EN"
+                                    ? "We couldn't find the square footage in this document — you can enter it below."
+                                    : "No encontramos la superficie en este documento — puedes ingresarla abajo."}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Address mismatch — floating warning requiring explicit acknowledgment */}
+                            {taxScanReview.addressMismatch && (
+                              <div className={`space-y-2 rounded-lg p-2 border ${
+                                darkMode ? "bg-rose-950/30 border-rose-500/30" : "bg-rose-50 border-rose-200"
+                              }`}>
+                                <div className={`flex items-start gap-2 text-[10px] font-semibold leading-snug ${darkMode ? "text-rose-300" : "text-rose-700"}`}>
+                                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                                  <span>
+                                    {lang === "FR"
+                                      ? "L'adresse postale du propriétaire ne correspond pas à l'adresse de la propriété. Confirmez-vous que vous y habitez ?"
+                                      : lang === "EN"
+                                      ? "The owner's mailing address doesn't match the property address. Do you confirm you live there?"
+                                      : "La dirección postal del propietario no coincide con la dirección de la propiedad. ¿Confirmas que vives ahí?"}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, mismatchAcknowledged: true } : prev)}
+                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
+                                      taxScanReview.mismatchAcknowledged
+                                        ? darkMode ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-emerald-100 border-emerald-400 text-emerald-700"
+                                        : darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {lang === "FR" ? "Oui, je confirme" : lang === "EN" ? "Yes, I confirm" : "Sí, confirmo"}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setTaxScanReview(null);
+                                      const backIdx = questions.findIndex((q) => q.id === "proprietaire_occupant");
+                                      if (backIdx >= 0) setCurrentQuestionIndex(backIdx);
+                                    }}
+                                    className={`flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded-lg border cursor-pointer ${
+                                      darkMode ? "bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {lang === "FR" ? "Corriger ma réponse" : lang === "EN" ? "Fix my answer" : "Corregir mi respuesta"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editable door list — useful later for per-unit records, unrelated to this total */}
+                            <div className="space-y-1.5">
+                              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                {lang === "FR" ? "Portes détectées" : lang === "EN" ? "Detected doors" : "Puertas detectadas"}
+                              </p>
+                              {taxScanReview.doors.map((door, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={door}
+                                    onChange={(e) => setTaxScanReview((prev) => {
+                                      if (!prev) return prev;
+                                      const doors = [...prev.doors]; doors[idx] = e.target.value;
+                                      return { ...prev, doors };
+                                    })}
+                                    className={`flex-1 min-w-0 px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[11px] font-semibold ${
+                                      darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                    }`}
+                                  />
+                                  <button
+                                    onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: prev.doors.filter((_, i) => i !== idx) } : prev)}
+                                    className="text-rose-400 hover:text-rose-300 shrink-0 cursor-pointer transition-colors"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                              <button
+                                onClick={() => setTaxScanReview((prev) => prev ? { ...prev, doors: [...prev.doors, ""] } : prev)}
+                                className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors ${
+                                  darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"
+                                }`}
+                              >
+                                <Plus size={11} /> {lang === "FR" ? "Ajouter une porte" : lang === "EN" ? "Add a door" : "Agregar una puerta"}
+                              </button>
+                            </div>
+
+                            {/* Only the building's total — never a guessed personal share */}
+                            <div>
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                {lang === "FR" ? "Superficie totale (pi²)" : lang === "EN" ? "Total sq ft" : "Superficie total (pi²)"}
+                              </label>
+                              <input
+                                type="number"
+                                value={taxScanReview.superficieTotale}
+                                onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, superficieTotale: e.target.value } : prev)}
+                                className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
+                                  darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                }`}
+                              />
+                            </div>
+
+                            <button
+                              onClick={handleConfirmTaxScanReview}
+                              disabled={
+                                !taxScanReview.superficieTotale.trim() ||
+                                (taxScanReview.addressMismatch && !taxScanReview.mismatchAcknowledged)
+                              }
+                              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
+                                taxScanReview.superficieTotale.trim() && (!taxScanReview.addressMismatch || taxScanReview.mismatchAcknowledged)
+                                  ? darkMode ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30" : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
+                                  : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
+                              }`}
+                            >
+                              <CheckCircle2 size={13} />
+                              {lang === "FR" ? "Confirmer" : lang === "EN" ? "Confirm" : "Confirmar"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {currentQuestion.tooltipFR && (
                   <div className={`flex items-start gap-2 p-3 rounded-xl border text-[10px] font-medium leading-relaxed ${
                     darkMode ? "bg-indigo-950/30 border-indigo-500/25 text-indigo-300" : "bg-indigo-50 border-indigo-200 text-indigo-700"
@@ -1597,162 +1543,148 @@ export default function SofiOnboarding({
               </div>
             )}
 
-            {/* ── common_expense_split ────────────────────────────────────── */}
-            {currentQuestion.type === "common_expense_split" && (
-              <div className="space-y-4 animate-fade-in">
-                {/* Sofi's dynamic message — phase-aware */}
-                <div className={`p-4 rounded-2xl border text-[12px] font-medium leading-relaxed ${
-                  darkMode ? "bg-emerald-950/20 border-emerald-500/20 text-zinc-200" : "bg-emerald-50 border-emerald-200 text-slate-700"
+            {/* ── unit_room_split ─────────────────────────────────────────── */}
+            {currentQuestion.type === "unit_room_split" && (
+              <div className="space-y-3 animate-fade-in">
+                {/* Quebec "grandeur" explainer */}
+                <div className={`flex items-start gap-2 p-3 rounded-xl border text-[10px] font-medium leading-relaxed ${
+                  darkMode ? "bg-indigo-950/30 border-indigo-500/25 text-indigo-300" : "bg-indigo-50 border-indigo-200 text-indigo-700"
                 }`}>
-                  {ceOccupant === "" && (
-                    lang === "FR"
-                      ? "Salut ! C'est une étape super importante pour tes impôts. Est-ce que tu habites dans l'un des logements de cet immeuble (propriétaire-occupant) ?"
+                  <Info size={12} className="mt-0.5 shrink-0" />
+                  <span>
+                    {lang === "FR"
+                      ? "Au Québec, un logement « 5½ » a 5,5 pièces (le ½ compte pour la salle de bain). Si vous avez plusieurs logements identiques (ex : 2 logements de 5½), utilisez le champ « × » au lieu d'ajouter une ligne pour chacun."
                       : lang === "EN"
-                      ? "Hey! This step really matters for your taxes. Do you live in one of this building's units (owner-occupant)?"
-                      : "¡Hola! Este paso es muy importante para tus impuestos. ¿Vives en una de las unidades de este edificio (propietario-ocupante)?"
-                  )}
-                  {ceOccupant === "oui" && ceMethod === "" && (
-                    lang === "FR"
-                      ? "Parfait ! Revenu Québec demande de calculer la portion de l'immeuble que tu utilises pour toi-même. Comment préfères-tu diviser les dépenses communes (comme les taxes ou le déneigement) ?"
-                      : lang === "EN"
-                      ? "Perfect! Revenu Québec requires calculating the portion of the building you use for yourself. How would you prefer to split common expenses (like taxes or snow removal)?"
-                      : "¡Perfecto! Revenu Québec pide calcular la porción del edificio que usas para ti mismo. ¿Cómo prefieres dividir los gastos comunes (como los impuestos o la remoción de nieve)?"
-                  )}
-                  {ceOccupant === "oui" && ceMethod !== "" && !ceValidInputs && (
-                    lang === "FR"
-                      ? "Entre les chiffres ci-dessous — je calcule ta portion déductible en temps réel."
-                      : lang === "EN"
-                      ? "Enter the numbers below — I'll calculate your deductible portion in real time."
-                      : "Ingresa las cifras abajo — calcularé tu porción deducible en tiempo real."
-                  )}
-                  {ceOccupant === "oui" && ceValidInputs && (
-                    lang === "FR"
-                      ? `Génial ! D'après tes chiffres, la portion locative de ton immeuble est de ${ceDeductiblePct}%. La portion personnelle est de ${cePersonalPct}%. À partir de maintenant, quand tu téléchargeras une facture de frais communs (comme tes taxes municipales), je vais déduire automatiquement ${ceDeductiblePct}% pour tes impôts !`
-                      : lang === "EN"
-                      ? `Great! Based on your numbers, the rental portion of your building is ${ceDeductiblePct}%. The personal portion is ${cePersonalPct}%. From now on, when you upload a common expense invoice (like your municipal taxes), I'll automatically deduct ${ceDeductiblePct}% for your taxes!`
-                      : `¡Genial! Según tus cifras, la porción de alquiler de tu edificio es del ${ceDeductiblePct}%. La porción personal es del ${cePersonalPct}%. A partir de ahora, cuando subas una factura de gastos comunes (como tus impuestos municipales), voy a deducir automáticamente el ${ceDeductiblePct}% de tus impuestos!`
-                  )}
+                      ? "In Quebec, a \"5½\" unit has 5.5 rooms (the ½ counts the bathroom). If you have several identical units (e.g. 2 units of 5½), use the \"×\" field instead of adding a row for each."
+                      : "En Quebec, una unidad «5½» tiene 5,5 habitaciones (el ½ cuenta el baño). Si tienes varias unidades idénticas (ej: 2 unidades de 5½), usa el campo «×» en vez de agregar una fila por cada una."}
+                  </span>
                 </div>
 
-                {/* Phase 1 — Oui / Non toggle */}
-                {ceOccupant === "" && (
-                  <div className="flex gap-3">
-                    {(["oui", "non"] as const).map((val) => (
-                      <button
-                        key={val}
-                        onClick={() => {
-                          setCeOccupant(val);
-                          if (val === "non") setTimeout(() => handleCommonExpenseConfirm(100), 280);
-                          else playStepChime();
-                        }}
-                        className={`flex-1 py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all duration-300 cursor-pointer ${
-                          darkMode
-                            ? "bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.07] hover:border-emerald-500/40"
-                            : "bg-white/50 border-slate-200 hover:border-emerald-500/40 hover:bg-white/80"
-                        }`}
-                      >
-                        {val === "oui" ? (lang === "FR" ? "Oui" : lang === "EN" ? "Yes" : "Sí") : (lang === "FR" ? "Non" : lang === "EN" ? "No" : "No")}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Phase 2 — Calculation method */}
-                {ceOccupant === "oui" && ceMethod === "" && (
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => { setCeMethod("pieces"); playStepChime(); }}
-                      className={`w-full text-left px-4 py-3 rounded-2xl border transition-all duration-300 cursor-pointer text-[13px] font-semibold ${
-                        darkMode ? "bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.07] hover:border-emerald-500/40" : "bg-white/50 border-slate-200 hover:border-emerald-500/40 hover:bg-white/80"
-                      }`}
-                    >
-                      {lang === "FR" ? "Au prorata des pièces (Recommandé si les logements sont similaires)" : lang === "EN" ? "Prorated by rooms (Recommended if units are similar)" : "Prorrateado por habitaciones (Recomendado si las unidades son similares)"}
-                    </button>
-                    <button
-                      onClick={() => { setCeMethod("superficie"); playStepChime(); }}
-                      className={`w-full text-left px-4 py-3 rounded-2xl border transition-all duration-300 cursor-pointer text-[13px] font-semibold ${
-                        darkMode ? "bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.07] hover:border-emerald-500/40" : "bg-white/50 border-slate-200 hover:border-emerald-500/40 hover:bg-white/80"
-                      }`}
-                    >
-                      {lang === "FR" ? "Au prorata de la superficie (Pieds carrés/Mètres carrés)" : lang === "EN" ? "Prorated by area (Square feet/Square metres)" : "Prorrateado por superficie (Pies cuadrados/Metros cuadrados)"}
-                    </button>
-                    <button
-                      onClick={() => setCeOccupant("")}
-                      className={`self-start text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"}`}
-                    >
-                      <ArrowLeft size={10} className="inline mr-1" />{t.back}
-                    </button>
-                  </div>
-                )}
-
-                {/* Phase 3 — Dynamic inputs + real-time calculation */}
-                {ceOccupant === "oui" && ceMethod !== "" && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                          {ceMethod === "pieces"
-                            ? (lang === "FR" ? "Nombre total de pièces dans l'immeuble" : lang === "EN" ? "Total number of rooms in the building" : "Número total de habitaciones en el edificio")
-                            : (lang === "FR" ? "Superficie totale de l'immeuble" : lang === "EN" ? "Total square footage of the building" : "Superficie total del edificio")}
+                {unitRooms.map((unit, idx) => (
+                  <div key={idx} className={`space-y-2 p-3 rounded-2xl border ${
+                    personalUnitIdx === idx
+                      ? darkMode ? "bg-emerald-950/20 border-emerald-500/40" : "bg-emerald-50/60 border-emerald-400/50"
+                      : darkMode ? "bg-white/[0.03] border-white/[0.08]" : "bg-white/60 border-slate-200"
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={lang === "FR" ? `Logement ${idx + 1} (ex : RDC)` : lang === "EN" ? `Unit ${idx + 1} (e.g. Ground floor)` : `Unidad ${idx + 1} (ej: Planta baja)`}
+                        value={unit.label}
+                        onChange={(e) => { const u = [...unitRooms]; u[idx] = { ...u[idx], label: e.target.value }; setUnitRooms(u); }}
+                        className={`flex-1 min-w-0 bg-transparent outline-none text-[12px] font-semibold ${darkMode ? "text-white placeholder-zinc-600" : "text-slate-900 placeholder-slate-300"}`}
+                      />
+                      {unitRooms.length > 2 && (
+                        <button
+                          onClick={() => {
+                            setUnitRooms(unitRooms.filter((_, i) => i !== idx));
+                            if (personalUnitIdx === idx) setPersonalUnitIdx(null);
+                            else if (personalUnitIdx !== null && personalUnitIdx > idx) setPersonalUnitIdx(personalUnitIdx - 1);
+                          }}
+                          className="text-rose-400 hover:text-rose-300 shrink-0 cursor-pointer transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                    {/* Two explicitly-labeled fields — unlabeled side-by-side number boxes
+                        previously got confused with each other (users typed the size into
+                        the quantity box). Each now has its own caption above it. */}
+                    <div className="flex items-end gap-3">
+                      <div className="flex-1">
+                        <label className={`block text-[8px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-emerald-400/80" : "text-emerald-700/80"}`}>
+                          {lang === "FR" ? "Grandeur (pièces) — ex : 5.5" : lang === "EN" ? "Size (rooms) — e.g. 5.5" : "Tamaño (habitaciones) — ej: 5.5"}
                         </label>
                         <input
-                          type="number"
-                          min={0}
-                          placeholder={ceMethod === "pieces" ? "Ex : 14.5" : "Ex : 2500"}
-                          value={ceTotal}
-                          onChange={(e) => setCeTotal(e.target.value)}
-                          className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${darkMode ? "border-white/10 text-white placeholder-zinc-700" : "border-slate-200 text-slate-900 placeholder-slate-300"}`}
+                          type="number" min={0.5} step={0.5} placeholder={lang === "FR" ? "Ex : 5.5" : "5.5"}
+                          value={unit.pieces}
+                          onChange={(e) => { const u = [...unitRooms]; u[idx] = { ...u[idx], pieces: e.target.value }; setUnitRooms(u); }}
+                          className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-black ${darkMode ? "border-white/10 text-emerald-400 placeholder-zinc-600" : "border-slate-200 text-emerald-700 placeholder-slate-300"}`}
                         />
                       </div>
-                      <div>
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                          {ceMethod === "pieces"
-                            ? (lang === "FR" ? "Nombre de pièces de ton logement personnel" : lang === "EN" ? "Number of rooms in your personal unit" : "Número de habitaciones de tu unidad personal")
-                            : (lang === "FR" ? "Superficie de ton logement personnel" : lang === "EN" ? "Square footage of your personal unit" : "Superficie de tu unidad personal")}
+                      <div className="w-20">
+                        <label className={`block text-[8px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          {lang === "FR" ? "Logements identiques" : lang === "EN" ? "Identical units" : "Unidades idénticas"}
                         </label>
                         <input
-                          type="number"
-                          min={0}
-                          placeholder={ceMethod === "pieces" ? "Ex : 5.5" : "Ex : 1000"}
-                          value={cePersonal}
-                          onChange={(e) => setCePersonal(e.target.value)}
-                          className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${darkMode ? "border-white/10 text-white placeholder-zinc-700" : "border-slate-200 text-slate-900 placeholder-slate-300"}`}
+                          type="number" min={1} step={1}
+                          value={unit.quantity}
+                          onChange={(e) => { const u = [...unitRooms]; u[idx] = { ...u[idx], quantity: e.target.value }; setUnitRooms(u); }}
+                          className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-black text-center ${darkMode ? "border-white/10 text-zinc-200" : "border-slate-200 text-slate-700"}`}
                         />
                       </div>
                     </div>
-
-                    {/* Live calculated badge */}
-                    {ceValidInputs && (
-                      <div className={`flex items-center justify-between text-[10px] font-black uppercase tracking-widest rounded-xl px-3 py-2 ${
-                        darkMode ? "bg-emerald-950/30 text-emerald-400 border border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      }`}>
-                        <span>{lang === "FR" ? "Portion déductible (locative)" : lang === "EN" ? "Deductible (rental) portion" : "Porción deducible (alquiler)"}</span>
-                        <span className="flex items-center gap-1"><CheckCircle2 size={10} />{ceDeductiblePct}%</span>
-                      </div>
+                    {/* Visible (not hover-only) toggle — this is what was invisible before */}
+                    <button
+                      onClick={() => setPersonalUnitIdx(idx)}
+                      className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all duration-200 cursor-pointer ${
+                        personalUnitIdx === idx
+                          ? "bg-emerald-500 border-emerald-500 text-white"
+                          : darkMode ? "border-white/15 text-zinc-400 hover:border-emerald-500/40 hover:text-emerald-300" : "border-slate-200 text-slate-500 hover:border-emerald-400/50 hover:text-emerald-700"
+                      }`}
+                    >
+                      <Home size={11} />
+                      {personalUnitIdx === idx
+                        ? (lang === "FR" ? "✓ C'est mon logement" : lang === "EN" ? "✓ This is my unit" : "✓ Esta es mi unidad")
+                        : (lang === "FR" ? "C'est mon logement" : lang === "EN" ? "This is my unit" : "Esta es mi unidad")}
+                    </button>
+                    {(parseFloat(unit.quantity) || 0) > 1 && (
+                      <p className={`text-[9px] font-semibold text-center ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                        {lang === "FR"
+                          ? `1 de ces ${unit.quantity} logements est le vôtre — les ${Math.max(0, (parseFloat(unit.quantity) || 0) - 1)} autres sont loués.`
+                          : lang === "EN"
+                          ? `1 of these ${unit.quantity} units is yours — the other ${Math.max(0, (parseFloat(unit.quantity) || 0) - 1)} are rented.`
+                          : `1 de estas ${unit.quantity} unidades es tuya — las otras ${Math.max(0, (parseFloat(unit.quantity) || 0) - 1)} están alquiladas.`}
+                      </p>
                     )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    const ordinalsFR = ["Rez-de-chaussée (RDC)", "2e étage", "3e étage", "4e étage", "5e étage"];
+                    const ordinalsEN = ["Ground floor", "2nd floor", "3rd floor", "4th floor", "5th floor"];
+                    const ordinalsES = ["Planta baja", "2do piso", "3er piso", "4to piso", "5to piso"];
+                    const list = lang === "FR" ? ordinalsFR : lang === "EN" ? ordinalsEN : ordinalsES;
+                    const defaultLabel = list[unitRooms.length] ?? "";
+                    setUnitRooms([...unitRooms, { label: defaultLabel, pieces: "", quantity: "1" }]);
+                  }}
+                  className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"}`}
+                >
+                  <Plus size={11} /> {lang === "FR" ? "Ajouter un logement" : lang === "EN" ? "Add a unit" : "Agregar una unidad"}
+                </button>
 
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => { setCeMethod(""); setCeTotal(""); setCePersonal(""); }}
-                        className={`text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"}`}
-                      >
-                        <ArrowLeft size={10} className="inline mr-1" />{t.back}
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => handleCommonExpenseConfirm(ceDeductiblePct)}
-                      disabled={!ceValidInputs}
-                      className={`w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
-                        ceValidInputs
-                          ? darkMode ? "bg-white/10 border-emerald-500/40 text-emerald-400 hover:bg-white/15" : "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/20"
-                          : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
-                      }`}
-                    >
-                      {t.next} →
-                    </button>
+                {personalUnitIdx === null && (
+                  <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-[10px] font-bold ${
+                    darkMode ? "bg-amber-950/30 border-amber-500/30 text-amber-300" : "bg-amber-50 border-amber-300 text-amber-700"
+                  }`}>
+                    <AlertTriangle size={12} className="shrink-0" />
+                    <span>{lang === "FR" ? "Touchez « C'est mon logement » sous le logement que vous occupez." : lang === "EN" ? "Tap \"This is my unit\" under the unit you occupy." : "Toca «Esta es mi unidad» debajo de la unidad que ocupas."}</span>
                   </div>
                 )}
+
+                {/* Live calculated badge */}
+                {unitRoomsValid && (
+                  <div className="space-y-1.5">
+                    <div className={`flex items-center justify-between text-[10px] font-black uppercase tracking-widest rounded-xl px-3 py-2 ${
+                      darkMode ? "bg-emerald-950/30 text-emerald-400 border border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    }`}>
+                      <span>{lang === "FR" ? `Total : ${unitRoomsTotal} pièces` : lang === "EN" ? `Total: ${unitRoomsTotal} rooms` : `Total: ${unitRoomsTotal} hab.`}</span>
+                      <span className="flex items-center gap-1"><CheckCircle2 size={10} />{unitRoomsDeductiblePct}% {lang === "FR" ? "déductible" : lang === "EN" ? "deductible" : "deducible"}</span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleUnitRoomsConfirm}
+                  disabled={!unitRoomsValid}
+                  className={`w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
+                    unitRoomsValid
+                      ? darkMode ? "bg-white/10 border-emerald-500/40 text-emerald-400 hover:bg-white/15" : "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/20"
+                      : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
+                  }`}
+                >
+                  {t.next} →
+                </button>
               </div>
             )}
 
@@ -1778,6 +1710,24 @@ export default function SofiOnboarding({
                 {t.profiles[selectedProfile].label}
               </h2>
             </div>
+
+            {/* Owner-occupant deductible % confirmation — reuses the calcul_portion_personnelle
+                answer instead of re-asking (previously a separate duplicate question). */}
+            {selectedProfile === "investisseur" && onboardingAnswers["proprietaire_occupant"] === "oui" && (() => {
+              const { deductiblePct, occupancyPct } = computeOccupancyDeductible(onboardingAnswers);
+              if (occupancyPct <= 0) return null;
+              return (
+                <div className={`p-4 rounded-2xl border text-[12px] font-medium leading-relaxed ${
+                  darkMode ? "bg-emerald-950/20 border-emerald-500/25 text-zinc-200" : "bg-emerald-50 border-emerald-200 text-slate-700"
+                }`}>
+                  {lang === "FR"
+                    ? `Génial ! D'après vos chiffres, la portion locative de votre immeuble est de ${deductiblePct}%. À partir de maintenant, quand vous téléchargerez une facture de frais communs (comme vos taxes municipales), AutoCompt déduira automatiquement ${deductiblePct}% pour vos impôts.`
+                    : lang === "EN"
+                    ? `Great! Based on your numbers, the rental portion of your building is ${deductiblePct}%. From now on, when you upload a common expense invoice (like your municipal taxes), AutoCompt will automatically deduct ${deductiblePct}% for your taxes.`
+                    : `¡Genial! Según tus cifras, la porción de alquiler de tu edificio es del ${deductiblePct}%. A partir de ahora, cuando subas una factura de gastos comunes (como tus impuestos municipales), AutoCompt deducirá automáticamente el ${deductiblePct}% para tus impuestos.`}
+                </div>
+              );
+            })()}
 
             {/* Answer summary */}
             <div className={`space-y-2 p-4 rounded-2xl border ${darkMode ? "bg-white/[0.03] border-white/[0.06]" : "bg-white/50 border-slate-100"}`}>
