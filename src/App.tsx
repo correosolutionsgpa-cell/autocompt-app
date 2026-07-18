@@ -1733,6 +1733,7 @@ const App = () => {
       loi16: "loi16",
       "rapport-ia": "rapport_ia",
       muro: "mur_communication",
+      equipe: null,           // always visible — hosts "Connecter Google Drive" (ProfilEtEquipe)
       settings: null,         // always visible
     };
 
@@ -1744,6 +1745,7 @@ const App = () => {
       { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       { id: "rapport-ia", label: "Rapport IA (SyndicAI)", icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
       { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
+      { id: "equipe", label: "Notre Équipe", icon: <UserPlus size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 

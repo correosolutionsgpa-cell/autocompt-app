@@ -27,7 +27,7 @@ import jsPDF from 'jspdf';
 import { db, auth, storage } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { dataService, type DocTemplateDoc } from '../lib/dataService';
+import { dataService, type DocTemplateDoc, type LegalDocumentDoc } from '../lib/dataService';
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from '../lib/docTemplateService';
 import { isCompanyDriveActive, uploadDocumentToDrive } from '../lib/driveService';
 
@@ -71,72 +71,47 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   const [fillConditions, setFillConditions] = useState<Record<string, boolean>>({});
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
 
-  // Dynamic States for Lists
-  const [contrats, setContrats] = useState<LegalDocument[]>([
-    { 
-      id: 'c1', 
-      title: "Déneigement Pro Inc. - Contrat 2026-2027", 
-      date: "12 Oct 2026", 
-      status: "signe", 
-      summary: "Contrat annuel pour le déneigement du stationnement, des allées piétonnières et l'épandage de sel. Inclut le déneigement des balcons sur demande.",
-      provider: "Déneigement Pro",
-      signedBy: "Fabiola Beatriz",
-      signedDate: "12 Oct 2026"
-    },
-    { 
-      id: 'c2', 
-      title: "Nettoyage Élégance - Entretien Ménager", 
-      date: "05 Nov 2026", 
-      status: "signe", 
-      summary: "Entretien hebdomadaire des espaces communs: hall d'entrée, couloirs, ascenseurs et salle des déchets.",
-      provider: "Nettoyage Élégance",
-      signedBy: "Fabiola Beatriz",
-      signedDate: "05 Nov 2026"
-    },
-    { 
-      id: 'c3', 
-      title: "Jardinage Plus - Aménagement Paysager", 
-      date: "20 Fév 2027", 
-      status: "attente", 
-      summary: "Ouverture et fermeture du terrain, tonte de pelouse hebdomadaire et entretien des plates-bandes estivales.",
-      provider: "Jardinage Plus",
-      signedBy: "",
-      signedDate: ""
-    },
-  ]);
-  
-  const [resolutions, setResolutions] = useState<LegalDocument[]>([
-    { 
-      id: 'r1', 
-      title: "Résolution - Réfection de la toiture", 
-      date: "15 Mai 2026", 
-      status: "signe", 
-      summary: "Approbation du devis de Toitures Plus pour la réfection complète de la toiture. Financement via le fonds de prévoyance.",
-      provider: "Conseil d'Administration",
-      signedBy: "Fabiola Beatriz",
-      signedDate: "15 Mai 2026"
-    },
-    { 
-      id: 'r2', 
-      title: "Assemblée Générale Spéciale - Cotisation Spéciale", 
-      date: "10 Avr 2026", 
-      status: "signe", 
-      summary: "Adoption d'une cotisation spéciale de 50 000$ répartie selon les quotes-parts pour le remplacement de la génératrice.",
-      provider: "Conseil d'Administration",
-      signedBy: "Fabiola Beatriz",
-      signedDate: "10 Avr 2026"
-    },
-    { 
-      id: 'r3', 
-      title: "Nomination du Conseil d'Administration", 
-      date: "01 Jui 2026", 
-      status: "attente", 
-      summary: "Nomination officielle du nouveau trésorier (Unité 302) et du secrétaire (Unité 104) suite à l'assemblée générale annuelle.",
-      provider: "Conseil d'Administration",
-      signedBy: "",
-      signedDate: ""
-    },
-  ]);
+  // Dynamic States for Lists — loaded from Firestore on mount (see effect below).
+  const [contrats, setContrats] = useState<LegalDocument[]>([]);
+  const [resolutions, setResolutions] = useState<LegalDocument[]>([]);
+  const [docsLoaded, setDocsLoaded] = useState(false);
+
+  // ── Load real contracts/resolutions from Firestore on mount ─────────────────
+  // Previously these two lists were hardcoded mock arrays: nothing typed, signed
+  // or deleted survived a page refresh. Mirrors the "Mes Modèles" load pattern.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) { setDocsLoaded(true); return; }
+    dataService.fetchLegalDocuments(uid, companyId)
+      .then((docs) => {
+        setContrats(docs.filter((d) => d.kind === 'contrat'));
+        setResolutions(docs.filter((d) => d.kind === 'resolution'));
+      })
+      .catch((err) => console.error('fetchLegalDocuments failed:', err))
+      .finally(() => setDocsLoaded(true));
+  }, [companyId]);
+
+  // Fire-and-forget background sync to Firestore — local state is already the
+  // source of truth for the UI, this just makes it survive a refresh.
+  // Returns whether the doc will actually be persisted, so callers can avoid
+  // showing a false "success" toast that would otherwise overwrite (the toast
+  // state only holds one message at a time) the "not saved" warning below.
+  const persistLegalDoc = (kind: 'contrat' | 'resolution', d: LegalDocument): boolean => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) {
+      // Previously this failed silently — the doc looked saved in the UI but
+      // vanished on refresh with no warning. Now the user finds out immediately.
+      triggerToast("Aucune copropriété configurée : ce document ne sera pas conservé après un rafraîchissement. Configurez d'abord votre copropriété.", "error");
+      return false;
+    }
+    dataService.saveLegalDocument(uid, { ...d, companyId, kind }).catch((err) => console.error('saveLegalDocument failed:', err));
+    return true;
+  };
+  const deleteLegalDocRemote = (id: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) return;
+    dataService.deleteLegalDocument(uid, id).catch((err) => console.error('deleteLegalDocument failed:', err));
+  };
 
   // Toast State
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -371,7 +346,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
       const summaryText = Object.entries(fillValues).map(([k, v]) => `${k} : ${v}`).join('  ·  ');
 
-      setContrats(prev => [...prev, {
+      const generatedDoc: LegalDocument = {
         id: Math.random().toString(36).substr(2, 9),
         title: `${fillingTemplate.nombre} — ${todayStr}`,
         date: todayStr,
@@ -381,13 +356,17 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
         signedBy: "",
         signedDate: "",
         customDocUrl,
-      }]);
+      };
+      setContrats(prev => [...prev, generatedDoc]);
+      const wasSaved = persistLegalDoc('contrat', generatedDoc);
 
       setFillingTemplate(null);
       setFillValues({});
       setFillConditions({});
       setActiveTab('externe');
-      triggerToast("Document généré et téléchargé ! Retrouvez-le dans « Contrats & Ententes » pour le signer.", "success");
+      if (wasSaved) {
+        triggerToast("Document généré et téléchargé ! Retrouvez-le dans « Contrats & Ententes » pour le signer.", "success");
+      }
     } catch (err) {
       console.error('Document generation from template failed:', err);
       triggerToast("Erreur lors de la génération du document.", "error");
@@ -573,25 +552,26 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       }
     }
 
-    // Update locally
+    // Update locally, then sync the signed doc to Firestore
+    const applySignature = (d: LegalDocument): LegalDocument => ({
+      ...d,
+      status: 'signe',
+      signedBy: signerName,
+      signedDate: todayStr,
+      signatureType: signatureType,
+      signatureDataUrl: signatureImgDataUrl || undefined,
+    });
+    let wasSaved = true;
     if (activeTab === 'externe') {
-      setContrats(prev => prev.map(c => c.id === signingDoc.id ? { 
-        ...c, 
-        status: 'signe', 
-        signedBy: signerName, 
-        signedDate: todayStr,
-        signatureType: signatureType,
-        signatureDataUrl: signatureImgDataUrl || undefined
-      } : c));
+      const list = contrats.map((c) => (c.id === signingDoc.id ? applySignature(c) : c));
+      setContrats(list);
+      const signedDoc = list.find((c) => c.id === signingDoc.id);
+      if (signedDoc) wasSaved = persistLegalDoc('contrat', signedDoc);
     } else {
-      setResolutions(prev => prev.map(r => r.id === signingDoc.id ? { 
-        ...r, 
-        status: 'signe', 
-        signedBy: signerName, 
-        signedDate: todayStr,
-        signatureType: signatureType,
-        signatureDataUrl: signatureImgDataUrl || undefined
-      } : r));
+      const list = resolutions.map((r) => (r.id === signingDoc.id ? applySignature(r) : r));
+      setResolutions(list);
+      const signedDoc = list.find((r) => r.id === signingDoc.id);
+      if (signedDoc) wasSaved = persistLegalDoc('resolution', signedDoc);
     }
 
     // Close and reset
@@ -599,7 +579,9 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setSigningDoc(null);
     setTypedSignature('');
     setHasDrawn(false);
-    triggerToast("Document signé électroniquement avec succès !", "success");
+    if (wasSaved) {
+      triggerToast("Document signé électroniquement avec succès !", "success");
+    }
   };
 
   // Handle Send for Signature (generate unique public link)
@@ -691,10 +673,14 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
 
     if (activeTab === 'externe') {
       setContrats(prev => [...prev, newDoc]);
-      triggerToast("Nouveau contrat ajouté avec succès !", "success");
+      if (persistLegalDoc('contrat', newDoc)) {
+        triggerToast("Nouveau contrat ajouté avec succès !", "success");
+      }
     } else {
       setResolutions(prev => [...prev, newDoc]);
-      triggerToast("Nouvelle résolution ajoutée avec succès !", "success");
+      if (persistLegalDoc('resolution', newDoc)) {
+        triggerToast("Nouvelle résolution ajoutée avec succès !", "success");
+      }
     }
 
     // Reset fields & Close
@@ -711,6 +697,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     } else {
       setResolutions(prev => prev.filter(r => r.id !== id));
     }
+    deleteLegalDocRemote(id);
     setOpenDrawerId(null);
     triggerToast("Document supprimé avec succès.", "success");
   };
@@ -1020,6 +1007,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       customDocUrl: pdfStorageUrl,
     };
     setContrats(prev => [newDoc, ...prev]);
+    persistLegalDoc('contrat', newDoc);
     setPdfEditorFile(null);
     setSignerEmailForInvite(signerEmail);
     setActiveTab('externe');
@@ -1200,7 +1188,21 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                 ))}
               </>
             )}
-            {activeTab !== 'modeles' && currentList.map((doc) => {
+            {activeTab !== 'modeles' && !docsLoaded && (
+              <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"}`}>
+                <Loader2 size={24} className="mx-auto mb-3 animate-spin opacity-60" />
+                <p className="text-xs font-black uppercase tracking-widest">Chargement…</p>
+              </div>
+            )}
+            {activeTab !== 'modeles' && docsLoaded && currentList.length === 0 && (
+              <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"}`}>
+                <FileText size={30} className="mx-auto mb-3 opacity-60" />
+                <p className="text-xs font-black uppercase tracking-widest mb-1">
+                  {activeTab === 'externe' ? "Aucun contrat pour l'instant" : "Aucune résolution pour l'instant"}
+                </p>
+              </div>
+            )}
+            {activeTab !== 'modeles' && docsLoaded && currentList.map((doc) => {
               const isOpen = openDrawerId === doc.id;
               
               // Determine colored translucent glassmorphic theme when selected/open

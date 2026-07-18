@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Settings,
   Sparkles,
+  UserPlus,
 } from "lucide-react";
 
 interface SyndicModuleGridProps {
@@ -201,6 +202,25 @@ export default function SyndicModuleGrid({
         </span>
         <p className="text-[7.5px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
           Configurez les informações du Syndicat, de facturation et accès.
+        </p>
+      </button>
+
+      {/* Module 8b: Notre Équipe — blue accent (hosts "Connecter Google Drive") */}
+      <button
+        onClick={() => setVista("equipe")}
+        className={cardBase}
+        style={{ boxShadow: darkMode ? restShadow : restShadowLight, "--spin-rgb": "59,130,246" } as React.CSSProperties}
+        onMouseEnter={(e) => onHoverIn(e, "59,130,246")}
+        onMouseLeave={onHoverOut}
+      >
+        <div className={iconContainer("bg-blue-500/10", "text-blue-600 dark:text-blue-400")}>
+          <UserPlus size={22} />
+        </div>
+        <span className="text-[10px] font-black uppercase italic tracking-tighter">
+          Notre Équipe
+        </span>
+        <p className="text-[7.5px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
+          Gérez vos collaborateurs et connectez votre Google Drive.
         </p>
       </button>
 

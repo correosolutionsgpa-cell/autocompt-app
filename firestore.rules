@@ -144,6 +144,12 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    match /legalDocuments/{docId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /syndicSettings/{configId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();

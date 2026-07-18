@@ -210,6 +210,24 @@ export interface CommunityPostDoc {
   createdAt: string;
 }
 
+export interface LegalDocumentDoc {
+  id: string;
+  companyId: string;
+  kind: 'contrat' | 'resolution';
+  title: string;
+  date: string;
+  status: string;
+  summary: string;
+  provider: string;
+  signedBy: string;
+  signedDate: string;
+  signatureType?: 'draw' | 'type';
+  signatureDataUrl?: string;
+  customDocUrl?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 export interface BoardMember {
   name: string;
   role: string;
@@ -1238,6 +1256,45 @@ export const dataService = {
     };
     await setDoc(doc(db, 'communityPosts', docId), data);
     return { ...data, id: originalId, companyId: postData.companyId };
+  },
+
+  // ── Legal documents — Síndico "Contrats & Résolutions" (DocuLegal) ──────────
+
+  async fetchLegalDocuments(userId: string, companyId: string): Promise<LegalDocumentDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(collection(db, 'legalDocuments'), where('ownerId', '==', userId), where('companyId', '==', docCompanyId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_legaldoc_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as LegalDocumentDoc;
+      });
+    } catch (e) {
+      console.error('fetchLegalDocuments failed:', e);
+      return [];
+    }
+  },
+
+  async saveLegalDocument(userId: string, docData: Omit<LegalDocumentDoc, 'ownerId' | 'createdAt'> & { createdAt?: string }): Promise<LegalDocumentDoc> {
+    assertCanWrite();
+    const originalId = docData.id || `legaldoc_${Date.now()}`;
+    const docId = `${userId}_legaldoc_${originalId}`;
+    const docCompanyId = `${userId}_company_${docData.companyId}`;
+    const data: LegalDocumentDoc = {
+      ...docData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: docData.createdAt || new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'legalDocuments', docId), data);
+    return { ...data, id: originalId, companyId: docData.companyId };
+  },
+
+  async deleteLegalDocument(userId: string, id: string): Promise<void> {
+    assertCanWrite();
+    await deleteDoc(doc(db, 'legalDocuments', `${userId}_legaldoc_${id}`));
   },
 
   // ── Syndic settings — one config doc per company (Paramètres Syndicat) ──────
