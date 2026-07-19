@@ -186,6 +186,26 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // AI usage events — cost-tracking log (one doc per Gemini/Claude call).
+    // Any signed-in user can log their own events; only SuperAdmin can read
+    // the log (aggregated in the "Usage IA" tab). Events are immutable.
+    match /aiUsageEvents/{eventId} {
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow read: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
+    // Platform invoices — AutoCompt's own SaaS billing (sequential numbering),
+    // and the counter doc backing it. SuperAdmin-only in both directions:
+    // only Fabiola issues invoices, so no client ever needs to write these.
+    match /platformInvoices/{invoiceId} {
+      allow read, create: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+    match /counters/{counterId} {
+      allow read, write: if isSuperAdmin();
+    }
+
     // Beta access codes — `get` must work BEFORE the user is authenticated
     // (redemption is checked during signup), so it's public by exact code
     // (doc ID) only. `list` (enumerating every code) is superadmin-only,

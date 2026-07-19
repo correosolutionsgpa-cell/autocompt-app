@@ -5922,6 +5922,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
           }
         }
 
+        // Log this AI call for the SuperAdmin "Usage IA" cost dashboard — fire
+        // and forget, never blocks the scan flow.
+        if (auth.currentUser?.uid) {
+          dataService.logAiUsageEvent(auth.currentUser.uid, {
+            profile: activeProfile,
+            feature: "receipt_scan",
+            userEmail: auth.currentUser.email || undefined,
+          });
+        }
+
         // Step D: Extract real values or default to simulation fallbacks
         let supplierName = "Fournisseur inconnu";
         let extractedDate = new Date().toISOString().split("T")[0];

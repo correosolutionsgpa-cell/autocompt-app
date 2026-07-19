@@ -28,6 +28,7 @@ import {
   query,
   where,
   orderBy,
+  runTransaction,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject, getDownloadURL } from 'firebase/storage';
@@ -226,6 +227,35 @@ export interface LegalDocumentDoc {
   customDocUrl?: string;
   ownerId: string;
   createdAt: string;
+}
+
+/** One call to an AI provider (Gemini/Claude) — logged for cost tracking per profile. */
+export interface AiUsageEventDoc {
+  id: string;
+  ownerId: string;
+  userEmail?: string;
+  profile: string;
+  feature: string;
+  createdAt: string;
+}
+
+/** One SaaS subscription invoice AutoCompt issues to a client — permanent
+ *  record backing the sequential invoice numbering (SuperAdmin "Facturation"). */
+export interface PlatformInvoiceDoc {
+  id: string;
+  invoiceNumber: string;
+  invoiceSeq: number;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  company: string;
+  plan: string;
+  subtotal: number;
+  tps: number;
+  tvq: number;
+  total: number;
+  issuedAt: string;
+  issuedBy: string;
 }
 
 export interface BoardMember {
@@ -1295,6 +1325,68 @@ export const dataService = {
   async deleteLegalDocument(userId: string, id: string): Promise<void> {
     assertCanWrite();
     await deleteDoc(doc(db, 'legalDocuments', `${userId}_legaldoc_${id}`));
+  },
+
+  // ── AI usage events — cost tracking per profile (SuperAdmin "Usage IA") ─────
+
+  /**
+   * Fire-and-forget log of one AI call (e.g. a receipt scan). Never throws —
+   * a logging failure must not block the feature that triggered it.
+   */
+  async logAiUsageEvent(userId: string, data: { profile: string; feature: string; userEmail?: string }): Promise<void> {
+    try {
+      await addDoc(collection(db, 'aiUsageEvents'), {
+        ownerId: userId,
+        userEmail: data.userEmail || '',
+        profile: data.profile,
+        feature: data.feature,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('logAiUsageEvent failed (non-blocking):', e);
+    }
+  },
+
+  // ── Platform invoices — sequential numbering (SuperAdmin "Facturation") ────
+
+  /**
+   * Atomically claims the next sequential invoice number (AC-00001, AC-00002, …)
+   * and persists a permanent record of the invoice. Uses a Firestore
+   * transaction on `counters/platformInvoiceNumber` so two admins clicking
+   * "Générer facture" at the same instant never get the same number.
+   */
+  async issuePlatformInvoice(data: Omit<PlatformInvoiceDoc, 'id' | 'invoiceNumber' | 'invoiceSeq' | 'issuedAt'>): Promise<PlatformInvoiceDoc> {
+    const counterRef = doc(db, 'counters', 'platformInvoiceNumber');
+    const seq = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(counterRef);
+      const current = snap.exists() ? (snap.data().value || 0) : 0;
+      const next = current + 1;
+      tx.set(counterRef, { value: next }, { merge: true });
+      return next;
+    });
+    const invoiceNumber = `AC-${String(seq).padStart(5, '0')}`;
+    const docId = `platforminvoice_${seq}`;
+    const record: PlatformInvoiceDoc = {
+      ...data,
+      id: docId,
+      invoiceNumber,
+      invoiceSeq: seq,
+      issuedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'platformInvoices', docId), record);
+    return record;
+  },
+
+  /** Full invoice history, newest first — for the SuperAdmin registry/audit trail. */
+  async fetchPlatformInvoices(): Promise<PlatformInvoiceDoc[]> {
+    try {
+      const q = query(collection(db, 'platformInvoices'), orderBy('invoiceSeq', 'desc'));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as PlatformInvoiceDoc);
+    } catch (e) {
+      console.error('fetchPlatformInvoices failed:', e);
+      return [];
+    }
   },
 
   // ── Syndic settings — one config doc per company (Paramètres Syndicat) ──────

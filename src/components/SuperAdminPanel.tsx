@@ -11,7 +11,8 @@ import {
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
-import { dataService, type BetaCodeDoc } from '../lib/dataService';
+import { dataService, type BetaCodeDoc, type PlatformInvoiceDoc } from '../lib/dataService';
+import { autocomptLogoWhiteBase64 } from '../assets/brand/autocomptLogoWhiteBase64';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,7 +74,12 @@ const SAMPLE_USERS: AdminUser[] = [
 ];
 
 // ─── Invoice PDF Generator ────────────────────────────────────────────────────
-function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: string) {
+function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: string): jsPDF {
+  // Real Firestore user docs don't always have `name`/`company` — jsPDF's
+  // .text() throws on undefined, so every field drawn on the page needs a fallback.
+  const safeName = user.name || user.email || 'Client';
+  const safeCompany = user.company || '';
+  const safeEmail = user.email || '';
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, M = 18;
   const green: [number, number, number] = [5, 150, 105];
@@ -82,10 +88,15 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
   // Header
   pdf.setFillColor(...green);
   pdf.rect(0, 0, W, 38, 'F');
+  // Rounded-square "squircle" frame around the logo, app-icon style — outline only.
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.6);
+  pdf.roundedRect(M - 1.5, 5, 15, 15, 4, 4, 'S');
+  pdf.addImage(autocomptLogoWhiteBase64, 'PNG', M - 0.7, 5.5, 13.4, 14);
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('Helvetica', 'bold');
   pdf.setFontSize(18);
-  pdf.text('AutoCompt', M, 18);
+  pdf.text('AutoCompt', M + 18, 18);
   pdf.setFont('Helvetica', 'normal');
   pdf.setFontSize(8);
   pdf.text('Plateforme de Gestion Immobilière & Comptabilité Québec', M, 25);
@@ -99,10 +110,10 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
   pdf.text('FACTURÉ À:', M, 52);
   pdf.setFont('Helvetica', 'normal');
   pdf.setFontSize(10);
-  pdf.text(user.name, M, 59);
+  pdf.text(safeName, M, 59);
   pdf.setFontSize(9);
-  pdf.text(user.company, M, 65);
-  pdf.text(user.email, M, 71);
+  pdf.text(safeCompany, M, 65);
+  pdf.text(safeEmail, M, 71);
   if (user.city) pdf.text(user.city + ', Québec, Canada', M, 77);
 
   // From
@@ -110,47 +121,50 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
   pdf.setFontSize(9);
   pdf.text('DE LA PART DE:', W / 2 + 10, 52);
   pdf.setFont('Helvetica', 'normal');
-  pdf.setFontSize(10);
-  pdf.text('Solutions GPA Inc.', W / 2 + 10, 59);
-  pdf.setFontSize(9);
-  pdf.text(adminName, W / 2 + 10, 65);
-  pdf.text('Laval, Québec, Canada', W / 2 + 10, 71);
-  pdf.text('autocompt-app.vercel.app', W / 2 + 10, 77);
+  pdf.setFontSize(9.5);
+  pdf.text('Gestions Solutions G.PA INC.', W / 2 + 10, 58);
+  pdf.setFontSize(7);
+  pdf.text('1841 rue Le Royer, Laval (Québec) H7M2S4', W / 2 + 10, 63);
+  pdf.text('NEQ: 1179999900', W / 2 + 10, 67);
+  pdf.text('N° TPS/TVH: 75385 8620 RT 0001', W / 2 + 10, 71);
+  pdf.text('N° TVQ: 12 3186 5353 TQ 0001', W / 2 + 10, 75);
+  pdf.text('+1 514 659 7218 · correo.solutionsgpa@gmail.com', W / 2 + 10, 79);
+  pdf.text('www.autocompt.ca', W / 2 + 10, 83);
 
   // Separator
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.5);
-  pdf.line(M, 85, W - M, 85);
+  pdf.line(M, 92, W - M, 92);
 
   // Table header
   pdf.setFillColor(248, 250, 252);
-  pdf.rect(M, 89, W - M * 2, 9, 'F');
+  pdf.rect(M, 96, W - M * 2, 9, 'F');
   pdf.setFont('Helvetica', 'bold');
   pdf.setFontSize(8);
   pdf.setTextColor(100, 116, 139);
-  pdf.text('DESCRIPTION', M + 3, 95);
-  pdf.text('PÉRIODE', 120, 95);
-  pdf.text('MONTANT', W - M - 3, 95, { align: 'right' });
+  pdf.text('DESCRIPTION', M + 3, 102);
+  pdf.text('PÉRIODE', 120, 102);
+  pdf.text('MONTANT', W - M - 3, 102, { align: 'right' });
 
   // Table row
-  const planConf = PLAN_CONFIG[user.plan];
+  const planConf = PLAN_CONFIG[user.plan] || PLAN_CONFIG.beta;
   const price = planConf.price;
   const monthName = new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
 
   pdf.setFont('Helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...dark);
-  pdf.text(`Abonnement AutoCompt ${planConf.label}`, M + 3, 106);
+  pdf.text(`Abonnement AutoCompt ${planConf.label}`, M + 3, 113);
   pdf.setFontSize(8);
   pdf.setTextColor(100, 116, 139);
-  pdf.text('Accès plateforme, DocuLegal, IA Sofi, Signature électronique', M + 3, 112);
+  pdf.text('Accès plateforme, DocuLegal, IA Sofi, Signature électronique', M + 3, 119);
   pdf.setTextColor(...dark);
   pdf.setFontSize(9);
-  pdf.text(monthName, 120, 106);
-  pdf.text(`${price.toFixed(2)} $`, W - M - 3, 106, { align: 'right' });
+  pdf.text(monthName, 120, 113);
+  pdf.text(`${price.toFixed(2)} $`, W - M - 3, 113, { align: 'right' });
 
   pdf.setDrawColor(226, 232, 240);
-  pdf.line(M, 118, W - M, 118);
+  pdf.line(M, 125, W - M, 125);
 
   // Totals
   const tps = parseFloat((price * 0.05).toFixed(2));
@@ -159,20 +173,20 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
 
   pdf.setFontSize(9);
   pdf.setTextColor(100, 116, 139);
-  pdf.text('Sous-total:', W - M - 40, 128);
-  pdf.text(`${price.toFixed(2)} $`, W - M - 3, 128, { align: 'right' });
-  pdf.text('TPS (5%):', W - M - 40, 135);
-  pdf.text(`${tps.toFixed(2)} $`, W - M - 3, 135, { align: 'right' });
-  pdf.text('TVQ (9.975%):', W - M - 40, 142);
-  pdf.text(`${tvq.toFixed(2)} $`, W - M - 3, 142, { align: 'right' });
+  pdf.text('Sous-total:', W - M - 40, 135);
+  pdf.text(`${price.toFixed(2)} $`, W - M - 3, 135, { align: 'right' });
+  pdf.text('TPS (5%):', W - M - 40, 142);
+  pdf.text(`${tps.toFixed(2)} $`, W - M - 3, 142, { align: 'right' });
+  pdf.text('TVQ (9.975%):', W - M - 40, 149);
+  pdf.text(`${tvq.toFixed(2)} $`, W - M - 3, 149, { align: 'right' });
 
   pdf.setFillColor(...green);
-  pdf.rect(W - M - 60, 147, 60 - M + M, 12, 'F');
+  pdf.rect(W - M - 60, 154, 60 - M + M, 12, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('Helvetica', 'bold');
   pdf.setFontSize(10);
-  pdf.text('TOTAL DÛ:', W - M - 40, 155);
-  pdf.text(`${total.toFixed(2)} $`, W - M - 3, 155, { align: 'right' });
+  pdf.text('TOTAL DÛ:', W - M - 40, 162);
+  pdf.text(`${total.toFixed(2)} $`, W - M - 3, 162, { align: 'right' });
 
   // Footer
   pdf.setFillColor(...green);
@@ -180,15 +194,15 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('Helvetica', 'normal');
   pdf.setFontSize(7);
-  pdf.text('Merci de votre confiance. Paiement dû dans 30 jours. autocompt-app.vercel.app', W / 2, 285, { align: 'center' });
-  pdf.text('AutoCompt © Solutions GPA Inc. — NAS/TPS: en cours d\'enregistrement', W / 2, 291, { align: 'center' });
+  pdf.text('Merci de votre confiance. Paiement dû dans 30 jours. www.autocompt.ca', W / 2, 285, { align: 'center' });
+  pdf.text('AutoCompt © Gestions Solutions G.PA INC. — NEQ: 1179999900 — TPS: 75385 8620 RT 0001 — TVQ: 12 3186 5353 TQ 0001', W / 2, 291, { align: 'center' });
 
-  pdf.save(`Facture_AutoCompt_${user.name.replace(/\s+/g, '_')}_${invoiceNumber}.pdf`);
+  return pdf;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola Beatriz', adminEmail = '' }: SuperAdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'codes' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'ia' | 'codes' | 'settings'>('overview');
   const [betaCodes, setBetaCodes] = useState<BetaCodeDoc[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [newCodeEmail, setNewCodeEmail] = useState('');
@@ -203,6 +217,10 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [invoiceUser, setInvoiceUser] = useState<AdminUser | null>(null);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [aiEvents, setAiEvents] = useState<{ profile: string; feature: string; userEmail?: string; createdAt: string }[]>([]);
+  const [loadingAiEvents, setLoadingAiEvents] = useState(false);
+  const [platformInvoices, setPlatformInvoices] = useState<PlatformInvoiceDoc[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   const D = darkMode;
 
@@ -229,6 +247,41 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     loadUsers();
   }, [refreshTick]);
 
+  // Load AI usage events (only once the tab has been opened — `read` is
+  // superadmin-gated by firestore.rules, cheap to skip until needed). Also
+  // loaded on 'billing' since the financial summary there needs the cost total.
+  useEffect(() => {
+    if (activeTab !== 'ia' && activeTab !== 'billing') return;
+    const loadAiEvents = async () => {
+      setLoadingAiEvents(true);
+      try {
+        const snap = await getDocs(collection(db, 'aiUsageEvents'));
+        setAiEvents(snap.docs.map(d => d.data() as { profile: string; feature: string; userEmail?: string; createdAt: string }));
+      } catch {
+        // Rules will reject this for non-superadmin accounts — fail silently.
+      } finally {
+        setLoadingAiEvents(false);
+      }
+    };
+    loadAiEvents();
+  }, [activeTab, refreshTick]);
+
+  // Load the platform invoice history (SuperAdmin-only, per firestore.rules).
+  useEffect(() => {
+    if (activeTab !== 'billing') return;
+    const loadInvoices = async () => {
+      setLoadingInvoices(true);
+      try {
+        setPlatformInvoices(await dataService.fetchPlatformInvoices());
+      } catch {
+        // Rules will reject this for non-superadmin accounts — fail silently.
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    loadInvoices();
+  }, [activeTab, refreshTick]);
+
   // Load beta access codes (only once the tab has been opened — `list` is
   // superadmin-gated by firestore.rules, cheap to skip until needed).
   useEffect(() => {
@@ -249,6 +302,73 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const toast = (text: string, type: 'success' | 'error' = 'success') => {
     setNotification({ text, type });
     setTimeout(() => setNotification(null), 3500);
+  };
+
+  const [sendingInvoice, setSendingInvoice] = useState(false);
+
+  /**
+   * Issues the next sequential invoice number, downloads the PDF, and —
+   * only when explicitly asked — emails it to the client via the same
+   * Resend pipeline already used for DocuLegal signed documents.
+   */
+  const handleGenerateInvoice = async (user: AdminUser, alsoEmail: boolean) => {
+    setSendingInvoice(true);
+    try {
+      const planConf = PLAN_CONFIG[user.plan] || PLAN_CONFIG.beta;
+      const price = planConf.price;
+      const tps = parseFloat((price * 0.05).toFixed(2));
+      const tvq = parseFloat((price * 0.09975).toFixed(2));
+      const total = parseFloat((price + tps + tvq).toFixed(2));
+      const invoice = await dataService.issuePlatformInvoice({
+        userId: user.id,
+        userEmail: user.email || '',
+        userName: user.name || user.email || 'Client',
+        company: user.company || '',
+        plan: user.plan || 'beta',
+        subtotal: price,
+        tps,
+        tvq,
+        total,
+        issuedBy: adminName || '',
+      });
+      const pdf = generateInvoicePDF(user, invoice.invoiceNumber, adminName);
+      pdf.save(`Facture_AutoCompt_${(user.name || 'client').replace(/\s+/g, '_')}_${invoice.invoiceNumber}.pdf`);
+
+      if (alsoEmail) {
+        if (!user.email) {
+          toast(`Facture ${invoice.invoiceNumber} générée, mais aucun courriel n'est associé à ${user.name || user.id} — envoi annulé.`, 'error');
+        } else {
+          const pdfBase64 = pdf.output('datauristring').split(',')[1];
+          const resp = await fetch('/api/send-invoice-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pdfBase64,
+              clientEmail: user.email,
+              clientName: user.name || user.email || '',
+              adminEmail,
+              invoiceNumber: invoice.invoiceNumber,
+              planLabel: planConf.label,
+              total,
+            }),
+          });
+          const result = await resp.json().catch(() => ({ success: false }));
+          if (result.success) {
+            toast(`Facture ${invoice.invoiceNumber} générée et envoyée à ${user.email} ✅`);
+          } else {
+            toast(`Facture ${invoice.invoiceNumber} générée, mais l'envoi par courriel a échoué.`, 'error');
+          }
+        }
+      } else {
+        toast(`Facture ${invoice.invoiceNumber} générée pour ${user.name} ✅`);
+      }
+    } catch (e) {
+      toast('Erreur lors de la génération de la facture — réessayez.', 'error');
+    } finally {
+      setSendingInvoice(false);
+      setInvoiceUser(null);
+      setRefreshTick(t => t + 1);
+    }
   };
 
   // Computed metrics
@@ -336,7 +456,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
               <div key={u.id} className="flex items-center gap-3">
                 <span className={`text-[10px] font-black text-slate-400 w-4`}>{i + 1}</span>
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0">
-                  <span className="text-[9px] font-black text-white">{u.name[0]}</span>
+                  <span className="text-[9px] font-black text-white">{(u.name || u.email || '?')[0]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`text-[11px] font-bold truncate ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{u.name}</p>
@@ -529,7 +649,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
         </h3>
         <div className="space-y-3">
           {users.filter(u => u.mrr > 0 || u.status !== 'cancelled').map(u => {
-            const planConf = PLAN_CONFIG[u.plan];
+            const planConf = PLAN_CONFIG[u.plan] || PLAN_CONFIG.beta;
             return (
               <div key={u.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/40' : 'border-slate-100 bg-slate-50/50'}`}>
                 <div className="flex-1">
@@ -544,11 +664,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                   <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>+ taxes</p>
                 </div>
                 <button
-                  onClick={() => {
-                    const invNum = `AC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-                    generateInvoicePDF(u, invNum, adminName);
-                    toast(`Facture générée pour ${u.name} ✅`);
-                  }}
+                  onClick={() => setInvoiceUser(u)}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
                   <Download size={13} />
                   <span>Facture PDF</span>
@@ -556,6 +672,104 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Financial summary: revenue issued vs. estimated AI cost */}
+      <div className={card}>
+        <h3 className={`text-[10px] font-black uppercase tracking-widest mb-5 ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+          📊 Résumé — Facturé vs. Coût IA estimé
+        </h3>
+        {(() => {
+          const totalInvoiced = platformInvoices.reduce((s, i) => s + (i.total || 0), 0);
+          const totalAiCost = aiEvents.length * EST_COST_PER_SCAN_USD;
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className={`p-4 rounded-2xl ${D ? 'bg-zinc-900/40' : 'bg-slate-50/50'}`}>
+                <p className={`text-[9px] font-black uppercase ${D ? 'text-zinc-500' : 'text-slate-400'}`}>Total facturé</p>
+                <p className="text-xl font-black text-emerald-600 mt-1">{totalInvoiced.toFixed(2)} $</p>
+              </div>
+              <div className={`p-4 rounded-2xl ${D ? 'bg-zinc-900/40' : 'bg-slate-50/50'}`}>
+                <p className={`text-[9px] font-black uppercase ${D ? 'text-zinc-500' : 'text-slate-400'}`}>Coût IA estimé</p>
+                <p className="text-xl font-black text-amber-600 mt-1">${totalAiCost.toFixed(3)} USD</p>
+              </div>
+              <div className={`p-4 rounded-2xl ${D ? 'bg-zinc-900/40' : 'bg-slate-50/50'}`}>
+                <p className={`text-[9px] font-black uppercase ${D ? 'text-zinc-500' : 'text-slate-400'}`}>Factures émises</p>
+                <p className="text-xl font-black mt-1">{platformInvoices.length}</p>
+              </div>
+            </div>
+          );
+        })()}
+        <p className={`text-[10px] mt-4 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
+          "Facturé" ≠ "encaissé" — ceci reflète les factures générées, pas les paiements réellement reçus. À croiser avec votre comptable pour la comptabilité officielle.
+        </p>
+      </div>
+
+      {/* Invoice history — audit trail for the accountant */}
+      <div className={card}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className={`text-[10px] font-black uppercase tracking-widest ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+            🧾 Historique des factures
+          </h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setRefreshTick(t => t + 1)} className={`p-2 rounded-lg ${D ? 'hover:bg-zinc-800' : 'hover:bg-slate-100'}`}>
+              <RefreshCw size={14} className={loadingInvoices ? 'animate-spin' : ''} />
+            </button>
+            {platformInvoices.length > 0 && (
+              <button
+                onClick={() => {
+                  const headers = ['Numéro', 'Date', 'Client', 'Courriel', 'Compagnie', 'Plan', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Émise par'];
+                  const rows = platformInvoices.map(inv => [
+                    inv.invoiceNumber,
+                    new Date(inv.issuedAt).toLocaleDateString('fr-CA'),
+                    inv.userName,
+                    inv.userEmail,
+                    inv.company,
+                    inv.plan,
+                    inv.subtotal.toFixed(2),
+                    inv.tps.toFixed(2),
+                    inv.tvq.toFixed(2),
+                    inv.total.toFixed(2),
+                    inv.issuedBy,
+                  ]);
+                  const csv = [headers, ...rows]
+                    .map(r => r.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+                    .join('\r\n');
+                  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Factures_AutoCompt_${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all">
+                <Download size={12} />
+                <span>Exporter CSV</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {loadingInvoices && platformInvoices.length === 0 && (
+          <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'} text-center py-6`}>Chargement…</p>
+        )}
+        {!loadingInvoices && platformInvoices.length === 0 && (
+          <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'} text-center py-6`}>
+            Aucune facture émise pour l'instant — le registre se remplit à chaque "Facture PDF" généré ci-dessus.
+          </p>
+        )}
+        <div className="space-y-2">
+          {platformInvoices.map(inv => (
+            <div key={inv.id} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${D ? 'bg-zinc-900/30' : 'bg-slate-50/50'}`}>
+              <span className={`text-[10px] font-mono font-black ${D ? 'text-zinc-400' : 'text-slate-500'}`}>{inv.invoiceNumber}</span>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-bold truncate ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{inv.userName || inv.userEmail}</p>
+                <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{new Date(inv.issuedAt).toLocaleDateString('fr-CA')} · {inv.plan}</p>
+              </div>
+              <span className="text-[12px] font-black text-emerald-600">{inv.total.toFixed(2)} $</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -571,7 +785,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
         {users.filter(u => (u.docsSignedCount || 0) > 0).map(u => (
           <div key={u.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-black text-white">{u.name[0]}</span>
+              <span className="text-[10px] font-black text-white">{(u.name || u.email || '?')[0]}</span>
             </div>
             <div className="flex-1">
               <p className={`text-[12px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{u.name}</p>
@@ -593,6 +807,104 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       </div>
     </div>
   );
+
+  // ── Tab: AI usage — cost tracking per profile ───────────────────────────────
+  const PROFILE_LABELS: Record<string, string> = {
+    prospecteur: 'Prospecteur',
+    investisseur: 'Investisseur',
+    flippeur: 'Flippeur',
+    gestionnaire: 'Gestionnaire',
+    syndicat: 'Syndicat',
+  };
+  // Gemini 2.5 Flash rate ($0.30 / $2.50 per 1M tokens) × an average receipt
+  // scan (~1500 input tokens for the image + prompt, ~200 output tokens).
+  // Rough estimate only — no real token count is logged per call.
+  const EST_COST_PER_SCAN_USD = 0.00095;
+
+  const IaUsageTab = () => {
+    const byProfile = Object.entries(
+      aiEvents.reduce((acc, e) => {
+        acc[e.profile] = (acc[e.profile] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).sort((a, b) => b[1] - a[1]);
+
+    const byUser = Object.entries(
+      aiEvents.reduce((acc, e) => {
+        const key = e.userEmail || '—';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    const total = aiEvents.length;
+
+    return (
+      <div className="space-y-5">
+        <div className={card}>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className={`text-[10px] font-black uppercase tracking-widest ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+              ⚡ Usage IA — Coût par profil (S.O.F.I. scan)
+            </h3>
+            <button onClick={() => setRefreshTick(t => t + 1)} className={`p-2 rounded-lg ${D ? 'hover:bg-zinc-800' : 'hover:bg-slate-100'}`}>
+              <RefreshCw size={14} className={loadingAiEvents ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {total === 0 && !loadingAiEvents && (
+            <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'} text-center py-6`}>
+              Aucun scan enregistré pour l'instant — le compteur démarre dès le premier scan de facture.
+            </p>
+          )}
+
+          {total > 0 && (
+            <>
+              <div className="space-y-3 mb-5">
+                {byProfile.map(([profile, count]) => (
+                  <div key={profile} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className="flex-1">
+                      <p className={`text-[12px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{PROFILE_LABELS[profile] || profile}</p>
+                      <p className={`text-[10px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{((count / total) * 100).toFixed(0)}% des scans</p>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700'} text-center`}>
+                      <p className="text-[16px] font-black">{count}</p>
+                      <p className="text-[8px] font-bold uppercase tracking-wider">scans</p>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'} text-center`}>
+                      <p className="text-[13px] font-black">${(count * EST_COST_PER_SCAN_USD).toFixed(3)}</p>
+                      <p className="text-[8px] font-bold uppercase tracking-wider">coût est.</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className={`p-4 rounded-2xl ${D ? 'bg-zinc-900/50 border-zinc-800' : 'bg-amber-50/50 border-amber-100'} border text-center`}>
+                <p className={`text-[11px] font-bold ${D ? 'text-zinc-400' : 'text-amber-700'}`}>
+                  Total: <strong>{total}</strong> scans · coût estimé <strong>${(total * EST_COST_PER_SCAN_USD).toFixed(3)}</strong> USD (Gemini 2.5 Flash) · estimation basée sur un scan moyen, pas sur les tokens réels
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {byUser.length > 0 && (
+          <div className={card}>
+            <h3 className={`text-[10px] font-black uppercase tracking-widest mb-5 ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+              👤 Top utilisateurs par nombre de scans
+            </h3>
+            <div className="space-y-2">
+              {byUser.map(([email, count]) => (
+                <div key={email} className={`flex items-center justify-between px-4 py-2.5 rounded-xl ${D ? 'bg-zinc-900/30' : 'bg-slate-50/50'}`}>
+                  <span className={`text-[11px] ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{email}</span>
+                  <span className={`text-[11px] font-black ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Tab: Beta access codes ──────────────────────────────────────────────────
   const handleGenerateCode = async (kind: 'trial' | 'extension') => {
@@ -684,8 +996,8 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   // ── User detail modal ───────────────────────────────────────────────────────
   const UserModal = () => {
     if (!selectedUser) return null;
-    const planConf = PLAN_CONFIG[selectedUser.plan];
-    const statusConf = STATUS_CONFIG[selectedUser.status];
+    const planConf = PLAN_CONFIG[selectedUser.plan] || PLAN_CONFIG.beta;
+    const statusConf = STATUS_CONFIG[selectedUser.status] || STATUS_CONFIG.trial;
     return (
       <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowUserModal(false)}>
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
@@ -693,7 +1005,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
           onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-4 mb-6">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
-              <span className="text-xl font-black text-white">{selectedUser.name[0]}</span>
+              <span className="text-xl font-black text-white">{(selectedUser.name || selectedUser.email || '?')[0]}</span>
             </div>
             <div>
               <h2 className="text-lg font-black">{selectedUser.name}</h2>
@@ -751,6 +1063,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     { id: 'users',     label: 'Utilisateurs',    icon: <Users size={14} /> },
     { id: 'billing',   label: 'Facturation',      icon: <DollarSign size={14} /> },
     { id: 'doculegal', label: 'DocuLegal',        icon: <FileText size={14} /> },
+    { id: 'ia',        label: 'Usage IA',         icon: <Zap size={14} /> },
     { id: 'codes',     label: 'Codes Bêta',       icon: <Sparkles size={14} /> },
   ] as const;
 
@@ -827,6 +1140,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
             {activeTab === 'users'     && <UsersTab />}
             {activeTab === 'billing'   && <BillingTab />}
             {activeTab === 'doculegal' && <DocuLegalTab />}
+            {activeTab === 'ia'        && <IaUsageTab />}
             {activeTab === 'codes'     && <CodesTab />}
           </motion.div>
         </AnimatePresence>
@@ -852,22 +1166,34 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                 {invoiceUser.name} — {invoiceUser.company}
               </p>
               <p className="text-2xl font-black text-emerald-600 my-3">
-                {(PLAN_CONFIG[invoiceUser.plan].price * 1.14975).toFixed(2)} $
+                {((PLAN_CONFIG[invoiceUser.plan] || PLAN_CONFIG.beta).price * 1.14975).toFixed(2)} $
                 <span className={`text-[10px] font-bold ml-1 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>TTC</span>
               </p>
-              <div className="flex gap-3 mt-4">
-                <button onClick={() => setInvoiceUser(null)}
-                  className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase border transition-all ${D ? 'border-zinc-700 text-zinc-400 hover:bg-zinc-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                  Annuler
+              {invoiceUser.email && (
+                <p className={`text-[10px] mb-3 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
+                  Sera envoyée à : <strong>{invoiceUser.email}</strong>
+                </p>
+              )}
+              <div className="flex flex-col gap-2 mt-2">
+                <button
+                  disabled={sendingInvoice}
+                  onClick={() => handleGenerateInvoice(invoiceUser, true)}
+                  className="flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all">
+                  <Mail size={13} />
+                  <span>{sendingInvoice ? 'Envoi…' : 'Télécharger + Envoyer au client'}</span>
                 </button>
-                <button onClick={() => {
-                  const invNum = `AC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-                  generateInvoicePDF(invoiceUser, invNum, adminName);
-                  toast(`Facture PDF générée pour ${invoiceUser.name} ✅`);
-                  setInvoiceUser(null);
-                }}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all">
-                  Télécharger PDF
+                <button
+                  disabled={sendingInvoice}
+                  onClick={() => handleGenerateInvoice(invoiceUser, false)}
+                  className={`flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase border transition-all disabled:opacity-50 ${D ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  <Download size={13} />
+                  <span>Télécharger seulement</span>
+                </button>
+                <button
+                  disabled={sendingInvoice}
+                  onClick={() => setInvoiceUser(null)}
+                  className={`py-2 text-[10px] font-bold uppercase disabled:opacity-50 ${D ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-400 hover:text-slate-600'}`}>
+                  Annuler
                 </button>
               </div>
             </motion.div>

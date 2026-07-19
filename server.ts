@@ -1037,6 +1037,90 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── SuperAdmin: Email a generated platform invoice to the client ───────────
+  app.post("/api/send-invoice-email", async (req, res) => {
+    try {
+      const { pdfBase64, clientEmail, clientName, adminEmail, invoiceNumber, planLabel, total } = req.body;
+
+      if (!pdfBase64 || !clientEmail || !invoiceNumber) {
+        return res.status(400).json({ success: false, error: "pdfBase64, clientEmail and invoiceNumber are required" });
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      // Dedicated billing sender — intentionally not RESEND_FROM_EMAIL, which is
+      // DocuLegal's address. The domain is fully verified in Resend, so any
+      // @autocompt.ca address works here regardless of RESEND_FROM_EMAIL's value.
+      const fromEmail = process.env.RESEND_INVOICE_FROM_EMAIL || "AutoCompt Facturation <facturation@autocompt.ca>";
+      if (!resendApiKey) {
+        return res.status(500).json({ success: false, error: "RESEND_API_KEY not configured" });
+      }
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+          <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">AutoCompt · Facturation</div>
+              <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">Facture ${invoiceNumber}</div>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                Bonjour ${clientName || ""}, veuillez trouver ci-joint votre facture AutoCompt.
+              </p>
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin-bottom:24px">
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Abonnement</div>
+                <div style="font-size:16px;font-weight:900;color:#111827">${planLabel || ""}</div>
+                <div style="font-size:20px;font-weight:900;color:#059669;margin-top:8px">${Number(total || 0).toFixed(2)} $ TTC</div>
+              </div>
+              <p style="color:#9ca3af;font-size:11px;margin:0">
+                Gestions Solutions G.PA INC. — NEQ: 1179999900<br>
+                TPS: 75385 8620 RT 0001 — TVQ: 12 3186 5353 TQ 0001
+              </p>
+            </div>
+            <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+              <p style="color:#9ca3af;font-size:11px;margin:0">
+                AutoCompt Canada · <a href="https://www.autocompt.ca" style="color:#059669">www.autocompt.ca</a>
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: [clientEmail],
+          cc: adminEmail ? [adminEmail] : undefined,
+          subject: `Facture AutoCompt ${invoiceNumber}`,
+          html: emailHtml,
+          attachments: [{
+            filename: `Facture_AutoCompt_${invoiceNumber}.pdf`,
+            content: pdfBase64,
+          }],
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error("[Invoice email] Resend error:", errBody);
+        return res.status(502).json({ success: false, error: "Resend rejected the email" });
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("send-invoice-email error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Vite development or production integration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
