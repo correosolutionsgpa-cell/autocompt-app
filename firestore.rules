@@ -104,6 +104,14 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // DocuLegal entries — Prospecteur/Investisseur/Flippeur/Gestionnaire
+    // (leases, offers, subcontracts). Distinct from Syndicat's `legalDocuments`.
+    match /docuLegalDocs/{docId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     // Per-company Google Drive connection metadata (folder id, connected
     // email — never the OAuth token itself). Doc id is `{ownerId}_company_{id}`,
     // scoped the same way as `companies`, since the app's internal company ids

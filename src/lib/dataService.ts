@@ -326,6 +326,39 @@ export interface DocTemplateDoc {
   createdAt: string;
 }
 
+/**
+ * DocuLegal entry for Prospecteur/Investisseur/Flippeur/Gestionnaire (the
+ * general-purpose lease/offer/subcontract e-signature flow — distinct from
+ * Syndicat's contrat/resolution model in `legalDocuments`). Shape mirrors
+ * the in-memory `docuLegalList` object App.tsx already builds, so no
+ * client-side remapping is needed at the call sites.
+ */
+export interface DocuLegalEntryDoc {
+  id: string;
+  name: string;
+  cat: string;
+  status: string;
+  date: string;
+  companyId: string;
+  author: string;
+  recipient: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  content?: string;
+  smsVerify?: boolean;
+  emailInvite?: string;
+  signers?: any[];
+  placedFields?: any;
+  // Populated once a signature completes.
+  signerName?: string;
+  signerEmail?: string;
+  signatureTimestamp?: string;
+  transactionId?: string;
+  signatureData?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── PaieRecordDoc — Firestore `paieRecords` collection (Payroll) ──────────────
 
 export interface PaieRecordDoc {
@@ -1616,6 +1649,39 @@ export const dataService = {
   /** Downloads a saved template's raw .docx bytes from Storage, for filling client-side. */
   async fetchTemplateFile(storagePath: string): Promise<ArrayBuffer> {
     return getBytes(ref(storage, storagePath));
+  },
+
+  // ── DocuLegal entries — Prospecteur/Investisseur/Flippeur/Gestionnaire ──────
+  // Firestore doc id is `{userId}_doculegal_{entry.id}` — the client-generated
+  // entry.id (e.g. "DOC-12345") alone isn't unique enough across accounts to
+  // trust as a shared collection's primary key, so it's prefixed on write and
+  // stripped back off on read, same convention as `legalDocuments`.
+
+  async fetchDocuLegalDocs(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<DocuLegalEntryDoc[]> {
+    try {
+      const docs = await fetchOwnedAndShared('docuLegalDocs', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
+        const data = d.data() as DocuLegalEntryDoc;
+        const idParts = d.id.split('_doculegal_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id };
+      });
+    } catch (e) {
+      console.error('fetchDocuLegalDocs failed:', e);
+      return [];
+    }
+  },
+
+  /** Upsert — same entry.id is reused for drafts, pending, and signed states as the entry progresses. */
+  async saveDocuLegalDoc(userId: string, entry: Omit<DocuLegalEntryDoc, 'ownerId' | 'createdAt'> & { createdAt?: string }): Promise<DocuLegalEntryDoc> {
+    assertCanWrite();
+    const docId = `${userId}_doculegal_${entry.id}`;
+    const data: DocuLegalEntryDoc = {
+      ...entry,
+      ownerId: userId,
+      createdAt: entry.createdAt || new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'docuLegalDocs', docId), data);
+    return data;
   },
 
   async deleteDocTemplate(templateId: string, storagePath: string): Promise<boolean> {

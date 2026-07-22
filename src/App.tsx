@@ -90,6 +90,7 @@ import {
   Lightbulb,
   Wrench,
   Hash,
+  HelpCircle,
 } from "lucide-react";
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
@@ -1457,7 +1458,7 @@ const App = () => {
     useState("PDF Unifié");
   const [isExporting, setIsExporting] = useState(false);
   const [comptableMessage, setComptableMessage] = useState(
-    "Bonjour,\n\nVeuillez trouver ci-joint mon livre de comptes ainsi que le relevé bancaire concilié pour la période sélectionnée d'AutoCompt.\n\nCordialement,\nFabiola Villegas",
+    "Bonjour,\n\nVeuillez trouver ci-joint mon livre de comptes ainsi que le relevé bancaire concilié pour la période sélectionnée d'AutoCompt.\n\nCordialement,",
   );
   const [rapportSentSuccess, setRapportSentSuccess] = useState(false);
   const [showComptableModal, setShowComptableModal] = useState(false);
@@ -2694,91 +2695,9 @@ const App = () => {
   const [docActiveVue, setDocActiveVue] = useState<'contrats' | 'resolutions'>('contrats');
   const [docuSignInProgress, setDocuSignInProgress] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [docuLegalList, setDocuLegalList] = useState<any[]>([
-    {
-      id: "DOC-001",
-      name: "Bail Résidentiel - Apt. 3, 1234 Rue Saint-Hubert",
-      status: "Signé",
-      date: "2026-05-01",
-      cat: "Baux Résidentiels",
-      author: "Fabiola Villegas",
-      recipient: "Marc-André Tremblay",
-      companyId: "3",
-      content:
-        "Le présent bail résidentiel est consenti pour le loyer de 1,200 $ par mois, incluant le chauffage...",
-      recipientPhone: "514-555-0123",
-      recipientEmail: "marc.tremblay@email.com",
-      smsVerify: true,
-      emailInvite: "Bonjour Marc-André, voici le bail conforme pour signature.",
-    },
-    {
-      id: "DOC-002",
-      name: "Avis d'Augmentation de Loyer - Apt. 12",
-      status: "En attente",
-      date: "2026-05-18",
-      cat: "Avis d'Augmentation",
-      author: "Fabiola Villegas",
-      recipient: "Chantal Roy",
-      companyId: "3",
-      content:
-        "Avis officiel d'augmentation mensuelle de 2.5% conformément aux critères du Tribunal administratif du logement...",
-      recipientPhone: "514-555-5566",
-      recipientEmail: "chantal.roy@email.com",
-      smsVerify: true,
-      emailInvite:
-        "Bonjour Chantal, veuillez prendre connaissance de l'avis d'ajustement annuel.",
-    },
-    {
-      id: "DOC-003",
-      name: "Contrat de Gestion Exclusive Solutions GPA",
-      status: "Signé",
-      date: "2026-05-15",
-      cat: "Contrats de Gestion",
-      author: "Fabiola Villegas",
-      recipient: "Solutions GPA Inc.",
-      companyId: "1",
-      content:
-        "Entente liant le gestionnaire des immeubles aux standards d'administration BYOS, incluant conciliation automatisée...",
-      recipientPhone: "450-555-0123",
-      recipientEmail: "gestion@propiosolutions.com",
-      smsVerify: false,
-      emailInvite: "Bonjour, voici le contrat de service de gestion actualisé.",
-    },
-    {
-      id: "DOC-004",
-      name: "Promesse d'Achat Standard - Laval Vimont",
-      status: "En attente",
-      date: "2026-05-19",
-      cat: "Promesses d'Achat",
-      author: "Achat Direct Inc.",
-      recipient: "Jean-Pierre Roy",
-      companyId: "2",
-      content:
-        "Offre conditionnelle d'achat ferme d'un immeuble Triplex pour un montant de 450,000 $ avec dépôt initial...",
-      recipientPhone: "514-555-9876",
-      recipientEmail: "jp.roy@achatdirect.ca",
-      smsVerify: true,
-      emailInvite:
-        "Bonjour Jean-Pierre, voici notre offre rédigée d'achat pour le Triplex Laval.",
-    },
-    {
-      id: "DOC-005",
-      name: "Contrat de Sous-traitance Peinture",
-      status: "Signé",
-      date: "2026-05-10",
-      cat: "Contrats de Sous-traitance",
-      author: "Fabiola Villegas",
-      recipient: "Marc Tremblay Enr.",
-      companyId: "1",
-      content:
-        "Contrat de main d'œuvre de peintre pour la réfection complète des plafonds de l'unité 3...",
-      recipientPhone: "514-555-0122",
-      recipientEmail: "marc.enr@email.com",
-      smsVerify: false,
-      emailInvite:
-        "Bonjour Marc, veuillez signer le contrat de peinture avant d'entamer le chantier.",
-    },
-  ]);
+  // Populated from Firestore (see fetchDocuLegalDocs in the login effect) —
+  // was hardcoded mock data before, which vanished on every page refresh.
+  const [docuLegalList, setDocuLegalList] = useState<any[]>([]);
   const [selectedDocuFolder, setSelectedDocuFolder] = useState<string | null>(
     null,
   );
@@ -2826,28 +2745,25 @@ const App = () => {
   const [fillingDocTemplate, setFillingDocTemplate] = useState<DocTemplateDoc | null>(null);
   const [docFillValues, setDocFillValues] = useState<Record<string, string>>({});
   const [docFillConditions, setDocFillConditions] = useState<Record<string, boolean>>({});
+  // Sofi's one-time "how Mes Modèles works" guide — shown automatically the
+  // first time a user opens a template to fill it, persisted to Firestore so
+  // it never reappears uninvited. A "?" button next to "Mes Modèles" reopens
+  // it manually at any time (pendingTemplateAfterGuide stays null in that case).
+  const [hasSeenDocTemplateGuide, setHasSeenDocTemplateGuide] = useState(false);
+  const [showDocTemplateGuide, setShowDocTemplateGuide] = useState(false);
+  const [pendingTemplateAfterGuide, setPendingTemplateAfterGuide] = useState<DocTemplateDoc | null>(null);
   const [isGeneratingDocFromTemplate, setIsGeneratingDocFromTemplate] = useState(false);
-  const [docPlacedFields, setDocPlacedFields] = useState<any[]>([
-    {
-      id: "field-1",
-      type: "Signature",
-      signer: "Natalia Lopez",
-      roleColor: "Emerald",
-    },
-    {
-      id: "field-2",
-      type: "Initiales",
-      signer: "Fabiola Villegas",
-      roleColor: "Purple",
-    },
-  ]);
-  const [docSignerActive, setDocSignerActive] = useState("Natalia Lopez");
+  // No pre-placed fields by default — they used to be tagged to Fabiola's own
+  // team by name (Natalia Lopez / Fabiola Villegas) for every account, which
+  // no longer even matches anyone in the now-dynamic docFormSignersList.
+  const [docPlacedFields, setDocPlacedFields] = useState<any[]>([]);
+  const [docSignerActive, setDocSignerActive] = useState("");
   const [showSigProfileModal, setShowSigProfileModal] = useState(false);
   const [activeSigTab, setActiveSigTab] = useState<"draw" | "type" | "upload">(
     "draw",
   );
-  const [typeSigName, setTypeSigName] = useState("Fabiola Villegas");
-  const [typeInitials, setTypeInitials] = useState("FV");
+  const [typeSigName, setTypeSigName] = useState("");
+  const [typeInitials, setTypeInitials] = useState("");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [savedInitials, setSavedInitials] = useState<string | null>(null);
   const [savedUploadSignature, setSavedUploadSignature] = useState<
@@ -3309,26 +3225,27 @@ const App = () => {
     printWindow.document.close();
   };
 
-  const [docFormSignersList, setDocFormSignersList] = useState<any[]>([
-    {
-      id: "1",
-      name: "Fabiola Villegas",
-      email: "fabiola@propiosolutions.com",
-      phone: "514-555-1111",
-      role: "Propriétaire / Émetteur",
-      color: "Purple",
-      dotClass: "bg-purple-500",
-    },
-    {
-      id: "2",
-      name: "Natalia Lopez",
-      email: "natalia@propiosolutions.com",
-      phone: "514-555-2222",
-      role: "Collaborateur direct",
-      color: "Emerald",
-      dotClass: "bg-emerald-500",
-    },
-  ]);
+  // Starts empty and gets seeded with the actual logged-in user as the
+  // document's "Propriétaire / Émetteur" once their email is known (see
+  // effect below) — this used to hardcode Fabiola's own name/email as the
+  // default first signer for every account, so every external user's
+  // documents showed her identity instead of their own.
+  const [docFormSignersList, setDocFormSignersList] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (docFormSignersList.length > 0 || !currentUserEmail) return;
+    setDocFormSignersList([
+      {
+        id: "1",
+        name: currentUserEmail,
+        email: currentUserEmail,
+        phone: "",
+        role: "Propriétaire / Émetteur",
+        color: "Purple",
+        dotClass: "bg-purple-500",
+      },
+    ]);
+  }, [currentUserEmail]);
 
   // --- GESTIONNAIRE DE DOSSIERS FISCAUX ---
   const [customDossiers, setCustomDossiers] = useState<
@@ -5455,6 +5372,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const pdfInputRef = React.useRef<HTMLInputElement>(null);
   const csvInputRef = React.useRef<HTMLInputElement>(null);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const docLogoInputRef = React.useRef<HTMLInputElement>(null);
@@ -7269,6 +7189,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             setUserLevel(userData.level || "Gestion Immobilière");
             phoneAlreadyVerified = !!userData.phoneVerified;
             setIsPhoneVerified(phoneAlreadyVerified);
+            setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 
             // Beta trial status — same founder allowlist as getEffectiveTier().
             const userEmail = (user.email ?? "").toLowerCase().trim();
@@ -7351,6 +7272,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
           // Fetch user's own DocuLegal document templates (private, per-account).
           dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
+
+          // Fetch DocuLegal entries (Prospecteur/Investisseur/Flippeur/Gestionnaire
+          // leases, offers, subcontracts) — was in-memory-only mock data before.
+          dataService.fetchDocuLegalDocs(user.uid, collaboratorCompanyDocIds).then(setDocuLegalList).catch((err) => console.error("fetchDocuLegalDocs failed:", err));
 
           // Fetch properties
           const props = await dataService.fetchProperties(user.uid, collaboratorCompanyDocIds);
@@ -9386,10 +9311,22 @@ Ceci est un message automatisé généré par AutoCompt.`;
       }
       setPhoneVerifyBusy(true);
       try {
+        // Always build a fresh verifier instead of reusing a cached one — if
+        // this screen re-renders (retry, back-then-forward, etc.) the old
+        // "phone-verify-recaptcha" DOM node is gone, and a stale verifier
+        // still pointing at it throws "reCAPTCHA client element has been
+        // removed" the moment it's used. `.clear()` alone doesn't reliably
+        // tear down the injected grecaptcha iframe in time — wiping the
+        // container's innerHTML too avoids "reCAPTCHA has already been
+        // rendered in this element" on the next attempt.
         const win = window as any;
-        if (!win.__autocomptRecaptchaVerifier) {
-          win.__autocomptRecaptchaVerifier = new RecaptchaVerifier(auth, "phone-verify-recaptcha", { size: "invisible" });
+        if (win.__autocomptRecaptchaVerifier) {
+          try { win.__autocomptRecaptchaVerifier.clear(); } catch { /* already invalid — ignore */ }
+          win.__autocomptRecaptchaVerifier = null;
         }
+        const recaptchaContainer = document.getElementById("phone-verify-recaptcha");
+        if (recaptchaContainer) recaptchaContainer.innerHTML = "";
+        win.__autocomptRecaptchaVerifier = new RecaptchaVerifier(auth, "phone-verify-recaptcha", { size: "invisible" });
         if (!auth.currentUser) throw new Error("Session expirée — veuillez vous reconnecter.");
         const confirmation = await linkWithPhoneNumber(auth.currentUser, formatted, win.__autocomptRecaptchaVerifier);
         setPhoneConfirmationResult(confirmation);
@@ -10523,10 +10460,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           />
 
 
-          {/* Input universel — photo, galerie OU fichier (PDF / image)
-               Sans attribut capture="" → le système affiche le menu natif:
-               [📷 Prendre une photo] [🖼 Choisir dans la galerie] [📁 Parcourir les fichiers]
-               Accepte : toutes images + PDF pour factures, baux, documents longs */}
+          {/* Input universel — photo, galerie OU fichier (PDF / image) */}
           <input
             type="file"
             ref={cameraInputRef}
@@ -10538,6 +10472,46 @@ Ceci est un message automatisé généré par AutoCompt.`;
             }}
             className="hidden"
             accept="application/pdf, image/jpeg, image/png, image/webp"
+          />
+          {/* Input photo directe (capture caméra) */}
+          <input
+            type="file"
+            ref={photoInputRef}
+            onChange={(e) => {
+              handleAIScan(e);
+              if (selectedTier === "basique") {
+                setMonthlyScanCount((prev) => prev + 1);
+              }
+            }}
+            className="hidden"
+            accept="image/jpeg, image/png, image/webp"
+            capture="environment"
+          />
+          {/* Input galerie (images seulement, sans capture) */}
+          <input
+            type="file"
+            ref={galleryInputRef}
+            onChange={(e) => {
+              handleAIScan(e);
+              if (selectedTier === "basique") {
+                setMonthlyScanCount((prev) => prev + 1);
+              }
+            }}
+            className="hidden"
+            accept="image/jpeg, image/png, image/webp"
+          />
+          {/* Input PDF */}
+          <input
+            type="file"
+            ref={pdfInputRef}
+            onChange={(e) => {
+              handleAIScan(e);
+              if (selectedTier === "basique") {
+                setMonthlyScanCount((prev) => prev + 1);
+              }
+            }}
+            className="hidden"
+            accept="application/pdf"
           />
 
 
@@ -10622,13 +10596,85 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 )}
               </div>
 
-              <div className="text-center relative z-10 space-y-1.5 max-w-xs px-2">
+              <div className="text-center relative z-10 space-y-3 max-w-xs px-2">
                 <span className="text-sm font-black uppercase tracking-[0.2em] italic text-emerald-400 font-sans">
                   SCANNER IA (FACTURES)
                 </span>
-                <p className="text-[8.5px] italic font-bold uppercase mt-1 leading-relaxed tracking-wider text-emerald-500/80">
-                  📷 Photo &nbsp;•&nbsp; 🖼 Galerie &nbsp;•&nbsp; 📄 Fichier PDF
-                </p>
+                {/* Minimalist action pills */}
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  {/* Foto */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedTier === "gratuit") {
+                        setPaywallTargetTier("Basique (4.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      if (selectedTier === "basique" && monthlyScanCount >= 10) {
+                        setPaywallTargetTier("Pro Individuel (19.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      photoInputRef.current?.click();
+                    }}
+                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 transition-all duration-200 group/pill active:scale-95"
+                  >
+                    <Camera size={14} className="text-emerald-400/70 group-hover/pill:text-emerald-400 transition-colors" />
+                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">Foto</span>
+                  </button>
+                  {/* Galerie */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedTier === "gratuit") {
+                        setPaywallTargetTier("Basique (4.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      if (selectedTier === "basique" && monthlyScanCount >= 10) {
+                        setPaywallTargetTier("Pro Individuel (19.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      galleryInputRef.current?.click();
+                    }}
+                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 transition-all duration-200 group/pill active:scale-95"
+                  >
+                    <ImageIcon size={14} className="text-emerald-400/70 group-hover/pill:text-emerald-400 transition-colors" />
+                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">Galerie</span>
+                  </button>
+                  {/* Fichier PDF */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedTier === "gratuit") {
+                        setPaywallTargetTier("Basique (4.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      if (selectedTier === "basique" && monthlyScanCount >= 10) {
+                        setPaywallTargetTier("Pro Individuel (19.99$)");
+                        setShowPaywallModal(true);
+                        playNotificationSound();
+                        return;
+                      }
+                      pdfInputRef.current?.click();
+                    }}
+                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 transition-all duration-200 group/pill active:scale-95"
+                  >
+                    <FileText size={14} className="text-emerald-400/70 group-hover/pill:text-emerald-400 transition-colors" />
+                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">PDF</span>
+                  </button>
+                </div>
               </div>
             </button>
 
@@ -11855,6 +11901,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
     };
 
     const handleOpenFillDocTemplate = (tpl: DocTemplateDoc) => {
+      if (!hasSeenDocTemplateGuide) {
+        setPendingTemplateAfterGuide(tpl);
+        setShowDocTemplateGuide(true);
+        return;
+      }
       const initial: Record<string, string> = {};
       tpl.campos.forEach((c) => { initial[c] = ""; });
       setDocFillValues(initial);
@@ -11862,6 +11913,30 @@ Ceci est un message automatisé généré par AutoCompt.`;
       (tpl.condiciones || []).forEach((c) => { initialConditions[c] = false; });
       setDocFillConditions(initialConditions);
       setFillingDocTemplate(tpl);
+    };
+
+    // Marks the guide as seen (persisted so it never reappears uninvited) and,
+    // if the user was opening a specific template when it triggered, proceeds
+    // to actually open that template's fill panel.
+    const handleCloseDocTemplateGuide = () => {
+      setShowDocTemplateGuide(false);
+      setHasSeenDocTemplateGuide(true);
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        setDoc(doc(db, "users", uid), { hasSeenDocTemplateGuide: true }, { merge: true })
+          .catch((err) => console.error("Failed to save hasSeenDocTemplateGuide:", err));
+      }
+      if (pendingTemplateAfterGuide) {
+        const tpl = pendingTemplateAfterGuide;
+        setPendingTemplateAfterGuide(null);
+        const initial: Record<string, string> = {};
+        tpl.campos.forEach((c) => { initial[c] = ""; });
+        setDocFillValues(initial);
+        const initialConditions: Record<string, boolean> = {};
+        (tpl.condiciones || []).forEach((c) => { initialConditions[c] = false; });
+        setDocFillConditions(initialConditions);
+        setFillingDocTemplate(tpl);
+      }
     };
 
     const handleDeleteDocTemplate = async (tpl: DocTemplateDoc) => {
@@ -12353,7 +12428,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               Vos propres documents Word, réutilisables à chaque client
                             </p>
                           </div>
-                          <Layers size={22} className="text-[#7c3aed] opacity-60" />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowDocTemplateGuide(true)}
+                              title="Revoir le guide de S.O.F.I."
+                              className={`p-1.5 rounded-full border transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:text-violet-400 hover:border-violet-500" : "border-slate-200 text-slate-400 hover:text-[#7c3aed] hover:border-[#7c3aed]"}`}
+                            >
+                              <HelpCircle size={14} />
+                            </button>
+                            <Layers size={22} className="text-[#7c3aed] opacity-60" />
+                          </div>
                         </div>
 
                         {docTemplates.length === 0 ? (
@@ -12501,6 +12586,56 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   {isSavingDocTemplate ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <>Enregistrer le modèle</>}
                                 </button>
                               </div>
+                            </motion.div>
+                          </div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* MODAL: S.O.F.I.'s one-time "how Mes Modèles works" guide */}
+                      <AnimatePresence>
+                        {showDocTemplateGuide && (
+                          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <motion.div
+                              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                              animate={{ scale: 1, opacity: 1, y: 0 }}
+                              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                              className={`w-full max-w-md rounded-[32px] border shadow-2xl p-6 sm:p-8 relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+                            >
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2.5 rounded-2xl bg-[#7c3aed]/10 text-[#7c3aed] shrink-0">
+                                  <Sparkles size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-[8px] font-black uppercase tracking-widest text-[#7c3aed]">S.O.F.I.</p>
+                                  <h3 className="text-sm font-black">Comment fonctionne « Mes Modèles »</h3>
+                                </div>
+                              </div>
+
+                              <div className={`space-y-3 text-[11px] leading-relaxed ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>
+                                <p>
+                                  <strong>1.</strong> Vous avez téléversé <strong>votre propre</strong> document Word — vous en êtes l'auteur. AutoCompt ne rédige ni ne révise le contenu légal de vos modèles; assurez-vous vous-même de sa conformité.
+                                </p>
+                                <p>
+                                  <strong>2.</strong> Les champs comme <code className={`px-1 py-0.5 rounded text-[9px] ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>{"{{nom_client}}"}</code> dans votre Word se remplissent automatiquement, un par un, dans le formulaire qui va s'ouvrir.
+                                </p>
+                                <p>
+                                  <strong>3.</strong> Si votre document contient des clauses conditionnelles <code className={`px-1 py-0.5 rounded text-[9px] ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>{"{{#clause}}...{{/clause}}"}</code>, une case à cocher apparaît pour chacune — cochez seulement celles qui s'appliquent à ce client précis.
+                                </p>
+                                <p>
+                                  <strong>4.</strong> Une fois rempli, le document est généré en PDF, prêt à envoyer pour signature électronique.
+                                </p>
+                                <p className={`text-[10px] italic ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                  💡 Vous pouvez revoir ce guide à tout moment avec le bouton [?] à côté de « Mes Modèles ».
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleCloseDocTemplateGuide}
+                                className="w-full mt-6 py-3.5 bg-[#7c3aed] hover:bg-violet-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+                              >
+                                {pendingTemplateAfterGuide ? "Compris, continuer" : "Compris, fermer"}
+                              </button>
                             </motion.div>
                           </div>
                         )}
@@ -12758,26 +12893,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                         doc.signers || [
                                           {
                                             id: "1",
-                                            name: "Fabiola Villegas",
-                                            email: "fabiola@propiosolutions.com",
-                                            phone: "514-555-1111",
+                                            name: currentUserEmail || "",
+                                            email: currentUserEmail || "",
+                                            phone: "",
                                             role: "Propriétaire / Émetteur",
                                             color: "Purple",
                                           },
                                           {
-                                            id: "2",
-                                            name: "Natalia Lopez",
-                                            email: "natalia@propiosolutions.com",
-                                            phone: "514-555-2222",
-                                            role: "Collaborateur direct",
-                                            color: "Emerald",
-                                          },
-                                          {
                                             id: "3",
-                                            name: doc.recipient || "Richard",
-                                            email:
-                                              doc.recipientEmail ||
-                                              "richard@outlook.com",
+                                            name: doc.recipient || "",
+                                            email: doc.recipientEmail || "",
                                             role: "Signataire",
                                             color: "Amber",
                                           },
@@ -12789,13 +12914,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                           {
                                             id: "field-1",
                                             type: "Signature",
-                                            signer: doc.recipient || "Richard",
+                                            signer: doc.recipient || "",
                                             roleColor: "Amber",
                                           },
                                           {
                                             id: "field-2",
                                             type: "Initiales",
-                                            signer: "Fabiola Villegas",
+                                            signer: currentUserEmail || "",
                                             roleColor: "Purple",
                                           },
                                         ],
@@ -12897,6 +13022,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                                       : d,
                                                   ),
                                                 );
+                                                {
+                                                  const uid = auth.currentUser?.uid;
+                                                  if (uid) dataService.saveDocuLegalDoc(uid, { ...doc, status: "Révoqué" }).catch((err) => console.error("saveDocuLegalDoc (revoke) failed:", err));
+                                                }
                                                 playNotificationSound();
                                               }
                                             }}
@@ -12984,43 +13113,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 setDocFormSignersList([
                                   {
                                     id: "1",
-                                    name: "Fabiola Villegas",
-                                    email: "fabiola@propiosolutions.com",
-                                    phone: "514-555-1111",
+                                    name: currentUserEmail || "",
+                                    email: currentUserEmail || "",
+                                    phone: "",
                                     role: "Propriétaire / Émetteur",
                                     color: "Purple",
                                   },
-                                  {
-                                    id: "2",
-                                    name: "Natalia Lopez",
-                                    email: "natalia@propiosolutions.com",
-                                    phone: "514-555-2222",
-                                    role: "Collaborateur direct",
-                                    color: "Emerald",
-                                  },
-                                  {
-                                    id: "3",
-                                    name: "Richard",
-                                    email: "richard.duchesne@outlook.com",
-                                    role: "Signataire",
-                                    color: "Amber",
-                                  },
                                 ]);
                                 setDocLogo(null);
-                                setDocPlacedFields([
-                                  {
-                                    id: "field-1",
-                                    type: "Signature",
-                                    signer: "Richard",
-                                    roleColor: "Amber",
-                                  },
-                                  {
-                                    id: "field-2",
-                                    type: "Initiales",
-                                    signer: "Fabiola Villegas",
-                                    roleColor: "Purple",
-                                  },
-                                ]);
+                                setDocPlacedFields([]);
                                 setSelectedDocuEntry(null);
                                 setSubVistaDocu("editor");
                                 playNotificationSound();
@@ -13049,26 +13150,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     doc.signers || [
                                       {
                                         id: "1",
-                                        name: "Fabiola Villegas",
-                                        email: "fabiola@propiosolutions.com",
-                                        phone: "514-555-1111",
+                                        name: currentUserEmail || "",
+                                        email: currentUserEmail || "",
+                                        phone: "",
                                         role: "Propriétaire / Émetteur",
                                         color: "Purple",
                                       },
                                       {
-                                        id: "2",
-                                        name: "Natalia Lopez",
-                                        email: "natalia@propiosolutions.com",
-                                        phone: "514-555-2222",
-                                        role: "Collaborateur direct",
-                                        color: "Emerald",
-                                      },
-                                      {
                                         id: "3",
-                                        name: doc.recipient || "Richard",
-                                        email:
-                                          doc.recipientEmail ||
-                                          "richard@outlook.com",
+                                        name: doc.recipient || "",
+                                        email: doc.recipientEmail || "",
                                         role: "Signataire",
                                         color: "Amber",
                                       },
@@ -13080,13 +13171,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       {
                                         id: "field-1",
                                         type: "Signature",
-                                        signer: doc.recipient || "Richard",
+                                        signer: doc.recipient || "",
                                         roleColor: "Amber",
                                       },
                                       {
                                         id: "field-2",
                                         type: "Initiales",
-                                        signer: "Fabiola Villegas",
+                                        signer: currentUserEmail || "",
                                         roleColor: "Purple",
                                       },
                                     ],
@@ -13189,6 +13280,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                                   : d,
                                               ),
                                             );
+                                            {
+                                              const uid = auth.currentUser?.uid;
+                                              if (uid) dataService.saveDocuLegalDoc(uid, { ...doc, status: "Révoqué" }).catch((err) => console.error("saveDocuLegalDoc (revoke) failed:", err));
+                                            }
                                             playNotificationSound();
                                           }
                                         }}
@@ -13452,7 +13547,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               </label>
                               <input
                                 type="text"
-                                value={activeUser}
+                                // The Fabiola/Natalia toggle only means something on her own
+                                // Achat Direct partnership — every other account should see
+                                // their own email here, not her name by default.
+                                value={activeCompanyId === "2" ? activeUser : (currentUserEmail || activeUser)}
                                 disabled
                                 className={`w-full p-3.5 rounded-2xl outline-none text-[11px] font-bold transition-all border opacity-60 cursor-not-allowed ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-slate-50 border-slate-105 text-slate-400'}`}
                               />
@@ -14284,6 +14382,17 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               );
                             }
 
+                            {
+                              const uid = auth.currentUser?.uid;
+                              if (uid) {
+                                dataService.saveDocuLegalDoc(uid, {
+                                  ...newDocObj,
+                                  signers: docFormSignersList,
+                                  placedFields: docPlacedFields,
+                                }).catch((err) => console.error("saveDocuLegalDoc (draft) failed:", err));
+                              }
+                            }
+
                             setSubVistaDocu("liste");
                             playNotificationSound();
                             alert(
@@ -14679,6 +14788,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 d.id === qrModalDoc.id ? signedDoc : d,
                               ),
                             );
+                            {
+                              const uid = auth.currentUser?.uid;
+                              if (uid) dataService.saveDocuLegalDoc(uid, signedDoc).catch((err) => console.error("saveDocuLegalDoc (signed) failed:", err));
+                            }
 
                             // Show success and play notification sound!
                             playNotificationSound();
@@ -14724,6 +14837,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             d.id === qrModalDoc.id ? pendingDoc : d,
                           ),
                         );
+                      }
+                      {
+                        const uid = auth.currentUser?.uid;
+                        if (uid) dataService.saveDocuLegalDoc(uid, pendingDoc).catch((err) => console.error("saveDocuLegalDoc (pending) failed:", err));
                       }
 
                       setShowQrModal(false);
@@ -14901,7 +15018,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               <span
                                 className={`text-[#1e3a8a] dark:text-blue-300 leading-none ${fontSpec.fontClass}`}
                               >
-                                ${typeSigName || "Fabiola Villegas"}
+                                ${typeSigName || currentUserEmail || ""}
                               </span>
                             </div>
                             <button
@@ -14924,7 +15041,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   ctx.textAlign = "center";
                                   ctx.textBaseline = "middle";
                                   ctx.fillText(
-                                    typeSigName || "Fabiola Villegas",
+                                    typeSigName || currentUserEmail || "",
                                     canvas.width / 2,
                                     canvas.height / 2,
                                   );
