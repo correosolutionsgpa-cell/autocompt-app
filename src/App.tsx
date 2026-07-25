@@ -760,6 +760,13 @@ const App = () => {
   const updateSelectedProfile = async (profile: string) => {
     setSelectedProfile(profile);
     localStorage.setItem("autocompt_selected_profile", profile);
+
+    // Keep dashboardMode (Plex vs Syndic) in sync with the profile — it's
+    // derived, not independently stored, so it can't drift out of sync.
+    const modeForProfile = profile === "syndicat" ? "Syndic" : "Plex";
+    setDashboardMode(modeForProfile);
+    localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
+
     const uid = auth.currentUser?.uid;
     if (uid) {
       try {
@@ -7206,6 +7213,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
             if (userData.selectedProfile) {
               setSelectedProfile(userData.selectedProfile);
               localStorage.setItem("autocompt_selected_profile", userData.selectedProfile);
+
+              // dashboardMode (Plex vs Syndic) was NEVER persisted to Firestore —
+              // only localStorage, set once during onboarding. On a new device/
+              // browser it silently defaulted to "Plex", or kept a stale value
+              // from an earlier stray onboarding click. Re-derive it from the
+              // authoritative profile every login so it can't drift.
+              const modeForProfile = userData.selectedProfile === "syndicat" ? "Syndic" : "Plex";
+              setDashboardMode(modeForProfile);
+              localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
             }
 
             // Beta trial status — same founder allowlist as getEffectiveTier().
