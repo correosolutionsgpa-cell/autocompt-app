@@ -7406,50 +7406,53 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
   if (vista === "sofi-onboarding") {
     return (
-      <SofiOnboarding
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        playNotificationSound={playNotificationSound}
-        onLoginClick={() => setVista("login")}
-        onComplete={(profile, lang, answers) => {
-          localStorage.setItem("autocompt_selected_profile", profile);
-          if (answers) {
-            localStorage.setItem("autocompt_onboarding_answers", JSON.stringify(answers));
-          }
-          setSelectedProfile(profile);
-          setActiveLang(lang);
+      <div className="min-h-screen flex flex-col justify-between">
+        <SofiOnboarding
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          playNotificationSound={playNotificationSound}
+          onLoginClick={() => setVista("login")}
+          onComplete={(profile, lang, answers) => {
+            localStorage.setItem("autocompt_selected_profile", profile);
+            if (answers) {
+              localStorage.setItem("autocompt_onboarding_answers", JSON.stringify(answers));
+            }
+            setSelectedProfile(profile);
+            setActiveLang(lang);
 
-          let mode: "Plex" | "Syndic" | "Global" = "Plex";
-          let level = "Investisseur Immobilier";
-          if (profile === "prospecteur") {
-            mode = "Plex";
-            level = "Prospecteur Immobilier";
-          } else if (profile === "investisseur") {
-            mode = "Plex";
-            level = "Investisseur Immobilier";
-          } else if (profile === "flippeur") {
-            mode = "Plex";
-            level = "Flippeur Immobilier";
-          } else if (profile === "gestionnaire") {
-            mode = "Plex";
-            level = "Gestionnaire Immobilier";
-          } else if (profile === "syndicat") {
-            mode = "Syndic";
-            level = "Syndicat de Copropriété";
-          }
+            let mode: "Plex" | "Syndic" | "Global" = "Plex";
+            let level = "Investisseur Immobilier";
+            if (profile === "prospecteur") {
+              mode = "Plex";
+              level = "Prospecteur Immobilier";
+            } else if (profile === "investisseur") {
+              mode = "Plex";
+              level = "Investisseur Immobilier";
+            } else if (profile === "flippeur") {
+              mode = "Plex";
+              level = "Flippeur Immobilier";
+            } else if (profile === "gestionnaire") {
+              mode = "Plex";
+              level = "Gestionnaire Immobilier";
+            } else if (profile === "syndicat") {
+              mode = "Syndic";
+              level = "Syndicat de Copropriété";
+            }
 
-          localStorage.setItem("autocompt_dashboard_mode", mode);
-          localStorage.setItem("autocompt_user_level", level);
-          setDashboardMode(mode);
-          setUserLevel(level);
-          setSetupComplet(true);
-          // Phase 4 / Bug Fix #3: Always trigger tour when onboarding completes.
-          // Remove stale key so the tour shows even after dev resets / repeat testing.
-          localStorage.removeItem("autocompt_settings_tour_shown");
-          setShowSettingsTour(true);
-          setVista("dashboard");
-        }}
-      />
+            localStorage.setItem("autocompt_dashboard_mode", mode);
+            localStorage.setItem("autocompt_user_level", level);
+            setDashboardMode(mode);
+            setUserLevel(level);
+            setSetupComplet(true);
+            // Phase 4 / Bug Fix #3: Always trigger tour when onboarding completes.
+            // Remove stale key so the tour shows even after dev resets / repeat testing.
+            localStorage.removeItem("autocompt_settings_tour_shown");
+            setShowSettingsTour(true);
+            setVista("dashboard");
+          }}
+        />
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
+      </div>
     );
   }
 
@@ -7511,277 +7514,287 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </button>
           </div>
         </div>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
 
   if (vista === "level_selection") {
     return (
-      <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-6 pt-24 md:p-12 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
-        <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
-          <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
-        </div>
-        <div className="w-full max-w-4xl p-8 rounded-[32px] border bg-white shadow-xl flex flex-col items-center gap-8 z-10 animate-in zoom-in-95">
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                setVista("portal");
-                if (typeof playNotificationSound === "function") playNotificationSound();
-              }}
-              className="flex items-center text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 tracking-wider mb-2 border-none bg-transparent cursor-pointer"
-            >
-              <ArrowLeft size={12} className="mr-1.5" /> Retour
-            </button>
-            <h1 className="text-2xl md:text-4xl font-black italic tracking-tighter text-slate-900 uppercase">
-              Configurez votre profil d'utilisation
-            </h1>
-            <p className="text-xs md:text-sm font-medium text-slate-500 leading-relaxed max-w-xl mx-auto">
-              Choisissez le niveau de structure qui vous correspond pour optimiser vos outils de tenue de livres et déductions.
-            </p>
+      <div className="min-h-screen relative bg-slate-50 flex flex-col justify-between items-center p-6 pt-24 md:p-12 animate-in fade-in duration-700 overflow-x-hidden text-center antialiased">
+        <div className="flex-1 flex flex-col items-center justify-center w-full">
+          <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
+            <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full text-left">
-            {[
-              {
-                id: "plex",
-                title: "Gestion Immobilière",
-                desc: "Idéal pour les particuliers/entreprises propriétaires de plex, autonomes dans le secteur immobilier. Gérez vos dépenses, vos déductions et la facturation.",
-                badge: "Plex / Travailleur autonome immobilier",
-                icon: <Home size={24} />,
-                colorClass: "from-cyan-50 to-blue-50 hover:border-cyan-500 bg-cyan-500/10",
-                textColor: "text-cyan-700",
-                tagColor: "bg-cyan-100 text-cyan-800"
-              },
-              {
-                id: "entreprise",
-                title: "Gestion Syndicat de Copropriété",
-                desc: "La solution intégrée pour les syndicats de copropriété : gestion des contrats, transparence financière et communication fluide avec les copropriétaires.",
-                badge: "Syndicat",
-                icon: <Building2 size={24} />,
-                colorClass: "from-indigo-50 to-purple-50 hover:border-indigo-500 bg-indigo-500/10",
-                textColor: "text-indigo-700",
-                tagColor: "bg-indigo-100 text-indigo-800"
-              }
-            ].map((lvl) => {
-              const isSelected = userLevel === lvl.title;
-              return (
-                <button
-                  key={lvl.id}
-                  onClick={() => {
-                    setUserLevel(lvl.title);
-                    localStorage.setItem("autocompt_dashboard_mode", lvl.id === "entreprise" ? "Syndic" : "Plex");
-                    setDashboardMode(lvl.id === "entreprise" ? "Syndic" : "Plex");
-                    localStorage.setItem("autocompt_user_level", lvl.title);
-                    if (typeof playNotificationSound === "function") playNotificationSound();
-                  }}
-                  className={`p-6 rounded-[28px] border-2 bg-gradient-to-br hover:shadow-xl transition-all duration-300 flex flex-col justify-between min-h-[260px] cursor-pointer text-left ${isSelected
-                    ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10"
-                    : "border-slate-100 hover:border-slate-350 bg-white"
-                    }`}
-                >
-                  <div>
-                    <div className={`p-3.5 rounded-2xl w-min mb-4 text-emerald-600 ${lvl.tagColor}`}>
-                      {lvl.icon}
-                    </div>
-                    <div className="flex items-center space-x-2 mb-2">
-                      <h3 className="text-sm font-black uppercase text-slate-950 tracking-tight">
-                        {lvl.title}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed mb-4">
-                      {lvl.desc}
-                    </p>
-                  </div>
-
-                  <div className="mt-auto pt-4 flex flex-col gap-2">
-                    <span className={`text-[8.5px] font-black uppercase tracking-wider py-1 px-2.5 rounded-full w-max ${lvl.tagColor}`}>
-                      {lvl.badge}
-                    </span>
-                    {isSelected && (
-                      <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider flex items-center">
-                        ✓ Sélectionné
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="w-full flex justify-end md:pr-4 pt-4 border-t border-slate-100 mt-4">
-            <button
-              onClick={() => {
-                if (!userLevel) {
-                  setDispatcherSuccessToast({
-                    text: "Sélection Requise",
-                    channel: "Validation 🔒",
-                    customMessage: "Veuillez sélectionner l'un des trois niveaux pour continuer."
-                  });
+          <div className="w-full max-w-4xl p-8 rounded-[32px] border bg-white shadow-xl flex flex-col items-center gap-8 z-10 animate-in zoom-in-95 my-10">
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setVista("portal");
                   if (typeof playNotificationSound === "function") playNotificationSound();
-                  return;
+                }}
+                className="flex items-center text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 tracking-wider mb-2 border-none bg-transparent cursor-pointer"
+              >
+                <ArrowLeft size={12} className="mr-1.5" /> Retour
+              </button>
+              <h1 className="text-2xl md:text-4xl font-black italic tracking-tighter text-slate-900 uppercase">
+                Configurez votre profil d'utilisation
+              </h1>
+              <p className="text-xs md:text-sm font-medium text-slate-500 leading-relaxed max-w-xl mx-auto">
+                Choisissez le niveau de structure qui vous correspond pour optimiser vos outils de tenue de livres et déductions.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full text-left">
+              {[
+                {
+                  id: "plex",
+                  title: "Gestion Immobilière",
+                  desc: "Idéal pour les particuliers/entreprises propriétaires de plex, autonomes dans le secteur immobilier. Gérez vos dépenses, vos déductions et la facturation.",
+                  badge: "Plex / Travailleur autonome immobilier",
+                  icon: <Home size={24} />,
+                  colorClass: "from-cyan-50 to-blue-50 hover:border-cyan-500 bg-cyan-500/10",
+                  textColor: "text-cyan-700",
+                  tagColor: "bg-cyan-100 text-cyan-800"
+                },
+                {
+                  id: "entreprise",
+                  title: "Gestion Syndicat de Copropriété",
+                  desc: "La solution intégrée pour les syndicats de copropriété : gestion des contrats, transparence financière et communication fluide avec les copropriétaires.",
+                  badge: "Syndicat",
+                  icon: <Building2 size={24} />,
+                  colorClass: "from-indigo-50 to-purple-50 hover:border-indigo-500 bg-indigo-500/10",
+                  textColor: "text-indigo-700",
+                  tagColor: "bg-indigo-100 text-indigo-800"
                 }
-                if (dashboardMode === "Syndic") {
-                  setVista("pricing");
-                } else {
-                  setVista("rental_model");
-                }
-                if (typeof playNotificationSound === "function") playNotificationSound();
-              }}
-              className={`py-4 px-10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 ${userLevel
-                ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed border-none shadow-none"
-                }`}
-            >
-              Confirmer et Continuer
-            </button>
+              ].map((lvl) => {
+                const isSelected = userLevel === lvl.title;
+                return (
+                  <button
+                    key={lvl.id}
+                    onClick={() => {
+                      setUserLevel(lvl.title);
+                      localStorage.setItem("autocompt_dashboard_mode", lvl.id === "entreprise" ? "Syndic" : "Plex");
+                      setDashboardMode(lvl.id === "entreprise" ? "Syndic" : "Plex");
+                      localStorage.setItem("autocompt_user_level", lvl.title);
+                      if (typeof playNotificationSound === "function") playNotificationSound();
+                    }}
+                    className={`p-6 rounded-[28px] border-2 bg-gradient-to-br hover:shadow-xl transition-all duration-300 flex flex-col justify-between min-h-[260px] cursor-pointer text-left ${isSelected
+                      ? "border-emerald-500 shadow-xl scale-[1.02] bg-emerald-50/10"
+                      : "border-slate-100 hover:border-slate-350 bg-white"
+                      }`}
+                  >
+                    <div>
+                      <div className={`p-3.5 rounded-2xl w-min mb-4 text-emerald-600 ${lvl.tagColor}`}>
+                        {lvl.icon}
+                      </div>
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="text-sm font-black uppercase text-slate-950 tracking-tight">
+                          {lvl.title}
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed mb-4">
+                        {lvl.desc}
+                      </p>
+                    </div>
+
+                    <div className="mt-auto pt-4 flex flex-col gap-2">
+                      <span className={`text-[8.5px] font-black uppercase tracking-wider py-1 px-2.5 rounded-full w-max ${lvl.tagColor}`}>
+                        {lvl.badge}
+                      </span>
+                      {isSelected && (
+                        <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider flex items-center">
+                          ✓ Sélectionné
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="w-full flex justify-end md:pr-4 pt-4 border-t border-slate-100 mt-4">
+              <button
+                onClick={() => {
+                  if (!userLevel) {
+                    setDispatcherSuccessToast({
+                      text: "Sélection Requise",
+                      channel: "Validation 🔒",
+                      customMessage: "Veuillez sélectionner l'un des trois niveaux pour continuer."
+                    });
+                    if (typeof playNotificationSound === "function") playNotificationSound();
+                    return;
+                  }
+                  if (dashboardMode === "Syndic") {
+                    setVista("pricing");
+                  } else {
+                    setVista("rental_model");
+                  }
+                  if (typeof playNotificationSound === "function") playNotificationSound();
+                }}
+                className={`py-4 px-10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 ${userLevel
+                  ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border-none"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed border-none shadow-none"
+                  }`}
+              >
+                Confirmer et Continuer
+              </button>
+            </div>
           </div>
         </div>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
 
   if (vista === "welcome") {
     return (
-      <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-6 pt-24 md:p-12 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
-        <div
-          className="absolute top-1/4 left-1/4 w-[280px] md:w-[480px] h-[280px] md:h-[480px] rounded-full blur-[90px] md:blur-[150px] pointer-events-none select-none animate-pulse bg-emerald-500/5"
-          style={{ animationDuration: "9s" }}
-        />
-        <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
-          <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
-        </div>
+      <div className="min-h-screen relative bg-[#FAF9F6] dark:bg-zinc-950 flex flex-col justify-between animate-in fade-in duration-700 overflow-x-hidden antialiased">
+        <div className="flex-1 flex items-center justify-center p-6 pt-24 md:p-12 relative">
+          <div
+            className="absolute top-1/4 left-1/4 w-[280px] md:w-[480px] h-[280px] md:h-[480px] rounded-full blur-[90px] md:blur-[150px] pointer-events-none select-none animate-pulse bg-emerald-500/5"
+            style={{ animationDuration: "9s" }}
+          />
+          <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
+            <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
+          </div>
 
-        <div className="w-full max-w-xl p-6 md:p-12 rounded-[32px] border bg-white shadow-xl flex flex-col text-center gap-8 md:gap-10 z-10 animate-in zoom-in-95">
-          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter text-slate-900">
-            Votre comptabilité immobilière, enfin automatisée.
-          </h1>
-          <p className="text-sm md:text-base font-medium text-slate-600 leading-relaxed px-2 md:px-0">
-            L'assistant intelligent conçu sur mesure pour les investisseurs et
-            professionnels de l'immobilier au Québec. Centralisez vos finances
-            et maximisez vos déductions.
-          </p>
-          <div className="flex flex-col md:flex-row gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setVista("benefits");
-                if (typeof playNotificationSound === "function")
-                  playNotificationSound();
-              }}
-              className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-[16px] text-sm font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-emerald-600/20 border-none"
-            >
-              Créer mon profil
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setVista("login");
-                if (typeof playNotificationSound === "function")
-                  playNotificationSound();
-              }}
-              className="flex-1 py-4 bg-transparent hover:bg-slate-100 text-slate-600 rounded-[16px] text-xs font-bold uppercase tracking-widest transition-all cursor-pointer border-none"
-            >
-              J'ai déjà un compte, accès sécurisé
-            </button>
+          <div className="w-full max-w-xl p-6 md:p-12 rounded-[32px] border border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl flex flex-col text-center gap-8 md:gap-10 z-10 animate-in zoom-in-95">
+            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter text-slate-900 dark:text-white">
+              Votre comptabilité immobilière, enfin automatisée.
+            </h1>
+            <p className="text-sm md:text-base font-medium text-slate-600 dark:text-zinc-300 leading-relaxed px-2 md:px-0">
+              L'assistant intelligent conçu sur mesure pour les investisseurs et
+              professionnels de l'immobilier au Québec. Centralisez vos finances
+              et maximisez vos déductions.
+            </p>
+            <div className="flex flex-col md:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setVista("benefits");
+                  if (typeof playNotificationSound === "function")
+                    playNotificationSound();
+                }}
+                className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-[16px] text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-emerald-600/20 border-none"
+              >
+                Réserver mon accès
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVista("login");
+                  if (typeof playNotificationSound === "function")
+                    playNotificationSound();
+                }}
+                className="flex-1 py-4 bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[16px] text-xs font-bold uppercase tracking-widest transition-all cursor-pointer border-none"
+              >
+                J'ai déjà un compte, accès sécurisé
+              </button>
+            </div>
           </div>
         </div>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
 
   if (vista === "benefits") {
     return (
-      <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
-        <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
-          <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
-        </div>
-        <div className="w-full max-w-2xl relative pt-8 px-6 pb-10 mt-12 md:mt-0 md:p-10 rounded-[32px] border border-slate-100 bg-white shadow-xl flex flex-col space-y-8 z-10 animate-in slide-in-from-right-8">
-          <div className="space-y-3">
-            <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 text-left">
-              L'Intelligence Artificielle au Service de vos Finances
-            </h2>
+      <div className="min-h-screen relative bg-slate-100/70 dark:bg-zinc-900/60 border-y border-slate-200/60 dark:border-zinc-800/60 flex flex-col justify-between animate-in fade-in duration-700 overflow-x-hidden text-center antialiased">
+        <div className="flex-1 flex items-center justify-center p-6 relative">
+          <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
+            <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
           </div>
+          <div className="w-full max-w-2xl relative pt-8 px-6 pb-10 mt-12 md:mt-0 md:p-10 rounded-[32px] border border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl flex flex-col space-y-8 z-10 animate-in slide-in-from-right-8 my-10">
+            <div className="space-y-3">
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white text-left">
+                L'Intelligence Artificielle au Service de vos Finances
+              </h2>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-            <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50 flex space-x-4 items-start">
-              <div className="text-emerald-500 mt-1">
-                <CheckCircle2 size={18} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+              <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-950/50 flex space-x-4 items-start">
+                <div className="text-emerald-500 mt-1">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
+                    Nube (Cloud)
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1.5 font-medium leading-relaxed">
+                    Gardez vos documents et données en sécurité et accessibles partout grâce au Cloud.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                  Nube (Cloud)
-                </h3>
-                <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-relaxed">
-                  Gardez vos documents et données en sécurité et accessibles partout grâce au Cloud.
-                </p>
+              <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-950/50 flex space-x-4 items-start">
+                <div className="text-emerald-500 mt-1">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
+                    Intelligence Artificielle
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1.5 font-medium leading-relaxed">
+                    Automatisez la saisie, l'extraction de TPS/TVQ et l'analyse fiscale.
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-950/50 flex space-x-4 items-start">
+                <div className="text-emerald-500 mt-1">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
+                    Assistance 24/7
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1.5 font-medium leading-relaxed">
+                    Support en continu pour vous aider en tout temps avec la plateforme.
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-950/50 flex space-x-4 items-start">
+                <div className="text-emerald-500 mt-1">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
+                    Expertise & Optimisation
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1.5 font-medium leading-relaxed">
+                    Au-delà de la gestion, nous transformons vos données en décisions. Notre spécialisation en immobilier québécois vous garantit une conformité fiscale optimisée et une rentabilité accrue dès votre première année.
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50 flex space-x-4 items-start">
-              <div className="text-emerald-500 mt-1">
-                <CheckCircle2 size={18} />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                  Intelligence Artificielle
-                </h3>
-                <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-relaxed">
-                  Automatisez la saisie, l'extraction de TPS/TVQ et l'analyse fiscale.
-                </p>
-              </div>
-            </div>
-            <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50 flex space-x-4 items-start">
-              <div className="text-emerald-500 mt-1">
-                <CheckCircle2 size={18} />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                  Assistance 24/7
-                </h3>
-                <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-relaxed">
-                  Support en continu pour vous aider en tout temps avec la plateforme.
-                </p>
-              </div>
-            </div>
-            <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50 flex space-x-4 items-start">
-              <div className="text-emerald-500 mt-1">
-                <CheckCircle2 size={18} />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                  Expertise & Optimisation
-                </h3>
-                <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-relaxed">
-                  Au-delà de la gestion, nous transformons vos données en décisions. Notre spécialisation en immobilier québécois vous garantit une conformité fiscale optimisée et une rentabilité accrue dès votre première année.
-                </p>
-              </div>
-            </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => {
-                setVista("level_selection");
-                if (typeof playNotificationSound === "function")
-                  playNotificationSound();
-              }}
-              className="w-full sm:flex-1 py-4 px-8 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all cursor-pointer border-none shadow-lg shadow-emerald-600/20 order-1 sm:order-2"
-            >
-              Commencer maintenant
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setVista("login");
-                if (typeof playNotificationSound === "function")
-                  playNotificationSound();
-              }}
-              className="w-full sm:flex-1 py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"
-            >
-              J'ai déjà un compte
-            </button>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setVista("level_selection");
+                  if (typeof playNotificationSound === "function")
+                    playNotificationSound();
+                }}
+                className="w-full sm:flex-1 py-4 px-8 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all cursor-pointer border-none shadow-lg shadow-emerald-600/20 order-1 sm:order-2"
+              >
+                Réserver mon accès
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVista("login");
+                  if (typeof playNotificationSound === "function")
+                    playNotificationSound();
+                }}
+                className="w-full sm:flex-1 py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer border border-transparent order-2 sm:order-1"
+              >
+                J'ai déjà un compte
+              </button>
+            </div>
           </div>
         </div>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
@@ -9345,10 +9358,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
               </div>
             </div>
           </div>
-          <div className="absolute bottom-4 left-0 right-0 text-center z-10 w-full animate-in fade-in delay-200">
-            <p className="text-[10px] font-medium text-slate-400">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
-          </div>
         </div>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
@@ -11264,6 +11275,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </div>
           )}
         </AnimatePresence>
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
 
@@ -14336,7 +14348,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                     {/* iPhone Mock Frame */}
                     <div
-                      className={`w-[290px] h-[510px] rounded-[40px] border-4 border-zinc-850 dark:border-zinc-800 shadow-2xl relative flex flex-col justify-between overflow-hidden select-none bg-slate-50 dark:bg-zinc-900 ring-8 ring-zinc-900/15`}
+                      className={`w-[330px] sm:w-[370px] h-[600px] sm:h-[650px] min-h-[560px] rounded-[44px] border-4 border-zinc-800 dark:border-zinc-700 shadow-2xl shadow-emerald-950/20 relative flex flex-col justify-between overflow-hidden select-none bg-slate-50 dark:bg-zinc-900 ring-8 ring-emerald-500/20 dark:ring-emerald-500/30 transition-all`}
                     >
                       {/* Speaker Dynamic Notch */}
                       <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-4 bg-black rounded-full z-30 flex items-center justify-center">
