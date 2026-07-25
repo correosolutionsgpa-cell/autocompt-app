@@ -954,7 +954,7 @@ export default function DossierFiscauxView({
                     
                     {selectedDocPreview.lien && selectedDocPreview.lien !== '#' ? (
                       <div className="rounded-[28px] overflow-hidden border border-slate-200 dark:border-zinc-800 flex items-center justify-center bg-black min-h-[320px] w-full">
-                        {selectedDocPreview.lien.includes('.pdf') ? (
+                        {selectedDocPreview.lien.includes('.pdf') || selectedDocPreview.lien.includes('drive.google.com') ? (
                           <iframe 
                             src={selectedDocPreview.lien} 
                             className="w-full h-[320px] rounded-2xl border-none" 

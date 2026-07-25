@@ -2,25 +2,68 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Building2, MapPin, Search, Plus, FileText, ChevronRight, Calculator, CheckCircle2, ShieldCheck, Download, FolderOpen, Loader2, Trash2, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { dataService, type PropertyDoc, type PropertyDocumentDoc } from "../lib/dataService";
-import { auth, storage } from "../lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { auth } from "../lib/firebase";
+import { uploadDocumentToDrive, getCompanyDriveConfig } from "../lib/driveService";
+
+const DRIVE_CATEGORY_BY_TAB: Record<"Municipales" | "Scolaires" | "Assurances", string> = {
+  Municipales: "Taxes Municipales",
+  Scolaires: "Taxes Scolaires",
+  Assurances: "Assurances",
+};
+
+// Maps to the app's expense category dropdown (see validCategories in App.tsx's OCR pipeline).
+const EXPENSE_CATEGORY_BY_TAB: Record<"Municipales" | "Scolaires" | "Assurances", string> = {
+  Municipales: "Taxes",
+  Scolaires: "Taxes",
+  Assurances: "Assurance",
+};
+
+// Converts "X units occupied out of Y total" into a 0-100 occupancy %.
+// Much easier for a non-expert to fill in than a raw percentage.
+function unitsToOccupancyPct(unitsTotal: string, unitsOccupied: string): number {
+  const total = Number(unitsTotal);
+  const occupied = Number(unitsOccupied);
+  if (!total || total <= 0 || !occupied || occupied <= 0) return 0;
+  return Math.round(Math.min(occupied, total) / total * 100);
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result as string;
+      const commaIndex = res.indexOf(",");
+      resolve(commaIndex !== -1 ? res.substring(commaIndex + 1) : res);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 interface Propriete extends PropertyDoc {
   documentsCount: number;
 }
 
-export const TaxesAssurancesView = ({ 
-  darkMode, 
+export const TaxesAssurancesView = ({
+  darkMode,
   setVista,
   setDepenses,
   companyId,
+  companyName,
+  ownerId,
+  activeUser,
+  activeProfile,
   playNotificationSound,
   setDispatcherSuccessToast
-}: { 
-  darkMode: boolean; 
+}: {
+  darkMode: boolean;
   setVista: (v: string) => void;
   setDepenses?: React.Dispatch<React.SetStateAction<any[]>>;
   companyId?: string;
+  companyName?: string;
+  ownerId?: string;
+  activeUser?: string;
+  activeProfile?: string;
   playNotificationSound?: () => void;
   setDispatcherSuccessToast?: React.Dispatch<React.SetStateAction<any>>;
 }) => {
@@ -28,6 +71,16 @@ export const TaxesAssurancesView = ({
   const [activeTab, setActiveTab] = useState<"Municipales" | "Scolaires" | "Assurances">("Municipales");
   const [showAddPropModal, setShowAddPropModal] = useState(false);
   const [newPropAddress, setNewPropAddress] = useState("");
+  // Owner-occupancy is entered as "X of Y units" (much easier for a non-expert
+  // than typing a raw %) and converted to occupancyPct automatically.
+  const [newPropUnitsTotal, setNewPropUnitsTotal] = useState("");
+  const [newPropUnitsOccupied, setNewPropUnitsOccupied] = useState("");
+  const [isScanningNewProp, setIsScanningNewProp] = useState(false);
+  const [scanNewPropError, setScanNewPropError] = useState<string | null>(null);
+  const [pendingScanFile, setPendingScanFile] = useState<File | null>(null);
+  const [isEditingOccupancy, setIsEditingOccupancy] = useState(false);
+  const [editUnitsTotal, setEditUnitsTotal] = useState("");
+  const [editUnitsOccupied, setEditUnitsOccupied] = useState("");
   
   const [proprietes, setProprietes] = useState<Propriete[]>([]);
   const [documents, setDocuments] = useState<PropertyDocumentDoc[]>([]);
@@ -73,6 +126,56 @@ export const TaxesAssurancesView = ({
       .catch((err) => console.error("fetchPropertyDocuments failed:", err));
   }, [selectedPropriete]);
 
+  // Lets the user scan a tax/evaluation document to auto-fill the address
+  // instead of typing it — reuses the same S.O.F.I. Dimensions scanner built
+  // for onboarding (extracts adresse_propriete). Still requires the explicit
+  // "Ajouter" click below: never auto-creates the property from a scan alone.
+  const handleScanNewPropertyDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setIsScanningNewProp(true);
+    setScanNewPropError(null);
+    try {
+      const base64Data = await fileToBase64(file);
+      const resp = await fetch("/api/scan-dimensions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64Data, mimeType: file.type || "application/pdf", filename: file.name }),
+      });
+      if (!resp.ok) throw new Error(`Serveur: ${resp.status}`);
+      const data = await resp.json();
+      const uidForUsage = auth.currentUser?.uid;
+      if (uidForUsage) {
+        dataService.logAiUsageEvent(uidForUsage, {
+          profile: activeProfile || "gestionnaire",
+          feature: "dimension_scan",
+          userEmail: auth.currentUser?.email || undefined,
+        });
+      }
+      if (data.adresse_propriete) {
+        setNewPropAddress(data.adresse_propriete);
+        setPendingScanFile(file); // kept so "Ajouter" can also file the source document itself
+        // Suggest a starting "1 of N units" when the document says the owner
+        // lives in the building — still just a suggestion, she reviews/corrects
+        // it in the fields below before confirming.
+        if (data.est_proprietaire_occupant && Number(data.nombre_unites_total) > 0) {
+          setNewPropUnitsTotal(String(Number(data.nombre_unites_total)));
+          setNewPropUnitsOccupied("1");
+        }
+        if (playNotificationSound) playNotificationSound();
+      } else {
+        setScanNewPropError("Aucune adresse détectée dans ce document. Veuillez la saisir manuellement.");
+      }
+    } catch (err) {
+      console.error("[TaxesAssurances] Scan new property doc failed:", err);
+      setScanNewPropError("Échec de la lecture du document. Veuillez saisir l'adresse manuellement.");
+    } finally {
+      setIsScanningNewProp(false);
+    }
+  };
+
   const handleAddPropriete = async () => {
     if (!newPropAddress.trim()) return;
     const uid = auth.currentUser?.uid;
@@ -93,6 +196,8 @@ export const TaxesAssurancesView = ({
         };
         setProprietes(prev => [...prev, mockProp]);
         setNewPropAddress("");
+        setNewPropUnitsTotal("");
+        setNewPropUnitsOccupied("");
         setShowAddPropModal(false);
         return;
       }
@@ -103,9 +208,53 @@ export const TaxesAssurancesView = ({
         typeLocation: "Appartement/Maison",
         adresse: newPropAddress.trim(),
         status: 'Actif',
+        occupancyPct: unitsToOccupancyPct(newPropUnitsTotal, newPropUnitsOccupied),
       });
-      setProprietes(prev => [...prev, { ...saved, documentsCount: 0 }]);
+
+      // File the source document that produced this address — otherwise the
+      // évaluation/rôle document used to set up the property would be read
+      // once for its text and then silently discarded, with no trace of it
+      // in Drive for the client's accountant or an eventual audit.
+      let documentsCount = 0;
+      if (pendingScanFile) {
+        try {
+          const driveOwnerId = ownerId || uid;
+          const driveStatus = compId ? await getCompanyDriveConfig(compId, driveOwnerId) : null;
+          if (driveStatus?.connected) {
+            const base64Data = await fileToBase64(pendingScanFile);
+            const result = await uploadDocumentToDrive(
+              compId,
+              driveOwnerId,
+              base64Data,
+              pendingScanFile.name,
+              pendingScanFile.type || "application/octet-stream",
+              companyName || saved.adresse || "Entreprise",
+              DRIVE_CATEGORY_BY_TAB.Municipales,
+            );
+            if (result.success) {
+              await dataService.savePropertyDocument(uid, {
+                id: "",
+                propertyId: saved.id,
+                companyId: `${driveOwnerId}_company_${compId}`,
+                type: "Municipales",
+                name: pendingScanFile.name,
+                fileUrl: result.webViewLink || "",
+                storagePath: "",
+              });
+              documentsCount = 1;
+            }
+          }
+        } catch (fileErr) {
+          console.error("Failed to file the source scan document (property still created):", fileErr);
+        }
+      }
+
+      setProprietes(prev => [...prev, { ...saved, documentsCount }]);
       setNewPropAddress("");
+      setNewPropUnitsTotal("");
+      setNewPropUnitsOccupied("");
+      setPendingScanFile(null);
+      setScanNewPropError(null);
       setShowAddPropModal(false);
       if (playNotificationSound) playNotificationSound();
     } catch (err) {
@@ -122,43 +271,147 @@ export const TaxesAssurancesView = ({
       alert("Session non active. Impossible d'importer le document.");
       return;
     }
+    const driveOwnerId = ownerId || uid;
+    if (!companyId) {
+      alert("Aucun workspace actif — impossible de déterminer le Drive de destination.");
+      return;
+    }
 
     setIsUploading(true);
     try {
-      const storagePath = `properties/${selectedPropriete.id}/${activeTab}/${Date.now()}_${file.name}`;
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, file);
-      const fileUrl = await getDownloadURL(storageRef);
+      const driveStatus = await getCompanyDriveConfig(companyId, driveOwnerId);
+      if (!driveStatus?.connected) {
+        alert("Le Google Drive de ce workspace n'est pas connecté. Allez dans Paramètres → Google Drive pour le connecter, puis réessayez.");
+        return;
+      }
+
+      const base64Data = await fileToBase64(file);
+      const result = await uploadDocumentToDrive(
+        companyId,
+        driveOwnerId,
+        base64Data,
+        file.name,
+        file.type || "application/octet-stream",
+        companyName || selectedPropriete.adresse || "Entreprise",
+        DRIVE_CATEGORY_BY_TAB[activeTab],
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || "Échec du téléversement Google Drive");
+      }
 
       const savedDoc = await dataService.savePropertyDocument(uid, {
         id: "",
         propertyId: selectedPropriete.id,
+        companyId: `${driveOwnerId}_company_${companyId}`,
         type: activeTab,
         name: file.name,
-        fileUrl,
-        storagePath,
+        fileUrl: result.webViewLink || "",
+        storagePath: "",
       });
 
       setDocuments(prev => [savedDoc, ...prev]);
 
       // Update property documentsCount locally
-      setProprietes(prev => prev.map(p => 
-        p.id === selectedPropriete.id 
+      setProprietes(prev => prev.map(p =>
+        p.id === selectedPropriete.id
           ? { ...p, documentsCount: p.documentsCount + 1 }
           : p
       ));
+
+      // ── Feed the same central Tenue de Livres ledger the receipt scanner
+      // uses — a tax/insurance bill is a deductible expense like any other,
+      // it shouldn't live only as a filed document. The property was already
+      // explicitly chosen by the user (this folder), so no address-mismatch
+      // check is needed here — that's only for the general, unscoped scanner.
+      if (setDepenses && companyId) {
+        try {
+          const scanResp = await fetch("/api/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ base64Data, mimeType: file.type || "application/pdf", filename: file.name }),
+          });
+          if (scanResp.ok) {
+            const scanData = await scanResp.json();
+            dataService.logAiUsageEvent(uid, {
+              profile: activeProfile || "gestionnaire",
+              feature: "tax_scan",
+              userEmail: auth.currentUser?.email || undefined,
+            });
+            const rawSubtotal = Number(scanData.subtotal) || 0;
+            const rawTps = Number(scanData.tps) || 0;
+            const rawTvq = Number(scanData.tvq) || 0;
+            const rawTotal = Number(scanData.total) || 0;
+
+            // Sanity ceiling — a real property tax/insurance bill is never this
+            // large. Documents like a rôle d'évaluation have no "amount due" at
+            // all; if the OCR mistakes an assessed property VALUE (hundreds of
+            // thousands of $) for a payable total, refuse to auto-log it as an
+            // expense rather than silently corrupting the ledger.
+            if (rawTotal > 20000) {
+              if (setDispatcherSuccessToast) {
+                setDispatcherSuccessToast({
+                  text: "Montant suspect — non enregistré ⚠️",
+                  channel: "Taxes & Assurances",
+                  customMessage: `Le document est archivé, mais le montant lu (${rawTotal.toLocaleString('fr-CA')}$) semble beaucoup trop élevé pour une facture de taxes/assurance — probablement une valeur d'évaluation, pas un montant à payer. Ajoutez la dépense manuellement si nécessaire.`,
+                });
+              }
+              return;
+            }
+
+            // Owner-occupied properties: only the rented portion is deductible
+            // (Quebec/CRA rule). Applied the same way as "Bureau à domicile"
+            // elsewhere in the app — never silent: the full amount and the %
+            // applied are both kept on the record so she can verify it.
+            const occupancyPct = Math.max(0, Math.min(100, selectedPropriete.occupancyPct || 0));
+            const deductiblePct = (100 - occupancyPct) / 100;
+            const isProrated = occupancyPct > 0;
+
+            const newExpense: Record<string, any> = {
+              id: `${uid}_expense_${Date.now()}`,
+              companyId,
+              fecha: scanData.date || new Date().toISOString().split("T")[0],
+              fournisseur: (scanData.supplier || selectedPropriete.adresse) + (isProrated ? ` (${100 - occupancyPct}% déductible — propriétaire occupant)` : ""),
+              cat: EXPENSE_CATEGORY_BY_TAB[activeTab],
+              adresse: selectedPropriete.adresse,
+              propertyId: selectedPropriete.id,
+              subtotal: parseFloat((rawSubtotal * deductiblePct).toFixed(2)),
+              tps: parseFloat((rawTps * deductiblePct).toFixed(2)),
+              tvq: parseFloat((rawTvq * deductiblePct).toFixed(2)),
+              total: parseFloat((rawTotal * deductiblePct).toFixed(2)),
+              lien: result.webViewLink || "",
+              documentUrl: result.webViewLink || "",
+              partnerTag: activeUser || "Fabiola",
+              status: "En attente",
+              déjàFacturé: false,
+            };
+            // Firestore rejects literal `undefined` field values outright, so
+            // these two are only added when actually prorated — never set as
+            // `undefined` keys (that's what silently broke every save here).
+            if (isProrated) {
+              newExpense.montantBrut = rawTotal;
+              newExpense.occupancyPctApplied = occupancyPct;
+            }
+            setDepenses((prev) => [newExpense, ...prev]);
+          } else {
+            console.error("[TaxesAssurances] /api/scan failed:", scanResp.status);
+          }
+        } catch (scanErr) {
+          console.error("[TaxesAssurances] OCR extraction failed (document still saved):", scanErr);
+        }
+      }
 
       if (playNotificationSound) playNotificationSound();
       if (setDispatcherSuccessToast) {
         setDispatcherSuccessToast({
           text: "Document importé",
           channel: "Taxes & Assurances",
-          customMessage: `Le document ${file.name} a été enregistré avec succès.`,
+          customMessage: `Le document ${file.name} a été enregistré et ajouté à votre Tenue de Livres.`,
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("File upload failed:", err);
-      alert("Erreur lors du téléversement du fichier.");
+      alert(`Erreur lors du téléversement du fichier: ${err?.message || err}`);
     } finally {
       setIsUploading(false);
     }
@@ -181,6 +434,30 @@ export const TaxesAssurancesView = ({
     } catch (err) {
       console.error("Failed to delete document:", err);
       alert("Erreur lors de la suppression du document.");
+    }
+  };
+
+  const handleSaveOccupancyPct = async () => {
+    if (!selectedPropriete || !isEditingOccupancy) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const pct = unitsToOccupancyPct(editUnitsTotal, editUnitsOccupied);
+    try {
+      const updated = await dataService.saveProperty(uid, {
+        id: selectedPropriete.id,
+        companyId: selectedPropriete.companyId,
+        typeLocation: selectedPropriete.typeLocation,
+        adresse: selectedPropriete.adresse,
+        status: selectedPropriete.status,
+        occupancyPct: pct,
+      });
+      setSelectedPropriete(prev => prev ? { ...prev, occupancyPct: pct } : prev);
+      setProprietes(prev => prev.map(p => p.id === updated.id ? { ...p, occupancyPct: pct } : p));
+      setIsEditingOccupancy(false);
+      if (playNotificationSound) playNotificationSound();
+    } catch (err) {
+      console.error("Failed to save occupancy %:", err);
+      alert("Erreur lors de l'enregistrement du pourcentage d'occupation.");
     }
   };
 
@@ -338,6 +615,55 @@ export const TaxesAssurancesView = ({
                 <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
                   Gestion des relevés officiels
                 </p>
+                {/* Owner-occupancy: controls the deductible portion applied to
+                    every tax/insurance document imported for this property.
+                    Entered as "X of Y units", not a raw % — much easier for a
+                    non-expert user to fill in correctly. */}
+                <div className="mt-2">
+                  {isEditingOccupancy ? (
+                    <div className={`p-3 rounded-2xl border inline-flex flex-col gap-2 ${darkMode ? "border-zinc-700 bg-zinc-900" : "border-slate-200 bg-slate-50"}`}>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          autoFocus
+                          placeholder="Unités totales"
+                          value={editUnitsTotal}
+                          onChange={(e) => setEditUnitsTotal(e.target.value)}
+                          className={`w-28 p-1.5 rounded-lg border text-xs font-bold ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder="Occupée(s) par le propriétaire"
+                          value={editUnitsOccupied}
+                          onChange={(e) => setEditUnitsOccupied(e.target.value)}
+                          className={`w-24 p-1.5 rounded-lg border text-xs font-bold ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+                        />
+                        <button onClick={handleSaveOccupancyPct} className="text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700">Enregistrer</button>
+                        <button onClick={() => setIsEditingOccupancy(false)} className={`text-[10px] font-black uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Annuler</button>
+                      </div>
+                      {editUnitsTotal && editUnitsOccupied && (
+                        <p className={`text-[10px] font-bold ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
+                          → {unitsToOccupancyPct(editUnitsTotal, editUnitsOccupied)}% occupé par le propriétaire — {100 - unitsToOccupancyPct(editUnitsTotal, editUnitsOccupied)}% déductible
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditUnitsTotal("");
+                        setEditUnitsOccupied("");
+                        setIsEditingOccupancy(true);
+                      }}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${darkMode ? "border-zinc-700 text-zinc-400 hover:border-emerald-500/50" : "border-slate-200 text-slate-500 hover:border-emerald-500/50"}`}
+                    >
+                      {(selectedPropriete?.occupancyPct || 0) > 0
+                        ? `🏠 ${selectedPropriete?.occupancyPct}% occupé par le propriétaire — ${100 - (selectedPropriete?.occupancyPct || 0)}% déductible`
+                        : "Entièrement loué — 100% déductible (modifier)"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -531,6 +857,38 @@ export const TaxesAssurancesView = ({
             </h3>
             <div className="space-y-4">
               <div>
+                <label className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl border border-dashed text-xs font-black uppercase tracking-widest cursor-pointer transition-all ${
+                  darkMode ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                } ${isScanningNewProp ? "opacity-60 pointer-events-none" : ""}`}>
+                  {isScanningNewProp ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Lecture du document...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      <span>Scanner un document (adresse auto)</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    onChange={handleScanNewPropertyDoc}
+                    accept="application/pdf, image/jpeg, image/png, image/webp"
+                    disabled={isScanningNewProp}
+                    className="hidden"
+                  />
+                </label>
+                {scanNewPropError && (
+                  <p className="text-[10px] font-bold text-rose-500 mt-1.5">{scanNewPropError}</p>
+                )}
+                {pendingScanFile && (
+                  <p className={`text-[10px] font-bold mt-1.5 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
+                    📎 « {pendingScanFile.name} » sera archivé dans Drive avec la propriété.
+                  </p>
+                )}
+              </div>
+              <div>
                 <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1 shadow-sm ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                   Adresse
                 </label>
@@ -545,9 +903,56 @@ export const TaxesAssurancesView = ({
                   autoFocus
                 />
               </div>
+              <div>
+                <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1 shadow-sm ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                  Est-ce que le propriétaire habite dans cet immeuble?
+                </label>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="Unités totales"
+                      value={newPropUnitsTotal}
+                      onChange={(e) => setNewPropUnitsTotal(e.target.value)}
+                      className={`w-full p-3 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                        darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"
+                      }`}
+                    />
+                    <span className={`text-[9px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Unités au total</span>
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="Occupée(s) par le propriétaire"
+                      value={newPropUnitsOccupied}
+                      onChange={(e) => setNewPropUnitsOccupied(e.target.value)}
+                      className={`w-full p-3 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                        darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"
+                      }`}
+                    />
+                    <span className={`text-[9px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Unité(s) occupée(s) par le propriétaire (0 si aucune)</span>
+                  </div>
+                </div>
+                {newPropUnitsTotal && newPropUnitsOccupied && (
+                  <p className={`text-[10px] font-bold mt-2 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
+                    → {unitsToOccupancyPct(newPropUnitsTotal, newPropUnitsOccupied)}% occupé par le propriétaire — {100 - unitsToOccupancyPct(newPropUnitsTotal, newPropUnitsOccupied)}% déductible
+                  </p>
+                )}
+                <p className={`text-[9px] mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                  Laissez vide si l'immeuble est entièrement loué (100% déductible).
+                </p>
+              </div>
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setShowAddPropModal(false)}
+                  onClick={() => {
+                    setShowAddPropModal(false);
+                    setPendingScanFile(null);
+                    setScanNewPropError(null);
+                    setNewPropUnitsTotal("");
+                    setNewPropUnitsOccupied("");
+                  }}
                   className={`flex-1 p-3 rounded-xl text-xs font-black uppercase tracking-widest transition-colors ${
                     darkMode ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   }`}

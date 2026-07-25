@@ -128,6 +128,15 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Taxes & Assurances documents filed per property. This collection had
+    // no rule at all before — every write was silently rejected by the
+    // default-deny catch-all, so no document ever actually saved here.
+    match /propertyDocuments/{docId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /loyers/{loyerId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();

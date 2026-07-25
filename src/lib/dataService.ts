@@ -105,6 +105,13 @@ export interface PropertyDoc {
   typeLocation: string;   // "Appartement/Maison" | "Immeuble à revenus" | etc.
   adresse: string;
   status: 'Actif' | 'Vacant' | 'Archivé';
+  /** % of this property occupied by the owner themselves (0 for a fully-rented
+   * building). When set, tax/insurance expenses filed against this property
+   * are only logged as deductible for the remaining (100 − occupancyPct)% —
+   * mirrors BuildingLedger.occupancyPct/deductiblePct for properties that
+   * don't (yet) have a full BuildingLedger set up. Always user-confirmed,
+   * never silently assumed — defaults to 0 (no reduction) until set. */
+  occupancyPct?: number;
   ownerId: string;
   createdAt: string;
 }
@@ -381,10 +388,14 @@ export interface PaieRecordDoc {
 export interface PropertyDocumentDoc {
   id: string;
   propertyId: string;
+  /** Prefixed company doc id (`{ownerId}_company_{shortId}`) — lets invited
+   * collaborators read these documents too, same pattern as every other
+   * shared collection. Optional only for documents saved before this field existed. */
+  companyId?: string;
   type: 'Municipales' | 'Scolaires' | 'Assurances';
   name: string;
-  fileUrl: string;
-  storagePath: string;
+  fileUrl: string; // Google Drive "/preview" link — the company's own Drive, not AutoCompt storage
+  storagePath?: string; // legacy Firebase Storage path, empty for Drive-based uploads
   ownerId: string;
   uploadedAt: string;
 }
@@ -1478,10 +1489,17 @@ export const dataService = {
       createdAt: expenseData.createdAt || new Date().toISOString(),
     };
     
-    // Generate an ID if not provided
-    const id = expenseData.id && String(expenseData.id).length > 6 && isNaN(Number(expenseData.id)) 
-      ? String(expenseData.id) 
-      : `exp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    // Derive a STABLE, per-user document id from whatever id the caller passed in
+    // (a raw numeric client-side timestamp on first save, or this same prefixed id
+    // on every later save as the OCR pipeline fills in more data). Reusing the same
+    // id across a scan's create → Drive-upload → OCR-finalize stages means every
+    // stage's setDoc lands on the SAME Firestore document instead of minting a new
+    // one each time — previously `isNaN(Number(...))` rejected numeric ids outright,
+    // so every stage of every scan created its own orphaned duplicate document.
+    const rawId = expenseData.id != null && String(expenseData.id).trim() !== ''
+      ? String(expenseData.id)
+      : `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const id = rawId.startsWith(`${userId}_expense_`) ? rawId : `${userId}_expense_${rawId}`;
 
     const entryData = {
       id: id,

@@ -46,13 +46,13 @@ const TrialExpiredModal: React.FC<TrialExpiredModalProps> = ({ darkMode, show, o
 
               <div className="space-y-1">
                 <span className="text-[9px] font-black tracking-widest uppercase italic text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                  Période d'essai terminée
+                  Phase Bêta · Accès Gratuit
                 </span>
                 <h3 className="text-xl font-black uppercase italic tracking-tighter mt-2">
-                  Votre essai bêta est arrivé à échéance
+                  Prolongez votre accès bêta gratuit
                 </h3>
                 <p className="text-[10px] text-slate-400 dark:text-zinc-500 leading-relaxed max-w-xs mx-auto">
-                  Vous pouvez continuer à consulter toutes vos données déjà enregistrées, mais l'ajout de nouvelles dépenses, immeubles ou unités est maintenant bloqué. Répondez à ce court questionnaire pour obtenir un mois supplémentaire gratuit.
+                  Accès 100% gratuit pendant la phase bêta — sans carte de crédit. Répondez à ce court questionnaire pour aider à améliorer AutoCompt et prolonger votre accès prioritaire.
                 </p>
               </div>
             </div>

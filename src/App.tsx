@@ -107,10 +107,14 @@ import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
+import { PolitiqueConfidentialite } from "./components/PolitiqueConfidentialite";
+import { ConditionsUtilisation } from "./components/ConditionsUtilisation";
+import { SiteFooter } from "./components/SiteFooter";
+import { NotFound404 } from "./components/NotFound404";
+import { CookieConsentBanner } from "./components/CookieConsentBanner";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
 import SofiOnboarding from "./components/SofiOnboarding";
 import ProfilEtEquipe from "./components/ProfilEtEquipe";
-import { SofiAvatarSVG } from "./components/SofiAvatarSVG";
 import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
@@ -146,7 +150,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
-import { isCompanyDriveActive, uploadDocumentToDrive } from "./lib/driveService";
+import { getCompanyDriveConfig, uploadDocumentToDrive } from "./lib/driveService";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
@@ -749,6 +753,22 @@ const App = () => {
   const [selectedProfile, setSelectedProfile] = useState<string | null>(
     () => localStorage.getItem("autocompt_selected_profile") || null
   );
+  // Changes the active profile from within the app (e.g. Paramètres), unlike
+  // the onboarding-only setSelectedProfile — this also persists to Firestore
+  // so it survives across browsers/sessions instead of living only in
+  // localStorage, which was silently reverting with no warning to the user.
+  const updateSelectedProfile = async (profile: string) => {
+    setSelectedProfile(profile);
+    localStorage.setItem("autocompt_selected_profile", profile);
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      try {
+        await setDoc(doc(db, "users", uid), { selectedProfile: profile }, { merge: true });
+      } catch (err) {
+        console.error("Failed to persist selectedProfile:", err);
+      }
+    }
+  };
   // ── Phase 4: Post-onboarding guided tour state ─────────────────────────────
   // showSettingsTour is set to true the moment the user completes the Sofi
   // onboarding and lands on the dashboard for the very first time.
@@ -883,7 +903,7 @@ const App = () => {
         const saved = await dataService.saveProperty(userId, {
           id: item.id,
           companyId: item.companyId || activeCompanyId,
-          buildingId: item.buildingId,
+          ...(item.buildingId ? { buildingId: item.buildingId } : {}),
           typeLocation: item.typeLocation || "Logement entier",
           adresse: item.adresse,
           status: (item.status as 'Actif' | 'Vacant' | 'Archivé') || "Actif",
@@ -920,6 +940,10 @@ const App = () => {
         }
       } catch (err) {
         console.error("Failed to save property/units:", err);
+        setDispatcherSuccessToast({
+          text: "Erreur lors de l'enregistrement de la propriété. Veuillez réessayer.",
+          channel: "Tenue de Livres",
+        });
       }
     }
   };
@@ -1180,6 +1204,20 @@ const App = () => {
   }, [soundEnabled]);
 
   useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (hash === 'politique-de-confidentialite' || hash === 'privacy') {
+        setVista('politique-de-confidentialite');
+      } else if (hash === 'conditions-d-utilisation' || hash === 'terms') {
+        setVista('conditions-d-utilisation');
+      }
+    };
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
@@ -1211,6 +1249,24 @@ const App = () => {
     const mode = company?.dashboardMode ?? (activeCompanyId === "1" ? "Syndic" : "Plex");
     setDashboardMode(mode);
   }, [activeCompanyId, listaEmpresas]);
+
+  // Beta strategy (2026-07-22, Fabiola): pricing is intentionally hidden
+  // everywhere while the beta is free — she wants usage data first, prices
+  // later. Skip the "Choisissez votre forfait" screen entirely and silently
+  // grant the most complete tier for the workspace type, so nothing is
+  // restricted for beta testers. Remove this effect (and the vista==="pricing"
+  // redirect stub below) once real pricing is ready to launch.
+  useEffect(() => {
+    if (vista !== "pricing") return;
+    // "integral" clears every usage-limit / paywall check in the app (AI query
+    // count, scan count, second-company gate) for both Plex and Syndic
+    // workspaces — confirmed by reading every selectedTier/getEffectiveTier()
+    // comparison in this file. Don't swap in "syndicat_complet" for Syndic:
+    // it isn't recognized by the AI-query "isPro" check, so Syndic beta
+    // testers would hit a 0-query limit and see the paywall immediately.
+    setSelectedTier("integral");
+    setVista("setup");
+  }, [vista]);
 
   const isSuperAdmin =
     currentUserEmail ? (
@@ -1247,7 +1303,7 @@ const App = () => {
         "kilometraje", "facturas", "dossiers", "documents", "drive",
         "homeoffice", "taxes", "rapports", "banque", "sous-traitance", "doculegal",
         // Syndic views
-        "cotisations", "contrats", "transparence", "loi16", "muro", "settings",
+        "cotisations", "contrats", "transparence", "loi16", "muro", "settings", "politique-de-confidentialite", "conditions-d-utilisation",
         "rapport-ia",
         // Other app views
         "plex", "meuble", "incident", "taxes_assurances", "accepter-invitation",
@@ -1344,7 +1400,12 @@ const App = () => {
   const [onboardingPorcBureau, setOnboardingPorcBureau] = useState(0);
 
   // --- PRICING TIERS & WORKSPACE LIMITS STATE ---
-  const [selectedTier, setSelectedTier] = useState<string>("porte_ouverte");
+  // "integral" (not the old "porte_ouverte" default) because selectedTier
+  // isn't persisted anywhere — every session, including returning users who
+  // never pass through the pricing screen, starts from this value. During
+  // the free beta this must be the unrestricted tier, or every AI chat/scan
+  // hits a 0-query limit and shows the paywall on the very first use.
+  const [selectedTier, setSelectedTier] = useState<string>("integral");
   const [showLimitModal, setShowLimitModal] = useState(false);
   /** Toast shown in GestionPlex after S.O.F.I. pre-fills the property form */
   const [sofiPrefillMessage, setSofiPrefillMessage] = useState("");
@@ -2417,7 +2478,7 @@ const App = () => {
 
                 {/* BOUTON DE SUPPORT CONTACT DIRECT */}
                 <a
-                  href="mailto:info@solutionsgpa.com"
+                  href="mailto:support@autocompt.ca"
                   className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
                     ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
                     : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
@@ -2426,6 +2487,25 @@ const App = () => {
                   <Mail size={12} />
                   <span>Contactez le support</span>
                 </a>
+
+                <div id="nav-legal-privacy" className="flex flex-col space-y-1 pt-2 border-t border-zinc-800/60 text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                  <button
+                    type="button"
+                    onClick={() => { setVista("politique-de-confidentialite"); setIsSidebarOpen(false); }}
+                    className="hover:text-emerald-400 text-left transition-colors flex items-center gap-1.5 py-0.5"
+                  >
+                    <ShieldCheck size={11} className="text-emerald-400" />
+                    <span>Politique de confidentialité</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setVista("conditions-d-utilisation"); setIsSidebarOpen(false); }}
+                    className="hover:text-emerald-400 text-left transition-colors flex items-center gap-1.5 py-0.5"
+                  >
+                    <Lock size={11} className="text-blue-400" />
+                    <span>Conditions d'utilisation</span>
+                  </button>
+                </div>
 
                 <div className="space-y-1.5 w-full">
                   {isSuperAdmin && (
@@ -2676,6 +2756,13 @@ const App = () => {
         },
       ]);
       setAiQueryCount((prev) => prev + 1);
+      if (auth.currentUser?.uid) {
+        dataService.logAiUsageEvent(auth.currentUser.uid, {
+          profile: activeProfile,
+          feature: "sofi_chat",
+          userEmail: auth.currentUser.email || undefined,
+        });
+      }
     } catch {
       setChatMessages((prev) => [
         ...prev,
@@ -5503,48 +5590,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
     }
   };
 
+  // Uploads to the company's PERMANENT shared Drive (server-side refresh token —
+  // see driveService.ts). Works identically for the owner and any invited
+  // collaborator; no per-browser OAuth popup needed once the company connected once.
   const uploadToDrive = async (file: File) => {
-    // 1. État de chargement : Toast de début de synchronisation
     setDispatcherSuccessToast({
       text: "Synchronisation en cours...",
       channel: "Google Drive",
       customMessage: `Préparation et téléversement sécurisé de "${file.name}"...`,
     });
 
-    // Pause artificielle pour donner un ressenti d'action asynchrone de synchronisation
-    await new Promise((resolve) => setTimeout(resolve, 1400));
-
-    const folder = currentCompany?.driveConfig?.folderId || "Default_Vault";
-    console.log(`[Google Drive Integration] Target Folder FolderID: ${folder}`);
-    console.log(
-      `[Google Drive Integration] Using GOOGLE_API_KEY: ${GOOGLE_API_KEY ? "Set" : "Unset"}`,
-    );
-    console.log(
-      `[Google Drive Integration] Using GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID ? "Set" : "Unset"}`,
-    );
+    const companyIdForDrive = activeCompanyId || "default";
+    const driveOwnerId = currentCompany?.ownerId || auth.currentUser?.uid || "";
 
     try {
-      // Préparation de la structure asynchrone prête à communiquer avec l'API Google Drive via multipart rest upload (gapi/gapi.client.drive)
-      if (
-        (GOOGLE_API_KEY as string) === "COLLEZ_VOTRE_CLE_AIza_ICI" ||
-        (GOOGLE_CLIENT_ID as string) === "COLLEZ_VOTRE_CLIENT_ID_ICI"
-      ) {
-        console.warn(
-          "Fabiola Drive: Clés d'API manquantes. Simulation active.",
-        );
-
-        // Alerte de succès de simulation
-        setDispatcherSuccessToast({
-          text: "Document synchronisé (Simulé)",
-          channel: "Google Drive",
-          customMessage: `Fichier "${file.name}" traité et envoyé avec succès sous simulation active.`,
-        });
-
-        return `https://drive.google.com/active_company_storage/${folder}/${Date.now()}_${file.name}`;
-      }
-
-      // Structure d'appel d'API Google Drive v3 multipart réelle
-      // On encode d'abord en base64 pour un envoi robuste
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -5556,139 +5615,37 @@ Ceci est un message automatisé généré par AutoCompt.`;
         reader.readAsDataURL(file);
       });
 
-      const boundary = "foo_bar_baz_autocompt";
-      const delimiter = `\r\n--${boundary}\r\n`;
-      const close_delim = `\r\n--${boundary}--`;
-
-      // Récupération sécurisée du jeton d'accès (interactif s'il est expiré ou absent)
-      let accessToken = await getOrCreateGoogleAccessToken();
-
-      // Resolve the hierarchy of folders: /AutoCompt/[Año]/[Nombre_Propiedad]/Recibos
-      let targetFolderId = folder;
-      try {
-        const rootParentId = folder && folder !== "Default_Vault" ? folder : "root";
-        const autoComptFolderId = await getOrCreateDriveFolder("AutoCompt", rootParentId, accessToken);
-        const currentYear = new Date().getFullYear().toString();
-        const yearFolderId = await getOrCreateDriveFolder(currentYear, autoComptFolderId, accessToken);
-        const propertyName = currentCompany?.nombre || "Propriété Générale";
-        const propertyFolderId = await getOrCreateDriveFolder(propertyName, yearFolderId, accessToken);
-        targetFolderId = await getOrCreateDriveFolder("Recibos", propertyFolderId, accessToken);
-        console.log(`[Google Drive Hierarchy] Resolved target folder id: ${targetFolderId} for file: ${file.name}`);
-      } catch (hierarchicalErr) {
-        console.warn("[Google Drive Hierarchy] Failed to resolve hierarchy, falling back to root/folder ID:", hierarchicalErr);
-      }
-
-      const metadata = {
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        parents: [targetFolderId],
-      };
-
-      let multipartRequestBody =
-        delimiter +
-        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-        JSON.stringify(metadata) +
-        delimiter +
-        "Content-Type: " +
-        (file.type || "application/octet-stream") +
-        "\r\n" +
-        "Content-Transfer-Encoding: base64\r\n\r\n" +
-        base64Data +
-        close_delim;
-
-      let response = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=${GOOGLE_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": `multipart/related; boundary=${boundary}`,
-          },
-          body: multipartRequestBody,
-        },
+      const result = await uploadDocumentToDrive(
+        companyIdForDrive,
+        driveOwnerId,
+        base64Data,
+        file.name,
+        file.type || "application/octet-stream",
+        currentCompany?.nombre || "Propriété Générale",
+        "Recibos",
       );
 
-      // Gestion automatique en cas de jeton d'accès expiré (Erreur 401) : Nettoyage et ré-autorisation
-      if (response.status === 401) {
-        console.warn(
-          "[Google Drive Upload] Jeton d'accès expiré ou révoqué (401 d'API). Tentative de renouvellement interactif...",
-        );
-        localStorage.removeItem("google_access_token_data");
-        if ((window as any).gapi?.auth) {
-          (window as any).gapi.auth.setToken(null);
-        }
-
-        accessToken = await getOrCreateGoogleAccessToken();
-
-        // Re-resolve targetFolderId with new token
-        try {
-          const rootParentId = folder && folder !== "Default_Vault" ? folder : "root";
-          const autoComptFolderId = await getOrCreateDriveFolder("AutoCompt", rootParentId, accessToken);
-          const currentYear = new Date().getFullYear().toString();
-          const yearFolderId = await getOrCreateDriveFolder(currentYear, autoComptFolderId, accessToken);
-          const propertyName = currentCompany?.nombre || "Propriété Générale";
-          const propertyFolderId = await getOrCreateDriveFolder(propertyName, yearFolderId, accessToken);
-          targetFolderId = await getOrCreateDriveFolder("Recibos", propertyFolderId, accessToken);
-        } catch (hierarchicalErr) {
-          console.warn("[Google Drive Hierarchy] Failed to resolve hierarchy on retry:", hierarchicalErr);
-        }
-
-        const retryMetadata = {
-          name: file.name,
-          mimeType: file.type || "application/octet-stream",
-          parents: [targetFolderId],
-        };
-
-        multipartRequestBody =
-          delimiter +
-          "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-          JSON.stringify(retryMetadata) +
-          delimiter +
-          "Content-Type: " +
-          (file.type || "application/octet-stream") +
-          "\r\n" +
-          "Content-Transfer-Encoding: base64\r\n\r\n" +
-          base64Data +
-          close_delim;
-
-        response = await fetch(
-          `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=${GOOGLE_API_KEY}`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": `multipart/related; boundary=${boundary}`,
-            },
-            body: multipartRequestBody,
-          },
-        );
+      if (!result.success) {
+        throw new Error(result.error || "Échec du téléversement Google Drive");
       }
 
-      if (!response.ok) {
-        throw new Error(
-          `Erreur réseau HTTP : ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const driveResult = await response.json();
-      const generatedId = driveResult.id || `uploaded_${Date.now()}`;
-
-      // Alerte de succès réelle
       setDispatcherSuccessToast({
         text: "Document synchronisé avec succès !",
         channel: "Google Drive",
         customMessage: `"${file.name}" est téléversé dans le dossier Google Drive pour ${currentCompany?.nombre || "entreprise"}.`,
       });
 
-      return `https://drive.google.com/file/d/${generatedId}/view`;
+      // "/preview" (not "/view") is Drive's embeddable format — works inside an
+      // <iframe> for both images and PDFs. "/view" is a full page and can't be
+      // embedded, which was silently breaking the in-app document preview.
+      return `https://drive.google.com/file/d/${result.fileId}/preview`;
     } catch (err: any) {
-      console.error("Échec d'envoi vers Google Drive principal ou gapi:", err);
-      // Alerte d'erreur
+      console.error("Échec d'envoi vers Google Drive:", err);
       alert(
         `Erreur de synchronisation Google Drive: ${err.message || err}. Le fichier sera stocké localement.`,
       );
       // Return a fallback path to still maintain the bookkeeping record
-      return `https://drive.google.com/error_fallback_vault/${folder}/${Date.now()}_${file.name}`;
+      return `https://drive.google.com/error_fallback_vault/${companyIdForDrive}/${Date.now()}_${file.name}`;
     }
   };
 
@@ -5976,6 +5933,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             normalized.address ||
             scanResults.adresse ||
             scanResults.address ||
+            scanResults.propertyAddress ||
             "Général";
         }
 
@@ -6125,6 +6083,24 @@ Ceci est un message automatisé généré par AutoCompt.`;
             `[S.O.F.I. Address Match] Extracted address "${extractedAdresse}" → buildingId "${sofiMatchedBuildingId}" ("${sofiMatchedBuildingAddress}")`,
           );
         }
+
+        // ── S.O.F.I. Wrong-workspace warning ────────────────────────────────
+        // If the document names a real property address that matches neither a
+        // known building/unit NOR the active company's own registered address,
+        // warn before saving — the document may belong to a different company
+        // or property than the one currently open.
+        let addressMismatchWarning = '';
+        if (extractedAdresse && extractedAdresse !== 'Général' && !sofiMatchedBuildingId) {
+          const addrTokens = normalizeAddr(extractedAdresse).split(' ').filter(t => t.length > 2);
+          const companyAddrNorm = normalizeAddr(currentCompany?.userProfile?.adresse || currentCompany?.adresse || '');
+          const matchesCompanyAddr = addrTokens.some(t => companyAddrNorm.includes(t));
+          if (!matchesCompanyAddr) {
+            addressMismatchWarning = extractedAdresse;
+            console.warn(
+              `[S.O.F.I. Address Match] Extracted address "${extractedAdresse}" matches neither a known building nor "${currentCompany?.nombre}"'s own address ("${currentCompany?.userProfile?.adresse || currentCompany?.adresse || 'inconnue'}").`,
+            );
+          }
+        }
         // ── End S.O.F.I. Matcher ──────────────────────────────────────────────
 
         // Deductible calculations for Bureau à domicile rule
@@ -6145,8 +6121,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
           : tvq;
 
         // Pre-check for duplicate with the currently captured state (to fail fast and notify synchronously)
-        // [DEBUG] TEMPORARILY BYPASS DOUBLON
-        const isCurrentlyDuplicate = false;
+        const isCurrentlyDuplicate = depenses.some(
+          (d) =>
+            d.id !== tempId &&
+            String(d.id) !== String(tempId) &&
+            d.fournisseur.trim().toLowerCase() ===
+            supplierName.trim().toLowerCase() &&
+            d.fecha === extractedDate &&
+            Number(d.total) === Number(totalToUse),
+        );
 
         if (isCurrentlyDuplicate) {
           setDepenses((prev) =>
@@ -6175,9 +6158,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
           tvq: tvqToUse,
           total: totalToUse,
           adresse: extractedAdresse,
+          addressMismatchWarning: addressMismatchWarning || null,
+          // Prefer the permanent Drive link over the local blob URL — blob: URLs
+          // only live for the current browser tab/session and go dead on reload,
+          // which was silently orphaning the "document attaché" preview after
+          // every scan once Drive upload actually started succeeding.
           lien:
-            localUrl ||
             driveLink ||
+            localUrl ||
             `https://drive.google.com/error_fallback_vault/ocr/${Date.now()}_scanned.jpg`,
           status: "En attente", // Crucial: change from loading to ready so the user can see and work with it
           // S.O.F.I. address-matched building suggestion
@@ -6209,8 +6197,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
         } else {
           // Step E: Update state entry matching tempId with real parsed data and change status to 'En attente'
           setDepenses((prev) => {
-            // [DEBUG] TEMPORARILY BYPASS DOUBLON
-            const hasDuplicate = false;
+            const hasDuplicate = prev.some(
+              (d) =>
+                d.id !== tempId &&
+                String(d.id) !== String(tempId) &&
+                d.fournisseur.trim().toLowerCase() ===
+                supplierName.trim().toLowerCase() &&
+                d.fecha === extractedDate &&
+                Number(d.total) === Number(totalToUse),
+            );
 
             if (hasDuplicate) {
               isDuplicate = true;
@@ -6534,8 +6529,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
     setVista("reportes");
     setTabReporte("taxes");
 
-    // Bypassing Google Drive Connection completely and calling the client-side/server-side Gemini OCR pipeline directly
-    executeScanPipeline(file, true, tempId);
+    // Upload to the company's shared Drive when it's connected (permanent server-side
+    // token — no popup needed); otherwise proceed with local-only OCR as before.
+    const driveOwnerIdForScan = currentCompany?.ownerId || auth.currentUser?.uid || "";
+    let driveIsConnected = false;
+    try {
+      const driveStatus = activeCompanyId && driveOwnerIdForScan
+        ? await getCompanyDriveConfig(activeCompanyId, driveOwnerIdForScan)
+        : null;
+      driveIsConnected = !!driveStatus?.connected;
+    } catch { /* treat as not connected */ }
+
+    executeScanPipeline(file, !driveIsConnected, tempId);
   };
 
   const handleAuthorizeGoogleAndScan = async () => {
@@ -7191,6 +7196,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
             setIsPhoneVerified(phoneAlreadyVerified);
             setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 
+            // Selected profile (prospecteur/investisseur/flippeur/gestionnaire/syndicat)
+            // — Firestore is the source of truth here, not just localStorage, which
+            // was silently reverting between sessions/browsers with no warning.
+            if (userData.selectedProfile) {
+              setSelectedProfile(userData.selectedProfile);
+              localStorage.setItem("autocompt_selected_profile", userData.selectedProfile);
+            }
+
             // Beta trial status — same founder allowlist as getEffectiveTier().
             const userEmail = (user.email ?? "").toLowerCase().trim();
             const isFounder =
@@ -7334,6 +7347,24 @@ Ceci est un message automatisé généré par AutoCompt.`;
         <p className="text-emerald-500 font-black uppercase tracking-widest text-sm animate-pulse">
           Chargement des données...
         </p>
+      </div>
+    );
+  }
+
+  if (vista === "politique-de-confidentialite") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <PolitiqueConfidentialite onBack={() => setVista("dashboard")} darkMode={darkMode} />
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
+      </div>
+    );
+  }
+
+  if (vista === "conditions-d-utilisation") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <ConditionsUtilisation onBack={() => setVista("dashboard")} darkMode={darkMode} />
+        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
   }
@@ -8087,381 +8118,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
     );
   }
 
+  // Pricing is hidden during the free beta — the effect above picks a tier
+  // and redirects to "setup" immediately, so this only flashes briefly.
   if (vista === "pricing") {
     return (
-      <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
-        <div className="absolute top-6 left-6 flex items-center space-x-2 z-50">
-          <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
-        </div>
-
-        <div className="w-full max-w-5xl relative mt-16 md:mt-0 pt-8 px-6 pb-24 md:p-10 md:pb-10 rounded-[32px] border border-slate-100 bg-white shadow-xl flex flex-col z-10 animate-in slide-in-from-right-8 mx-auto">
-          <div className="text-center space-y-4 max-w-2xl mx-auto mb-10">
-            <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-slate-900 leading-tight">
-              Choisissez votre forfait
-            </h2>
-            <p className="text-sm md:text-base font-medium text-slate-500">
-              Optimisez votre comptabilité immobilière avec le plan qui correspond parfaitement à vos besoins.
-            </p>
-          </div>
-
-          {/* Toggle & Promo Section */}
-          <div className="flex flex-col items-center space-y-6 w-full max-w-lg mx-auto mb-10">
-
-            {dashboardMode === "Plex" && (
-              <div className="w-full bg-slate-50 p-6 rounded-[28px] border border-slate-200/60 shadow-inner text-center">
-                <label className="text-[11px] font-black uppercase text-slate-700 block mb-4 tracking-widest">
-                  Combien de portes / unités gérez-vous ?
-                </label>
-                <div className="flex justify-center items-center gap-4">
-                  <button
-                    onClick={() => setNombrePortes(Math.max(1, nombrePortes - 1))}
-                    className="w-12 h-12 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition-all shadow-sm"
-                  >
-                    <span className="text-xl font-bold font-mono">-</span>
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    value={nombrePortes}
-                    onChange={(e) => {
-                      const parsed = parseInt(e.target.value) || 1;
-                      setNombrePortes(parsed);
-                    }}
-                    className="w-24 text-center p-3 rounded-2xl text-2xl font-black border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/50 outline-none text-slate-800 transition-all bg-white shadow-sm"
-                  />
-                  <button
-                    onClick={() => setNombrePortes(nombrePortes + 1)}
-                    className="w-12 h-12 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition-all shadow-sm"
-                  >
-                    <span className="text-xl font-bold font-mono">+</span>
-                  </button>
-                </div>
-                {nombrePortes > 15 && (
-                  <p className="mt-4 text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full inline-block">
-                    Besoin de plus de 15 portes ? Le forfait Multi-Entreprise vous permet d'en gérer d'avantage en consolidant.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Toggle */}
-            <div className="flex items-center p-1 rounded-full border transition-all bg-slate-100 border-slate-200">
-              <button
-                onClick={() => setIsAnnual(false)}
-                className={`px-6 py-2.5 rounded-full text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 ${!isAnnual ? "bg-white shadow-md text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Paiement mensuel
-              </button>
-              <button
-                onClick={() => setIsAnnual(true)}
-                className={`px-6 py-2.5 rounded-full text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 ${isAnnual ? "bg-white shadow-md text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Paiement annuel <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full ml-1 text-[9px]">(Rabais de 25%)</span>
-              </button>
-            </div>
-
-            {/* Promo Box */}
-            <div className="w-full flex flex-col items-center gap-2">
-              <div className="w-full flex gap-2">
-                <input
-                  type="text"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  placeholder="Avez-vous un code promo ?"
-                  className="flex-1 text-xs px-4 py-3 rounded-full border bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
-                />
-                <button onClick={handleApplyPromo} className="px-4 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm shrink-0">
-                  Appliquer
-                </button>
-              </div>
-              {promoStatus !== "idle" && (
-                <div className={`text-[11px] font-bold mt-1 px-3 py-1.5 rounded-full ${promoStatus === "success" ? "text-emerald-700 bg-emerald-100/50" : "text-rose-600 bg-rose-100/50"}`}>
-                  {promoMessage}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Pricing Cards Grid */}
-          <div className={`grid grid-cols-1 gap-6 lg:gap-8 items-stretch pt-4 ${dashboardMode === "Plex" ? "md:grid-cols-3 max-w-5xl" : "md:grid-cols-2 max-w-3xl"} mx-auto`}>
-            {dashboardMode === "Plex" ? (
-              <>
-                {/* Card 1: Forfait Portes Ouvertes */}
-                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes <= 4 ? "md:-translate-y-4 border-teal-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-teal-500 hover:shadow-[0_0_30px_rgba(20,184,166,0.15)]`}>
-                  {nombrePortes <= 4 && (
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                      Recommandé
-                    </div>
-                  )}
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-teal-600`}>Forfait Portes Ouvertes</h3>
-                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><ShieldCheck size={36} className="text-teal-500" /></div>
-                  </div>
-                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Spécialement conçu pour les Propriétaires de Plex (jusqu'à 4 portes) et Travailleurs autonomes.</p>
-
-                  <div className="mb-6 h-20 flex flex-col justify-center">
-                    <div className="flex items-end gap-1 mb-1">
-                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>19.99$</span>}
-                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "11.24" : "14.99") : (promoStatus === "success" ? "4.49" : "5.99")}$</span>
-                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                    </div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-teal-600`}>
-                      {isAnnual ? "179.91$ / an (Basé sur tarif régulier)" : "(Promo 3 mois, régulier 19.99$ après)"}
-                    </p>
-                  </div>
-
-                  <ul className="space-y-4 flex-1 mb-8 text-left">
-                    {[
-                      "Tenue de livres automatisée",
-                      "Scan IA pour factures",
-                      "Suivi de kilométrage (10 adresses)",
-                      "Espace sécurisé (Stockage chiffré et protection bancaire)",
-                      "Exportation comptable (Excel/CSV)",
-                      "Support IA 24/7"
-                    ].map((feature, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><CheckCircle2 size={12} /></div>
-                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                      </li>
-                    ))}
-                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                      <span className="text-xs font-black uppercase tracking-widest text-teal-600 px-3 py-1 rounded-full bg-teal-50">Jusqu'à 4 portes</span>
-                    </li>
-                  </ul>
-
-                  <button
-                    onClick={() => { setActiveMobilePricingTab("porte_ouverte"); setSelectedTier("assistant"); setVista("setup"); }}
-                    disabled={nombrePortes > 4}
-                    className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 4 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-teal-700 hover:bg-teal-500 hover:text-white border-2 border-transparent hover:border-teal-500"} mt-auto shrink-0`}
-                  >
-                    {nombrePortes > 4 ? "Limite Dépassée" : "Choisir ce plan"}
-                  </button>
-                </div>
-
-                {/* Card 2: Pro */}
-                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 4 && nombrePortes <= 15 ? "md:-translate-y-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-blue-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]`}>
-                  {nombrePortes > 4 && nombrePortes <= 15 && (
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                      Recommandé
-                    </div>
-                  )}
-                  <div className="flex justify-between items-start mb-4 mt-2">
-                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-blue-600`}>Forfait Pro</h3>
-                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Briefcase size={36} className="text-blue-500" /></div>
-                  </div>
-                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Une solution complète pour vos investissements.</p>
-
-                  <div className="mb-6 h-20 flex flex-col justify-center">
-                    <div className="flex items-end gap-1 mb-1">
-                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>34.99$</span>}
-                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? (promoStatus === "success" ? "19.68" : "26.24") : (promoStatus === "success" ? "26.24" : "34.99")}$</span>
-                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                    </div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wider leading-snug text-blue-600`}>
-                      {isAnnual ? "314.91$ / an (-25%)" : ""}
-                    </p>
-                  </div>
-
-                  <ul className="space-y-4 flex-1 mb-8 text-left">
-                    {[
-                      "Jusqu'à 1 entreprise",
-                      "1 abonné inclus",
-                      "DocuLegal inclus (Ilimité)",
-                      "Archivage et factures illimités",
-                      "Rapports fiscaux avancés"
-                    ].map((feature, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><CheckCircle2 size={12} /></div>
-                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                      </li>
-                    ))}
-                    <li className="flex items-start gap-3">
-                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-teal-50 text-teal-600`}><Plus size={12} /></div>
-                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Portes Ouvertes</span>
-                    </li>
-                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                      <span className="text-xs font-black uppercase tracking-widest text-blue-600 px-3 py-1 rounded-full bg-blue-50">Jusqu'à 15 portes (Max global)</span>
-                    </li>
-                  </ul>
-
-                  <button
-                    onClick={() => { setActiveMobilePricingTab("pro"); setSelectedTier("premium"); setVista("setup"); }}
-                    disabled={nombrePortes > 15}
-                    className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${nombrePortes > 15 ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-50 text-blue-700 hover:bg-blue-500 hover:text-white border-2 border-transparent hover:border-blue-500"} mt-auto shrink-0`}
-                  >
-                    {nombrePortes > 15 ? "Limite Dépassée" : "Choisir ce plan"}
-                  </button>
-                </div>
-
-                {/* Card 3: Multi-Entreprise */}
-                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white ${nombrePortes > 15 ? "md:-translate-y-4 border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.15)]" : "border-slate-200 opacity-60 hover:opacity-100"} hover:border-indigo-500 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]`}>
-                  {nombrePortes > 15 && (
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                      Recommandé
-                    </div>
-                  )}
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-indigo-600`}>Multi-Entreprise</h3>
-                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-indigo-500" /></div>
-                  </div>
-                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Croissance optimale et partenariats.</p>
-
-                  <div className="mb-6 h-20 flex flex-col justify-center">
-                    <div className="flex items-end gap-1 mb-1">
-                      {isAnnual && <span className={`text-2xl font-black line-through mr-2 text-slate-300`}>49.99$</span>}
-                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>{isAnnual ? "37.49" : "49.99"}$</span>
-                      <span className={`text-sm font-bold mb-1 text-slate-400`}>{isAnnual ? "/ mois" : "/ mois"}</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-4 flex-1 mb-8 text-left">
-                    {[
-                      "Jusqu'à 2 entreprises",
-                      "1 abonné + 1 invité inclus",
-                      "Partage des bénéfices et dépenses",
-                      "Rapports personnalisables"
-                    ].map((feature, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-indigo-50 text-indigo-600`}><CheckCircle2 size={12} /></div>
-                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                      </li>
-                    ))}
-                    <li className="flex items-start gap-3">
-                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-blue-50 text-blue-600`}><Plus size={12} /></div>
-                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Pro</span>
-                    </li>
-                    <li className="mt-4 pt-4 border-t border-slate-100 flex items-start justify-center gap-3">
-                      <span className="text-xs font-black uppercase tracking-widest text-indigo-600 px-3 py-1 rounded-full bg-indigo-50">Jusqu'à 15 portes (Max global)</span>
-                    </li>
-                  </ul>
-
-                  <button onClick={() => { setActiveMobilePricingTab("multi_entreprise"); setSelectedTier("integral"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-indigo-700 hover:bg-indigo-500 hover:text-white border-2 border-transparent hover:border-indigo-500 mt-auto shrink-0`}>
-                    Choisir ce plan
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Card Syndicat 1: Essentiel */}
-                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group bg-white border-slate-200 hover:border-sky-500 hover:shadow-[0_0_30px_rgba(14,165,233,0.15)]`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-sky-600`}>Syndicat Essentiel</h3>
-                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building size={36} className="text-sky-500" /></div>
-                  </div>
-                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les petits immeubles sans équipements complexes.</p>
-
-                  <div className="mb-6 h-20 flex flex-col justify-center">
-                    <div className="flex items-end gap-1 mb-1">
-                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>29.99$</span>
-                      <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-4 flex-1 mb-8 text-left">
-                    {[
-                      "Gouvernance et suivi de CA",
-                      "Registre des Actifs basiques",
-                      "Communication basique avec copropriétaires",
-                      "1 administrateur avec droits complets",
-                      "Accès limité aux membres simples"
-                    ].map((feature, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><CheckCircle2 size={12} /></div>
-                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_essentiel"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-slate-50 text-sky-700 hover:bg-sky-500 hover:text-white border-2 border-transparent hover:border-sky-500 mt-auto shrink-0`}>
-                    Continuer l'inscription
-                  </button>
-                </div>
-
-                {/* Card Syndicat 2: Gestion Complète */}
-                <div className={`p-8 rounded-[32px] border-2 flex flex-col transition-all duration-300 relative group md:-translate-y-4 bg-white border-emerald-200 shadow-xl hover:border-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]`}>
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md z-10 whitespace-nowrap">
-                    Recommandé
-                  </div>
-                  <div className="flex justify-between items-start mb-4 mt-2">
-                    <h3 className={`text-xl font-black italic uppercase tracking-tight text-emerald-600`}>Syndicat Gestion Complète</h3>
-                    <div className="opacity-50 group-hover:opacity-100 transition-opacity"><Building2 size={36} className="text-emerald-500" /></div>
-                  </div>
-                  <p className={`text-xs font-medium mb-6 h-8 text-slate-500`}>Pour les immeubles avec piscines, concierges ou équipements complexes.</p>
-
-                  <div className="mb-6 h-20 flex flex-col justify-center">
-                    <div className="flex items-end gap-1 mb-1">
-                      <span className={`text-3xl md:text-4xl font-black text-slate-900`}>59.99$</span>
-                      <span className={`text-sm font-bold mb-1 text-slate-400`}>/ mois</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-4 flex-1 mb-8 text-left">
-                    {[
-                      "Maintenance préventive des actifs complexes",
-                      "Suivi des fournisseurs spécialisés",
-                      "Rapports financiers avancés pour le CA",
-                      "Modules Piscine, Gym, Ascenseurs activés",
-                      "Transparence totale et illimitée"
-                    ].map((feature, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className={`p-1 rounded shrink-0 mt-0.5 bg-emerald-50 text-emerald-600`}><CheckCircle2 size={12} /></div>
-                        <span className={`text-xs font-semibold leading-relaxed text-slate-700`}>{feature}</span>
-                      </li>
-                    ))}
-                    <li className="flex items-start gap-3">
-                      <div className={`p-1 rounded shrink-0 mt-0.5 bg-sky-50 text-sky-600`}><Plus size={12} /></div>
-                      <span className={`text-xs font-medium italic text-slate-500`}>Tout du forfait Essentiel</span>
-                    </li>
-                  </ul>
-
-                  <button onClick={() => { setActiveMobilePricingTab("elite_condo"); setSelectedTier("syndicat_complet"); setVista("setup"); }} className={`w-full py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 border-2 border-transparent hover:border-emerald-600 mt-auto shrink-0 shadow-md`}>
-                    Choisir ce plan
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Footer Note */}
-          <div className="mt-12 text-center max-w-2xl mx-auto px-4">
-            <p className={`text-sm font-medium italic text-slate-600`}>
-              "Nos modules à la carte sont en développement constant. AutoCompt évolue avec votre patrimoine immobilier."
-            </p>
-          </div>
-
-          {/* Value Statement */}
-          <div className={`mt-16 w-full max-w-4xl mx-auto text-left relative z-10 border-t pt-12 mb-16 border-slate-100`}>
-            <div className="flex flex-wrap justify-center gap-6">
-              {[
-                { title: "IA fiscale québécoise", icon: <Zap size={20} className="text-teal-600" /> },
-                { title: "Synchronisation Drive sécurisée", icon: <ShieldCheck size={20} className="text-blue-600" /> },
-                { title: "Conciliation bancaire automatisée", icon: <CheckCircle2 size={20} className="text-amber-600" /> },
-                { title: "Exportation comptable fluide", icon: <Download size={20} className="text-teal-600" /> }
-              ].map((valeur, i) => (
-                <div key={i} className={`flex items-center gap-4 py-3 px-6 rounded-full border bg-slate-50 border-slate-100`}>
-                  <div className="shrink-0">{valeur.icon}</div>
-                  <span className={`text-xs font-black uppercase tracking-wider text-slate-800`}>{valeur.title}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="fixed bottom-4 left-0 w-full px-4 z-50 md:static md:w-auto md:px-0 md:z-auto mt-8">
-            <div className="flex justify-start items-center bg-white/90 backdrop-blur-md border border-slate-200/50 shadow-2xl rounded-3xl p-4 md:bg-transparent md:backdrop-blur-none md:border-transparent md:shadow-none md:rounded-none md:p-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setVista(dashboardMode === "Syndic" ? "level_selection" : "rental_model");
-                  if (typeof playNotificationSound === "function")
-                    playNotificationSound();
-                }}
-                className="py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:bg-slate-50 transition-all cursor-pointer border border-transparent"
-              >
-                Retour
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 size={28} className="animate-spin text-emerald-600" />
       </div>
     );
   }
@@ -10516,8 +10178,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
 
           <div className="space-y-4">
-            <button
-              type="button"
+            {/* This wraps the Foto/Galerie/PDF <button>s below, so it must NOT
+                itself be a <button> — nested interactive elements are invalid
+                HTML and React logs a console error for it. A div with the same
+                click/keyboard handling preserves both behavior and accessibility. */}
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 if (selectedTier === "gratuit") {
                   setPaywallTargetTier("Basique (4.99$)");
@@ -10535,7 +10202,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   cameraInputRef.current.click();
                 }
               }}
-              className={`w-full p-8 rounded-[40px] shadow-2xl flex flex-col items-center space-y-3 active:scale-95 transition-all duration-300 hover:border-emerald-500/50 group relative overflow-hidden border ${darkMode ? "bg-zinc-950 border-zinc-805 text-zinc-100 shadow-[0_0_40px_rgba(16,185,129,0.15)]" : "bg-slate-950 border-slate-900 text-white"}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}
+              className={`w-full p-8 rounded-[40px] shadow-2xl flex flex-col items-center space-y-3 active:scale-95 transition-all duration-300 hover:border-emerald-500/50 group relative overflow-hidden border cursor-pointer ${darkMode ? "bg-zinc-950 border-zinc-805 text-zinc-100 shadow-[0_0_40px_rgba(16,185,129,0.15)]" : "bg-slate-950 border-slate-900 text-white"}`}
             >
               {/* Premium Conversion Tag Badge */}
               {selectedTier === "gratuit" && (
@@ -10676,7 +10349,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   </button>
                 </div>
               </div>
-            </button>
+            </div>
 
 
 
@@ -10979,7 +10652,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                   </div>
                 </div>
 
-                {/* ── Floating SOFI — success pose image (La_pose__Sofi_con_exito.jpeg) ── */}
+                {/* ── Floating SOFI — canonical avatar (sofimediocuerpoblanco.png) ── */}
                 <div
                   className="self-end cursor-pointer"
                   onClick={() => {
@@ -11042,7 +10715,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     {dashboardMode === "Syndic" ? (
                       <div className="w-10 h-10 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950">
                         <img
-                          src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                          src="/sofi/sofimediocuerpoblanco.png"
                           alt="Sofi"
                           className="w-full h-full object-cover"
                           style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
@@ -11091,7 +10764,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               dashboardMode === "Syndic" ? (
                                 <div className="w-5.5 h-5.5 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 mr-1">
                                   <img
-                                    src="/sofi/La_pose__Sofi_con_exito.jpeg"
+                                    src="/sofi/sofimediocuerpoblanco.png"
                                     alt="Sofi"
                                     className="w-full h-full object-cover"
                                     style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
@@ -11977,14 +11650,19 @@ Ceci est un message automatisé généré par AutoCompt.`;
         // AutoCompt shouldn't become the permanent host of a user's documents;
         // Storage is only a fallback for accounts with no drive connected yet.
         let savedToDrive = false;
-        if (isCompanyDriveActive(activeCompanyId)) {
-          try {
+        const driveOwnerId = currentCompany?.ownerId || uid;
+        try {
+          const driveStatus = await getCompanyDriveConfig(activeCompanyId, driveOwnerId);
+          if (driveStatus?.connected) {
             const base64 = await blobToRawBase64(pdfBlob);
-            const driveResult = await uploadDocumentToDrive(activeCompanyId, base64, fileName);
+            const driveResult = await uploadDocumentToDrive(
+              activeCompanyId, driveOwnerId, base64, fileName, "application/pdf",
+              currentCompany?.nombre || "Entreprise", "Documents",
+            );
             savedToDrive = !!driveResult.success;
-          } catch (err) {
-            console.error("Generated PDF upload to Drive failed (falling back to Storage):", err);
           }
+        } catch (err) {
+          console.error("Generated PDF upload to Drive failed (falling back to Storage):", err);
         }
         if (!savedToDrive) {
           try {
@@ -16329,8 +16007,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 }`}>
                 {/* Header — avatar + headline */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="relative shrink-0">
-                    <SofiAvatarSVG size={40} className="rounded-full border-2 border-emerald-500" />
+                  <div className="relative shrink-0 w-10 h-10 rounded-full border-2 border-emerald-500 overflow-hidden bg-slate-100">
+                    <img
+                      src="/sofi/sofimediocuerpoblanco.png"
+                      alt="Sofi"
+                      className="w-full h-full object-cover"
+                      style={{ transform: "scale(1.8)", transformOrigin: "50% 15%" }}
+                    />
                     <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse" />
                   </div>
                   <div className="min-w-0">
@@ -16421,13 +16104,23 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     <div className="flex-1 w-full flex items-center justify-center overflow-auto rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800 bg-white dark:bg-transparent/50 p-2">
                       {(editingExpense.lien || editingExpense.documentUrl) ? (() => {
                         const docUrl: string = editingExpense.lien || editingExpense.documentUrl || "";
+                        // Google Drive links (our post-upload "/preview" URL) are an
+                        // HTML page — never a raw image/PDF byte stream — so they can
+                        // only render inside an <iframe>, never <img>/<object data>.
+                        const isDriveLink = docUrl.includes("drive.google.com");
                         // Detect PDFs by: stored mimeType, URL ending, or Firebase Storage content-type hint
                         const isPdf =
                           editingExpense.mimeType === "application/pdf" ||
                           docUrl.toLowerCase().endsWith(".pdf") ||
                           docUrl.includes("%2F") && docUrl.toLowerCase().includes(".pdf") ||
                           docUrl.includes("alt=media") && (editingExpense.fileName || "").toLowerCase().endsWith(".pdf");
-                        return isPdf ? (
+                        return isDriveLink ? (
+                          <iframe
+                            src={docUrl}
+                            className="w-full h-full min-h-[40vh] border-none rounded-xl"
+                            title="Aperçu Google Drive"
+                          />
+                        ) : isPdf ? (
                           <object
                             data={docUrl}
                             type="application/pdf"
@@ -16544,6 +16237,25 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         return null;
                       })()}
 
+                      {/* S.O.F.I. wrong-workspace address warning — blocks save until explicitly acknowledged */}
+                      {editingExpense.addressMismatchWarning && (
+                        <div className="bg-amber-500/10 text-amber-600 dark:text-amber-400 p-3 rounded-2xl space-y-2 text-[10px] font-bold">
+                          <div className="flex items-center space-x-2">
+                            <AlertTriangle size={14} className="shrink-0" />
+                            <span>⚠️ Ce document mentionne l'adresse « {editingExpense.addressMismatchWarning} », qui ne correspond pas à {currentCompany?.nombre || "cette entreprise"} ({currentCompany?.userProfile?.adresse || currentCompany?.adresse || "adresse inconnue"}). Vérifiez que ce document est bien classé dans le bon dossier.</span>
+                          </div>
+                          <label className="flex items-center space-x-2 cursor-pointer pl-6">
+                            <input
+                              type="checkbox"
+                              checked={!!editingExpense.addressMismatchConfirmed}
+                              onChange={(e) => setEditingExpense({ ...editingExpense, addressMismatchConfirmed: e.target.checked })}
+                              className="w-4 h-4 accent-amber-600"
+                            />
+                            <span className="normal-case font-semibold">Je confirme que cette dépense appartient bien à cette propriété.</span>
+                          </label>
+                        </div>
+                      )}
+
                       {/* Admin Toggle Concilié */}
                       {activeCompanyId === "1" && ( /* Adjust conditionally based on admin check */
                         <div className={`p-4 rounded-2xl flex items-center justify-between border ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
@@ -16562,26 +16274,38 @@ Ceci est un message automatisé généré par AutoCompt.`;
                     </div>
 
                     <div className="mt-8">
-                      <button onClick={() => {
-                        // Freeze vehicle pro-rata at save time if not already stamped by OCR pipeline
-                        const stampedVehicleFields = (
-                          VEHICLE_EXPENSE_CATS.has(editingExpense.cat) &&
-                          editingExpense.tauxApplique == null &&
-                          porcVehicule > 0
-                        ) ? {
-                          tauxApplique: Number((porcVehicule * 100).toFixed(1)),
-                          vehicleRateApplied: true,
-                        } : {};
-                        setDepenses(prev => prev.map(d =>
-                          d.id === editingExpense.id
-                            ? { ...d, ...editingExpense, ...stampedVehicleFields, status: "Vérifiée" }
-                            : d
-                        ));
-                        setEditingExpense(null);
-                      }} className="w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all bg-[#059669] text-white hover:bg-emerald-700 shadow-xl shadow-emerald-900/20 active:scale-95 flex items-center justify-center space-x-2">
-                        <Save size={16} />
-                        <span>Approuver & Sauvegarder</span>
-                      </button>
+                      {(() => {
+                        const addressBlocked = !!editingExpense.addressMismatchWarning && !editingExpense.addressMismatchConfirmed;
+                        return (
+                          <button
+                            disabled={addressBlocked}
+                            onClick={() => {
+                              // Freeze vehicle pro-rata at save time if not already stamped by OCR pipeline
+                              const stampedVehicleFields = (
+                                VEHICLE_EXPENSE_CATS.has(editingExpense.cat) &&
+                                editingExpense.tauxApplique == null &&
+                                porcVehicule > 0
+                              ) ? {
+                                tauxApplique: Number((porcVehicule * 100).toFixed(1)),
+                                vehicleRateApplied: true,
+                              } : {};
+                              setDepenses(prev => prev.map(d =>
+                                d.id === editingExpense.id
+                                  ? { ...d, ...editingExpense, ...stampedVehicleFields, status: "Vérifiée" }
+                                  : d
+                              ));
+                              setEditingExpense(null);
+                            }}
+                            className={`w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all shadow-xl flex items-center justify-center space-x-2 ${addressBlocked
+                              ? "bg-slate-300 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400 cursor-not-allowed shadow-none"
+                              : "bg-[#059669] text-white hover:bg-emerald-700 shadow-emerald-900/20 active:scale-95"
+                              }`}
+                          >
+                            <Save size={16} />
+                            <span>{addressBlocked ? "Confirmez l'adresse ci-dessus pour continuer" : "Approuver & Sauvegarder"}</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -18913,6 +18637,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <WorkspaceDriveSettings
             companyId={activeCompanyId || 'default'}
             companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+            ownerId={currentCompany?.ownerId || auth.currentUser?.uid || ''}
             companyEmail={currentUserEmail || ''}
             darkMode={darkMode}
           />
@@ -18985,6 +18710,13 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         if (resp.ok) {
           taxData = await resp.json();
           console.log("[S.O.F.I. Tax Scanner] Extracted:", taxData);
+          if (auth.currentUser?.uid) {
+            dataService.logAiUsageEvent(auth.currentUser.uid, {
+              profile: activeProfile,
+              feature: "tax_scan",
+              userEmail: auth.currentUser.email || undefined,
+            });
+          }
         } else {
           console.error("[S.O.F.I. Tax Scanner] Server error:", resp.status);
         }
@@ -19095,6 +18827,10 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
             setVista={setVista}
             setDepenses={setDepenses}
             companyId={activeCompanyId}
+            companyName={currentCompany?.nombre}
+            ownerId={currentCompany?.ownerId || auth.currentUser?.uid}
+            activeUser={activeUser}
+            activeProfile={activeProfile}
             playNotificationSound={playNotificationSound}
             setDispatcherSuccessToast={setDispatcherSuccessToast}
           />
@@ -19336,6 +19072,10 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         WorkspaceSidebar={WorkspaceSidebar}
         dashboardMode={dashboardMode}
         companyId={activeCompanyId}
+        companyName={currentCompany?.nombre}
+        ownerId={currentCompany?.ownerId || auth.currentUser?.uid}
+        selectedProfile={selectedProfile}
+        updateSelectedProfile={updateSelectedProfile}
       />
     );
   }
@@ -19494,7 +19234,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     );
   }
 
-  return null;
+  // Fallback 404 View for any unmatched route/hash
+  return <NotFound404 darkMode={darkMode} onNavigateHome={() => setVista("dashboard")} />;
 };
 
 export default App;

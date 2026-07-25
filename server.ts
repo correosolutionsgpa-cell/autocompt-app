@@ -3,6 +3,18 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin";
+import {
+  companyDocId,
+  driveCredDocId,
+  isAuthorizedForCompany,
+  exchangeCodeForTokens,
+  refreshAccessToken,
+  getGoogleUserEmail,
+  getOrCreateDriveFolderServer,
+  resolveCompanyDriveFolder,
+  uploadBase64ToDrive,
+} from "./src/lib/googleDriveAdmin";
 
 // Load .env BEFORE anything else — including SDK initialization
 dotenv.config({ override: true });
@@ -120,9 +132,18 @@ async function startServer() {
       // Real Gemini API call using @google/genai SDK
       const ai = new GoogleGenAI({ apiKey: apiKey, httpOptions: { apiVersion: "v1" } });
 
+      // Hard topic scope-lock — Sofi must stay on AutoCompt / bookkeeping /
+      // Quebec real estate tax organization. Prepended to every system prompt
+      // so off-topic requests (recipes, general chit-chat, unrelated coding
+      // help, etc.) get politely declined instead of answered.
+      const SCOPE_GUARDRAIL =
+        "RÈGLE ABSOLUE DE PÉRIMÈTRE : tu ne réponds JAMAIS à une question hors du périmètre d'AutoCompt. Ton périmètre autorisé est strictement : (1) comment utiliser l'application AutoCompt (navigation, boutons, où trouver une fonctionnalité), (2) où et comment classer/enregistrer une facture, un reçu ou un document, (3) l'organisation comptable et fiscale immobilière au Québec (catégories de dépenses, TPS/TVQ, formulaires TP-128/T776, amortissement, etc.), (4) la facturation et les forfaits AutoCompt. " +
+        "Si l'utilisateur pose une question hors de ce périmètre (recettes de cuisine, actualités, programmation générale, sujets personnels, ou tout autre sujet sans rapport), décline poliment et brièvement en rappelant que tu es uniquement l'assistante comptable d'AutoCompt, puis propose de l'aider avec l'application ou sa comptabilité. Ne donne jamais de réponse sur le sujet hors-périmètre lui-même, même partiellement. ";
+
       let systemInstruction = "";
       if (currentForfeit !== "Pro") {
         systemInstruction =
+          SCOPE_GUARDRAIL +
           "Tu es Sofi, une assistante de vente d'AutoCompt et assistante virtuelle spécialisée en organisation comptable. Tu es une assistante multilingue. Tu dois détecter automatiquement la langue de l'utilisateur (Français, Anglais, Espagnol) et répondre dans cette même langue. Ton but est d'agir comme une assistante et de pousser l'utilisateur à s'abonner au forfait Pro d'AutoCompt. " +
           "Pour toute question fiscale complexe, d'amortissement, d'optimisation d'impôts ou de déduction d'immeubles, tu devez ABSOLUMENT et uniquement répondre avec l'équivalent de cette phrase exacte dans la langue détectée : " +
           "En Français : \"Pour automatiser votre comptabilité et analyser vos déductions, passez au forfait AutoCompt Pro.\", " +
@@ -132,6 +153,7 @@ async function startServer() {
           "Rappelle toujours gentiment à l'utilisateur que tu es une assistante virtuelle d'organisation comptable, que tu ne remplaces pas un véritable CPA, et que tu l'aides simplement à organiser et trier ses documents.";
       } else {
         systemInstruction =
+          SCOPE_GUARDRAIL +
           "Tu es Sofi, assistante virtuelle spécialisée en organisation comptable pour AutoCompt, et assistante multilingue. Tu ne remplaces pas un véritable CPA et ton rôle consiste uniquement à aider avec plaisir à préparer et à organiser de manière structurée les rapports et les justificatifs comptables. " +
           "Tu devez détecter automatiquement la langue de l'utilisateur (Français, Anglais, Espagnol) et répondre dans cette même langue. " +
           "Tu es capable de répondre de façon extrêmement précise pour aider à l'organisation des stratégies de dépenses, les déductions fiscales d'usage, le classement des reçus, des baux, " +
@@ -284,7 +306,8 @@ async function startServer() {
         tps: calculatedTps,
         tvq: calculatedTvq,
         total: calculatedTotal,
-        category: detectedCategory
+        category: detectedCategory,
+        propertyAddress: null as string | null,
       };
 
       // 2. REAL GEMINI EXTRACTION — diagnostic logging to surface exact failures
@@ -305,13 +328,14 @@ ZERO HALLUCINATION RULE: Extract ONLY exact text/numbers printed on the document
 
 JSON schema to return:
 {
-  "supplier": string,   // Legal company/vendor name. null if unreadable.
+  "supplier": string,   // Legal company/vendor name (who issued/sold this). null if unreadable.
   "date": string,       // Transaction date YYYY-MM-DD. Use "${detectedDate}" if not found.
   "subtotal": number,   // Net amount before taxes (CAD). Never invent.
   "tps": number,        // GST/TPS (5%) amount. Calculate as subtotal*0.05 if not printed.
   "tvq": number,        // QST/TVQ (9.975%) amount. Calculate as subtotal*0.09975 if not printed.
   "total": number,      // Grand total all-taxes-included (CAD). Never invent.
-  "category": string    // One of: ["À classer","Télécommunications","Bureau à domicile","Équipement","Réparations / Entretien","Rénovation / Construction","Taxes","Assurance","Chauffage","Electricité","Frais de gestion / Exploitation"]
+  "category": string,   // One of: ["À classer","Télécommunications","Bureau à domicile","Équipement","Réparations / Entretien","Rénovation / Construction","Taxes","Assurance","Chauffage","Electricité","Frais de gestion / Exploitation"]
+  "propertyAddress": string | null  // The PROPERTY/CIVIC ADDRESS this document concerns (e.g. the address on a municipal tax bill, insurance policy, or utility bill) — NOT the supplier's own business address. Only fill this when a real property address is printed on the document (street + city). If the document doesn't reference a specific property (e.g. a generic retail receipt), return null. Never confuse a municipality/city name alone with a full address — only return it if it's part of a real civic address.
 }`;
 
         let documentPart: any;
@@ -358,6 +382,7 @@ JSON schema to return:
                 tvq: (parsed.tvq != null && parsed.tvq !== '') ? parseCurrency(parsed.tvq) : fallbackResult.tvq,
                 total: (parsed.total != null && parsed.total !== '') ? parseCurrency(parsed.total) : fallbackResult.total,
                 category: parsed.category || fallbackResult.category,
+                propertyAddress: (typeof parsed.propertyAddress === 'string' && parsed.propertyAddress.trim()) ? parsed.propertyAddress.trim() : null,
               };
               console.log("[S.O.F.I. Scanner] ✅ Parsed result:", ocrResult);
               return res.json(ocrResult);
@@ -1118,6 +1143,184 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     } catch (error: any) {
       console.error("send-invoice-email error:", error);
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ── Google Drive: connect a company's Drive permanently (authorization-code flow) ──
+  // The client sends the one-time `code` from google.accounts.oauth2.initCodeClient.
+  // We exchange it for a refresh token here (needs the Client Secret, server-only) and
+  // store it keyed by the company's OWNER uid — never the current viewer's uid — so
+  // every collaborator invited to the company shares the same connected Drive.
+  app.post("/api/drive/connect", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
+
+      const { code, companyId, ownerId, redirectUri } = req.body;
+      if (!code || !companyId || !ownerId || !redirectUri) {
+        return res.status(400).json({ success: false, error: "code, companyId, ownerId et redirectUri sont requis" });
+      }
+
+      const authorized = await isAuthorizedForCompany(auth.uid, ownerId, companyId);
+      if (!authorized) return res.status(403).json({ success: false, error: "Accès refusé à cette entreprise" });
+
+      const tokens = await exchangeCodeForTokens(code, redirectUri);
+      const connectedEmail = await getGoogleUserEmail(tokens.accessToken);
+      const folderId = await getOrCreateDriveFolderServer("AutoCompt", "root", tokens.accessToken);
+
+      const db = getAdminDb();
+      const credId = driveCredDocId(ownerId, companyId);
+      const credRef = db.collection("driveCredentials").doc(credId);
+
+      // Google only returns a refresh_token on first consent — if this is a
+      // reconnect where none came back, keep the previously stored one.
+      let refreshToken = tokens.refreshToken;
+      if (!refreshToken) {
+        const existing = await credRef.get();
+        refreshToken = existing.exists ? existing.data()?.refreshToken : null;
+      }
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          error: "Google n'a pas renvoyé de jeton permanent. Révoquez l'accès dans votre compte Google (myaccount.google.com/permissions) puis reconnectez.",
+        });
+      }
+
+      const connectedAt = new Date().toISOString();
+      await credRef.set({ refreshToken, connectedEmail, folderId, folderName: "AutoCompt", connectedAt, ownerId, companyShortId: companyId }, { merge: true });
+
+      await db.collection("companyDriveConfig").doc(credId).set({
+        ownerId,
+        companyId: companyDocId(ownerId, companyId),
+        connectedEmail,
+        folderId,
+        folderName: "AutoCompt",
+        connectedAt,
+        connected: true,
+        sharedAccess: true, // marks this as using the permanent server-backed flow
+      }, { merge: true });
+
+      return res.json({ success: true, connectedEmail, folderId, folderName: "AutoCompt", connectedAt });
+    } catch (err: any) {
+      console.error("[drive/connect] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur de connexion Google Drive" });
+    }
+  });
+
+  // ── Google Drive: upload a file to the company's shared Drive ──────────────
+  // Works for ANY collaborator on the company, not just whoever connected it —
+  // the server mints a fresh access token from the stored refresh token each call.
+  app.post("/api/drive/upload", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
+
+      const { companyId, ownerId, fileName, mimeType, base64Data, companyName, category, year } = req.body;
+      if (!companyId || !ownerId || !fileName || !base64Data) {
+        return res.status(400).json({ success: false, error: "companyId, ownerId, fileName et base64Data sont requis" });
+      }
+
+      const authorized = await isAuthorizedForCompany(auth.uid, ownerId, companyId);
+      if (!authorized) return res.status(403).json({ success: false, error: "Accès refusé à cette entreprise" });
+
+      const db = getAdminDb();
+      const credSnap = await db.collection("driveCredentials").doc(driveCredDocId(ownerId, companyId)).get();
+      if (!credSnap.exists) {
+        return res.status(400).json({ success: false, error: "not_connected", message: "Google Drive n'est pas connecté pour cette entreprise." });
+      }
+
+      let accessToken: string;
+      try {
+        accessToken = await refreshAccessToken(credSnap.data()!.refreshToken);
+      } catch (refreshErr: any) {
+        console.error("[drive/upload] token refresh failed:", refreshErr.message);
+        return res.status(400).json({ success: false, error: "reconnect_required", message: "L'accès Google Drive a été révoqué. Reconnectez le Drive de cette entreprise." });
+      }
+
+      const folderId = await resolveCompanyDriveFolder(accessToken, companyName, category, year);
+      const file = await uploadBase64ToDrive(accessToken, folderId, fileName, mimeType, base64Data);
+
+      return res.json({ success: true, fileId: file.id, webViewLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view` });
+    } catch (err: any) {
+      console.error("[drive/upload] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur de téléversement Google Drive" });
+    }
+  });
+
+  // ── Google Drive: upload from the PUBLIC signature page (no Firebase Auth — ──
+  // the external signer never has an AutoCompt account). Trust is anchored to the
+  // unique signing token instead: the request must match the companyId/ownerId
+  // already recorded on that pendingSignatures doc, which only the legitimate
+  // signing link (sent by the admin) could have produced.
+  app.post("/api/drive/upload-public", async (req, res) => {
+    try {
+      const { companyId, ownerId, fileName, mimeType, base64Data, companyName, category, year, token } = req.body;
+      if (!companyId || !ownerId || !fileName || !base64Data || !token) {
+        return res.status(400).json({ success: false, error: "companyId, ownerId, fileName, base64Data et token sont requis" });
+      }
+
+      const db = getAdminDb();
+      const pendingSnap = await db.collection("pendingSignatures").doc(token).get();
+      if (!pendingSnap.exists) {
+        return res.status(403).json({ success: false, error: "Jeton de signature invalide" });
+      }
+      const pending = pendingSnap.data()!;
+      if (pending.companyId !== companyId || pending.ownerId !== ownerId) {
+        return res.status(403).json({ success: false, error: "Jeton de signature ne correspond pas à cette entreprise" });
+      }
+
+      const credSnap = await db.collection("driveCredentials").doc(driveCredDocId(ownerId, companyId)).get();
+      if (!credSnap.exists) {
+        return res.status(400).json({ success: false, error: "not_connected" });
+      }
+
+      let accessToken: string;
+      try {
+        accessToken = await refreshAccessToken(credSnap.data()!.refreshToken);
+      } catch {
+        return res.status(400).json({ success: false, error: "reconnect_required" });
+      }
+
+      const folderId = await resolveCompanyDriveFolder(accessToken, companyName, category, year);
+      const file = await uploadBase64ToDrive(accessToken, folderId, fileName, mimeType, base64Data);
+
+      return res.json({ success: true, fileId: file.id, webViewLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view` });
+    } catch (err: any) {
+      console.error("[drive/upload-public] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur de téléversement Google Drive" });
+    }
+  });
+
+  // ── Google Drive: disconnect a company's Drive (owner only — affects every collaborator) ──
+  app.post("/api/drive/disconnect", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
+
+      const { companyId, ownerId } = req.body;
+      if (!companyId || !ownerId) return res.status(400).json({ success: false, error: "companyId et ownerId sont requis" });
+      if (auth.uid !== ownerId) return res.status(403).json({ success: false, error: "Seul le propriétaire de l'entreprise peut déconnecter le Drive" });
+
+      const db = getAdminDb();
+      const credId = driveCredDocId(ownerId, companyId);
+      const credSnap = await db.collection("driveCredentials").doc(credId).get();
+
+      if (credSnap.exists) {
+        const refreshToken = credSnap.data()?.refreshToken;
+        if (refreshToken) {
+          try {
+            await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(refreshToken)}`, { method: "POST" });
+          } catch { /* best-effort revoke */ }
+        }
+        await db.collection("driveCredentials").doc(credId).delete();
+      }
+
+      await db.collection("companyDriveConfig").doc(credId).set({ connected: false, connectedEmail: "", folderId: null }, { merge: true });
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[drive/disconnect] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur de déconnexion" });
     }
   });
 

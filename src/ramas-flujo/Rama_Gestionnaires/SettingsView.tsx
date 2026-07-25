@@ -14,6 +14,7 @@
 
 import React, { useState } from "react";
 import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
+import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import {
@@ -91,7 +92,22 @@ export interface SettingsViewProps {
   // Section Paramètres de la Copropriété (visible seulement en mode Syndic)
   dashboardMode?: "Plex" | "Syndic" | "Global";
   companyId?: string;
+  companyName?: string;
+  ownerId?: string;
+
+  // Profil actif (prospecteur/investisseur/flippeur/gestionnaire/syndicat) —
+  // change quel module grid + RBAC s'applique. Persisté dans Firestore.
+  selectedProfile?: string | null;
+  updateSelectedProfile?: (profile: string) => void;
 }
+
+const PROFILE_OPTIONS: { id: string; label: string }[] = [
+  { id: "prospecteur", label: "Prospecteur Immobilier" },
+  { id: "investisseur", label: "Investisseur Immobilier" },
+  { id: "flippeur", label: "Flippeur Immobilier" },
+  { id: "gestionnaire", label: "Gestionnaire Immobilier" },
+  { id: "syndicat", label: "Syndicat de Copropriété" },
+];
 
 // ── Registre Véhicules — Single Source of Truth ──────────────────────────────
 // Exported so KilometrageGPS can import the type for safe reading.
@@ -136,6 +152,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   WorkspaceSidebar,
   dashboardMode,
   companyId,
+  companyName,
+  ownerId,
+  selectedProfile,
+  updateSelectedProfile,
 }) => {
   // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
   // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
@@ -222,8 +242,52 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 
+        {/* Profil actif — change les modules visibles (RBAC). Persisté dans
+            Firestore users/{uid}.selectedProfile, pas seulement le navigateur. */}
+        {dashboardMode !== "Syndic" && updateSelectedProfile && (
+          <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`p-2 rounded-xl ${darkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
+                <User size={16} />
+              </span>
+              <div>
+                <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+                  Profil actif
+                </h3>
+                <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                  Détermine les modules visibles (DocuLegal, Heures & Paie, etc.)
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PROFILE_OPTIONS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => updateSelectedProfile(p.id)}
+                  className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
+                    selectedProfile === p.id
+                      ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")
+                      : (darkMode ? "border-zinc-800 text-zinc-400 hover:border-zinc-700" : "border-slate-200 text-slate-600 hover:border-slate-300")
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {dashboardMode === "Syndic" && companyId && (
           <SyndicSettingsPanel darkMode={darkMode} companyId={companyId} />
+        )}
+
+        {companyId && ownerId && (
+          <WorkspaceDriveSettings
+            darkMode={darkMode}
+            companyId={companyId}
+            companyName={companyName || "Entreprise"}
+            ownerId={ownerId}
+          />
         )}
 
         {/* ══════════════════════════════════════════════════════════════════

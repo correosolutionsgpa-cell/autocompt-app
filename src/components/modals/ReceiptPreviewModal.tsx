@@ -75,7 +75,7 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
 
         {/* Image Preview Container */}
         <div className="flex-1 overflow-auto max-h-[55vh] flex items-center justify-center rounded-2xl bg-zinc-900/5 dark:bg-transparent/25 p-2 mb-5 border border-slate-150 dark:border-zinc-900/40">
-          {receiptPreviewUrl.endsWith(".pdf") ? (
+          {receiptPreviewUrl.endsWith(".pdf") || receiptPreviewUrl.includes("drive.google.com") ? (
             <iframe
               src={receiptPreviewUrl}
               className="w-full h-[50vh] rounded-xl border-none"

@@ -29,7 +29,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { dataService, type DocTemplateDoc, type LegalDocumentDoc } from '../lib/dataService';
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from '../lib/docTemplateService';
-import { isCompanyDriveActive, uploadDocumentToDrive } from '../lib/driveService';
+import { getCompanyDriveConfig, uploadDocumentToDrive } from '../lib/driveService';
 
 interface LegalDocument {
   id: string;
@@ -51,9 +51,11 @@ interface SyndicatDocuLegalProps {
   adminName?: string;
   adminEmail?: string;
   companyId?: string;  // Workspace ID — routed into signed doc for Drive upload
+  ownerId?: string;    // Company owner's uid — Drive is shared by this, not the current viewer
 }
 
-export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminName = '', adminEmail = '', companyId = '' }: SyndicatDocuLegalProps) {
+export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions GPA Inc.", adminName = '', adminEmail = '', companyId = '', ownerId = '' }: SyndicatDocuLegalProps) {
+  const driveOwnerId = ownerId || auth.currentUser?.uid || '';
   const [activeTab, setActiveTab] = useState<'externe' | 'interne' | 'modeles'>('externe');
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
 
@@ -133,6 +135,10 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   const [newTitle, setNewTitle] = useState('');
   const [newProvider, setNewProvider] = useState('');
   const [newSummary, setNewSummary] = useState('');
+  // Lets an already-signed document (e.g. a paper lease photographed on a phone)
+  // be archived directly, without going through the digital signature flow.
+  const [newAttachedFile, setNewAttachedFile] = useState<File | null>(null);
+  const [isUploadingNewDoc, setIsUploadingNewDoc] = useState(false);
 
   // Signature Pad States
   const [signatureType, setSignatureType] = useState<'draw' | 'type'>('draw');
@@ -323,14 +329,15 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       // AutoCompt shouldn't become the permanent host of a user's documents;
       // Storage is only a fallback for accounts with no drive connected yet.
       let customDocUrl = '';
-      if (isCompanyDriveActive(companyId)) {
-        try {
+      try {
+        const driveStatus = companyId && driveOwnerId ? await getCompanyDriveConfig(companyId, driveOwnerId) : null;
+        if (driveStatus?.connected) {
           const base64 = await blobToRawBase64(pdfBlob);
-          const driveResult = await uploadDocumentToDrive(companyId, base64, fileName);
+          const driveResult = await uploadDocumentToDrive(companyId, driveOwnerId, base64, fileName, 'application/pdf', companyName, 'DocuLegal');
           if (driveResult.success && driveResult.webViewLink) customDocUrl = driveResult.webViewLink;
-        } catch (err) {
-          console.error('Generated PDF upload to Drive failed (falling back to Storage):', err);
         }
+      } catch (err) {
+        console.error('Generated PDF upload to Drive failed (falling back to Storage):', err);
       }
       if (!customDocUrl) {
         try {
@@ -604,6 +611,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       docSummary: document.summary,
       companyName: companyName,
       companyId: companyId,            // ← workspace ID for Drive routing
+      ownerId: driveOwnerId,           // ← company owner uid — Drive is scoped to this
       adminName: document.signedBy || 'Administrateur',
       adminEmail: adminEmail,
       adminSignedDate: document.signedDate || new Date().toLocaleDateString('fr-CA'),
@@ -651,24 +659,53 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     return signUrl;  // Return so callers can use the URL directly
   };
 
-  // Handle Add Document
-  const handleAddDocument = (e: React.FormEvent) => {
+  // Handle Add Document — also archives an already-signed document (e.g. a
+  // physical lease photographed on a phone) directly in Drive, no digital
+  // signature flow needed.
+  const handleAddDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newSummary.trim()) {
       triggerToast("Veuillez remplir le titre et la description.", "error");
       return;
     }
 
+    let attachedDocUrl = '';
+    if (newAttachedFile) {
+      setIsUploadingNewDoc(true);
+      try {
+        const driveStatus = companyId && driveOwnerId ? await getCompanyDriveConfig(companyId, driveOwnerId) : null;
+        if (driveStatus?.connected) {
+          const base64 = await blobToRawBase64(newAttachedFile);
+          const driveResult = await uploadDocumentToDrive(
+            companyId, driveOwnerId, base64, newAttachedFile.name,
+            newAttachedFile.type || 'application/octet-stream', companyName, 'DocuLegal',
+          );
+          if (driveResult.success && driveResult.webViewLink) attachedDocUrl = driveResult.webViewLink;
+          else triggerToast("Le document n'a pas pu être archivé dans Drive, mais l'entrée sera quand même créée.", "error");
+        } else {
+          triggerToast("Google Drive n'est pas connecté pour ce workspace — le document n'a pas pu être archivé. Allez dans Paramètres pour le connecter.", "error");
+        }
+      } catch (err) {
+        console.error('Failed to upload attached document to Drive:', err);
+        triggerToast("Échec du téléversement du document.", "error");
+      } finally {
+        setIsUploadingNewDoc(false);
+      }
+    }
+
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
-    const newDoc = {
+    const newDoc: LegalDocument = {
       id: Math.random().toString(36).substr(2, 9),
       title: newTitle,
       date: todayStr,
-      status: "attente",
+      status: attachedDocUrl ? "signe" : "attente",
       summary: newSummary,
       provider: newProvider || (activeTab === 'externe' ? "Nouveau Fournisseur" : "Conseil d'Administration"),
       signedBy: "",
-      signedDate: ""
+      signedDate: "",
+      // Firestore rejects a literal `undefined` field value outright — only
+      // set this key when there's actually an attached document.
+      ...(attachedDocUrl ? { customDocUrl: attachedDocUrl } : {}),
     };
 
     if (activeTab === 'externe') {
@@ -688,6 +725,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setNewTitle('');
     setNewProvider('');
     setNewSummary('');
+    setNewAttachedFile(null);
   };
 
   // Delete Document
@@ -1583,18 +1621,46 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                    Document déjà signé (photo ou PDF) — optionnel
+                  </label>
+                  <label className={`flex items-center justify-center gap-2 w-full p-4 rounded-2xl border border-dashed text-xs font-bold cursor-pointer transition-all ${
+                    darkMode ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                  } ${isUploadingNewDoc ? "opacity-60 pointer-events-none" : ""}`}>
+                    {isUploadingNewDoc ? (
+                      <><Loader2 size={14} className="animate-spin" /><span>Archivage en cours...</span></>
+                    ) : newAttachedFile ? (
+                      <><FileText size={14} /><span>{newAttachedFile.name}</span></>
+                    ) : (
+                      <><Upload size={14} /><span>Joindre le document déjà signé</span></>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf, image/jpeg, image/png, image/webp"
+                      disabled={isUploadingNewDoc}
+                      onChange={(e) => setNewAttachedFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className={`text-[9px] mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                    Utilisez ceci pour archiver un document déjà signé sur papier (ex: bail accepté par un chambreur) — sans repasser par la signature électronique.
+                  </p>
+                </div>
+
                 {/* Submit buttons */}
                 <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={() => { setIsAddModalOpen(false); setNewAttachedFile(null); }}
                     className={`flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer`}
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
-                    className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-emerald-600 hover:bg-emerald-750 text-white shadow-lg shadow-emerald-500/20 cursor-pointer"
+                    disabled={isUploadingNewDoc}
+                    className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-emerald-600 hover:bg-emerald-750 text-white shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-60"
                   >
                     Créer Document
                   </button>

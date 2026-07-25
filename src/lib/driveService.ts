@@ -1,33 +1,32 @@
 /**
  * driveService.ts — Multi-Company Google Drive Service
  *
- * Architecture: Scenario A — each company has its own Google Account.
- * OAuth uses Google Identity Services (GIS) token model (client-side).
- * Access tokens (1h lifetime) are cached in Firestore per companyId.
- * Routing always follows the active workspace's authenticated token.
+ * Architecture: each COMPANY has its own Google Drive, connected ONCE by its
+ * owner via the authorization-code flow (offline access). The resulting
+ * refresh token is exchanged and stored server-side (/api/drive/connect) —
+ * never in the browser — so any collaborator invited to the company can
+ * upload through the same shared Drive, not just whoever connected it.
+ *
+ * The Firestore doc id is scoped by the company's OWNER uid (`ownerId`), not
+ * the currently signed-in user, so the doc resolves to the same place for
+ * every collaborator: `{ownerId}_company_{companyId}`.
  */
 
 import { auth, db } from './firebase';
-import { doc, getDoc, setDoc, deleteField, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
-// `companyId` here is the app's internal workspace id (e.g. "1", "2") — every
-// AutoCompt account gets the same seeded ids, so a Firestore doc keyed by the
-// raw companyId alone would collide across different users' accounts. Scope
-// it by owner, matching the `companies` collection's own doc-id convention.
-function driveConfigDocId(companyId: string): string | null {
-  const uid = auth.currentUser?.uid;
-  return uid ? `${uid}_company_${companyId}` : null;
+function driveConfigDocId(ownerId: string, companyId: string): string {
+  return `${ownerId}_company_${companyId}`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface DriveConfig {
-  accessToken: string;
   folderId: string | null;
   folderName: string;
   connectedEmail: string;
   connectedAt: string;
-  expiresAt: number; // epoch ms
+  connected: boolean;
 }
 
 export interface DriveUploadResult {
@@ -35,16 +34,8 @@ export interface DriveUploadResult {
   fileId?: string;
   webViewLink?: string;
   error?: string;
+  reconnectRequired?: boolean;
 }
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const AUTOCOMPT_FOLDER_NAME = 'AutoCompt — DocuLegal';
-const TOKEN_LIFETIME_MS = 55 * 60 * 1000; // 55 min (GIS tokens last 60min)
-
-// In-memory token cache (survives page navigation within session)
-const tokenCache = new Map<string, DriveConfig>();
 
 // ─── GIS Loader ───────────────────────────────────────────────────────────────
 
@@ -66,14 +57,24 @@ function loadGIS(): Promise<void> {
   });
 }
 
+async function authHeader(): Promise<Record<string, string>> {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) throw new Error('Utilisateur non authentifié.');
+  return { Authorization: `Bearer ${idToken}` };
+}
+
 // ─── Core Service ─────────────────────────────────────────────────────────────
 
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
 /**
- * Trigger Google OAuth for a specific company workspace.
- * The `hintEmail` pre-selects the company's Google account in the popup.
+ * Connect (or reconnect) a company's Drive permanently. Opens a Google consent
+ * popup requesting a one-time authorization code, which the server exchanges
+ * for a refresh token it stores itself — the browser never sees it.
  */
 export async function connectCompanyDrive(
   companyId: string,
+  ownerId: string,
   hintEmail?: string,
   onSuccess?: (config: DriveConfig) => void,
   onError?: (error: string) => void,
@@ -86,243 +87,148 @@ export async function connectCompanyDrive(
 
   try {
     await loadGIS();
-
     const google = (window as any).google;
+    const redirectUri = window.location.origin;
 
-    const tokenClient = google.accounts.oauth2.initTokenClient({
+    const codeClient = google.accounts.oauth2.initCodeClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
-      hint: hintEmail || '',
+      ux_mode: 'popup',
+      login_hint: hintEmail || undefined,
       callback: async (response: any) => {
         if (response.error) {
           onError?.(response.error_description || response.error);
           return;
         }
-
-        const accessToken: string = response.access_token;
-        const expiresAt = Date.now() + TOKEN_LIFETIME_MS;
-
-        // Get the connected Google account email via userinfo
-        let connectedEmail = hintEmail || 'Compte Google';
         try {
-          const infoResp = await fetch(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          if (infoResp.ok) {
-            const info = await infoResp.json();
-            connectedEmail = info.email || connectedEmail;
+          const headers = await authHeader();
+          const resp = await fetch('/api/drive/connect', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: response.code, companyId, ownerId, redirectUri }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.success) {
+            onError?.(data.error || `Échec de connexion (${resp.status})`);
+            return;
           }
-        } catch {}
-
-        // Create or find the AutoCompt folder in this company's Drive
-        const folderId = await createOrGetAutoComptFolder(accessToken);
-
-        const config: DriveConfig = {
-          accessToken,
-          folderId,
-          folderName: AUTOCOMPT_FOLDER_NAME,
-          connectedEmail,
-          connectedAt: new Date().toISOString(),
-          expiresAt,
-        };
-
-        // Cache in memory
-        tokenCache.set(companyId, config);
-
-        // Persist to Firestore (token cached for session; Firestore for metadata)
-        const docId = driveConfigDocId(companyId);
-        if (docId) {
-          try {
-            await setDoc(
-              doc(db, 'companyDriveConfig', docId),
-              {
-                folderId,
-                folderName: AUTOCOMPT_FOLDER_NAME,
-                connectedEmail,
-                connectedAt: config.connectedAt,
-                ownerId: auth.currentUser?.uid,
-                // NOTE: We do NOT persist the access_token to Firestore for security.
-                // The token is kept in memory only for this session.
-              },
-              { merge: true }
-            );
-          } catch {
-            // Firestore save failed — token still works for this session
-          }
+          onSuccess?.({
+            folderId: data.folderId,
+            folderName: data.folderName,
+            connectedEmail: data.connectedEmail,
+            connectedAt: data.connectedAt,
+            connected: true,
+          });
+        } catch (err: any) {
+          onError?.(err.message || 'Échec de connexion au serveur AutoCompt');
         }
-
-        onSuccess?.(config);
       },
     });
 
-    tokenClient.requestAccessToken({ prompt: hintEmail ? '' : 'select_account' });
+    codeClient.requestCode();
   } catch (err: any) {
     onError?.(err.message || 'OAuth initialization failed');
   }
 }
 
 /**
- * Get the cached Drive config for a company.
- * Returns null if not connected or token expired.
+ * Get the Drive connection status for a company. Any collaborator can read
+ * this metadata (never the token itself) via the standard Firestore rules.
  */
-export async function getCompanyDriveConfig(companyId: string): Promise<DriveConfig | null> {
-  // Check in-memory cache first
-  const cached = tokenCache.get(companyId);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached;
-  }
-
-  // Check Firestore for metadata (no token — user needs to re-auth if token expired)
-  const docId = driveConfigDocId(companyId);
-  if (!docId) return null;
+export async function getCompanyDriveConfig(companyId: string, ownerId: string): Promise<DriveConfig | null> {
+  const docId = driveConfigDocId(ownerId, companyId);
   try {
     const snap = await getDoc(doc(db, 'companyDriveConfig', docId));
-    if (snap.exists()) {
-      const data = snap.data();
-      // Return metadata without token — caller knows token is expired
-      return {
-        accessToken: '', // expired or not in this session
-        folderId: data.folderId || null,
-        folderName: data.folderName || AUTOCOMPT_FOLDER_NAME,
-        connectedEmail: data.connectedEmail || '',
-        connectedAt: data.connectedAt || '',
-        expiresAt: 0, // indicates expired
-      };
-    }
-  } catch {}
-
-  return null;
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return {
+      folderId: data.folderId || null,
+      folderName: data.folderName || 'AutoCompt',
+      connectedEmail: data.connectedEmail || '',
+      connectedAt: data.connectedAt || '',
+      connected: !!data.connected && !!data.connectedEmail,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Check if a company Drive is connected AND has a valid token for this session.
- */
-export function isCompanyDriveActive(companyId: string): boolean {
-  const cached = tokenCache.get(companyId);
-  return !!(cached && Date.now() < cached.expiresAt);
-}
-
-/**
- * Upload a PDF (base64) to the company's Drive folder.
+ * Upload a base64 file (PDF or image) to the company's shared Drive.
+ * Works for the owner AND any invited collaborator — the server refreshes
+ * the stored token itself, no per-browser session token needed.
  */
 export async function uploadDocumentToDrive(
   companyId: string,
-  pdfBase64: string,
+  ownerId: string,
+  base64Data: string,
   fileName: string,
+  mimeType: string,
+  companyName: string,
+  category: string = 'Recibos',
 ): Promise<DriveUploadResult> {
-  const config = tokenCache.get(companyId);
-  if (!config || Date.now() >= config.expiresAt) {
-    return { success: false, error: 'Drive non connecté ou token expiré. Veuillez reconnecter.' };
+  try {
+    const headers = await authHeader();
+    const resp = await fetch('/api/drive/upload', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, ownerId, fileName, mimeType, base64Data, companyName, category }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      return {
+        success: false,
+        error: data.message || data.error || `Échec du téléversement (${resp.status})`,
+        reconnectRequired: data.error === 'reconnect_required' || data.error === 'not_connected',
+      };
+    }
+    return { success: true, fileId: data.fileId, webViewLink: data.webViewLink };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Échec du téléversement' };
   }
-
-  return uploadPDFToFolder(config.accessToken, config.folderId, pdfBase64, fileName);
 }
 
 /**
- * Disconnect Drive for a company (clears token + Firestore metadata).
+ * Upload from the PUBLIC signature page — the external signer has no Firebase
+ * Auth session. Trust is anchored to the unique signing `token` instead; the
+ * server checks it against the matching `pendingSignatures` doc server-side.
  */
-export async function disconnectCompanyDrive(companyId: string): Promise<void> {
-  tokenCache.delete(companyId);
-  const docId = driveConfigDocId(companyId);
-  if (!docId) return;
-  try {
-    await updateDoc(doc(db, 'companyDriveConfig', docId), {
-      connectedEmail: deleteField(),
-      connectedAt: deleteField(),
-      folderId: deleteField(),
-    });
-  } catch {}
-}
-
-// ─── Internal Helpers ─────────────────────────────────────────────────────────
-
-async function createOrGetAutoComptFolder(accessToken: string): Promise<string | null> {
-  try {
-    // Search for existing AutoCompt folder
-    const searchResp = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
-        `name='${AUTOCOMPT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
-      )}&fields=files(id,name)`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-
-    if (searchResp.ok) {
-      const data = await searchResp.json();
-      if (data.files?.length > 0) {
-        return data.files[0].id;
-      }
-    }
-
-    // Create the folder
-    const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: AUTOCOMPT_FOLDER_NAME,
-        mimeType: 'application/vnd.google-apps.folder',
-      }),
-    });
-
-    if (createResp.ok) {
-      const folder = await createResp.json();
-      return folder.id;
-    }
-  } catch {}
-
-  return null;
-}
-
-async function uploadPDFToFolder(
-  accessToken: string,
-  folderId: string | null,
-  pdfBase64: string,
+export async function uploadDocumentToDrivePublic(
+  companyId: string,
+  ownerId: string,
+  base64Data: string,
   fileName: string,
+  mimeType: string,
+  companyName: string,
+  category: string,
+  token: string,
 ): Promise<DriveUploadResult> {
   try {
-    const boundary = 'autocompt_boundary_' + Date.now();
-    const metadata: Record<string, any> = {
-      name: fileName,
-      mimeType: 'application/pdf',
-    };
-    if (folderId) metadata.parents = [folderId];
-
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      'Content-Type: application/pdf',
-      'Content-Transfer-Encoding: base64',
-      '',
-      pdfBase64,
-      `--${boundary}--`,
-    ].join('\r\n');
-
-    const resp = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`,
-        },
-        body,
-      }
-    );
-
-    if (resp.ok) {
-      const file = await resp.json();
-      return { success: true, fileId: file.id, webViewLink: file.webViewLink };
+    const resp = await fetch('/api/drive/upload-public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, ownerId, fileName, mimeType, base64Data, companyName, category, token }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      return { success: false, error: data.error || `Échec du téléversement (${resp.status})` };
     }
-
-    const err = await resp.text();
-    return { success: false, error: `Drive API error ${resp.status}: ${err}` };
+    return { success: true, fileId: data.fileId, webViewLink: data.webViewLink };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Upload failed' };
+    return { success: false, error: err.message || 'Échec du téléversement' };
+  }
+}
+
+/** Disconnect Drive for a company. Owner-only — revokes access for every collaborator. */
+export async function disconnectCompanyDrive(companyId: string, ownerId: string): Promise<void> {
+  try {
+    const headers = await authHeader();
+    await fetch('/api/drive/disconnect', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, ownerId }),
+    });
+  } catch {
+    // best-effort — UI will re-check status on next load
   }
 }

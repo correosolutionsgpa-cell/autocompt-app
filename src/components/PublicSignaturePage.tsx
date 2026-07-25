@@ -25,6 +25,7 @@ interface SignatureRequestDoc {
   docSummary: string;
   companyName: string;
   companyId?: string;          // Workspace ID — used for Drive routing
+  ownerId?: string;            // Company owner's uid — Drive is scoped to this
   adminName: string;
   adminEmail?: string;
   createdAt: string;
@@ -410,13 +411,16 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       // Works immediately when admin signs on the same session (same browser).
       // Gracefully skips (no crash) if the client is on a different device.
       let driveResult: { success: boolean; webViewLink?: string } = { success: false };
-      if (pdfBase64 && docData.companyId) {
+      if (pdfBase64 && docData.companyId && docData.ownerId) {
         try {
-          const { uploadDocumentToDrive } = await import('../lib/driveService');
+          const { uploadDocumentToDrivePublic } = await import('../lib/driveService');
           const safeTitle = (docData.docTitle || 'document').replace(/[^a-z0-9\-_]/gi, '_').slice(0, 40);
           const dateStr = new Date().toISOString().split('T')[0];
           const fileName = `DocuLegal_${safeTitle}_${dateStr}_BIPARTITE.pdf`;
-          driveResult = await uploadDocumentToDrive(docData.companyId, pdfBase64, fileName);
+          driveResult = await uploadDocumentToDrivePublic(
+            docData.companyId, docData.ownerId, pdfBase64, fileName, 'application/pdf',
+            docData.companyName, 'DocuLegal', token,
+          );
         } catch {
           // Drive upload failure is non-blocking — email delivery is the primary channel
         }

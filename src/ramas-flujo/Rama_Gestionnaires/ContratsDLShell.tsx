@@ -102,6 +102,7 @@ const ContratsDLShell: React.FC<ContratsDLShellProps> = ({
           adminName={adminName || ''}
           adminEmail={currentUserEmail || ''}
           companyId={activeCompanyId || ''}
+          ownerId={currentCompany?.ownerId || ''}
         />
       </main>
     </div>

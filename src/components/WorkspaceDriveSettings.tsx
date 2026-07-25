@@ -2,25 +2,27 @@
  * WorkspaceDriveSettings.tsx
  * Per-company Google Drive connection panel.
  * Shows connection status, allows OAuth connect/disconnect per workspace.
+ * Once connected, the connection is PERMANENT (server-side refresh token) —
+ * every collaborator invited to this company shares the same Drive.
  */
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   HardDrive, CheckCircle2, AlertCircle, RefreshCw,
-  Unlink, ExternalLink, FolderOpen, Loader2, Wifi, WifiOff,
+  Unlink, ExternalLink, FolderOpen, Loader2, Wifi, WifiOff, Users,
 } from 'lucide-react';
 import {
   connectCompanyDrive,
   disconnectCompanyDrive,
   getCompanyDriveConfig,
-  isCompanyDriveActive,
   DriveConfig,
 } from '../lib/driveService';
 
 interface WorkspaceDriveSettingsProps {
   companyId: string;
   companyName: string;
+  ownerId: string; // the company's owner uid — Drive is scoped to this, not the current viewer
   companyEmail?: string; // hint email for OAuth (company's Google account)
   darkMode: boolean;
   onConnectionChange?: (connected: boolean, config: DriveConfig | null) => void;
@@ -29,12 +31,12 @@ interface WorkspaceDriveSettingsProps {
 export default function WorkspaceDriveSettings({
   companyId,
   companyName,
+  ownerId,
   companyEmail,
   darkMode,
   onConnectionChange,
 }: WorkspaceDriveSettingsProps) {
   const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,16 +44,16 @@ export default function WorkspaceDriveSettings({
   const [loading, setLoading] = useState(true);
 
   const D = darkMode;
+  const isConnected = !!driveConfig?.connected;
 
   useEffect(() => {
     loadDriveStatus();
-  }, [companyId]);
+  }, [companyId, ownerId]);
 
   const loadDriveStatus = async () => {
     setLoading(true);
-    const config = await getCompanyDriveConfig(companyId);
+    const config = await getCompanyDriveConfig(companyId, ownerId);
     setDriveConfig(config);
-    setIsConnected(isCompanyDriveActive(companyId));
     setLoading(false);
   };
 
@@ -62,10 +64,10 @@ export default function WorkspaceDriveSettings({
 
     await connectCompanyDrive(
       companyId,
+      ownerId,
       companyEmail,
       (config) => {
         setDriveConfig(config);
-        setIsConnected(true);
         setIsConnecting(false);
         setSuccessMsg(`✅ Google Drive connecté · ${config.connectedEmail}`);
         onConnectionChange?.(true, config);
@@ -80,15 +82,11 @@ export default function WorkspaceDriveSettings({
 
   const handleDisconnect = async () => {
     setIsDisconnecting(true);
-    await disconnectCompanyDrive(companyId);
+    await disconnectCompanyDrive(companyId, ownerId);
     setDriveConfig(null);
-    setIsConnected(false);
     setIsDisconnecting(false);
     onConnectionChange?.(false, null);
   };
-
-  const tokenExpired = driveConfig !== null && driveConfig.expiresAt === 0;
-  const hasMetadata = driveConfig?.connectedEmail && driveConfig.connectedEmail !== '';
 
   if (loading) {
     return (
@@ -111,18 +109,16 @@ export default function WorkspaceDriveSettings({
         <div className="flex-1">
           <p className="text-[12px] font-black">Google Drive — {companyName}</p>
           <p className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
-            Stockage cloud dédié à ce workspace
+            Stockage cloud partagé de ce workspace
           </p>
         </div>
         {/* Status badge */}
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider ${isConnected
             ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            : tokenExpired && hasMetadata
-              ? 'bg-amber-50 border-amber-200 text-amber-700'
-              : 'bg-slate-50 border-slate-200 text-slate-500'
+            : 'bg-slate-50 border-slate-200 text-slate-500'
           }`}>
           {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
-          {isConnected ? 'Connecté' : tokenExpired && hasMetadata ? 'Session expirée' : 'Non connecté'}
+          {isConnected ? 'Connecté' : 'Non connecté'}
         </div>
       </div>
 
@@ -168,38 +164,20 @@ export default function WorkspaceDriveSettings({
                     </div>
                   )}
                 </div>
-                <p className={`text-[9px] mt-2 ${D ? 'text-emerald-500/60' : 'text-emerald-600/60'}`}>
-                  📁 Tous les documents signés dans ce workspace seront automatiquement sauvegardés dans ce Drive.
+                <p className={`text-[9px] mt-2 flex items-center gap-1.5 ${D ? 'text-emerald-500/60' : 'text-emerald-600/60'}`}>
+                  <Users size={10} /> Structure officielle Google Drive : AutoCompt / [Année] / {companyName}
                 </p>
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* Token expired — show reconnect */}
-        {!isConnected && tokenExpired && hasMetadata && (
-          <div className={`p-4 rounded-2xl border ${D ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
-            <div className="flex items-start gap-3">
-              <AlertCircle size={16} className="text-amber-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[12px] font-bold text-amber-700 dark:text-amber-400">
-                  Session Drive expirée
-                </p>
-                <p className={`text-[10px] mt-1 ${D ? 'text-zinc-400' : 'text-slate-600'}`}>
-                  Dernière connexion: <strong>{driveConfig?.connectedEmail}</strong>
-                  <br />Les tokens Google expirent après 1 heure. Reconnectez pour reprendre l'upload automatique.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Not connected — explain */}
-        {!isConnected && !hasMetadata && (
+        {!isConnected && (
           <div className={`p-4 rounded-2xl border border-dashed ${D ? 'border-zinc-700 bg-zinc-900/50' : 'border-slate-200 bg-slate-50'}`}>
             <p className={`text-[11px] font-semibold ${D ? 'text-zinc-400' : 'text-slate-600'} leading-relaxed`}>
               Connectez le Google Drive dédié à <strong>{companyName}</strong>.<br />
-              Choisissez le compte Google de cette entreprise dans la fenêtre qui s'ouvrira.
+              Choisissez le compte Google de cette entreprise dans la fenêtre qui s'ouvrira — une seule fois, la connexion reste active pour toute l'équipe.
             </p>
             {companyEmail && (
               <p className={`text-[10px] mt-2 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
@@ -237,7 +215,7 @@ export default function WorkspaceDriveSettings({
               {isConnecting ? (
                 <><Loader2 size={13} className="animate-spin" /><span>Connexion en cours...</span></>
               ) : (
-                <><HardDrive size={13} /><span>{tokenExpired && hasMetadata ? 'Reconnecter Google Drive' : 'Connecter Google Drive'}</span></>
+                <><HardDrive size={13} /><span>Connecter Google Drive</span></>
               )}
             </button>
           ) : (
@@ -248,7 +226,7 @@ export default function WorkspaceDriveSettings({
                 className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${D ? 'border-zinc-700 text-zinc-400 hover:bg-zinc-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
               >
                 <RefreshCw size={12} />
-                <span>Renouveler</span>
+                <span>Reconnecter</span>
               </button>
               <button
                 onClick={handleDisconnect}
@@ -264,7 +242,7 @@ export default function WorkspaceDriveSettings({
 
         {/* Info footer */}
         <p className={`text-[8.5px] ${D ? 'text-zinc-600' : 'text-slate-400'} leading-relaxed`}>
-          🔒 Les tokens OAuth sont stockés en mémoire uniquement (session). AutoCompt ne conserve jamais vos identifiants Google. Seul l'email et l'ID du dossier sont sauvegardés dans Firestore.
+          🔒 Le jeton d'accès permanent est stocké de façon sécurisée sur le serveur AutoCompt, jamais dans le navigateur. Seul l'email et l'ID du dossier sont visibles ici.
         </p>
       </div>
     </div>

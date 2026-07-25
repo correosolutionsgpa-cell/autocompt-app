@@ -1,3 +1,4 @@
+import { SiteFooter } from "./SiteFooter";
 import React, { useState, useEffect, useRef } from "react";
 import {
   Sparkles, Globe, FileSearch, Building, Hammer, Briefcase,
@@ -755,6 +756,13 @@ export default function SofiOnboarding({
         if (dimResp.ok) {
           parsed = await dimResp.json();
           console.log("[S.O.F.I. Dimensions] Server extraction result:", parsed);
+          if (auth.currentUser?.uid) {
+            dataService.logAiUsageEvent(auth.currentUser.uid, {
+              profile: selectedProfile || "onboarding",
+              feature: "dimension_scan",
+              userEmail: auth.currentUser.email || undefined,
+            });
+          }
         } else {
           const err = await dimResp.text();
           throw new Error(`Server error ${dimResp.status}: ${err.slice(0, 200)}`);
@@ -1764,6 +1772,12 @@ export default function SofiOnboarding({
             </button>
           </div>
         )}
+      </div>
+
+      
+      {/* Legal Site Footer */}
+      <div className="w-full mt-10 z-10">
+        <SiteFooter darkMode={darkMode} />
       </div>
 
       {/* Styles */}
