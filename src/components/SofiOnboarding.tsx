@@ -452,6 +452,8 @@ const T = {
     selectAll: "Sélectionnez tout ce qui s'applique",
     alreadyHaveAccount: "J'ai déjà un compte, accès sécurisé",
     loginShort: "Se connecter",
+    needBetaCode: "Accès sur invitation seulement — pas encore de code d'accès bêta ?",
+    requestBetaCode: "En demander un",
     profiles: {
       prospecteur:  { label: "Prospecteur Immobilier",  desc: "Outils DocuLégal intégrés pour simplifier votre travail sur le terrain." },
       investisseur: { label: "Investisseur Immobilier", desc: "Tenue de livres automatisée et distincte pour chacun de vos immeubles." },
@@ -471,6 +473,8 @@ const T = {
     selectAll: "Select all that apply",
     alreadyHaveAccount: "I already have an account, secure access",
     loginShort: "Log in",
+    needBetaCode: "Invite-only access — don't have a beta code yet?",
+    requestBetaCode: "Request one",
     profiles: {
       prospecteur:  { label: "Property Finder",         desc: "Integrated DocuLégal tools to simplify your field work." },
       investisseur: { label: "Real Estate Investor",    desc: "Automated and separate bookkeeping for each of your properties." },
@@ -490,6 +494,8 @@ const T = {
     selectAll: "Selecciona todo lo que aplique",
     alreadyHaveAccount: "Ya tengo una cuenta, acceso seguro",
     loginShort: "Iniciar sesión",
+    needBetaCode: "Acceso solo por invitación — ¿aún no tienes un código beta?",
+    requestBetaCode: "Solicitar uno",
     profiles: {
       prospecteur:  { label: "Buscador de Inmuebles",          desc: "Herramientas de DocuLégal integradas para simplificar tu trabajo de campo." },
       investisseur: { label: "Inversor Inmobiliario",          desc: "Contabilidad automatizada e independiente para cada uno de tus edificios." },
@@ -1056,6 +1062,19 @@ export default function SofiOnboarding({
         {/* ══ STEP 1: Profile Select ══════════════════════════════════════════ */}
         {step === "profile_select" && (
           <div className="w-full md:w-[50%] flex flex-col space-y-6 text-left">
+            <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2 rounded-2xl border text-[11px] font-bold ${
+              darkMode ? "border-amber-900/40 bg-amber-950/20 text-amber-300" : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}>
+              <span>{t.needBetaCode}</span>
+              <a
+                href="https://docs.google.com/forms/d/e/1FAIpQLScnBGzfTKw2qS033a7Z08OBqb7j1iSJPa-bR0nULC7uaQ7sBA/viewform?usp=dialog"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 font-black hover:opacity-80"
+              >
+                {t.requestBetaCode}
+              </a>
+            </div>
             <div className="space-y-1">
               <h2 className="text-xl md:text-2xl font-extrabold uppercase tracking-tight italic text-black dark:text-white">
                 {t.profileHeading}
