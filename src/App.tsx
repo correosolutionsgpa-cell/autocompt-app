@@ -11988,6 +11988,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
       <div
         className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden pb-12 md:pl-72 relative transition-all duration-300`}
       >
+        <ScrollToTopOnMount />
         <WorkspaceSidebar />
 
         {/* Top Header strictly matching main workspace navigation styles */}
