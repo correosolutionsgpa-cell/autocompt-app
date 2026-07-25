@@ -36,9 +36,13 @@ console.log("[server.ts] dotenv loaded. GEMINI_API_KEY present:", !!process.env.
 })();
 
 
-async function startServer() {
+// Builds the Express app with every route registered, but does NOT bind a
+// port — Vercel imports this and wraps it as a serverless function handler
+// (see the `handler` export at the bottom), since a long-lived `app.listen()`
+// process has no meaning in that environment. Local dev / traditional
+// hosting still gets a real listening server via startLocalServer() below.
+async function buildApp() {
   const app = express();
-  const PORT = 3000;
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -1324,6 +1328,15 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  return app;
+}
+
+// Only used for a real, long-lived server process (local dev via `tsx
+// server.ts`, or `node dist/server.cjs` on traditional/non-Vercel hosting).
+async function startLocalServer() {
+  const app = await buildApp();
+  const PORT = 3000;
+
   // Vite development or production integration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -1344,4 +1357,16 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
   });
 }
 
-startServer();
+// Vercel sets VERCEL=1 for every deployment (build and serverless runtime
+// alike) — never start a persistent listener there, it exports `handler`
+// below instead, which Vercel's Node.js runtime calls per-request.
+if (!process.env.VERCEL) {
+  startLocalServer();
+}
+
+let appPromise: Promise<express.Express> | null = null;
+export default async function handler(req: express.Request, res: express.Response) {
+  if (!appPromise) appPromise = buildApp();
+  const app = await appPromise;
+  return app(req, res);
+}
