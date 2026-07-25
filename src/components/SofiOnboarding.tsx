@@ -6,7 +6,7 @@ import {
   ArrowRight, ArrowLeft, CheckCircle2,
   Building2, UserCheck, Home,
   Plus, Trash2, Info, AlertTriangle,
-  Scan, Loader2, Camera, X,
+  Scan, Loader2, Camera, X, LogIn,
 } from "lucide-react";
 import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
@@ -451,6 +451,7 @@ const T = {
     stepLabel: (cur: number, tot: number) => `Étape ${cur} sur ${tot}`,
     selectAll: "Sélectionnez tout ce qui s'applique",
     alreadyHaveAccount: "J'ai déjà un compte, accès sécurisé",
+    loginShort: "Se connecter",
     profiles: {
       prospecteur:  { label: "Prospecteur Immobilier",  desc: "Outils DocuLégal intégrés pour simplifier votre travail sur le terrain." },
       investisseur: { label: "Investisseur Immobilier", desc: "Tenue de livres automatisée et distincte pour chacun de vos immeubles." },
@@ -469,6 +470,7 @@ const T = {
     stepLabel: (cur: number, tot: number) => `Step ${cur} of ${tot}`,
     selectAll: "Select all that apply",
     alreadyHaveAccount: "I already have an account, secure access",
+    loginShort: "Log in",
     profiles: {
       prospecteur:  { label: "Property Finder",         desc: "Integrated DocuLégal tools to simplify your field work." },
       investisseur: { label: "Real Estate Investor",    desc: "Automated and separate bookkeeping for each of your properties." },
@@ -487,6 +489,7 @@ const T = {
     stepLabel: (cur: number, tot: number) => `Paso ${cur} de ${tot}`,
     selectAll: "Selecciona todo lo que aplique",
     alreadyHaveAccount: "Ya tengo una cuenta, acceso seguro",
+    loginShort: "Iniciar sesión",
     profiles: {
       prospecteur:  { label: "Buscador de Inmuebles",          desc: "Herramientas de DocuLégal integradas para simplificar tu trabajo de campo." },
       investisseur: { label: "Inversor Inmobiliario",          desc: "Contabilidad automatizada e independiente para cada uno de tus edificios." },
@@ -1017,6 +1020,20 @@ export default function SofiOnboarding({
 
         {/* Header controls */}
         <div className="absolute top-4 right-6 flex items-center space-x-3">
+          {onLoginClick && (
+            <button
+              type="button"
+              onClick={onLoginClick}
+              title={t.loginShort}
+              className={`p-2 rounded-full border bg-transparent cursor-pointer transition-all duration-300 active:scale-95 ${
+                darkMode
+                  ? "border-emerald-500/20 hover:border-emerald-500/40 text-zinc-300 hover:text-white"
+                  : "border-slate-200 hover:border-emerald-500/40 text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <LogIn size={16} />
+            </button>
+          )}
           <button
             onClick={() => { setDarkMode(!darkMode); if (playNotificationSound) playNotificationSound(); }}
             className={`p-2 rounded-full border bg-transparent cursor-pointer transition-all duration-300 active:scale-95 ${
@@ -1044,15 +1061,6 @@ export default function SofiOnboarding({
                 {t.profileHeading}
               </h2>
               <p className={`text-xs font-medium ${darkMode ? "text-zinc-450" : "text-slate-500"}`}>{t.subtitle}</p>
-              {onLoginClick && (
-                <button
-                  type="button"
-                  onClick={onLoginClick}
-                  className={`text-[10px] font-bold uppercase tracking-wider underline underline-offset-2 bg-transparent border-none cursor-pointer p-0 ${darkMode ? "text-zinc-400 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
-                >
-                  {t.alreadyHaveAccount}
-                </button>
-              )}
             </div>
 
             {/* Language selector */}
