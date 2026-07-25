@@ -11695,7 +11695,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         const newDoc = {
           id: `archive_${Date.now()}`,
           name: file.name.replace(/\.[^/.]+$/, ""),
-          cat: folders[0] || "Documents",
+          cat: selectedDocuFolder || folders[0] || "Documents",
           status: "Signé",
           date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
           companyId: activeCompanyId,
