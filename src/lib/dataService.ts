@@ -362,6 +362,9 @@ export interface DocuLegalEntryDoc {
   signatureTimestamp?: string;
   transactionId?: string;
   signatureData?: string;
+  // Set when this entry was archived directly from an already-signed
+  // photo/PDF (not produced via the e-signature editor) — a Drive link.
+  fileUrl?: string;
   ownerId: string;
   createdAt: string;
 }

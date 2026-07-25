@@ -2827,6 +2827,8 @@ const App = () => {
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
+  const [isArchivingSignedDoc, setIsArchivingSignedDoc] = useState(false);
+  const archiveSignedDocInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
   // Flippeur/Gestionnaire DocuLegal. Each account's templates are private
@@ -11654,6 +11656,68 @@ Ceci est un message automatisé généré par AutoCompt.`;
       }
     };
 
+    // Archives a document that was already signed on paper/elsewhere (e.g. a
+    // photo of a bail accepted by a chambreur) directly into DocuLegal —
+    // skips the e-signature editor entirely since nothing needs to be signed.
+    const handleArchiveSignedDoc = async (file: File) => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+
+      setIsArchivingSignedDoc(true);
+      try {
+        const driveOwnerId = currentCompany?.ownerId || uid;
+        const driveStatus = await getCompanyDriveConfig(activeCompanyId, driveOwnerId);
+        if (!driveStatus?.connected) {
+          alert("Google Drive n'est pas connecté pour ce workspace. Allez dans Paramètres pour le connecter, puis réessayez.");
+          return;
+        }
+
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            const commaIndex = res.indexOf(",");
+            resolve(commaIndex !== -1 ? res.substring(commaIndex + 1) : res);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const driveResult = await uploadDocumentToDrive(
+          activeCompanyId, driveOwnerId, base64Data, file.name,
+          file.type || "application/octet-stream",
+          currentCompany?.nombre || "Entreprise", "DocuLegal",
+        );
+        if (!driveResult.success || !driveResult.webViewLink) {
+          throw new Error(driveResult.error || "Échec du téléversement Google Drive");
+        }
+
+        const newDoc = {
+          id: `archive_${Date.now()}`,
+          name: file.name.replace(/\.[^/.]+$/, ""),
+          cat: folders[0] || "Documents",
+          status: "Signé",
+          date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
+          companyId: activeCompanyId,
+          author: currentUserEmail || "",
+          recipient: "",
+          fileUrl: driveResult.webViewLink,
+        };
+        const saved = await dataService.saveDocuLegalDoc(uid, newDoc);
+        setDocuLegalList((prev) => [saved, ...prev]);
+        setDispatcherSuccessToast({
+          text: "Document archivé avec succès !",
+          channel: "Google Drive",
+          customMessage: `"${file.name}" a été archivé dans DocuLegal et votre Google Drive.`,
+        });
+      } catch (err) {
+        console.error("handleArchiveSignedDoc failed:", err);
+        alert("Erreur lors de l'archivage du document.");
+      } finally {
+        setIsArchivingSignedDoc(false);
+      }
+    };
+
     const handleGenerateFromDocTemplate = async () => {
       if (!fillingDocTemplate) return;
       const uid = auth.currentUser?.uid;
@@ -12437,48 +12501,41 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
                       {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* DROPZONE */}
+                        {/* DROPZONE — archive an already-signed document (photo/PDF) directly */}
                         <div
                           onClick={() => {
-                            setDocSimulatedFile(
-                              "Contrat_Location_Officiel_GPA.pdf",
-                            );
-                            setDocFormName("Contrat de Location - Apt. 3");
-                            setDocFormFolder(folders[0] || "Baux Locatifs");
-                            setDocFormRecipient("Richard Duchesne");
-                            setDocFormEmail("richard.duchesne@outlook.com");
-                            setDocFormPhone("514-555-8822");
-                            setDocFormContent(
-                              loadDefaultTemplate(folders[0] || "Baux Locatifs"),
-                            );
-                            setDocFormEmailInvite(
-                              "Bonjour Richard, voici la version finale du contrat de location pour signature électronique.",
-                            );
-                            setDocFormSmsVerify(true);
-                            setSubVistaDocu("editor");
-                            playNotificationSound();
-                            alert(
-                              "📂 Document 'Contrat_Location_Officiel_GPA.pdf' importé avec succès ! Nous l'avons injecté dans l'outil de préparation.",
-                            );
+                            if (!isArchivingSignedDoc) archiveSignedDocInputRef.current?.click();
                           }}
                           className={`p-6 rounded-[32px] border-2 border-dashed ${darkMode
                             ? "bg-zinc-950/40 border-teal-500/20 hover:border-teal-400 text-zinc-300"
                             : "bg-teal-50/10 border-[#14b8a6]/30 hover:border-[#059669] text-slate-800"
-                            } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px]`}
+                            } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px] ${isArchivingSignedDoc ? "opacity-60 pointer-events-none" : ""}`}
                         >
+                          <input
+                            ref={archiveSignedDocInputRef}
+                            type="file"
+                            accept="application/pdf, image/jpeg, image/png, image/webp, .doc, .docx"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) handleArchiveSignedDoc(file);
+                            }}
+                          />
                           <div
                             className={`p-3 rounded-2xl ${darkMode ? "bg-teal-950/20 text-teal-400" : "bg-teal-50 text-teal-600"} transition-transform group-hover:scale-110 mb-2`}
                           >
-                            <Upload size={20} />
+                            {isArchivingSignedDoc ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
                           </div>
                           <span className="text-[10px] font-black uppercase italic tracking-wider">
-                            Importer votre document (PDF / Word)
+                            {isArchivingSignedDoc ? "Archivage en cours..." : "Importer un document déjà signé"}
                           </span>
                           <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5">
-                            Glissez-déposez ou cliquez
+                            Photo ou PDF — archivé directement, sans passer par la signature électronique
                           </p>
                           <button
                             type="button"
+                            disabled={isArchivingSignedDoc}
                             className={`mt-3 px-4 py-2 rounded-xl text-[7.5px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-md ${darkMode
                               ? "bg-teal-950/50 hover:bg-teal-900/60 text-teal-400 border border-teal-500/10"
                               : "bg-[#059669] hover:bg-emerald-600 text-white"
@@ -12680,6 +12737,20 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                       >
                                         {doc.status}
                                       </span>
+
+                                      {(doc as any).fileUrl && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open((doc as any).fileUrl, "_blank", "noopener,noreferrer");
+                                          }}
+                                          title="Voir le document archivé"
+                                          className="p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer bg-teal-500/10 hover:bg-teal-500 hover:text-white text-teal-600"
+                                        >
+                                          <FileText size={10} />
+                                        </button>
+                                      )}
 
                                       {/* PENDING MANAGE ACTIONS FOR CLIENT ADMIN */}
                                       {doc.status === "En attente" && (
