@@ -11710,9 +11710,9 @@ Ceci est un message automatisé généré par AutoCompt.`;
           channel: "Google Drive",
           customMessage: `"${file.name}" a été archivé dans DocuLegal et votre Google Drive.`,
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("handleArchiveSignedDoc failed:", err);
-        alert("Erreur lors de l'archivage du document.");
+        alert(`Erreur lors de l'archivage du document.\n\nDétail: ${err?.message || err}`);
       } finally {
         setIsArchivingSignedDoc(false);
       }
