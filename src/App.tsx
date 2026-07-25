@@ -1336,6 +1336,10 @@ const App = () => {
           // isPhoneVerified may still be null here if Firestore hasn't resolved
           // yet — the corrective effect below catches that case once it does.
           setVista(isPhoneVerified === false ? "phone-verify" : "dashboard");
+        } else if (new URLSearchParams(window.location.search).get("login") === "1") {
+          // Deep link from the marketing landing page's "Se connecter" button —
+          // skip the onboarding wizard entirely for returning users.
+          setVista("login");
         } else {
           setVista("sofi-onboarding");
         }

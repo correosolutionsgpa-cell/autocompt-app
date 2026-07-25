@@ -91,7 +91,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ darkMode = true, onNavig
             
             {/* Facebook - Activo */}
             <a
-              href="https://facebook.com/autocompt"
+              href="https://www.facebook.com/profile.php?id=61590298907041"
               target="_blank"
               rel="noopener noreferrer"
               title="AutoCompt sur Facebook"
