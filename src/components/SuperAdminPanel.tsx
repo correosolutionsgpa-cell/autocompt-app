@@ -13,6 +13,7 @@ import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { dataService, type BetaCodeDoc, type PlatformInvoiceDoc } from '../lib/dataService';
 import { autocomptLogoWhiteBase64 } from '../assets/brand/autocomptLogoWhiteBase64';
+import { TRIAL_EXTENSION_FORM_URL } from './modals/TrialExpiredModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -663,8 +664,22 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                           <Receipt size={13} />
                         </button>
                         <button
-                          title="Envoyer email"
-                          onClick={() => { window.open(`mailto:${u.email}?subject=AutoCompt%20—%20Votre%20abonnement&body=Bonjour%20${encodeURIComponent(displayName)},`); }}
+                          title="Envoyer le courriel de prolongation (mois gratuit)"
+                          onClick={() => {
+                            const subject = "Obtenez 1 mois gratuit sur AutoCompt 🎁 (Votre avis est précieux)";
+                            const body = `Bonjour ${displayName},
+
+Votre période d'essai avec AutoCompt tire bientôt à sa fin. On espère que vous avez déjà pu constater à quel point l'automatisation de vos finances peut vous faire sauver un temps précieux au quotidien.
+
+Notre but avec AutoCompt est simple : vous livrer une comptabilité tellement bien classée et avec tous les reçus en ordre, que les honoraires de votre comptable en fin d'année seront considérablement réduits.
+
+Pour continuer à améliorer la plateforme, on a besoin de votre opinion. Prenez 2 minutes pour répondre à ce court sondage et on ajoutera 1 mois d'accès 100% gratuit à votre compte, en guise de remerciement.
+
+${TRIAL_EXTENSION_FORM_URL}
+
+Merci de nous aider à bâtir le meilleur outil pour vous !`;
+                            window.open(`mailto:${u.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                          }}
                           className={`p-1.5 rounded-lg transition-colors ${D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'}`}>
                           <Mail size={13} />
                         </button>

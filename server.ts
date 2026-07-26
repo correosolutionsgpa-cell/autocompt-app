@@ -1335,6 +1335,86 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── Cron: daily check for trials expiring in 5 days ─────────────────────────
+  // Triggered by Vercel Cron (see vercel.json "crons") once a day. Vercel signs
+  // these requests with an Authorization: Bearer <CRON_SECRET> header when
+  // CRON_SECRET is set on the project — reject anything else so this endpoint
+  // can't be hit publicly to spam Resend or leak how many trials exist.
+  app.get("/api/cron/trial-reminders", async (req, res) => {
+    try {
+      const cronSecret = process.env.CRON_SECRET;
+      if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
+        return res.status(401).json({ success: false, error: "Non authentifié" });
+      }
+
+      const db = getAdminDb();
+      // Small dataset at beta scale — fetch all users and filter in memory
+      // rather than a Firestore inequality query (avoids index/quirks for a
+      // one-field filter that'll never need to scale beyond a few hundred docs).
+      const snap = await db.collection("users").get();
+
+      const soonToExpire: { email: string; name: string; daysLeft: number }[] = [];
+      const batch = db.batch();
+
+      for (const docSnap of snap.docs) {
+        const u = docSnap.data();
+        if (!u.trialStartDate || u.trialReminderSent) continue;
+        const validDays = u.trialValidDays ?? 30;
+        const daysElapsed = (Date.now() - new Date(u.trialStartDate).getTime()) / 86400000;
+        const daysLeft = Math.max(0, Math.ceil(validDays - daysElapsed));
+        if (daysLeft <= 5 && daysLeft > 0) {
+          soonToExpire.push({ email: u.email || docSnap.id, name: u.name || u.email || docSnap.id, daysLeft });
+          batch.update(docSnap.ref, { trialReminderSent: true });
+        }
+      }
+
+      if (soonToExpire.length === 0) {
+        return res.json({ success: true, notified: 0 });
+      }
+
+      await batch.commit();
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const notifyEmail = process.env.TRIAL_REMINDER_NOTIFY_EMAIL || "correo.solutionsgpa@gmail.com";
+      if (resendApiKey) {
+        const rowsHtml = soonToExpire
+          .map((u) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${u.name}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${u.email}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">${u.daysLeft} j</td></tr>`)
+          .join("");
+        const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:system-ui,sans-serif">
+          <div style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:linear-gradient(135deg,#059669,#10b981);padding:28px 36px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">AutoCompt · Essais bêta</div>
+              <div style="color:#fff;font-size:20px;font-weight:900;margin-top:6px">${soonToExpire.length} essai(s) expirent bientôt</div>
+            </div>
+            <div style="padding:28px 36px">
+              <p style="color:#374151;font-size:14px">Envoyez-leur le courriel de prolongation (bouton ✉️ dans SuperAdmin → Utilisateurs) pour leur offrir un mois gratuit additionnel.</p>
+              <table style="width:100%;border-collapse:collapse;margin-top:12px">
+                <thead><tr><th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;color:#9ca3af">Nom</th><th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;color:#9ca3af">Courriel</th><th style="padding:8px 12px;font-size:11px;text-transform:uppercase;color:#9ca3af">Restant</th></tr></thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </div>
+          </div>
+        </body></html>`;
+
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "AutoCompt <info@autocompt.ca>",
+            to: [notifyEmail],
+            subject: `⏳ ${soonToExpire.length} essai(s) AutoCompt expirent dans 5 jours ou moins`,
+            html,
+          }),
+        }).catch((err) => console.error("[cron/trial-reminders] Resend error:", err));
+      }
+
+      return res.json({ success: true, notified: soonToExpire.length });
+    } catch (err: any) {
+      console.error("[cron/trial-reminders] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur cron" });
+    }
+  });
+
   return app;
 }
 

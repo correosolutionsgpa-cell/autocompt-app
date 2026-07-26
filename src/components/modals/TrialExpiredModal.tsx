@@ -12,7 +12,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export const TRIAL_EXTENSION_FORM_URL = "https://forms.gle/REMPLACER-PAR-LE-VRAI-FORMULAIRE";
+export const TRIAL_EXTENSION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScjTFPzRLQNwbqRrLd29p8WUC7Q2a2oi_SeWEk5v0LrdSCMuQ/viewform";
 
 export interface TrialExpiredModalProps {
   darkMode: boolean;
