@@ -939,16 +939,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-1 text-left md:col-span-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">URL de la Photo de Profil</label>
               <div className="flex gap-4 items-center">
-                <img src={adminPhoto} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-violet-500/20 shadow-md shrink-0" />
+                {adminPhoto ? (
+                  <img src={adminPhoto} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-violet-500/20 shadow-md shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-md">
+                    <span className="text-[13px] font-black text-white">{(adminName || "?")[0].toUpperCase()}</span>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={adminPhoto}
+                  placeholder="Aucune photo — collez une URL d'image ci-dessus"
                   onChange={(e) => {
                     setAdminPhoto(e.target.value);
                     localStorage.setItem("autocompt_admin_photo", e.target.value);
                   }}
                   className={`flex-1 p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
                 />
+                {adminPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => { setAdminPhoto(""); localStorage.removeItem("autocompt_admin_photo"); }}
+                    className={`px-4 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all shrink-0 ${darkMode ? "border-rose-900/40 text-rose-400 hover:bg-rose-950/30" : "border-rose-200 text-rose-600 hover:bg-rose-50"}`}
+                  >
+                    Retirer
+                  </button>
+                )}
               </div>
             </div>
           </div>

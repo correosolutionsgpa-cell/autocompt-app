@@ -721,7 +721,10 @@ const App = () => {
   // --- ADMIN PROFILE STATE ---
   const [adminName, setAdminName] = useState(() => localStorage.getItem("autocompt_admin_name") || "Fabiola Beatriz");
   const [adminRole, setAdminRole] = useState(() => localStorage.getItem("autocompt_admin_role") || "Administratrice");
-  const [adminPhoto, setAdminPhoto] = useState(() => localStorage.getItem("autocompt_admin_photo") || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop");
+  // No default stock photo — showing a stranger's face by default is worse
+  // than showing nothing. Empty means "no photo set", handled by falling
+  // back to an initials avatar wherever adminPhoto is displayed.
+  const [adminPhoto, setAdminPhoto] = useState(() => localStorage.getItem("autocompt_admin_photo") || "");
   const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem("autocompt_admin_phone") || "+1 (514) 555-0199");
   const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem("autocompt_admin_email") || "fabiola@autocompt.ca");
 
@@ -9652,12 +9655,18 @@ Ceci est un message automatisé généré par AutoCompt.`;
               onClick={() => setVista("settings")}
               className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer"
             >
-              <img
-                src={adminPhoto}
-                alt={adminName}
-                onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop"; }}
-                className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm shrink-0"
-              />
+              {adminPhoto ? (
+                <img
+                  src={adminPhoto}
+                  alt={adminName}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-sm">
+                  <span className="text-[9px] font-black text-white">{(adminName || "?")[0].toUpperCase()}</span>
+                </div>
+              )}
               <div className="text-left hidden sm:block">
                 <div className="flex items-center gap-1 leading-none">
                   <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
