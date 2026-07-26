@@ -278,6 +278,7 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
    * + Universal: Dossiers Fiscaux, Assistant IA.
    */
   gestionnaire: [
+    "facturation",        // Honoraires de gestion facturés aux propriétaires/clients
     "tenue_livres",
     "doculegal",          // Baux, mandats de gestion, contrats sous-traitance
     "dossiers_fiscaux",   // Universal
