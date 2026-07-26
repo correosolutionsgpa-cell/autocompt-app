@@ -725,6 +725,21 @@ const App = () => {
   const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem("autocompt_admin_phone") || "+1 (514) 555-0199");
   const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem("autocompt_admin_email") || "fabiola@autocompt.ca");
 
+  // Persist admin profile fields (name/role/photo) to Firestore, not just
+  // localStorage — otherwise an edit made on one device/browser silently
+  // reverts to the default on any other (same bug class as selectedProfile).
+  const updateAdminProfile = (field: "adminName" | "adminRole" | "adminPhoto", value: string) => {
+    if (field === "adminName") setAdminName(value);
+    else if (field === "adminRole") setAdminRole(value);
+    else setAdminPhoto(value);
+    localStorage.setItem(`autocompt_${field === "adminName" ? "admin_name" : field === "adminRole" ? "admin_role" : "admin_photo"}`, value);
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      setDoc(doc(db, "users", uid), { [field]: value }, { merge: true })
+        .catch((err) => console.error(`Failed to persist ${field}:`, err));
+    }
+  };
+
   // --- PERFIL Y CONFIGURACIÓN ---
   const [setupComplet, setSetupComplet] = useState(false);
   // NOTE: homeOfficeFiles, showHomeOfficeConfig, hoConfigForm
@@ -7236,6 +7251,13 @@ Ceci est un message automatisé généré par AutoCompt.`;
               localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
             }
 
+            // Admin profile display (name/role/photo) — same Firestore-over-
+            // localStorage fix, requested after a photo change didn't survive
+            // switching devices.
+            if (userData.adminName) { setAdminName(userData.adminName); localStorage.setItem("autocompt_admin_name", userData.adminName); }
+            if (userData.adminRole) { setAdminRole(userData.adminRole); localStorage.setItem("autocompt_admin_role", userData.adminRole); }
+            if (userData.adminPhoto) { setAdminPhoto(userData.adminPhoto); localStorage.setItem("autocompt_admin_photo", userData.adminPhoto); }
+
             // Beta trial status — same founder allowlist as getEffectiveTier().
             const userEmail = (user.email ?? "").toLowerCase().trim();
             const isFounder =
@@ -9604,22 +9626,24 @@ Ceci est un message automatisé généré par AutoCompt.`;
           </div>
 
           <div className="flex items-center space-x-3">
-            {dashboardMode === "Syndic" && (
-              <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer">
-                <img
-                  src={adminPhoto}
-                  alt={adminName}
-                  className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm"
-                />
-                <div className="text-left hidden sm:block">
-                  <div className="flex items-center gap-1 leading-none">
-                    <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
-                    <ChevronDown size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[7px] font-bold uppercase text-emerald-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
+            <div
+              onClick={() => setVista("settings")}
+              className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer"
+            >
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop"; }}
+                className="w-7 h-7 rounded-full border border-emerald-500/20 object-cover shadow-sm shrink-0"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1 leading-none">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
+                  <ChevronDown size={8} className="text-slate-400" />
                 </div>
+                <p className="text-[7px] font-bold uppercase text-emerald-500 tracking-wider mt-0.5 leading-none">{adminRole}</p>
               </div>
-            )}
+            </div>
 
             {/* ── Phase 4: Permanently pinned Settings gear in dashboard header ───
                 Always visible. Glows cyan + badge when tour is active.
@@ -19135,11 +19159,11 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         partnerData={partnerData}
         setPartnerData={setPartnerData}
         adminName={adminName}
-        setAdminName={setAdminName}
+        setAdminName={(v: string) => updateAdminProfile("adminName", v)}
         adminRole={adminRole}
-        setAdminRole={setAdminRole}
+        setAdminRole={(v: string) => updateAdminProfile("adminRole", v)}
         adminPhoto={adminPhoto}
-        setAdminPhoto={setAdminPhoto}
+        setAdminPhoto={(v: string) => updateAdminProfile("adminPhoto", v)}
         adminPhone={adminPhone}
         setAdminPhone={setAdminPhone}
         adminEmail={adminEmail}
