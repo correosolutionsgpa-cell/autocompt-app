@@ -45,7 +45,8 @@ export async function verifyRequestAuth(authHeader: string | undefined): Promise
   try {
     const decoded = await getAdminAuth().verifyIdToken(idToken);
     return { uid: decoded.uid, email: decoded.email || null };
-  } catch {
+  } catch (err: any) {
+    console.error("[verifyRequestAuth] verifyIdToken failed:", err?.message || err);
     return null;
   }
 }
