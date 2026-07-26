@@ -365,9 +365,30 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       if (!file) return;
                       const reader = new FileReader();
                       reader.onload = (ev) => {
-                        const dataUrl = ev.target?.result as string;
-                        setUserProfile((prev: any) => ({ ...prev, logo: dataUrl }));
-                        playNotificationSound();
+                        const rawDataUrl = ev.target?.result as string;
+                        const img = new Image();
+                        img.onload = () => {
+                          // Le logo est stocké tel quel dans Firestore (limite de 1 Mo par
+                          // document) — une photo de téléphone non compressée dépasse
+                          // souvent cette limite, ce qui faisait échouer l'enregistrement
+                          // en silence. On redimensionne donc côté client avant de stocker.
+                          const maxDim = 400;
+                          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                          const canvas = document.createElement("canvas");
+                          canvas.width = Math.round(img.width * scale);
+                          canvas.height = Math.round(img.height * scale);
+                          const ctx = canvas.getContext("2d");
+                          if (!ctx) {
+                            setUserProfile((prev: any) => ({ ...prev, logo: rawDataUrl }));
+                            playNotificationSound();
+                            return;
+                          }
+                          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                          const compressed = canvas.toDataURL("image/png");
+                          setUserProfile((prev: any) => ({ ...prev, logo: compressed }));
+                          playNotificationSound();
+                        };
+                        img.src = rawDataUrl;
                       };
                       reader.readAsDataURL(file);
                     }}
