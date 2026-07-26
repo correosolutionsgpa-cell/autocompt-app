@@ -34,6 +34,8 @@ interface AdminUser {
   phone?: string;
   city?: string;
   createdAt?: string;
+  trialStartDate?: string;
+  trialValidDays?: number;
 }
 
 interface SuperAdminPanelProps {
@@ -52,6 +54,14 @@ const PLAN_CONFIG: Record<Plan, { label: string; color: string; bg: string; pric
   integral:   { label: 'Intégral', color: 'text-amber-600',  bg: 'bg-amber-100',   price: 99 },
   superadmin: { label: 'Owner',    color: 'text-rose-600',   bg: 'bg-rose-100',    price: 0 },
 };
+
+/** Days left on a trial, or null if the user isn't on a dated trial (founder/paid/no trialStartDate). */
+function trialDaysLeft(u: { trialStartDate?: string; trialValidDays?: number }): number | null {
+  if (!u.trialStartDate) return null;
+  const validDays = u.trialValidDays ?? 30;
+  const daysElapsed = (Date.now() - new Date(u.trialStartDate).getTime()) / 86400000;
+  return Math.max(0, Math.ceil(validDays - daysElapsed));
+}
 
 const STATUS_CONFIG: Record<UserStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   active:    { label: 'Actif',     color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: <CheckCircle2 size={11} /> },
@@ -304,6 +314,24 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     setTimeout(() => setNotification(null), 3500);
   };
 
+  /**
+   * Grants an extra free month after the client has filled the extension
+   * questionnaire (TRIAL_EXTENSION_FORM_URL) — adds 30 days to their current
+   * trialValidDays rather than resetting trialStartDate, so it stacks
+   * correctly even if this is granted more than once.
+   */
+  const handleExtendTrial = async (u: AdminUser) => {
+    const currentValidDays = u.trialValidDays ?? 30;
+    const newValidDays = currentValidDays + 30;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { trialValidDays: newValidDays });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, trialValidDays: newValidDays } : x));
+      toast(`Mois gratuit additionnel accordé à ${u.email}.`);
+    } catch (err: any) {
+      toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
   const [sendingInvoice, setSendingInvoice] = useState(false);
 
   /**
@@ -398,6 +426,15 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     const matchPlan = filterPlan === 'all' || u.plan === filterPlan;
     const matchStatus = filterStatus === 'all' || u.status === filterStatus;
     return matchSearch && matchPlan && matchStatus;
+  }).sort((a, b) => {
+    // Users whose trial is about to expire bubble to the top, so they're
+    // never buried in the list when doing a quick daily follow-up check.
+    const da = trialDaysLeft(a);
+    const db_ = trialDaysLeft(b);
+    if (da === null && db_ === null) return 0;
+    if (da === null) return 1;
+    if (db_ === null) return -1;
+    return da - db_;
   });
 
   const card = `${D ? 'bg-zinc-900/70 border-zinc-800' : 'bg-white border-slate-200'} rounded-3xl border shadow-sm p-6`;
@@ -536,7 +573,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
           <table className="w-full">
             <thead>
               <tr className={`border-b ${D ? 'border-zinc-800 bg-zinc-950/50' : 'border-slate-100 bg-slate-50'}`}>
-                {['Utilisateur', 'Entreprise', 'Forfait', 'Statut', 'Depuis', 'MRR', 'Actions'].map(h => (
+                {['Utilisateur', 'Entreprise', 'Forfait', 'Statut', 'Essai', 'Depuis', 'MRR', 'Actions'].map(h => (
                   <th key={h} className={`px-5 py-3.5 text-left text-[9px] font-black uppercase tracking-widest ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{h}</th>
                 ))}
               </tr>
@@ -577,6 +614,29 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                       <span className={`text-[9px] font-bold flex items-center gap-1.5 w-fit px-2.5 py-1 rounded-lg border ${statusConf.bg} ${statusConf.color}`}>
                         {statusConf.icon}{statusConf.label}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {(() => {
+                        const daysLeft = trialDaysLeft(u);
+                        if (daysLeft === null) return <span className={`text-[10px] ${D ? 'text-zinc-600' : 'text-slate-300'}`}>—</span>;
+                        const soon = daysLeft <= 5;
+                        return (
+                          <div className="space-y-1">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg w-fit block ${soon ? (D ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-700') : (D ? 'text-zinc-400' : 'text-slate-500')}`}>
+                              {daysLeft} j restants
+                            </span>
+                            {soon && (
+                              <button
+                                onClick={() => handleExtendTrial(u)}
+                                title="Accorder un mois gratuit additionnel"
+                                className={`text-[8px] font-black uppercase tracking-wider underline ${D ? 'text-emerald-400' : 'text-emerald-600'}`}
+                              >
+                                +30 jours
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-5 py-3.5">
                       <p className={`text-[10px] font-semibold ${D ? 'text-zinc-400' : 'text-slate-600'}`}>
