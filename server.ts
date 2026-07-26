@@ -3,7 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin";
+import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
 import {
   companyDocId,
   driveCredDocId,
@@ -14,7 +14,7 @@ import {
   getOrCreateDriveFolderServer,
   resolveCompanyDriveFolder,
   uploadBase64ToDrive,
-} from "./src/lib/googleDriveAdmin";
+} from "./src/lib/googleDriveAdmin.js";
 
 // Load .env BEFORE anything else — including SDK initialization
 dotenv.config({ override: true });

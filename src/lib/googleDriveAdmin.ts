@@ -8,7 +8,7 @@
  * collaborator happens to be logged in — so every collaborator invited to that
  * company uploads through the same Drive without ever seeing the token.
  */
-import { getAdminDb } from './firebaseAdmin';
+import { getAdminDb } from './firebaseAdmin.js';
 
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const AUTOCOMPT_ROOT_FOLDER_NAME = 'AutoCompt';
