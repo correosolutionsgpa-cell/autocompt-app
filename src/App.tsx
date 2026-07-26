@@ -617,7 +617,15 @@ const SignatureDrawPad = ({
 
 const ScrollToTopOnMount = () => {
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Some views scroll the window itself; others scroll a nested container
+    // (the app has no single consistent layout). Reset every candidate so
+    // this reliably lands at the top regardless of which one is active here.
+    window.scrollTo({ top: 0, behavior: "auto" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    document.querySelectorAll(".overflow-y-auto, .overflow-auto, main").forEach((el) => {
+      el.scrollTop = 0;
+    });
   }, []);
   return null;
 };
@@ -2828,6 +2836,7 @@ const App = () => {
   const [docFormEmailInvite, setDocFormEmailInvite] = useState("");
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
   const [isArchivingSignedDoc, setIsArchivingSignedDoc] = useState(false);
+  const [archiveTargetFolder, setArchiveTargetFolder] = useState<string | null>(null);
   const archiveSignedDocInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
@@ -11695,7 +11704,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
         const newDoc = {
           id: `archive_${Date.now()}`,
           name: file.name.replace(/\.[^/.]+$/, ""),
-          cat: selectedDocuFolder || folders[0] || "Documents",
+          cat: archiveTargetFolder || selectedDocuFolder || folders[0] || "Documents",
           status: "Signé",
           date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
           companyId: activeCompanyId,
@@ -12534,6 +12543,24 @@ Ceci est un message automatisé généré par AutoCompt.`;
                           <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5">
                             Photo ou PDF — archivé directement, sans passer par la signature électronique
                           </p>
+                          <div
+                            className="w-full max-w-[220px] mt-3 space-y-1 text-left"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
+                              Enregistrer dans
+                            </label>
+                            <select
+                              value={archiveTargetFolder || selectedDocuFolder || folders[0] || ""}
+                              onChange={(e) => setArchiveTargetFolder(e.target.value)}
+                              disabled={isArchivingSignedDoc}
+                              className={`w-full px-3 py-2 rounded-xl text-[9px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
+                            >
+                              {folders.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </select>
+                          </div>
                           <button
                             type="button"
                             disabled={isArchivingSignedDoc}
