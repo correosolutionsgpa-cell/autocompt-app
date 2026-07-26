@@ -17418,8 +17418,11 @@ Ceci est un message automatisé généré par AutoCompt.`;
 
             <button
               onClick={() => {
-                const updatedCompany = {
-                  ...empresa,
+                // Explicit field list only (no `...empresa` spread) — same
+                // stale-snapshot bug fixed in setPartnerData()/userProfile's
+                // persist effect: `empresa` doesn't refresh after other saves,
+                // so spreading it here could revert whatever those just wrote.
+                const fieldsToSave = {
                   industry,
                   legalEntity,
                   userProfile,
@@ -17430,10 +17433,15 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 };
                 setListaEmpresas((prev) =>
                   prev.map((e) =>
-                    e.id === activeCompanyId ? updatedCompany : e,
+                    e.id === activeCompanyId ? { ...e, ...fieldsToSave } : e,
                   ),
                 );
                 setSetupComplet(true);
+                const uid = auth.currentUser?.uid;
+                if (uid && activeCompanyId) {
+                  dataService.saveWorkspace(uid, { id: activeCompanyId, ...fieldsToSave })
+                    .catch((err) => console.error("Failed to save workspace settings:", err));
+                }
               }}
               className="w-full py-5 bg-emerald-600 text-white rounded-[32px] text-[10px] font-black uppercase shadow-xl mb-10 tracking-widest active:scale-95 transition-all"
             >
