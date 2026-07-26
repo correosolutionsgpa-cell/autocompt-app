@@ -890,16 +890,24 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
         {byUser.length > 0 && (
           <div className={card}>
             <h3 className={`text-[10px] font-black uppercase tracking-widest mb-5 ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
-              👤 Top utilisateurs par nombre de scans
+              👤 Coût IA par utilisateur — utile pour calibrer vos forfaits
             </h3>
             <div className="space-y-2">
               {byUser.map(([email, count]) => (
-                <div key={email} className={`flex items-center justify-between px-4 py-2.5 rounded-xl ${D ? 'bg-zinc-900/30' : 'bg-slate-50/50'}`}>
-                  <span className={`text-[11px] ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{email}</span>
-                  <span className={`text-[11px] font-black ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{count}</span>
+                <div key={email} className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl ${D ? 'bg-zinc-900/30' : 'bg-slate-50/50'}`}>
+                  <span className={`text-[11px] truncate ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{email}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-bold ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{count} scans</span>
+                    <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg ${D ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
+                      ${(count * EST_COST_PER_SCAN_USD).toFixed(3)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
+            <p className={`text-[9px] mt-4 ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
+              Estimation basée sur un scan moyen (Gemini 2.5 Flash), pas sur les tokens réels de chaque appel — utilisez comme ordre de grandeur, pas comme facturation exacte.
+            </p>
           </div>
         )}
       </div>
