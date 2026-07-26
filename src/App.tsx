@@ -118,7 +118,7 @@ import ProfilEtEquipe from "./components/ProfilEtEquipe";
 import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
-import { getPrimaryVehicleBusinessRate } from "./lib/vehicleRateService";
+import { computeVehicleBusinessRate } from "./lib/vehicleRateService";
 import { extractDataFromImage } from "./lib/gemini";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
 import MuroTransparencia from "./ramas-flujo/MuroTransparencia";
@@ -5331,9 +5331,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
     (currentHomeOffice.aireBureau / currentHomeOffice.aireTotale || 0);
 
   // ── Taux d'utilisation professionnelle du véhicule (T2125 / TP-80) ──────────
-  // Formula: Business KM Logged ÷ (Current Odometer − Initial Odometer)
-  // Reads the same localStorage SSOT written by SettingsView + KilometrageGPS.
-  const porcVehicule = getPrimaryVehicleBusinessRate();
+  // "travail" = 100% fixe, "personnel" = 0% fixe, "hybride" = kmBusinessTotal /
+  // (kmBusinessTotal + kmPersonalTotal), classifié trajet par trajet dans
+  // KilometrageGPS. Tout est persisté sur le véhicule via partnerData (Firestore).
+  const porcVehicule = computeVehicleBusinessRate(partnerData?.vehicles?.[0]);
 
   // ── Catégories véhicule TP-80 / T2125 — aucune configuration manuelle requise ─
   // Ces catégories déclenchent automatiquement le pro-rata d'utilisation

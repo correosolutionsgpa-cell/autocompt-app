@@ -17,6 +17,7 @@ import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
+import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
 import {
   ArrowLeft,
   Bell,
@@ -118,6 +119,11 @@ export interface RegisteredVehicle {
   annee: string;
   plaque: string;
   odometreInitial: number;
+  // "travail" = 100% deductible, fixed. "personnel" = 0%, fixed. "hybride" =
+  // computed from kmBusinessTotal/kmPersonalTotal, classified trip-by-trip.
+  usageType?: "travail" | "personnel" | "hybride";
+  kmBusinessTotal?: number;
+  kmPersonalTotal?: number;
 }
 
 const VEHICLES_STORAGE_KEY = "autocompt_vehicles";
@@ -170,6 +176,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [vehAnnee, setVehAnnee] = useState("");
   const [vehPlaque, setVehPlaque] = useState("");
   const [vehOdometre, setVehOdometre] = useState("");
+  const [vehUsageType, setVehUsageType] = useState<"travail" | "personnel" | "hybride">("hybride");
 
   const handleAddVehicle = () => {
     const marque = vehMarque.trim();
@@ -182,14 +189,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       annee: vehAnnee.trim(),
       plaque: vehPlaque.trim().toUpperCase(),
       odometreInitial: parseFloat(vehOdometre) || 0,
+      usageType: vehUsageType,
+      kmBusinessTotal: 0,
+      kmPersonalTotal: 0,
     };
     setPartnerData((prev: any) => ({ ...prev, vehicles: [...(prev?.vehicles ?? vehicles), newV] }));
     playNotificationSound();
-    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre("");
+    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre(""); setVehUsageType("hybride");
   };
 
   const handleRemoveVehicle = (id: string) => {
     setPartnerData((prev: any) => ({ ...prev, vehicles: (prev?.vehicles ?? vehicles).filter((v: RegisteredVehicle) => v.id !== id) }));
+  };
+
+  const handleChangeVehicleUsage = (id: string, usageType: "travail" | "personnel" | "hybride") => {
+    setPartnerData((prev: any) => ({
+      ...prev,
+      vehicles: (prev?.vehicles ?? vehicles).map((v: RegisteredVehicle) => v.id === id ? { ...v, usageType } : v),
+    }));
   };
 
   return (
@@ -736,6 +753,36 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     }`}
                 />
               </div>
+              {/* Usage du véhicule — détermine comment le % déductible est calculé */}
+              <div className="md:col-span-2 space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Usage du véhicule
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { id: "travail", label: "Travail seulement", desc: "100% déductible" },
+                    { id: "hybride", label: "Mixte (travail + perso)", desc: "Classé trajet par trajet" },
+                    { id: "personnel", label: "Personnel seulement", desc: "0% déductible" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setVehUsageType(opt.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${vehUsageType === opt.id
+                        ? "border-indigo-500 bg-indigo-500/10"
+                        : darkMode ? "border-zinc-800 hover:border-zinc-700" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                    >
+                      <span className={`block text-[9px] font-black uppercase tracking-wider ${vehUsageType === opt.id ? "text-indigo-600 dark:text-indigo-400" : darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                        {opt.label}
+                      </span>
+                      <span className={`block text-[8px] mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                        {opt.desc}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Add CTA */}
@@ -790,6 +837,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                           }`}>
                           <Gauge size={9} />
                           {v.odometreInitial.toLocaleString("fr-CA")} km départ
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <select
+                        value={v.usageType || "hybride"}
+                        onChange={(e) => handleChangeVehicleUsage(v.id, e.target.value as "travail" | "personnel" | "hybride")}
+                        className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full border outline-none cursor-pointer ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-white border-slate-200 text-slate-600"}`}
+                      >
+                        <option value="travail">Travail seulement</option>
+                        <option value="hybride">Mixte (travail + perso)</option>
+                        <option value="personnel">Personnel seulement</option>
+                      </select>
+                      <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+                        {formatVehicleRate(computeVehicleBusinessRate(v))} déductible
+                      </span>
+                      {v.usageType === "hybride" && ((v.kmBusinessTotal ?? 0) > 0 || (v.kmPersonalTotal ?? 0) > 0) && (
+                        <span className={`text-[8px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          {(v.kmBusinessTotal ?? 0).toLocaleString("fr-CA")} km travail · {(v.kmPersonalTotal ?? 0).toLocaleString("fr-CA")} km perso
                         </span>
                       )}
                     </div>

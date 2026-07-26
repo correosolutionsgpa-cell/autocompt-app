@@ -4,131 +4,43 @@
  * Single Source of Truth: Taux d'Utilisation Professionnelle des Véhicules
  *
  * Quebec/CRA Pro-Rata Formula (T2125 / TP-80):
- *   Business Use % = Business KM Logged / Total KM Driven
- *   where Total KM = Current Odometer − Initial Odometer
+ *   Business Use % = Business KM Logged / Total KM Driven (Business + Personnel)
  *
- * Storage contract (shared with SettingsView + KilometrageGPS):
- *   localStorage["autocompt_vehicles"]   → RegisteredVehicle[]   (from SettingsView)
- *   localStorage["autocompt_km_current"] → Record<vehicleId, number>  (updated by KilometrageGPS on save)
- *   localStorage["autocompt_km_business"]→ Record<vehicleId, number>  (sum of logged business trips)
+ * Each vehicle declares a `usageType`:
+ *   - "travail"    → 100% business use, fixed. No per-trip classification needed.
+ *   - "personnel"  → 0% business use, fixed. Not used for business deductions.
+ *   - "hybride"    → computed from logged km: kmBusinessTotal / (kmBusinessTotal + kmPersonalTotal).
+ *                    Each trip must be classified Personnel/Professionnel when saved
+ *                    (see KilometrageGPS.tsx) so both accumulators stay accurate.
  *
- * Returns a value in [0, 1]. Default 0 if no vehicle or no data.
+ * Storage: kmBusinessTotal / kmPersonalTotal live directly on the RegisteredVehicle
+ * object in Firestore (partnerData.vehicles, via setPartnerData) — NOT localStorage.
+ * (Earlier version of this file tracked km in localStorage only, which silently
+ * reset on every new browser/device and was never updated once vehicles migrated
+ * to Firestore — the same class of bug fixed elsewhere in this app.)
  * ─────────────────────────────────────────────────────────────────────────────
  */
+import type { RegisteredVehicle } from "../ramas-flujo/Rama_Gestionnaires/SettingsView";
 
-export interface RegisteredVehicle {
-  id: string;
-  marque: string;
-  modele: string;
-  annee: string;
-  plaque: string;
-  odometreInitial: number;
-}
-
-/** Keys used across all modules — change here only. */
-export const VEHICLE_STORAGE_KEYS = {
-  vehicles:       "autocompt_vehicles",       // RegisteredVehicle[]
-  kmCurrent:      "autocompt_km_current",     // Record<vehicleId, number>
-  kmBusiness:     "autocompt_km_business",    // Record<vehicleId, number>
-} as const;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function safeParseJSON<T>(key: string, fallback: T): T {
-  try { return JSON.parse(localStorage.getItem(key) || "null") ?? fallback; }
-  catch { return fallback; }
-}
-
-// ── Public API ────────────────────────────────────────────────────────────────
+export type { RegisteredVehicle };
 
 /**
- * Returns all registered vehicles from localStorage.
+ * Computes Business Use Percentage for a given vehicle.
+ * Returns a decimal in [0, 1]. Returns 0 if no vehicle or no data.
  */
-export function getRegisteredVehicles(): RegisteredVehicle[] {
-  return safeParseJSON<RegisteredVehicle[]>(VEHICLE_STORAGE_KEYS.vehicles, []);
-}
-
-/**
- * Returns the primary (first) registered vehicle, or null if none.
- */
-export function getPrimaryVehicle(): RegisteredVehicle | null {
-  return getRegisteredVehicles()[0] ?? null;
-}
-
-/**
- * Reads current odometer values (set by KilometrageGPS after each trip save).
- */
-export function getKmCurrentMap(): Record<string, number> {
-  return safeParseJSON<Record<string, number>>(VEHICLE_STORAGE_KEYS.kmCurrent, {});
-}
-
-/**
- * Reads total business km per vehicle (accumulated by KilometrageGPS).
- */
-export function getKmBusinessMap(): Record<string, number> {
-  return safeParseJSON<Record<string, number>>(VEHICLE_STORAGE_KEYS.kmBusiness, {});
-}
-
-/**
- * Records a new business trip for a vehicle.
- * Called by KilometrageGPS when the user taps "Enregistrer le trajet".
- *
- * @param vehicleId  - RegisteredVehicle.id
- * @param kmLogged   - distance of this trip in km
- * @param newOdometer - current odometer after the trip (optional but recommended)
- */
-export function recordBusinessTrip(
-  vehicleId: string,
-  kmLogged: number,
-  newOdometer?: number
-): void {
-  // 1. Accumulate business KM
-  const bizMap = getKmBusinessMap();
-  bizMap[vehicleId] = (bizMap[vehicleId] ?? 0) + kmLogged;
-  localStorage.setItem(VEHICLE_STORAGE_KEYS.kmBusiness, JSON.stringify(bizMap));
-
-  // 2. Update current odometer if provided
-  if (newOdometer !== undefined) {
-    const curMap = getKmCurrentMap();
-    curMap[vehicleId] = newOdometer;
-    localStorage.setItem(VEHICLE_STORAGE_KEYS.kmCurrent, JSON.stringify(curMap));
-  }
-}
-
-/**
- * Computes Business Use Percentage for a specific vehicle.
- *
- * Formula: businessKM / (currentOdometer − initialOdometer)
- * Returns a decimal in [0, 1]. Returns 0 if data is insufficient.
- */
-export function computeVehicleBusinessRate(vehicleId: string): number {
-  const vehicles = getRegisteredVehicles();
-  const vehicle = vehicles.find(v => v.id === vehicleId);
+export function computeVehicleBusinessRate(vehicle: RegisteredVehicle | null | undefined): number {
   if (!vehicle) return 0;
 
-  const bizMap  = getKmBusinessMap();
-  const curMap  = getKmCurrentMap();
+  if (vehicle.usageType === "travail") return 1;
+  if (vehicle.usageType === "personnel") return 0;
 
-  const businessKM = bizMap[vehicleId] ?? 0;
-  const currentOdo = curMap[vehicleId] ?? vehicle.odometreInitial;
-  const totalKM    = currentOdo - vehicle.odometreInitial;
+  // "hybride" (or legacy vehicles with no usageType set) — computed from logged km.
+  const biz = vehicle.kmBusinessTotal ?? 0;
+  const perso = vehicle.kmPersonalTotal ?? 0;
+  const total = biz + perso;
+  if (total <= 0) return 0;
 
-  if (totalKM <= 0 || businessKM <= 0) return 0;
-
-  // Clamp to [0, 1] — business use cannot exceed 100%
-  return Math.min(businessKM / totalKM, 1);
-}
-
-/**
- * Computes Business Use Percentage for the primary vehicle.
- * This is the main function called by App.tsx and ledger modules.
- *
- * Falls back to 0 if no vehicle is registered.
- */
-export function getPrimaryVehicleBusinessRate(): number {
-  const primary = getPrimaryVehicle();
-  if (!primary) return 0;
-  return computeVehicleBusinessRate(primary.id);
+  return Math.min(biz / total, 1);
 }
 
 /**

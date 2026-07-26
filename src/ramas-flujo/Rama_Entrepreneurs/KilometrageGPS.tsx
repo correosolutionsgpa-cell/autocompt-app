@@ -22,7 +22,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { recordBusinessTrip } from "../../lib/vehicleRateService";
+import type { RegisteredVehicle } from "../Rama_Gestionnaires/SettingsView";
 
 // ÔöÇÔöÇ Trip persistence key (localStorage) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const TRIP_PERSIST_KEY = "autocompt_active_trip";
@@ -88,6 +88,7 @@ interface MileageLog {
   modelo: string;
   distancia: number;
   id: number;
+  classification?: "travail" | "personnel";
 }
 
 interface VehicleData {
@@ -98,15 +99,6 @@ interface VehicleData {
 interface PartnerEntry {
   vehicle: VehicleData;
   [key: string]: unknown;
-}
-
-interface RegisteredVehicle {
-  id: string;
-  marque: string;
-  modele: string;
-  annee: string;
-  plaque: string;
-  odometreInitial: number;
 }
 
 // partnerData is keyed by partner name (e.g. "Fabiola") for per-partner settings,
@@ -191,6 +183,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   // Elapsed trip duration
   const [tripStartTime, setTripStartTime] = useState<number | null>(null);
   const [tripElapsedSec, setTripElapsedSec] = useState(0);
+  // Trip classification prompt — shown before saving when the vehicle is "hybride"
+  // (mixed use), since the deductible % depends on knowing which trips were work.
+  const [pendingTripKm, setPendingTripKm] = useState<number | null>(null);
 
   // ÔöÇÔöÇ Refs: watchPosition ID + last known position for Haversine ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
   const watchIdRef = useRef<number | null>(null);
@@ -318,6 +313,58 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const primaryVehicleLabel = primaryVehicle
     ? [primaryVehicle.annee, primaryVehicle.marque, primaryVehicle.modele].filter(Boolean).join(" ")
     : null;
+
+  // Commits a trip: logs it (fecha/distance/classification) and adds the km to
+  // the correct accumulator (kmBusinessTotal or kmPersonalTotal) on the vehicle
+  // itself in Firestore — that split is what computeVehicleBusinessRate() uses
+  // for "hybride" vehicles to derive the % deductible in Tenue de livres.
+  const finalizeTrip = (kmToSave: number, classification: "travail" | "personnel") => {
+    const fecha = new Date().toISOString().split("T")[0];
+
+    const newData = { ...safePartnerData };
+    if (!newData[activeUser]?.vehicle) {
+      console.warn("[KilometrageGPS] partnerData not ready for user:", activeUser);
+    } else {
+      const userVehicle = newData[activeUser].vehicle;
+      const vehicleLabel = primaryVehicleLabel ?? userVehicle.model ?? "Véhicule";
+      userVehicle.mileageLogs = [
+        { fecha, modelo: vehicleLabel, distancia: kmToSave, id: Date.now(), classification },
+        ...(userVehicle.mileageLogs ?? []),
+      ];
+      if (primaryVehicle) {
+        newData.vehicles = (newData.vehicles ?? []).map((v: RegisteredVehicle) =>
+          v.id === primaryVehicle.id
+            ? {
+              ...v,
+              kmBusinessTotal: (v.kmBusinessTotal ?? 0) + (classification === "travail" ? kmToSave : 0),
+              kmPersonalTotal: (v.kmPersonalTotal ?? 0) + (classification === "personnel" ? kmToSave : 0),
+            }
+            : v
+        );
+      }
+      setPartnerData(newData);
+    }
+
+    if (typeof playNotificationSound === "function") playNotificationSound();
+
+    setKilometrageComputedKm(0);
+    setShowResumedBanner(false);
+    setShowGpsSaveForm(false);
+    setGpsSaveKmInput("");
+    setPendingTripKm(null);
+    clearPersistedTrip();
+    if (activeKilometrageTab === "gps") setIsTrackingAuto(false);
+
+    if (typeof setDispatcherSuccessToast === "function") {
+      setDispatcherSuccessToast({
+        text: classification === "travail" ? "Km d'affaires enregistrés" : "Trajet personnel enregistré",
+        channel: "Journal kilométrique",
+        customMessage: classification === "travail"
+          ? `${kmToSave} km ajoutés à votre compteur d'affaires. Le taux pro-rata se met à jour automatiquement dans Tenue de livres.`
+          : `${kmToSave} km enregistrés comme trajet personnel — non déductible, mais comptés dans le total du véhicule.`,
+      });
+    }
+  };
 
   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
@@ -844,61 +891,20 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 kmToSave = kilometrageComputedKm;
               }
               if (isNaN(kmToSave) || kmToSave <= 0) {
-                return; // silently ignore ÔÇö UI already prevents this
+                return; // silently ignore — UI already prevents this
               }
 
-              const fecha = new Date().toISOString().split("T")[0];
-
-              // 1. Mettre ├á jour les logs kilom├®triques (null-safe)
-              const newData = { ...safePartnerData };
-              if (!newData[activeUser]?.vehicle) {
-                // partnerData not yet hydrated for this user ÔÇö skip write
-                console.warn("[KilometrageGPS] partnerData not ready for user:", activeUser);
+              // "hybride" (or legacy vehicles with no usageType) needs the trip
+              // classified before we know which km bucket it belongs in.
+              // "travail"/"personnel" vehicles have a fixed classification —
+              // save immediately, no prompt needed.
+              const usageType = primaryVehicle?.usageType ?? "hybride";
+              if (usageType === "travail") {
+                finalizeTrip(kmToSave, "travail");
+              } else if (usageType === "personnel") {
+                finalizeTrip(kmToSave, "personnel");
               } else {
-                const userVehicle = newData[activeUser].vehicle;
-                // Use the SSOT vehicle label from Settings (falls back to Firebase model)
-                const vehicleLabel = primaryVehicleLabel ?? userVehicle.model ?? "V├®hicule";
-                userVehicle.mileageLogs = [
-                  {
-                    fecha,
-                    modelo: vehicleLabel,
-                    distancia: kmToSave,
-                    id: Date.now(),
-                  },
-                  ...(userVehicle.mileageLogs ?? []),
-                ];
-                setPartnerData(newData);
-              }
-
-              // 2. Sync to vehicleRateService SSOT so the pro-rata % auto-updates in Tenue de livres.
-              // NOTE: We do NOT inject a monetary expense here.
-              // The deduction is calculated by Tenue de livres via (Business KM / Total KM) * Vehicle Expenses.
-              if (primaryVehicle) {
-                const allLogs = safeCurrentCompanyPartnerData[activeUser]?.vehicle?.mileageLogs ?? [];
-                const previousBizKM = allLogs.reduce((acc: number, l: any) => acc + (l.distancia ?? 0), 0);
-                const runningOdometer = primaryVehicle.odometreInitial + previousBizKM + kmToSave;
-                recordBusinessTrip(primaryVehicle.id, kmToSave, runningOdometer);
-              }
-
-              if (typeof playNotificationSound === "function") {
-                playNotificationSound();
-              }
-
-              // Nettoyage + clear persisted trip (trip was saved intentionally)
-              setKilometrageComputedKm(0);
-              setShowResumedBanner(false);
-              setShowGpsSaveForm(false);
-              setGpsSaveKmInput("");
-              clearPersistedTrip();
-              if (activeKilometrageTab === "gps") {
-                setIsTrackingAuto(false);
-              }
-              if (typeof setDispatcherSuccessToast === "function") {
-                setDispatcherSuccessToast({
-                  text: "Km d'affaires enregistr├®s",
-                  channel: "Journal kilom├®trique",
-                  customMessage: `${kmToSave}┬ákm ajout├®s ├á votre compteur d'affaires. Le taux pro-rata se met ├á jour automatiquement dans Tenue de livres.`,
-                });
+                setPendingTripKm(kmToSave);
               }
             }}
             className={`w-full bg-[#059669] text-white font-black py-5 rounded-[32px] flex items-center justify-center space-x-3 text-sm uppercase italic shadow-xl active:scale-95 transition-all shadow-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -912,6 +918,45 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             <span>Enregistrer le trajet</span>
           </button>
         </div>
+
+        {/* ── Prompt de classification (véhicule à usage mixte) ──────────────── */}
+        {pendingTripKm !== null && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+            <div className={`w-full max-w-sm p-6 rounded-[32px] border shadow-2xl text-center space-y-5 ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-slate-200"}`}>
+              <div>
+                <h3 className="font-black text-base uppercase tracking-tight">
+                  {pendingTripKm} km — Trajet personnel ou de travail ?
+                </h3>
+                <p className={`text-[10px] font-medium mt-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                  Ce véhicule est à usage mixte — indiquez le type de trajet pour un calcul déductible exact.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => finalizeTrip(pendingTripKm, "personnel")}
+                  className={`p-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${darkMode ? "border-zinc-700 text-zinc-300 hover:bg-zinc-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                >
+                  Personnel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => finalizeTrip(pendingTripKm, "travail")}
+                  className="p-4 rounded-2xl border-none text-[10px] font-black uppercase tracking-widest bg-[#059669] text-white hover:bg-emerald-600 transition-all cursor-pointer"
+                >
+                  Travail
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingTripKm(null)}
+                className={`text-[9px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500 hover:text-zinc-300" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ÔöÇÔöÇ Journal unifi├® ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
         <div
