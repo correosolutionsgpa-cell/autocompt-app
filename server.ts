@@ -1,6 +1,4 @@
 import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
@@ -39,9 +37,18 @@ console.log("[server.ts] dotenv loaded. GEMINI_API_KEY present:", !!process.env.
 // Builds the Express app with every route registered, but does NOT bind a
 // port — Vercel imports this and wraps it as a serverless function handler
 // (see the `handler` export at the bottom), since a long-lived `app.listen()`
-// process has no meaning in that environment. Local dev / traditional
-// hosting still gets a real listening server via startLocalServer() below.
-async function buildApp() {
+// process has no meaning in that environment. Local dev / traditional hosting
+// gets a real listening server from dev-server.ts, which wraps this app with
+// Vite's dev middleware / static file serving.
+//
+// IMPORTANT: this file must never import "vite" (statically OR dynamically)
+// — Vercel's function bundler traces it in regardless, and Vite pulls in
+// Rollup's platform-specific optional native binary, which isn't present in
+// the Lambda runtime and crashes every request with
+// "Cannot find module @rollup/rollup-linux-x64-gnu". That's exactly what
+// broke this endpoint in production; keep the dev-only pieces in
+// dev-server.ts, never here.
+export async function buildApp() {
   const app = express();
 
   app.use(express.json({ limit: "50mb" }));
@@ -1329,39 +1336,6 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
   });
 
   return app;
-}
-
-// Only used for a real, long-lived server process (local dev via `tsx
-// server.ts`, or `node dist/server.cjs` on traditional/non-Vercel hosting).
-async function startLocalServer() {
-  const app = await buildApp();
-  const PORT = 3000;
-
-  // Vite development or production integration
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
-
-// Vercel sets VERCEL=1 for every deployment (build and serverless runtime
-// alike) — never start a persistent listener there, it exports `handler`
-// below instead, which Vercel's Node.js runtime calls per-request.
-if (!process.env.VERCEL) {
-  startLocalServer();
 }
 
 let appPromise: Promise<express.Express> | null = null;
