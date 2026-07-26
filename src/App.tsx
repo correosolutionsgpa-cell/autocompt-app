@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1621,6 +1621,7 @@ const App = () => {
       setLegalEntity(empresa.legalEntity);
       _setPartnerData(empresa.partnerData || {});
       setUserProfile(empresa.userProfile || {});
+      userProfileHydratedRef.current = true;
       setSelectedRapportProfile(empresa.nombre);
       setPropertyType(empresa.propertyType || "Triplex");
       if (empresa.hasPlex !== undefined) setHasPlex(empresa.hasPlex);
@@ -1737,6 +1738,27 @@ const App = () => {
     tpsRate: 5,
     tvqRate: 9.975,
   });
+  // True once userProfile has been hydrated from Firestore at least once —
+  // guards the persistence effect below from firing on the very first render
+  // (which would overwrite real saved data with this hardcoded placeholder
+  // object before the real fetch even completes).
+  const userProfileHydratedRef = useRef(false);
+
+  // Persist userProfile (logo, NEQ, TPS/TVQ, adresse, site, pago, etc.) to
+  // Firestore — it was previously edited via setUserProfile() from 20+ call
+  // sites (logo upload, company profile form) but NEVER saved anywhere, only
+  // held in memory. Every reload re-hydrated from the stale Firestore copy
+  // above, silently discarding anything the user had just entered — reported
+  // by Fabiola as "I upload my logo, fill in NEQ/TPS/TVQ, and it's gone every
+  // time I reopen the app." Guarded by the hydration flag so this can't fire
+  // with the hardcoded placeholder object before the real fetch completes.
+  useEffect(() => {
+    if (!userProfileHydratedRef.current) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    dataService.saveWorkspace(uid, { ...currentCompany, id: activeCompanyId, userProfile })
+      .catch((err) => console.error("Failed to save userProfile:", err));
+  }, [userProfile]);
   const [hasEmployment, setHasEmployment] = useState(false);
   const [hasVehicle, setHasVehicle] = useState(false);
   const [hasCommissions, setHasCommissions] = useState(false);
