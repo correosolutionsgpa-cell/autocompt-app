@@ -9229,7 +9229,23 @@ Ceci est un message automatisé généré par AutoCompt.`;
           <div className="border-t border-slate-100 pt-4 text-center">
             <button
               type="button"
-              onClick={() => signOut(auth)}
+              onClick={() => {
+                // signOut() alone left the previous session's profile/mode in
+                // localStorage — the splash-screen timer then saw a "valid"
+                // saved profile and jumped straight to "dashboard" on the next
+                // load, even though there was no authenticated user anymore,
+                // hanging forever on "Chargement des données...". Also matters
+                // if a different person logs in next on the same device/browser.
+                localStorage.removeItem("autocompt_selected_profile");
+                localStorage.removeItem("autocompt_dashboard_mode");
+                localStorage.removeItem("autocompt_user_level");
+                localStorage.removeItem("autocompt_admin_name");
+                localStorage.removeItem("autocompt_admin_role");
+                localStorage.removeItem("autocompt_admin_photo");
+                localStorage.removeItem("autocompt_admin_phone");
+                localStorage.removeItem("autocompt_admin_email");
+                signOut(auth);
+              }}
               className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
             >
               Déconnexion
