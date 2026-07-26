@@ -1774,15 +1774,54 @@ const App = () => {
   // by Fabiola as "I upload my logo, fill in NEQ/TPS/TVQ, and it's gone every
   // time I reopen the app." Guarded by the hydration flag so this can't fire
   // with the hardcoded placeholder object before the real fetch completes.
+  // Debounced: without this, every keystroke in a text field (NEQ, TPS, TVQ,
+  // téléphone...) fired its own Firestore write. If the user typed a field
+  // and immediately navigated away or logged out, the in-flight write for
+  // that last field could be cut off — reported by Fabiola as "my company
+  // name and address saved, but NEQ/TPS/TVQ/phone/payment info didn't."
+  // flushUserProfileSaveRef lets the Save button and logout force an
+  // immediate, un-debounced write instead of waiting.
+  const userProfileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushUserProfileSaveRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    flushUserProfileSaveRef.current = async () => {
+      if (userProfileSaveTimerRef.current) {
+        clearTimeout(userProfileSaveTimerRef.current);
+        userProfileSaveTimerRef.current = null;
+      }
+      const uid = auth.currentUser?.uid;
+      if (!uid || !activeCompanyId) return;
+      try {
+        await dataService.saveWorkspace(uid, { id: activeCompanyId, userProfile });
+      } catch (err) {
+        console.error("Failed to save userProfile:", err);
+      }
+    };
+  }, [userProfile, activeCompanyId]);
+
   useEffect(() => {
     if (!userProfileHydratedRef.current) return;
-    const uid = auth.currentUser?.uid;
-    if (!uid || !activeCompanyId) return;
-    // Minimal payload only — see the identical note in setPartnerData() above
-    // for why `...currentCompany` must never be spread here.
-    dataService.saveWorkspace(uid, { id: activeCompanyId, userProfile })
-      .catch((err) => console.error("Failed to save userProfile:", err));
+    if (userProfileSaveTimerRef.current) clearTimeout(userProfileSaveTimerRef.current);
+    userProfileSaveTimerRef.current = setTimeout(() => {
+      flushUserProfileSaveRef.current();
+    }, 800);
+    return () => {
+      if (userProfileSaveTimerRef.current) clearTimeout(userProfileSaveTimerRef.current);
+    };
   }, [userProfile]);
+
+  const handleLogout = async () => {
+    await flushUserProfileSaveRef.current();
+    localStorage.removeItem("autocompt_selected_profile");
+    localStorage.removeItem("autocompt_dashboard_mode");
+    localStorage.removeItem("autocompt_user_level");
+    localStorage.removeItem("autocompt_admin_name");
+    localStorage.removeItem("autocompt_admin_role");
+    localStorage.removeItem("autocompt_admin_photo");
+    localStorage.removeItem("autocompt_admin_phone");
+    localStorage.removeItem("autocompt_admin_email");
+    await signOut(auth);
+  };
   const [hasEmployment, setHasEmployment] = useState(false);
   const [hasVehicle, setHasVehicle] = useState(false);
   const [hasCommissions, setHasCommissions] = useState(false);
@@ -2057,12 +2096,13 @@ const App = () => {
 
               <div className="p-5 border-t border-slate-100 dark:border-zinc-900/60 mt-auto">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    playNotificationSound();
+                    await handleLogout();
                     setCurrentUserEmail(null);
                     setIsForfaitSelected(false);
                     setVista("login");
                     setIsSidebarOpen(false);
-                    playNotificationSound();
                   }}
                   className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all bg-red-950/25 border-red-900/30 text-rose-400 hover:bg-red-950/40`}
                 >
@@ -2622,12 +2662,13 @@ const App = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      playNotificationSound();
+                      await handleLogout();
                       setCurrentUserEmail(null);
                       setIsForfaitSelected(false);
                       setVista("login");
                       setIsSidebarOpen(false);
-                      playNotificationSound();
                     }}
                     className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "bg-red-950/25 border-red-900/30 text-rose-400 hover:bg-red-950/40" : "bg-[#FFF5F5] border-red-100 text-[#E53E3E] hover:bg-red-100/50"}`}
                   >
@@ -9249,21 +9290,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             <button
               type="button"
               onClick={() => {
-                // signOut() alone left the previous session's profile/mode in
-                // localStorage — the splash-screen timer then saw a "valid"
-                // saved profile and jumped straight to "dashboard" on the next
-                // load, even though there was no authenticated user anymore,
-                // hanging forever on "Chargement des données...". Also matters
-                // if a different person logs in next on the same device/browser.
-                localStorage.removeItem("autocompt_selected_profile");
-                localStorage.removeItem("autocompt_dashboard_mode");
-                localStorage.removeItem("autocompt_user_level");
-                localStorage.removeItem("autocompt_admin_name");
-                localStorage.removeItem("autocompt_admin_role");
-                localStorage.removeItem("autocompt_admin_photo");
-                localStorage.removeItem("autocompt_admin_phone");
-                localStorage.removeItem("autocompt_admin_email");
-                signOut(auth);
+                handleLogout();
               }}
               className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
             >
@@ -19238,6 +19265,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setDarkMode={setDarkMode}
         userProfile={userProfile}
         setUserProfile={setUserProfile}
+        onSaveProfileNow={() => flushUserProfileSaveRef.current()}
         partnerData={partnerData}
         setPartnerData={setPartnerData}
         adminName={adminName}

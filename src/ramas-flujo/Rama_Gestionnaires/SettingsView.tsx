@@ -52,6 +52,10 @@ export interface SettingsViewProps {
   // Profil entreprise
   userProfile: any;
   setUserProfile: (fn: any | ((prev: any) => any)) => void;
+  // Force un enregistrement immediat dans Firestore (l'auto-save normal est
+  // debounce de 800ms) — utilise par le bouton "Sauvegarder le profil" pour
+  // donner une confirmation certaine avant que l'utilisateur ne navigue ailleurs.
+  onSaveProfileNow: () => Promise<void>;
 
   // Véhicules enregistrés (persisté dans Firestore via partnerData/setPartnerData)
   partnerData: any;
@@ -135,6 +139,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   setDarkMode,
   userProfile,
   setUserProfile,
+  onSaveProfileNow,
   partnerData,
   setPartnerData,
   adminName,
@@ -171,6 +176,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     try { return JSON.parse(localStorage.getItem(VEHICLES_STORAGE_KEY) || "[]"); }
     catch { return []; }
   })();
+  const [profileSaveStatus, setProfileSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [vehMarque, setVehMarque] = useState("");
   const [vehModele, setVehModele] = useState("");
   const [vehAnnee, setVehAnnee] = useState("");
@@ -630,21 +636,29 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>{/* /.grid */}
 
           {/* Save CTA */}
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex items-center justify-end gap-3">
+            {profileSaveStatus === "saved" && (
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                Enregistré ✓
+              </span>
+            )}
             <button
-              onClick={() => {
+              disabled={profileSaveStatus === "saving"}
+              onClick={async () => {
                 playNotificationSound();
-                // Persist all fields — already saved field-by-field above,
-                // this button provides an explicit user confirmation moment.
+                setProfileSaveStatus("saving");
+                await onSaveProfileNow();
+                setProfileSaveStatus("saved");
+                setTimeout(() => setProfileSaveStatus("idle"), 2500);
                 if (showSettingsTour) {
                   setShowSettingsTour(false);
                   localStorage.setItem("autocompt_settings_tour_shown", "true");
                 }
               }}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-emerald-600/25 to-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:from-emerald-600/35 hover:to-emerald-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0_20px_rgba(16,185,129,0.08)]"
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-emerald-600/25 to-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:from-emerald-600/35 hover:to-emerald-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0_20px_rgba(16,185,129,0.08)] disabled:opacity-60 disabled:cursor-wait"
             >
               <CheckCircle2 size={14} />
-              Sauvegarder le profil
+              {profileSaveStatus === "saving" ? "Enregistrement..." : "Sauvegarder le profil"}
             </button>
           </div>
         </div>
