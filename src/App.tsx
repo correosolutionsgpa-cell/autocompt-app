@@ -9339,55 +9339,6 @@ Ceci est un message automatisé généré par AutoCompt.`;
                 Se connecter à mon Espace
               </button>
             </div>
-
-            <div className="border-t border-slate-100 pt-5 space-y-3">
-              <h4 className="text-[7.5px] font-black uppercase italic tracking-wider text-slate-400 text-left">
-                Simulation d'accès rapide
-              </h4>
-              <div className="grid grid-cols-1 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail("info@autocompt.ca");
-                    handleLoginSubmit("info@autocompt.ca");
-                  }}
-                  className="p-3 text-left rounded-xl border text-[8.5px] font-bold flex items-center justify-between transition-all cursor-pointer bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 hover:shadow-sm"
-                >
-                  <div>
-                    <span className="block text-[8px] font-black uppercase text-emerald-600">
-                      AutoCompt — Admin Principal
-                    </span>
-                    <span className="text-[7.5px] text-slate-500">
-                      info@autocompt.ca
-                    </span>
-                  </div>
-                  <span className="text-[7.5px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full">
-                    SuperAdmin
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail("natalia.caisse@solutionsgpa.ca");
-                    handleLoginSubmit("natalia.caisse@solutionsgpa.ca");
-                  }}
-                  className="p-3 text-left rounded-xl border text-[8.5px] font-bold flex items-center justify-between transition-all cursor-pointer bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 hover:shadow-sm"
-                >
-                  <div>
-                    <span className="block text-[8px] font-black uppercase text-purple-600">
-                      Achat Direct Inc.
-                    </span>
-                    <span className="text-[7.5px] text-slate-500 font-normal">
-                      natalia.caisse@solutionsgpa.ca
-                    </span>
-                  </div>
-                  <span className="text-[7.5px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-600 px-2 py-0.5 rounded-full">
-                    Associé
-                  </span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
         <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
