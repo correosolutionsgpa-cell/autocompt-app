@@ -225,6 +225,49 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
       <WorkspaceSidebar />
+
+      {/* ── Toast de confirmation d'enregistrement — Sofi ────────────────────
+            Fixe en bas de l'ecran, visible peu importe le scroll. Demande
+            explicite de Fabiola: le petit texte a cote du bouton passait
+            inapercu, elle ne savait jamais avec certitude si ca avait
+            enregistre. ─────────────────────────────────────────────────── */}
+      {profileSaveStatus !== "idle" && (
+        <div className="fixed bottom-6 inset-x-0 z-[100] flex justify-center px-4 pointer-events-none">
+          <div
+            className={`pointer-events-auto flex items-center gap-3 rounded-2xl border shadow-2xl px-4 py-3 max-w-md w-full sm:w-auto ${profileSaveStatus === "saving"
+              ? (darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-slate-200")
+              : (darkMode ? "bg-emerald-950/90 border-emerald-500/40" : "bg-emerald-600 border-emerald-500")
+              }`}
+          >
+            <img
+              src={sofiAvatar}
+              alt="S.O.F.I."
+              className="w-9 h-9 rounded-full object-cover object-top border-2 border-emerald-500 shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className={`text-[10px] font-black uppercase tracking-widest ${profileSaveStatus === "saving" ? (darkMode ? "text-zinc-200" : "text-slate-800") : "text-white"}`}>
+                {profileSaveStatus === "saving" ? "Sofi enregistre ton profil..." : "✓ Profil enregistré avec succès !"}
+              </p>
+              {profileSaveStatus === "saving" ? (
+                <div className={`mt-1.5 h-1 w-full rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-slate-200"}`}>
+                  <div className="h-full w-1/3 bg-emerald-500 rounded-full animate-[toastbar_1s_ease-in-out_infinite]" />
+                </div>
+              ) : (
+                <p className="text-[9px] font-medium text-emerald-100 mt-0.5">
+                  Tu peux fermer, changer d&apos;écran ou te déconnecter en toute confiance.
+                </p>
+              )}
+            </div>
+          </div>
+          <style>{`
+            @keyframes toastbar {
+              0% { margin-left: 0%; width: 30%; }
+              50% { margin-left: 70%; width: 30%; }
+              100% { margin-left: 0%; width: 30%; }
+            }
+          `}</style>
+        </div>
+      )}
       <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
         <div className="flex items-center space-x-3">
           <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
@@ -635,13 +678,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
           </div>{/* /.grid */}
 
-          {/* Save CTA */}
+          {/* Save CTA — confirmation visible via le toast Sofi en bas d'écran */}
           <div className="mt-6 flex items-center justify-end gap-3">
-            {profileSaveStatus === "saved" && (
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                Enregistré ✓
-              </span>
-            )}
             <button
               disabled={profileSaveStatus === "saving"}
               onClick={async () => {
