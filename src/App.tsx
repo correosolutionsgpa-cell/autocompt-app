@@ -1736,18 +1736,27 @@ const App = () => {
   });
 
   // --- PERFIL Y CONFIGURACIÓN ---
+  // Deliberately empty (not plausible-looking fake data like "Proprio
+  // Solutions" / a fake NEQ / a fake phone number) — Fabiola flagged that
+  // convincing-looking placeholder values are actively dangerous here: if
+  // hydration from Firestore ever silently fails again for any reason, an
+  // empty field is an obvious "not filled in yet" signal, whereas a fake but
+  // realistic-looking company name/NEQ/phone/TPS/TVQ could be mistaken for
+  // real saved data (and end up on a real invoice). tpsRate/tvqRate are the
+  // actual current Quebec tax rates, not company-identifying info — safe to
+  // keep as real defaults.
   const [userProfile, setUserProfile] = useState({
     logo: null,
     color: "#059669",
     font: "Moderne",
-    nom: "Proprio Solutions",
-    adresse: "Laval, QC",
-    tel: "450-000-0000",
-    neq: "1170000000",
-    tps: "123456789 RT0001",
-    tvq: "1098765432 TQ0001",
-    site: "www.propiosolutions.com",
-    pago: "Virement Interac: gestion@propiosolutions.com\nMot de passe: GPA2026",
+    nom: "",
+    adresse: "",
+    tel: "",
+    neq: "",
+    tps: "",
+    tvq: "",
+    site: "",
+    pago: "",
     tpsRate: 5,
     tvqRate: 9.975,
   });
@@ -3715,7 +3724,7 @@ Facture n° : ${fac.id}
 
 Instructions de paiement :
 Vous pouvez effectuer le paiement selon les instructions suivantes :
-${currentCompany?.userProfile?.pago || "Virement Interac : gestion@propiosolutions.com\n(SVP, utilisez le mot de passe : GPA2026)."}
+${currentCompany?.userProfile?.pago || "[Configurez votre mode de paiement dans Paramètres avant d'envoyer cette facture]"}
 
 Si vous avez des questions, n'hésitez pas à nous contacter. Merci de votre confiance !
 
