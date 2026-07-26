@@ -1667,7 +1667,17 @@ const App = () => {
           .catch((err) => console.error("fetchPaieRecords failed in useEffect:", err));
       }
     }
-  }, [activeCompanyId]);
+    // `empresa` (derived from listaEmpresas) is a real dependency, not just
+    // activeCompanyId: on login, listaEmpresas is replaced with real Firestore
+    // data via setListaEmpresas(workspaces), but activeCompanyId's default
+    // useState value is already "1" — the SAME string most workspaces resolve
+    // to — so React sees no change on that dependency alone and this effect
+    // silently never re-ran after the real company data arrived. userProfile/
+    // partnerData stayed hydrated from whatever `empresa` was BEFORE login
+    // (undefined, or stale), which looked exactly like "nothing saved" even
+    // though the Firestore writes themselves were fine all along. Reported by
+    // Fabiola as company profile / vehicle reverting to defaults after login.
+  }, [activeCompanyId, empresa]);
 
   const [tipoDoc, setTipoDoc] = useState("Facture");
   const [doculegalTab, setDoculegalTab] = useState("Baux");
