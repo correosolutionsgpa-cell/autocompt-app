@@ -1759,7 +1759,9 @@ const App = () => {
     if (!userProfileHydratedRef.current) return;
     const uid = auth.currentUser?.uid;
     if (!uid || !activeCompanyId) return;
-    dataService.saveWorkspace(uid, { ...currentCompany, id: activeCompanyId, userProfile })
+    // Minimal payload only — see the identical note in setPartnerData() above
+    // for why `...currentCompany` must never be spread here.
+    dataService.saveWorkspace(uid, { id: activeCompanyId, userProfile })
       .catch((err) => console.error("Failed to save userProfile:", err));
   }, [userProfile]);
   const [hasEmployment, setHasEmployment] = useState(false);
@@ -5334,8 +5336,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
       const next = typeof value === "function" ? value(prev) : value;
       const userId = auth.currentUser?.uid;
       if (userId && activeCompanyId) {
+        // Only ever write the partnerData field itself — NOT `...currentCompany`.
+        // currentCompany is a stale local snapshot (listaEmpresas only refreshes
+        // on login/company-switch, not after every save), so spreading it here
+        // could silently overwrite OTHER fields (like userProfile) that another
+        // effect just saved more recently. saveWorkspace already merges, so a
+        // minimal payload is both safer and sufficient.
         dataService
-          .saveWorkspace(userId, { ...currentCompany, id: activeCompanyId, partnerData: next })
+          .saveWorkspace(userId, { id: activeCompanyId, partnerData: next })
           .catch((err: any) => console.error("Failed to save partnerData:", err));
       }
       return next;
