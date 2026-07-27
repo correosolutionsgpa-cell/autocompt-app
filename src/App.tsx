@@ -17865,8 +17865,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                           </>
                                         )}
                                       </p>
-                                      {userProfile.neq && (
-                                        <p className="text-[8px] font-bold text-slate-400">NEQ : {userProfile.neq}</p>
+                                      {(userProfile.neq || userProfile.tps || userProfile.tvq) && (
+                                        <p className="text-[8px] font-bold text-slate-400 leading-relaxed">
+                                          {userProfile.neq && <>NEQ : {userProfile.neq}<br /></>}
+                                          {userProfile.tps && <>TPS : {userProfile.tps}<br /></>}
+                                          {userProfile.tvq && <>TVQ : {userProfile.tvq}</>}
+                                        </p>
                                       )}
                                     </div>
                                   </div>
@@ -17980,15 +17984,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   </div>
                                 </div>
 
-                                {/* Footer fiscal */}
+                                {/* Footer — TPS/TVQ affichés en haut sous le logo, inutile de les répéter ici */}
                                 <div className="pt-4 mt-2 border-t border-slate-100 space-y-1">
-                                  {(userProfile.tps || userProfile.tvq) && (
-                                    <p className="text-[8px] font-bold uppercase text-slate-400">
-                                      {userProfile.tps && <>TPS : {userProfile.tps}</>}
-                                      {userProfile.tps && userProfile.tvq && "  ·  "}
-                                      {userProfile.tvq && <>TVQ : {userProfile.tvq}</>}
-                                    </p>
-                                  )}
                                   {userProfile.pago && (
                                     <p className="text-[9px] italic whitespace-pre-line text-slate-500">{userProfile.pago}</p>
                                   )}
