@@ -1643,6 +1643,18 @@ const App = () => {
         setShowSettingsTour(false);
         localStorage.setItem("autocompt_settings_tour_shown", "true");
       }
+      // La Banque de Clients (clientes) n'était jamais persistée — un simple
+      // useState local, seedé avec 3 faux clients de démo (Jean Tremblay,
+      // Marie Cote, Proprio Plus Inc.). Tout client réellement ajouté (avec
+      // son vrai courriel) ne vivait que dans la mémoire de cet onglet et
+      // disparaissait à la prochaine session — exactement ce que Fabiola a vu
+      // en testant en navigation privée. `!== undefined` (pas juste "truthy")
+      // pour ne pas re-imposer les faux clients de démo si elle a vidé sa
+      // vraie liste intentionnellement.
+      if (empresa.clientes !== undefined) {
+        setClientes(empresa.clientes);
+      }
+      clientesHydratedRef.current = true;
       setSelectedRapportProfile(empresa.nombre);
       setPropertyType(empresa.propertyType || "Triplex");
       if (empresa.hasPlex !== undefined) setHasPlex(empresa.hasPlex);
@@ -1788,6 +1800,7 @@ const App = () => {
   // (which would overwrite real saved data with this hardcoded placeholder
   // object before the real fetch even completes).
   const userProfileHydratedRef = useRef(false);
+  const clientesHydratedRef = useRef(false);
 
   // Persist userProfile (logo, NEQ, TPS/TVQ, adresse, site, pago, etc.) to
   // Firestore — it was previously edited via setUserProfile() from 20+ call
@@ -1832,6 +1845,17 @@ const App = () => {
       if (userProfileSaveTimerRef.current) clearTimeout(userProfileSaveTimerRef.current);
     };
   }, [userProfile]);
+
+  // Persiste la Banque de Clients — voir la note d'hydratation plus haut,
+  // clientesHydratedRef evite d'ecraser Firestore avec les 3 faux clients de
+  // demo avant que la vraie liste n'ait fini de charger.
+  useEffect(() => {
+    if (!clientesHydratedRef.current) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    dataService.saveWorkspace(uid, { id: activeCompanyId, clientes })
+      .catch((err) => console.error("Failed to save clientes:", err));
+  }, [clientes]);
 
   const handleLogout = async () => {
     await flushUserProfileSaveRef.current();
@@ -18463,7 +18487,7 @@ const App = () => {
                                   onClick={() => setShowClientDropdown(false)}
                                 />
                                 <div
-                                  className={`absolute z-[70] mt-2 w-full rounded-2xl border shadow-2xl overflow-hidden max-h-64 overflow-y-auto scrollbar-thin animate-in fade-in slide-in-from-top-1 duration-150 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
+                                  className={`absolute z-[70] mt-2 w-full rounded-2xl border shadow-2xl max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin animate-in fade-in slide-in-from-top-1 duration-150 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
                                 >
                                   <button
                                     type="button"
