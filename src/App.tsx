@@ -1424,6 +1424,10 @@ const App = () => {
   } | null>(null);
   const [selectedFac, setSelectedFac] = useState(null);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
+  // Non-null while editing an existing recurring client (vs. creating a new
+  // one) — le meme modal "Ajout Client" sert aux deux, seul ce flag change
+  // le comportement du bouton Enregistrer.
+  const [editingClientId, setEditingClientId] = useState<number | null>(null);
 
   // NOTE: isTrackingAuto, activeKilometrageTab, kilometrageAddresses,
   // kilometrageComputedKm, gpsLatitude, gpsLongitude, gpsAccuracy, gpsStatus
@@ -17739,7 +17743,11 @@ const App = () => {
                       Banque de Clients
                     </h3>
                     <button
-                      onClick={() => setShowAddClientModal(true)}
+                      onClick={() => {
+                        setEditingClientId(null);
+                        setNewClient({ nom: "", adresse: "", email: "", neq: "" });
+                        setShowAddClientModal(true);
+                      }}
                       className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase italic ${darkMode ? "bg-zinc-100 text-black" : "bg-slate-900 text-white"}`}
                     >
                       + Nouveau
@@ -17764,11 +17772,17 @@ const App = () => {
                         >
                           {c.nom}
                         </p>
-                        <p
-                          className={`text-[8px] font-bold uppercase mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                        >
-                          {c.email}
-                        </p>
+                        {c.email ? (
+                          <p
+                            className={`text-[8px] font-bold uppercase mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                          >
+                            {c.email}
+                          </p>
+                        ) : (
+                          <p className="text-[8px] font-black uppercase mt-0.5 text-amber-500">
+                            ⚠ Aucun courriel — factures non envoyables
+                          </p>
+                        )}
                         {c.neq && (
                           <p
                             className={`text-[7px] font-bold uppercase mt-0.5 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}
@@ -17778,10 +17792,27 @@ const App = () => {
                         )}
                       </div>
                       <button
+                        onClick={() => {
+                          setNewClient({
+                            nom: c.nom || "",
+                            adresse: c.adresse || "",
+                            email: c.email || "",
+                            neq: c.neq || "",
+                          });
+                          setEditingClientId(c.id);
+                          setShowAddClientModal(true);
+                        }}
+                        className={`p-2 ${darkMode ? "text-zinc-500 hover:text-zinc-200" : "text-slate-400 hover:text-slate-700"}`}
+                        title="Modifier"
+                      >
+                        <PenLine size={16} />
+                      </button>
+                      <button
                         onClick={() =>
                           setClientes(clientes.filter((cl) => cl.id !== c.id))
                         }
                         className="p-2 text-rose-300"
+                        title="Supprimer"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -18423,7 +18454,7 @@ const App = () => {
                               className={`w-full p-4 rounded-2xl text-xs font-bold outline-none focus:ring-1 focus:ring-[#059669] ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-emerald-100"}`}
                             />
                             <input
-                              placeholder="Courriel (Optionnel)"
+                              placeholder="Courriel (requis pour envoyer la facture par courriel)"
                               value={newInvoiceData.nouveauClientEmail}
                               onChange={(e) =>
                                 setNewInvoiceData({
@@ -18732,7 +18763,10 @@ const App = () => {
                     className={`flex justify-between items-center -m-10 p-10 mb-2 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"}`}
                   >
                     <button
-                      onClick={() => setShowAddClientModal(false)}
+                      onClick={() => {
+                        setShowAddClientModal(false);
+                        setEditingClientId(null);
+                      }}
                       className={`p-2 transition-colors rounded-xl ${darkMode ? "bg-zinc-900 text-zinc-100 hover:text-white" : "bg-slate-50 text-slate-400 hover:text-slate-900"}`}
                     >
                       <ArrowLeft size={22} />
@@ -18740,7 +18774,7 @@ const App = () => {
                     <h3
                       className={`font-black italic uppercase text-base tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
                     >
-                      Nouveau Client
+                      {editingClientId ? "Modifier le Client" : "Nouveau Client"}
                     </h3>
                     <div className="w-10"></div>
                   </div>
@@ -18824,19 +18858,28 @@ const App = () => {
                           "Veuillez remplir le NOM et le COURRIEL pour cet enregistrement.",
                         );
                       }
-                      const id = Date.now();
-                      const client = { ...newClient, id };
-                      setClientes((prev: any[]) => [...prev, client]);
 
-                      // Enforce immediate selection and state reset
-                      setNewInvoiceData((prev: any) => ({
-                        ...prev,
-                        clientId: id.toString(),
-                        isNouveauClient: false,
-                      }));
+                      if (editingClientId) {
+                        setClientes((prev: any[]) =>
+                          prev.map((cl) => (cl.id === editingClientId ? { ...cl, ...newClient } : cl)),
+                        );
+                      } else {
+                        const id = Date.now();
+                        const client = { ...newClient, id };
+                        setClientes((prev: any[]) => [...prev, client]);
+
+                        // Enforce immediate selection and state reset — seulement
+                        // pertinent en creation depuis l'ecran de facturation.
+                        setNewInvoiceData((prev: any) => ({
+                          ...prev,
+                          clientId: id.toString(),
+                          isNouveauClient: false,
+                        }));
+                      }
 
                       playNotificationSound();
                       setShowAddClientModal(false);
+                      setEditingClientId(null);
                       setNewClient({
                         nom: "",
                         adresse: "",
@@ -18846,7 +18889,7 @@ const App = () => {
                     }}
                     className="w-full py-6 bg-[#059669] text-white rounded-[32px] text-[11px] font-black uppercase italic shadow-2xl active:scale-95 transition-all shadow-emerald-900/30 tracking-widest"
                   >
-                    Enregistrer et Sélectionner
+                    {editingClientId ? "Enregistrer les modifications" : "Enregistrer et Sélectionner"}
                   </button>
                 </div>
               </div>
