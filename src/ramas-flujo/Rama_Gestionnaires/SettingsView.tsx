@@ -541,9 +541,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       className={`text-[9.5px] font-medium leading-snug ${darkMode ? "text-zinc-200" : "text-slate-700"
                         }`}
                     >
-                      N&apos;oubliez pas d&apos;ajouter votre logo&nbsp;! Pour un
-                      résultat parfait sur vos factures, utilisez une image carrée
-                      (ex&nbsp;: 500×500 px) d&apos;un maximum de 2&nbsp;Mo.
+                      {userProfile.logo ? (
+                        <>Beau logo&nbsp;! Il apparaîtra automatiquement sur toutes vos factures et documents.</>
+                      ) : (
+                        <>
+                          N&apos;oubliez pas d&apos;ajouter votre logo&nbsp;! Pour un
+                          résultat parfait sur vos factures, utilisez une image carrée
+                          (ex&nbsp;: 500×500 px) d&apos;un maximum de 2&nbsp;Mo.
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>

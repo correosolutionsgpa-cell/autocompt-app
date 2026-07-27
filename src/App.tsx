@@ -1626,6 +1626,18 @@ const App = () => {
       _setPartnerData(empresa.partnerData || {});
       setUserProfile(empresa.userProfile || {});
       userProfileHydratedRef.current = true;
+      // Le tour "complétez vos informations fiscales" ne devrait jamais
+      // réapparaître si le profil est déjà rempli — mais son état initial
+      // se base uniquement sur un flag localStorage, propre à CE navigateur.
+      // Fabiola l'a vu réapparaître après une reconnexion (nouvel onglet/
+      // navigateur incognito = localStorage vide) alors que Paramètres était
+      // déjà complet côté Firestore. Auto-guérison: si le nom ET le NEQ sont
+      // déjà renseignés, on considère le profil configuré, peu importe ce que
+      // dit localStorage sur cet appareil.
+      if (empresa.userProfile?.nom && empresa.userProfile?.neq) {
+        setShowSettingsTour(false);
+        localStorage.setItem("autocompt_settings_tour_shown", "true");
+      }
       setSelectedRapportProfile(empresa.nombre);
       setPropertyType(empresa.propertyType || "Triplex");
       if (empresa.hasPlex !== undefined) setHasPlex(empresa.hasPlex);
@@ -18189,7 +18201,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <button
                         key={t}
                         onClick={() => setTipoDoc(t)}
-                        className={`flex-1 py-4 rounded-[22px] text-[10px] font-black uppercase italic transition-all ${tipoDoc === t ? "bg-[#059669] text-white shadow-lg" : darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-slate-400 hover:text-slate-600"}`}
+                        style={tipoDoc === t ? { backgroundColor: userProfile.color || "#059669" } : undefined}
+                        className={`flex-1 py-4 rounded-[22px] text-[10px] font-black uppercase italic transition-all ${tipoDoc === t ? "text-white shadow-lg" : darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-slate-400 hover:text-slate-600"}`}
                       >
                         {t}
                       </button>
@@ -18412,7 +18425,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 newItems[idx].taxable = !newItems[idx].taxable;
                                 setItems(newItems);
                               }}
-                              className={`col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-xl border-2 py-3 text-[9px] font-black uppercase tracking-wide transition-all ${item.taxable ? "bg-emerald-500 border-emerald-500 text-white" : darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-400" : "bg-white border-slate-300 text-slate-500"}`}
+                              style={item.taxable ? { backgroundColor: userProfile.color || "#059669", borderColor: userProfile.color || "#059669" } : undefined}
+                              className={`col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-xl border-2 py-3 text-[9px] font-black uppercase tracking-wide transition-all ${item.taxable ? "text-white" : darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-400" : "bg-white border-slate-300 text-slate-500"}`}
                             >
                               {item.taxable ? <CheckCircle2 size={14} /> : <span className="w-3.5 h-3.5 rounded-full border-2 border-current" />}
                               {item.taxable ? "Taxable (QC)" : "Non taxable"}
@@ -18567,7 +18581,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                   isTaxable: true,
                                 });
                               }}
-                              className="bg-emerald-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase italic shadow-lg active:scale-95 transition-all"
+                              style={{ backgroundColor: userProfile.color || "#059669" }}
+                              className="text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase italic shadow-lg active:scale-95 transition-all"
                             >
                               Émettre
                             </button>
