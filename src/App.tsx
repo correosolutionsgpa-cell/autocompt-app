@@ -18725,11 +18725,26 @@ const App = () => {
                                       f.id === editingInvoiceId ? newFac : f,
                                     ),
                                   );
-                                  alert("🟢 Facture mise à jour avec succès.");
                                 } else {
                                   setHistorique([newFac, ...historique]);
                                   setNextInvoiceNumber((prev) => prev + 1);
                                 }
+
+                                // "Émettre" enregistre la facture — ça ne l'envoie
+                                // pas. Fabiola cherchait le courriel juste après
+                                // avoir cliqué ici, en pensant que ce bouton
+                                // envoyait deja: on propose l'envoi tout de suite,
+                                // au lieu de la laisser chercher le bouton
+                                // "Envoyer" separement dans la liste.
+                                setDispatcherSuccessToast({
+                                  text: editingInvoiceId ? "Facture mise à jour" : "Facture émise",
+                                  channel: "Facturation",
+                                  customMessage: finalClientEmail
+                                    ? `${tipoDoc} ${newFac.id} enregistrée. L'envoyer par courriel à ${finalClientEmail} maintenant ?`
+                                    : `${tipoDoc} ${newFac.id} enregistrée — aucun courriel pour ${finalClientName}. Ajoutez-en un dans Clients pour pouvoir l'envoyer.`,
+                                  actionText: finalClientEmail ? "Envoyer maintenant ✉️" : undefined,
+                                  onAction: finalClientEmail ? () => handleSendFacture(newFac) : undefined,
+                                });
 
                                 setEditingInvoiceId(null);
                                 setSubVistaFactura("liste");
