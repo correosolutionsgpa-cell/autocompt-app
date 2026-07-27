@@ -3827,7 +3827,6 @@ const App = () => {
   // un vrai envoi automatise, comme les rappels d'essai). Genere le PDF a
   // partir du DOM #invoice-content (rendu par le modal d'apercu) puis
   // l'envoie via /api/send-client-invoice-email, cote serveur.
-  const [pendingSendFacId, setPendingSendFacId] = useState<string | null>(null);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
   // Résultat final de l'envoi — Fabiola a signalé que le petit toast en coin
   // (auto-disparaît en 4.5s) passait inaperçu, surtout sur mobile. Ce state
@@ -3907,27 +3906,29 @@ const App = () => {
     }
   };
 
-  // Point d'entree public: ouvre (ou garde ouvert) le modal d'apercu pour que
-  // #invoice-content existe dans le DOM, puis declenche l'envoi une fois peint
-  // (voir l'effet sur pendingSendFacId plus bas dans le composant).
-  const handleSendFacture = (fac: any) => {
+  // Point d'entree public — appele autant depuis l'icone Envoyer de la liste
+  // (modal pas encore ouvert) que depuis le bouton "Envoyer" a l'interieur du
+  // modal (deja ouvert) ou depuis le toast Sofi "Envoyer maintenant".
+  //
+  // Simplifie volontairement en UNE fonction lineaire (pas de useEffect +
+  // state intermediaire type pendingSendFacId) apres que Fabiola ait
+  // rapporte plusieurs fois qu'aucun envoi ne se declenchait jamais — meme
+  // pas la barre de statut "Envoi en cours". Avec l'ancien mecanisme en
+  // useEffect, si l'utilisateur cliquait "Envoyer" sur une facture qui etait
+  // deja `selectedFac` (ex: re-clic apres un premier essai), showPreview et
+  // selectedFac ne changeaient pas de valeur — seul pendingSendFacId
+  // changeait, ce qui DEVAIT suffire a re-declencher l'effet, mais ajoutait
+  // une dependance a la synchronisation exacte de 3 states + 1 effet + 1
+  // timer avant meme d'atteindre le code d'envoi. Ici, un seul appel direct
+  // ne depend d'aucune re-synchronisation d'etat.
+  const handleSendFacture = async (fac: any) => {
     setSelectedFac(fac);
     setShowPreview(true);
-    setPendingSendFacId(fac.id);
+    // Laisse React peindre le modal (logo + mise en page) avant que
+    // html2canvas ne capture #invoice-content.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await actuallySendInvoiceEmail(fac);
   };
-
-  // Le clic peut venir de la liste (modal pas encore ouvert) ou du bouton
-  // "Envoyer" a l'interieur du modal (deja ouvert, showPreview ne change
-  // donc pas) — on se declenche sur pendingSendFacId lui-meme, pas sur
-  // showPreview, pour couvrir les deux cas. Petit delai pour laisser le
-  // logo / la mise en page finir de peindre avant la capture html2canvas.
-  useEffect(() => {
-    if (!pendingSendFacId || !showPreview || !selectedFac || (selectedFac as any).id !== pendingSendFacId) return;
-    const facToSend = selectedFac;
-    setPendingSendFacId(null);
-    const timer = setTimeout(() => { actuallySendInvoiceEmail(facToSend); }, 150);
-    return () => clearTimeout(timer);
-  }, [pendingSendFacId, showPreview, selectedFac]);
 
   // --- TENUE DE LIVRES (BASE DE DATOS) ---
   const [historique, _setHistorique] = useState<any[]>([]);
