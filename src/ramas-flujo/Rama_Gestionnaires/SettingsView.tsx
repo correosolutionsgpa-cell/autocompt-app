@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Gauge,
+  Globe,
   Hash,
   Mail,
   MapPin,
@@ -632,6 +633,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 }}
                 placeholder="Ex: 1210 rue Maurice Cullen, Blainville, QC  J7C 0C1"
                 className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-indigo-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+              />
+            </div>
+
+            {/* ── Site web ─────────────────────────────────────────────── */}
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                <Globe size={11} className="text-teal-500" />
+                Site web (optionnel)
+              </label>
+              <input
+                id="settings-site"
+                type="text"
+                value={userProfile.site || ""}
+                onChange={(e) => {
+                  setUserProfile((prev: any) => ({ ...prev, site: e.target.value }));
+                }}
+                placeholder="Ex: www.monentreprise.com"
+                className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-teal-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
                   }`}
               />
             </div>

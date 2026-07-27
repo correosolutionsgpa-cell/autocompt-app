@@ -17553,180 +17553,46 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       <div
                         className={`p-6 border-t space-y-4 ${darkMode ? "border-zinc-900 bg-zinc-900/10" : "border-slate-50 bg-slate-50/30"}`}
                       >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Logo Upload Section */}
-                          <div
-                            className={`md:col-span-2 flex items-center space-x-6 p-6 rounded-[32px] border-2 border-dashed ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-emerald-500/20 bg-emerald-50/20"}`}
+                        {/* Identité de l'entreprise — lecture seule ici. Fabiola a
+                            signale que ce meme formulaire existait en double dans
+                            Parametres ET ici, avec des valeurs qui pouvaient
+                            diverger et preter a confusion. Parametres est
+                            maintenant la seule source modifiable. */}
+                        <div
+                          className={`flex items-center gap-4 p-5 rounded-[28px] border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-slate-100"}`}
+                        >
+                          {userProfile.logo ? (
+                            <img
+                              src={userProfile.logo}
+                              className="w-16 h-16 object-contain rounded-2xl p-2 shrink-0 border border-slate-100 dark:border-zinc-700 bg-white"
+                              alt="Logo"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-emerald-500 border border-dashed border-emerald-200 dark:border-emerald-900 shrink-0">
+                              <ImageIcon size={26} strokeWidth={1} />
+                            </div>
+                          )}
+                          <div className="text-left flex-1 min-w-0 space-y-0.5">
+                            <p className={`text-xs font-black italic truncate ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                              {userProfile.nom || "Nom de l'entreprise non configuré"}
+                            </p>
+                            <p className={`text-[9px] font-bold truncate ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                              {userProfile.adresse || "Adresse non configurée"}
+                            </p>
+                            <p className={`text-[8px] font-bold uppercase tracking-wide ${darkMode ? "text-zinc-600" : "text-slate-300"}`}>
+                              {[
+                                userProfile.neq && `NEQ ${userProfile.neq}`,
+                                userProfile.tps && `TPS ${userProfile.tps}`,
+                                userProfile.tvq && `TVQ ${userProfile.tvq}`,
+                              ].filter(Boolean).join(" · ") || "NEQ / TPS / TVQ non configurés"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setVista("settings")}
+                            className="shrink-0 px-3 py-2 rounded-xl text-[8px] font-black uppercase italic tracking-wide bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all"
                           >
-                            <div className="relative group">
-                              {userProfile.logo ? (
-                                <img
-                                  src={userProfile.logo}
-                                  className={`w-24 h-24 object-contain rounded-2xl p-3 shadow-sm border ${darkMode ? "bg-zinc-800 border-zinc-700" : "bg-white border-slate-100"}`}
-                                  alt="Logo Preview"
-                                />
-                              ) : (
-                                <div
-                                  className={`w-24 h-24 rounded-2xl flex items-center justify-center text-emerald-500 border border-dashed ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-emerald-50 border-emerald-100"}`}
-                                >
-                                  <ImageIcon size={38} strokeWidth={1} />
-                                </div>
-                              )}
-                              <button
-                                onClick={() => logoInputRef.current?.click()}
-                                className="absolute -bottom-2 -right-2 p-2.5 bg-emerald-600 text-white rounded-xl shadow-lg scale-90 group-hover:scale-100 transition-transform active:scale-95"
-                              >
-                                <Camera size={16} />
-                              </button>
-                            </div>
-                            <div className="text-left flex-1">
-                              <h4
-                                className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                              >
-                                Logo de l'entreprise
-                              </h4>
-                              <p
-                                className={`text-[8px] font-bold uppercase italic leading-tight mb-3 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                              >
-                                Dimensions recommandées: Carré ou paysage (Fond
-                                transparent idéalement)
-                              </p>
-                              <div className="flex items-center space-x-4">
-                                <button
-                                  onClick={() => logoInputRef.current?.click()}
-                                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase italic hover:bg-emerald-700 transition-all active:scale-95"
-                                >
-                                  {userProfile.logo
-                                    ? "Changer le logo"
-                                    : "Télécharger"}
-                                </button>
-                                {userProfile.logo && (
-                                  <button
-                                    onClick={() =>
-                                      setUserProfile({
-                                        ...userProfile,
-                                        logo: "",
-                                      })
-                                    }
-                                    className={`text-[9px] font-black uppercase italic hover:underline ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                                  >
-                                    Supprimer
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <input
-                              type="file"
-                              ref={logoInputRef}
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setUserProfile({
-                                      ...userProfile,
-                                      logo: reader.result as string,
-                                    });
-                                    playNotificationSound();
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              Nom de l'entreprise
-                            </label>
-                            <input
-                              value={userProfile.nom}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  nom: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              NEQ
-                            </label>
-                            <input
-                              value={userProfile.neq}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  neq: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              Numéro TPS
-                            </label>
-                            <input
-                              value={userProfile.tps}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  tps: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              Numéro TVQ
-                            </label>
-                            <input
-                              value={userProfile.tvq}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  tvq: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              Adresse
-                            </label>
-                            <input
-                              value={userProfile.adresse}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  adresse: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[7px] font-black uppercase italic text-slate-400 ml-2">
-                              Site Web
-                            </label>
-                            <input
-                              value={userProfile.site}
-                              onChange={(e) =>
-                                setUserProfile({
-                                  ...userProfile,
-                                  site: e.target.value,
-                                })
-                              }
-                              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border focus:ring-1 focus:ring-emerald-500/50 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800" : "bg-white border-slate-100"}`}
-                            />
-                          </div>
+                            Modifier dans Paramètres →
+                          </button>
                         </div>
                         <div
                           className={`mt-4 p-4 rounded-2xl border-2 border-dashed flex items-center justify-between ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-100 bg-emerald-50/10"}`}
