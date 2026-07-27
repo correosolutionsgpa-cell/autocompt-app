@@ -1873,7 +1873,18 @@ const App = () => {
   const [showPorteLimitMessage, setShowPorteLimitMessage] = useState(false);
   const [showMultiPrompt, setShowMultiPrompt] = useState(false);
   const [isCreatingSecondCompany, setIsCreatingSecondCompany] = useState(false);
-  const [nextInvoiceNumber, setNextInvoiceNumber] = useState(16);
+  // Fabiola: deux factures se sont retrouvées avec le même id "FAC-016" —
+  // ce compteur n'était jamais persisté ni recalculé à partir de l'historique
+  // réel, il repartait donc de ce "16" fixe à chaque nouvelle session/appareil,
+  // garantissant tôt ou tard une collision. nextInvoiceNumberRef sert de
+  // source de vérité synchrone (lu ET incrémenté dans le même tick au moment
+  // d'émettre), pour empêcher aussi une collision si "Émettre" est cliqué deux
+  // fois avant que React n'ait eu le temps de re-render entre les deux.
+  const [nextInvoiceNumber, setNextInvoiceNumber] = useState(1);
+  const nextInvoiceNumberRef = useRef(1);
+  useEffect(() => {
+    nextInvoiceNumberRef.current = nextInvoiceNumber;
+  }, [nextInvoiceNumber]);
 
   // --- WORKSPACE & MULTI-ACCOUNT SIDEBAR ---
   const WorkspaceSidebar = () => {
@@ -3922,6 +3933,25 @@ const App = () => {
       return next;
     });
   };
+
+  // Recalcule le prochain numero de facture a partir des factures reellement
+  // enregistrees (au chargement depuis Firestore, ou apres tout ajout/edition)
+  // — sans ca, nextInvoiceNumber repartait toujours du meme "16" fixe a
+  // chaque nouvelle session/appareil, garantissant des collisions comme
+  // "FAC-016" attribue a deux clients differents. Ne fait jamais REDESCENDRE
+  // le compteur si Fabiola l'a monte manuellement dans "Sequence active".
+  useEffect(() => {
+    let maxExisting = 0;
+    for (const f of historique) {
+      const match = /^(?:FAC|SOU|REC)-(\d+)$/.exec(f?.id || "");
+      if (match) maxExisting = Math.max(maxExisting, parseInt(match[1], 10));
+    }
+    const derivedNext = maxExisting + 1;
+    if (derivedNext > nextInvoiceNumberRef.current) {
+      nextInvoiceNumberRef.current = derivedNext;
+      setNextInvoiceNumber(derivedNext);
+    }
+  }, [historique]);
 
   const [depenses, _setDepenses] = useState<any[]>([]);
   const reconcileExpenses = async (prev: any[], next: any[]) => {
@@ -18759,10 +18789,21 @@ const App = () => {
                                   finalClientEmail = createdClient.email;
                                 }
 
+                                // Lit ET incremente le ref dans le meme tick (synchrone),
+                                // contrairement a nextInvoiceNumber (state React,
+                                // asynchrone) — evite que deux clics rapprochés sur
+                                // "Émettre" avant un re-render ne calculent le même
+                                // numéro. C'est exactement ce qui a produit deux
+                                // factures "FAC-016" differentes.
+                                const issuedNumber = editingInvoiceId ? null : nextInvoiceNumberRef.current;
+                                if (!editingInvoiceId) {
+                                  nextInvoiceNumberRef.current = (issuedNumber as number) + 1;
+                                }
+
                                 const newFac = {
                                   id:
                                     editingInvoiceId ||
-                                    `${idPrefix}${nextInvoiceNumber.toString().padStart(3, "0")}`,
+                                    `${idPrefix}${(issuedNumber as number).toString().padStart(3, "0")}`,
                                   companyId: activeCompanyId,
                                   cliente: finalClientName,
                                   email: finalClientEmail,
@@ -18785,7 +18826,7 @@ const App = () => {
                                   );
                                 } else {
                                   setHistorique([newFac, ...historique]);
-                                  setNextInvoiceNumber((prev) => prev + 1);
+                                  setNextInvoiceNumber(nextInvoiceNumberRef.current);
                                 }
 
                                 // "Émettre" enregistre la facture — ça ne l'envoie
