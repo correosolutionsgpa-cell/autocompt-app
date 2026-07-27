@@ -119,6 +119,7 @@ import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
 import { computeVehicleBusinessRate } from "./lib/vehicleRateService";
+import { getInvoiceFontStack } from "./lib/invoiceTemplates";
 import { extractDataFromImage } from "./lib/gemini";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
 import MuroTransparencia from "./ramas-flujo/MuroTransparencia";
@@ -1749,6 +1750,7 @@ const App = () => {
     logo: null,
     color: "#059669",
     font: "Moderne",
+    invoiceTemplate: "epure",
     nom: "",
     adresse: "",
     tel: "",
@@ -2075,6 +2077,7 @@ const App = () => {
                       logo: null,
                       color: "#059669",
                       font: "Moderne",
+                      invoiceTemplate: "epure",
                       nom: "",
                       adresse: "",
                       tel: "",
@@ -9072,6 +9075,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         logo: null,
                         color: "#059669",
                         font: "Moderne",
+                        invoiceTemplate: "epure",
                         nom: "",
                         adresse: "",
                         tel: "",
@@ -17823,13 +17827,84 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             un ecran de l'appli. Avant, le texte heritait des couleurs
                             claires du mode sombre (text-zinc-100 etc.) sur un fond
                             d'impression blanc — illisible sur papier en mode sombre. */}
-                        <div id="invoice-content" className="space-y-6 p-6 print:p-0 bg-white text-slate-900 rounded-2xl print:rounded-none">
+                        <div
+                          id="invoice-content"
+                          className="space-y-6 p-6 print:p-0 bg-white text-slate-900 rounded-2xl print:rounded-none overflow-hidden"
+                          style={{ fontFamily: getInvoiceFontStack(userProfile.font) }}
+                        >
                           {(() => {
                             const accent = userProfile.color || "#059669";
                             const statusLabel = (selectedFac as any).status;
+                            const isBandeau = (userProfile.invoiceTemplate || "epure") === "bandeau";
                             return (
                               <>
-                                {/* Header */}
+                                {/* Header — deux variantes: "Épuré" (ligne d'accent
+                                    sobre) ou "Bandeau" (bande de couleur pleine
+                                    largeur, texte blanc, cf. modèle demandé par
+                                    Fabiola inspiré de la facture AutoCompt). */}
+                                {isBandeau ? (
+                                  <div
+                                    className="-m-6 mb-0 print:m-0 px-6 py-6 flex justify-between items-start gap-4"
+                                    style={{ backgroundColor: accent }}
+                                  >
+                                    <div className="space-y-2 min-w-0">
+                                      {userProfile.logo ? (
+                                        <img
+                                          src={userProfile.logo}
+                                          alt="Logo"
+                                          className="w-14 h-14 object-contain rounded-xl bg-white/90 p-1"
+                                        />
+                                      ) : (
+                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-[10px] text-white font-black italic bg-white/20 border border-white/40">
+                                          LOGO
+                                        </div>
+                                      )}
+                                      <div className="space-y-0.5">
+                                        <p className="font-black uppercase text-sm leading-tight text-white">
+                                          {userProfile.nom || "Votre entreprise"}
+                                        </p>
+                                        <p className="text-[9px] leading-relaxed font-medium text-white/80">
+                                          {userProfile.adresse}
+                                          {userProfile.tel && (
+                                            <>
+                                              <br />
+                                              Tél : {userProfile.tel}
+                                            </>
+                                          )}
+                                          {userProfile.site && (
+                                            <>
+                                              <br />
+                                              {userProfile.site}
+                                            </>
+                                          )}
+                                        </p>
+                                        {(userProfile.neq || userProfile.tps || userProfile.tvq) && (
+                                          <p className="text-[8px] font-bold text-white/70 leading-relaxed">
+                                            {userProfile.neq && <>NEQ : {userProfile.neq}<br /></>}
+                                            {userProfile.tps && <>TPS : {userProfile.tps}<br /></>}
+                                            {userProfile.tvq && <>TVQ : {userProfile.tvq}</>}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <h4 className="text-2xl font-black italic uppercase leading-none tracking-tighter text-white">
+                                        {(selectedFac as any).tipoDoc || "Facture"}
+                                      </h4>
+                                      <p className="font-black mt-2 text-base leading-none text-white">
+                                        {(selectedFac as any).id}
+                                      </p>
+                                      <p className="mt-1 text-[9px] font-bold text-white/70">
+                                        Émise le : {(selectedFac as any).fecha}
+                                      </p>
+                                      {statusLabel && (
+                                        <span className="inline-block mt-2 px-2.5 py-1 rounded-full text-[8px] font-black uppercase bg-white/20 text-white">
+                                          {statusLabel}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
                                 <div className="flex justify-between items-start gap-4 pb-6 border-b-2" style={{ borderColor: accent }}>
                                   <div className="space-y-2 min-w-0">
                                     {userProfile.logo ? (
@@ -17897,6 +17972,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                     )}
                                   </div>
                                 </div>
+                                )}
 
                                 {/* Facturé à */}
                                 <div className="p-4 rounded-2xl bg-slate-50">

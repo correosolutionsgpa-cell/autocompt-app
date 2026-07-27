@@ -18,6 +18,7 @@ import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
+import { INVOICE_COLOR_PALETTE, INVOICE_FONT_STACKS, INVOICE_TEMPLATES } from "../../lib/invoiceTemplates";
 import {
   ArrowLeft,
   Bell,
@@ -718,6 +719,122 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               <CheckCircle2 size={14} />
               {profileSaveStatus === "saving" ? "Enregistrement..." : "Sauvegarder le profil"}
             </button>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+              Section: Personnalisation de la Facture
+              Couleur d'accent + police + modèle — utilisés par l'aperçu de
+              facture dans App.tsx (#invoice-content). Stockés directement
+              sur userProfile (color/font/invoiceTemplate) — même mécanisme
+              d'enregistrement debounce que le reste du profil.
+          ══════════════════════════════════════════════════════════════════ */}
+        <div className={`relative p-8 rounded-[32px] border overflow-hidden ${darkMode
+          ? "bg-[#090D1A]/60 border-amber-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+          : "bg-white border-amber-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_30px_rgba(245,158,11,0.05)]"
+          }`}>
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500/70 via-orange-500/40 to-transparent rounded-full pointer-events-none" />
+
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-zinc-800/60">
+            <h2 className="text-sm font-black uppercase tracking-widest flex items-center space-x-2">
+              <span className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                <Palette size={18} />
+              </span>
+              <span>Personnalisation de la Facture</span>
+            </h2>
+          </div>
+
+          {/* Couleur d'accent */}
+          <div className="space-y-2 mb-6">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
+              Couleur d&apos;accent
+            </label>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {INVOICE_COLOR_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setUserProfile((prev: any) => ({ ...prev, color: c }))}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform hover:scale-110 active:scale-95 ring-2 ring-offset-2 dark:ring-offset-zinc-950"
+                  style={{ backgroundColor: c, ["--tw-ring-color" as any]: (userProfile.color || "#059669") === c ? c : "transparent" }}
+                  title={c}
+                >
+                  {(userProfile.color || "#059669") === c && <CheckCircle2 size={16} className="text-white drop-shadow" />}
+                </button>
+              ))}
+              {/* Couleur personnalisée */}
+              <label
+                className={`w-9 h-9 rounded-full shrink-0 cursor-pointer flex items-center justify-center border-2 border-dashed transition-transform hover:scale-110 ${darkMode ? "border-zinc-700 text-zinc-500" : "border-slate-300 text-slate-400"}`}
+                title="Couleur personnalisée"
+              >
+                <Plus size={14} />
+                <input
+                  type="color"
+                  value={userProfile.color || "#059669"}
+                  onChange={(e) => setUserProfile((prev: any) => ({ ...prev, color: e.target.value }))}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Police de caractères */}
+          <div className="space-y-2 mb-6">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
+              Police de caractères
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {Object.entries(INVOICE_FONT_STACKS).map(([name, stack]) => (
+                <button
+                  key={name}
+                  onClick={() => setUserProfile((prev: any) => ({ ...prev, font: name }))}
+                  style={{ fontFamily: stack }}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all ${(userProfile.font || "Moderne") === name
+                    ? "border-amber-500 bg-amber-500/5"
+                    : darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"
+                    }`}
+                >
+                  <p className={`text-base font-bold leading-none mb-1 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Aa</p>
+                  <p className={`text-[9px] font-black uppercase tracking-wide ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>{name}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Modèle de facture */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
+              Modèle de facture
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {INVOICE_TEMPLATES.map((tpl) => {
+                const active = (userProfile.invoiceTemplate || "epure") === tpl.id;
+                const accent = userProfile.color || "#059669";
+                return (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setUserProfile((prev: any) => ({ ...prev, invoiceTemplate: tpl.id }))}
+                    className={`p-4 rounded-2xl border-2 text-left transition-all ${active ? "border-amber-500 bg-amber-500/5" : darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}
+                  >
+                    {/* Mini aperçu visuel du modèle */}
+                    <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-700 mb-2 bg-white">
+                      {tpl.id === "bandeau" ? (
+                        <div style={{ backgroundColor: accent }} className="h-5 w-full" />
+                      ) : (
+                        <div className="h-5 w-full flex items-center px-1.5" style={{ borderBottom: `2px solid ${accent}` }}>
+                          <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: accent }} />
+                        </div>
+                      )}
+                      <div className="p-1.5 space-y-1">
+                        <div className="h-1 w-3/4 bg-slate-200 rounded" />
+                        <div className="h-1 w-1/2 bg-slate-100 rounded" />
+                      </div>
+                    </div>
+                    <p className={`text-[10px] font-black uppercase tracking-wide ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{tpl.label}</p>
+                    <p className={`text-[8px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{tpl.description}</p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
