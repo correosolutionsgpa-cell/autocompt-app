@@ -306,11 +306,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
 
           <div className="flex items-center gap-2.5 p-1.5 sm:pr-3 sm:bg-slate-50/50 sm:dark:bg-zinc-900/40 sm:rounded-full sm:border sm:border-slate-150 sm:dark:border-zinc-800 sm:shadow-sm sm:hover:border-slate-500/30 transition-all cursor-pointer">
-            <img
-              src={adminPhoto}
-              alt={adminName}
-              className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm"
-            />
+            {adminPhoto ? (
+              <img
+                src={adminPhoto}
+                alt={adminName}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                className="w-7 h-7 rounded-full border border-violet-500/20 object-cover shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0 shadow-sm">
+                <span className="text-[9px] font-black text-white">{(adminName || "?")[0].toUpperCase()}</span>
+              </div>
+            )}
             <div className="text-left hidden sm:block">
               <div className="flex items-center gap-1 leading-none">
                 <p className="text-[9px] font-black uppercase tracking-tight text-slate-900 dark:text-zinc-150">{adminName}</p>
