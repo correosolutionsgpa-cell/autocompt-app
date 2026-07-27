@@ -305,7 +305,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <Bell size={14} />
           </button>
 
-          <div className="flex items-center gap-2.5 bg-slate-50/50 dark:bg-zinc-900/40 p-1.5 pr-3 rounded-full border border-slate-150 dark:border-zinc-800 shadow-sm hover:border-slate-500/30 transition-all cursor-pointer">
+          <div className="flex items-center gap-2.5 p-1.5 sm:pr-3 sm:bg-slate-50/50 sm:dark:bg-zinc-900/40 sm:rounded-full sm:border sm:border-slate-150 sm:dark:border-zinc-800 sm:shadow-sm sm:hover:border-slate-500/30 transition-all cursor-pointer">
             <img
               src={adminPhoto}
               alt={adminName}
