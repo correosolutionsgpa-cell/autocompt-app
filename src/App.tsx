@@ -91,6 +91,7 @@ import {
   Wrench,
   Hash,
   HelpCircle,
+  ReceiptText,
 } from "lucide-react";
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
@@ -1911,6 +1912,16 @@ const App = () => {
   }, [nextInvoiceNumber]);
 
   // --- WORKSPACE & MULTI-ACCOUNT SIDEBAR ---
+  // ⚠ KNOWN REACT ANTI-PATTERN — this component is defined *inside* App(),
+  // which means React recreates its function identity on every App render.
+  // React's reconciler treats it as a completely new component type each time,
+  // which causes the browser console warning:
+  //   "The final argument passed to useEffect changed size between renders."
+  // The correct fix is to extract WorkspaceSidebar to a top-level component
+  // (outside App), passing the required state as props — but that requires
+  // touching every early-return vista that uses it (~30 sites) and is a
+  // significant refactor. Tracked as a future task.
+  // Until then, the warning is cosmetic: no visible breakage, no data loss.
   const WorkspaceSidebar = () => {
     const activeColorHex = currentCompany?.userProfile?.color || "#059669";
     const activeBorderColor =
@@ -17269,466 +17280,6 @@ const App = () => {
             </button>
           </div>
         </header>
-        {false ? (
-          <main className="p-6 space-y-6 animate-in fade-in duration-500 overflow-y-auto">
-            <div className="space-y-6">
-              <div
-                className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
-              >
-                <div className="grid grid-cols-2 gap-3 font-sans">
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Spécialisation
-                    </label>
-                    <select
-                      value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
-                      className={`w-full p-4 rounded-[20px] text-[10px] font-bold border-none outline-none appearance-none cursor-pointer ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    >
-                      <option value="Prospecteur Immobilier">
-                        Prospecteur Immobilier (Off-Market)
-                      </option>
-                      <option value="Courtier Immobilier">
-                        Courtier Immobilier
-                      </option>
-                      <option value="Prêteur Privé">Prêteur Privé</option>
-                      <option value="Gestionnaire de Triplex">
-                        Gestionnaire de Triplex
-                      </option>
-                      <option value="Rénovation / Construction">
-                        Rénovation / Construction
-                      </option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Entité Légale
-                    </label>
-                    <select
-                      value={legalEntity}
-                      onChange={(e) => setLegalEntity(e.target.value)}
-                      className={`w-full p-4 rounded-[20px] text-[10px] font-bold border-none outline-none appearance-none cursor-pointer ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    >
-                      <option value="Travailleur Autonome">
-                        Travailleur Autonome
-                      </option>
-                      <option value="Incorporée">Incorporée (Inc.)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* PROPERTY CONFIGURATION CARD (ONLY FOR PLEX / IMMOBILIER WORKSPACES AND HIDDEN FOR GPA / ACHAT DIRECT) */}
-              {isImmobilierWorkspace && (
-                <div
-                  className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5 text-left`}
-                >
-                  <p className="text-[10px] font-black uppercase italic text-emerald-600 tracking-wider">
-                    Structure de l'Immeuble & Parts (%)
-                  </p>
-
-                  {/* Property Structure Selector */}
-                  <div className="space-y-2">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Type de propriété
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        "Duplex",
-                        "Triplex",
-                        "Quadruplex",
-                        "Multi-logement",
-                      ].map((type) => {
-                        const isActive = propertyType === type;
-                        return (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => setPropertyType(type)}
-                            className={`p-3 rounded-2xl border text-center transition-all duration-300 ${isActive
-                              ? "border-[#059669] bg-emerald-50/55 text-emerald-700 font-extrabold shadow-sm"
-                              : `${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-slate-100 bg-white text-slate-500 hover:border-slate-200"}`
-                              }`}
-                          >
-                            <span className="text-[10px] font-bold uppercase tracking-tight">
-                              {type === "Quadruplex"
-                                ? "4plex (Quadruplex)"
-                                : type}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Co_proprietaires List & Percent */}
-                  <div className="space-y-4 pt-2">
-                    <span
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Co-propriétaires & Parts (%)
-                    </span>
-                    <div className="space-y-3">
-                      {partners.map((p, i) => (
-                        <div
-                          key={i}
-                          className={`p-4 rounded-3xl border space-y-2 shadow-sm transition-all ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50/60 border-slate-200"}`}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Users size={16} className="text-[#059669]" />
-                            <input
-                              value={p}
-                              onChange={(e) => {
-                                const newP = [...partners];
-                                const oldName = newP[i];
-                                const newName = e.target.value;
-                                newP[i] = newName;
-
-                                const newPct = { ...partnersPct };
-                                if (oldName && newPct[oldName] !== undefined) {
-                                  const val = newPct[oldName];
-                                  delete newPct[oldName];
-                                  if (newName) newPct[newName] = val;
-                                } else if (newName) {
-                                  newPct[newName] = 50;
-                                }
-                                setPartners(newP);
-                                setPartnersPct(newPct);
-                              }}
-                              className={`flex-1 bg-transparent border-none outline-none font-extrabold italic text-xs ${darkMode ? "text-zinc-100" : "text-[#1E293B]"}`}
-                              placeholder="Nom"
-                            />
-                            {partners.length > 1 && (
-                              <button
-                                onClick={() => {
-                                  const pName = partners[i];
-                                  const newPct = { ...partnersPct };
-                                  delete newPct[pName];
-                                  setPartnersPct(newPct);
-                                  setPartners(
-                                    partners.filter((_, idx) => idx !== i),
-                                  );
-                                }}
-                                className="text-slate-300 hover:text-rose-500 transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-
-                          <div
-                            className={`flex items-center justify-between pt-1.5 border-t ${darkMode ? "border-zinc-800" : "border-slate-250"}`}
-                          >
-                            <span
-                              className={`text-[8.5px] font-black uppercase italic ${darkMode ? "text-zinc-500" : "text-slate-400"} tracking-wider`}
-                            >
-                              Pourcentage (%) :
-                            </span>
-                            <div className="flex items-center space-x-1">
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={
-                                  partnersPct[p] !== undefined
-                                    ? partnersPct[p]
-                                    : 50
-                                }
-                                onChange={(e) => {
-                                  const val = Math.min(
-                                    100,
-                                    Math.max(1, parseInt(e.target.value) || 0),
-                                  );
-                                  setPartnersPct({
-                                    ...partnersPct,
-                                    [p]: val,
-                                  });
-                                }}
-                                className={`w-16 p-1 text-center font-mono font-black text-xs border rounded-xl outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-950 text-zinc-100 border-zinc-800" : "bg-white text-[#1E293B] border-slate-200"}`}
-                              />
-                              <span className="text-xs font-bold text-slate-400">
-                                %
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => {
-                          if (
-                            getEffectiveTier() !== "superadmin" &&
-                            partners.length >= 2
-                          ) {
-                            setCorporatifModalReason("partenaire");
-                            setShowCorporatifModal(true);
-                            playNotificationSound();
-                            return;
-                          }
-                          const nextId = `Propriétaire ${partners.length + 1}`;
-                          setPartners([...partners, nextId]);
-                          setPartnersPct({
-                            ...partnersPct,
-                            [nextId]: 50,
-                          });
-                        }}
-                        className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-[9px] font-black uppercase italic tracking-widest text-[#059669] hover:bg-emerald-50/20 hover:border-[#059669] transition-all"
-                      >
-                        + Ajouter un propriétaire
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div
-                onClick={() => {
-                  const url = prompt("Lien de l'image pour le logo (HTTPS):");
-                  if (url) setUserProfile({ ...userProfile, logo: url });
-                }}
-                className={`w-full aspect-video border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center relative group overflow-hidden shadow-sm cursor-pointer transition-all ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-800 hover:border-emerald-500" : "bg-white border-slate-200 text-slate-300 hover:border-emerald-500"}`}
-              >
-                {userProfile.logo ? (
-                  <img
-                    src={userProfile.logo}
-                    className="w-full h-full object-contain p-8"
-                    alt="Logo preview"
-                  />
-                ) : (
-                  <>
-                    <Upload size={40} />
-                    <span className="text-[9px] font-black mt-4 uppercase tracking-[0.2em]">
-                      Télécharger Logo (PNG/SVG)
-                    </span>
-                  </>
-                )}
-                <div className="absolute inset-0 bg-slate-900/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </div>
-
-              <div className="space-y-4">
-                <div
-                  className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] shadow-sm border space-y-5`}
-                >
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Nom Légal de l'entreprise
-                    </label>
-                    <input
-                      value={userProfile.nom}
-                      onChange={(e) =>
-                        setUserProfile({ ...userProfile, nom: e.target.value })
-                      }
-                      className={`w-full p-4 rounded-[24px] text-sm font-bold border-none outline-none focus:ring-2 focus:ring-emerald-500/10 tracking-tighter ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Adresse Complète
-                    </label>
-                    <textarea
-                      value={userProfile.adresse}
-                      onChange={(e) =>
-                        setUserProfile({
-                          ...userProfile,
-                          adresse: e.target.value,
-                        })
-                      }
-                      rows={2}
-                      className={`w-full p-4 rounded-[24px] text-sm font-bold border-none outline-none focus:ring-2 focus:ring-emerald-500/10 resize-none leading-relaxed ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Dossier Google Drive (BYOS)
-                    </label>
-                    <div className="flex space-x-2">
-                      <input
-                        value={empresa?.driveConfig?.folderId || ""}
-                        onChange={(e) => {
-                          const updated = {
-                            ...empresa,
-                            driveConfig: {
-                              ...empresa.driveConfig,
-                              folderId: e.target.value,
-                              connected: true,
-                            },
-                          };
-                          setListaEmpresas((prev) =>
-                            prev.map((emp) =>
-                              emp.id === activeCompanyId ? updated : emp,
-                            ),
-                          );
-                        }}
-                        placeholder="ID du dossier Drive"
-                        className={`flex-1 p-4 rounded-[20px] text-[10px] font-bold border-none outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-100"}`}
-                      />
-                      <div
-                        className={`p-4 rounded-[20px] flex items-center justify-center ${darkMode ? "bg-emerald-950/30 text-emerald-500" : "bg-emerald-50 text-emerald-600"}`}
-                      >
-                        <Lock size={14} />
-                      </div>
-                    </div>
-                    <p
-                      className={`text-[7px] font-bold uppercase mt-1 ml-1 italic tracking-tight ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                    >
-                      Configuration de stockage sécurisée par entreprise
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div className="space-y-1">
-                      <label
-                        className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                      >
-                        NEQ
-                      </label>
-                      <input
-                        value={userProfile.neq}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            neq: e.target.value,
-                          })
-                        }
-                        className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label
-                        className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                      >
-                        Téléphone
-                      </label>
-                      <input
-                        value={userProfile.tel}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            tel: e.target.value,
-                          })
-                        }
-                        className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Site Web
-                    </label>
-                    <input
-                      value={userProfile.site}
-                      onChange={(e) =>
-                        setUserProfile({ ...userProfile, site: e.target.value })
-                      }
-                      className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label
-                        className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                      >
-                        TPS N°
-                      </label>
-                      <input
-                        value={userProfile.tps}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            tps: e.target.value,
-                          })
-                        }
-                        className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label
-                        className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                      >
-                        TVQ N°
-                      </label>
-                      <input
-                        value={userProfile.tvq}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            tvq: e.target.value,
-                          })
-                        }
-                        className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label
-                      className={`text-[8px] font-black uppercase italic ml-1 tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                    >
-                      Instructions de Paiement
-                    </label>
-                    <textarea
-                      value={userProfile.pago}
-                      onChange={(e) =>
-                        setUserProfile({ ...userProfile, pago: e.target.value })
-                      }
-                      rows={3}
-                      className={`w-full p-4 rounded-[24px] text-[10px] font-bold border-none outline-none focus:ring-2 focus:ring-emerald-500/10 resize-none font-mono leading-relaxed ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                // Explicit field list only (no `...empresa` spread) — same
-                // stale-snapshot bug fixed in setPartnerData()/userProfile's
-                // persist effect: `empresa` doesn't refresh after other saves,
-                // so spreading it here could revert whatever those just wrote.
-                const fieldsToSave = {
-                  industry,
-                  legalEntity,
-                  userProfile,
-                  partners,
-                  partnerData,
-                  propertyType,
-                  partnersPct,
-                };
-                setListaEmpresas((prev) =>
-                  prev.map((e) =>
-                    e.id === activeCompanyId ? { ...e, ...fieldsToSave } : e,
-                  ),
-                );
-                setSetupComplet(true);
-                const uid = auth.currentUser?.uid;
-                if (uid && activeCompanyId) {
-                  dataService.saveWorkspace(uid, { id: activeCompanyId, ...fieldsToSave })
-                    .catch((err) => console.error("Failed to save workspace settings:", err));
-                }
-              }}
-              className="w-full py-5 bg-emerald-600 text-white rounded-[32px] text-[10px] font-black uppercase shadow-xl mb-10 tracking-widest active:scale-95 transition-all"
-            >
-              Sauvegarder les paramètres
-            </button>
-          </main>
-        ) : (
           <div className="flex-1 overflow-y-auto pb-64">
             {/* Configuration de l'émetteur Collapsible — print:hidden ici et pas
                 sur le conteneur parent: le Preview Modal (#invoice-content) vit
@@ -17918,6 +17469,21 @@ const App = () => {
                       </div>
                       <button
                         onClick={() => {
+                          setNewInvoiceData({
+                            ...newInvoiceData,
+                            clientId: String(c.id),
+                            isNouveauClient: false,
+                          });
+                          setEditingInvoiceId(null);
+                          setSubVistaFactura("nouveau");
+                        }}
+                        className={`p-2 ${darkMode ? "text-emerald-500 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-800"} transition-colors`}
+                        title={`Créer une facture pour ${c.nom}`}
+                      >
+                        <ReceiptText size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
                           setNewClient({
                             nom: c.nom || "",
                             adresse: c.adresse || "",
@@ -18017,6 +17583,22 @@ const App = () => {
                         className={`p-2 rounded-lg ${darkMode ? "bg-zinc-900 text-zinc-400" : "bg-slate-50 text-slate-400"}`}
                       >
                         <Eye size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const ok = window.confirm(
+                            `Supprimer la facture ${fac.id} (${fac.cliente}) ?\n\nCette action est irréversible.`
+                          );
+                          if (ok) {
+                            setHistorique((prev) =>
+                              prev.filter((f) => f.id !== fac.id)
+                            );
+                          }
+                        }}
+                        className={`p-2 rounded-lg ${darkMode ? "bg-zinc-900 text-rose-500 hover:bg-rose-950/40" : "bg-rose-50 text-rose-500 hover:bg-rose-100"} transition-colors`}
+                        title="Supprimer la facture"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
@@ -18867,6 +18449,9 @@ const App = () => {
                                     : `${tipoDoc} ${newFac.id} enregistrée — aucun courriel pour ${finalClientName}. Ajoutez-en un dans Clients pour pouvoir l'envoyer.`,
                                   actionText: finalClientEmail ? "Envoyer maintenant ✉️" : undefined,
                                   onAction: finalClientEmail ? () => handleSendFacture(newFac) : undefined,
+                                  // Persistent: do not auto-dismiss — user needs time to click
+                                  // "Envoyer maintenant" without the toast vanishing under them.
+                                  persistent: true,
                                 });
 
                                 setEditingInvoiceId(null);
@@ -19067,7 +18652,6 @@ const App = () => {
               </div>
             )}
           </div>
-        )}
       </div>
     );
 

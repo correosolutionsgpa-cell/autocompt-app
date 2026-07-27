@@ -6,6 +6,11 @@ export interface DispatcherToast {
   customMessage?: string;
   actionText?: string;
   onAction?: () => void;
+  /** When true, the toast will NOT auto-dismiss after 4.5 s — the user must
+   *  close it manually via the × button in GlobalToastHost. Use this for
+   *  important action prompts (e.g. the Sofi "Envoyer maintenant ?" after
+   *  emitting an invoice) where the user needs enough time to react. */
+  persistent?: boolean;
 }
 
 interface ToastContextValue {
@@ -24,7 +29,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [dispatcherSuccessToast, setDispatcherSuccessToast] = useState<DispatcherToast | null>(null);
 
   useEffect(() => {
-    if (dispatcherSuccessToast) {
+    // persistent toasts stay until the user clicks the × button manually.
+    if (dispatcherSuccessToast && !dispatcherSuccessToast.persistent) {
       const timer = setTimeout(() => setDispatcherSuccessToast(null), 4500);
       return () => clearTimeout(timer);
     }
