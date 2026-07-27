@@ -1612,6 +1612,7 @@ const App = () => {
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showFormatDropdown, setShowFormatDropdown] = useState(false);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   const [propertyType, setPropertyType] = useState<string>("Triplex");
   const [partnersPct, setPartnersPct] = useState<{
@@ -18222,37 +18223,70 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             Destinataire
                           </label>
                           <div className="relative">
-                            <select
-                              value={newInvoiceData.clientId}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNewInvoiceData({
-                                  ...newInvoiceData,
-                                  isNouveauClient: val === "new",
-                                  clientId: val,
-                                });
-                              }}
-                              className={`w-full p-4 rounded-2xl text-sm font-bold border-none outline-none appearance-none cursor-pointer pr-10 ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                            <button
+                              type="button"
+                              onClick={() => setShowClientDropdown((v) => !v)}
+                              className={`w-full p-4 rounded-2xl text-sm font-bold outline-none cursor-pointer pr-10 text-left flex items-center transition-colors ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
                             >
-                              <option value="">
-                                Sélectionner un client...
-                              </option>
-                              {clientes.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.nom}
-                                </option>
-                              ))}
-                              <option
-                                value="new"
-                                className="text-[#059669] font-black"
-                              >
-                                + Nouveau Client Rapide
-                              </option>
-                            </select>
+                              {clientes.find((c) => String(c.id) === newInvoiceData.clientId)?.nom
+                                || (newInvoiceData.clientId === "new" ? "+ Nouveau Client Rapide" : "Sélectionner un client...")}
+                            </button>
                             <ChevronRight
                               size={16}
-                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none"
+                              className={`absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none transition-transform ${showClientDropdown ? "!rotate-[-90deg]" : ""}`}
                             />
+
+                            {showClientDropdown && (
+                              <>
+                                {/* Backdrop invisible pour fermer au clic extérieur */}
+                                <div
+                                  className="fixed inset-0 z-[60]"
+                                  onClick={() => setShowClientDropdown(false)}
+                                />
+                                <div
+                                  className={`absolute z-[70] mt-2 w-full rounded-2xl border shadow-2xl overflow-hidden max-h-64 overflow-y-auto scrollbar-thin animate-in fade-in slide-in-from-top-1 duration-150 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNewInvoiceData({ ...newInvoiceData, isNouveauClient: false, clientId: "" });
+                                      setShowClientDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-800" : "text-slate-400 hover:bg-slate-50"}`}
+                                  >
+                                    Sélectionner un client...
+                                  </button>
+                                  {clientes.map((c) => (
+                                    <button
+                                      type="button"
+                                      key={c.id}
+                                      onClick={() => {
+                                        setNewInvoiceData({ ...newInvoiceData, isNouveauClient: false, clientId: String(c.id) });
+                                        setShowClientDropdown(false);
+                                      }}
+                                      className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${newInvoiceData.clientId === String(c.id)
+                                        ? "text-white"
+                                        : darkMode ? "text-zinc-100 hover:bg-zinc-800" : "text-slate-900 hover:bg-slate-50"
+                                        }`}
+                                      style={newInvoiceData.clientId === String(c.id) ? { backgroundColor: userProfile.color || "#059669" } : undefined}
+                                    >
+                                      {c.nom}
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNewInvoiceData({ ...newInvoiceData, isNouveauClient: true, clientId: "new" });
+                                      setShowClientDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-sm font-black border-t ${darkMode ? "border-zinc-800 hover:bg-zinc-800" : "border-slate-100 hover:bg-slate-50"}`}
+                                    style={{ color: userProfile.color || "#059669" }}
+                                  >
+                                    + Nouveau Client Rapide
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                         <button
