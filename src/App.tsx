@@ -17145,9 +17145,11 @@ const App = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setSubVistaFactura("clients")}
-              className={`p-2 rounded-xl transition-all ${subVistaFactura === "clients" ? "bg-[#059669] text-white shadow-lg" : darkMode ? "bg-zinc-900 text-zinc-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:text-slate-900"}`}
+              title="Banque de Clients — ajouter ou modifier un client (courriel, adresse, NEQ)"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase italic tracking-wide transition-all ${subVistaFactura === "clients" ? "bg-[#059669] text-white shadow-lg" : darkMode ? "bg-zinc-900 text-zinc-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:text-slate-900"}`}
             >
-              <Users size={20} />
+              <Users size={16} />
+              <span>Clients</span>
             </button>
           </div>
         </header>
