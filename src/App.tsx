@@ -18367,7 +18367,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             )}
                           </div>
                           <textarea
-                            className={`w-full text-xs font-medium p-4 rounded-2xl border-none outline-none resize-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                            style={{ borderColor: darkMode ? `${userProfile.color || "#059669"}55` : `${userProfile.color || "#059669"}30`, ["--tw-ring-color" as any]: userProfile.color || "#059669" }}
+                            className={`w-full text-xs font-medium p-4 rounded-2xl border outline-none resize-none focus:ring-2 transition-colors ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
                             placeholder="Ex: Consultation en gestion immobilière..."
                             value={item.descripcion}
                             onChange={(e) => {
@@ -18386,7 +18387,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                               </label>
                               <input
                                 type="number"
-                                className={`w-full p-3 rounded-xl border text-sm font-bold outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-700" : "bg-slate-50 text-slate-900 border-slate-200"}`}
+                                style={{ borderColor: darkMode ? `${userProfile.color || "#059669"}55` : `${userProfile.color || "#059669"}30`, ["--tw-ring-color" as any]: userProfile.color || "#059669" }}
+                                className={`w-full p-3 rounded-xl border text-sm font-bold outline-none focus:ring-2 transition-colors ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
                                 value={item.cantidad}
                                 onChange={(e) => {
                                   const newItems = [...items];
@@ -18403,7 +18405,8 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 Prix Unitaire
                               </label>
                               <div
-                                className={`flex items-center rounded-xl border focus-within:ring-1 focus-within:ring-emerald-500 ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-slate-50 border-slate-200"}`}
+                                style={{ borderColor: darkMode ? `${userProfile.color || "#059669"}55` : `${userProfile.color || "#059669"}30`, ["--tw-ring-color" as any]: userProfile.color || "#059669" }}
+                                className={`flex items-center rounded-xl border focus-within:ring-2 transition-colors ${darkMode ? "bg-zinc-900" : "bg-slate-50"}`}
                               >
                                 <span className={`pl-3 text-sm font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>$</span>
                                 <input
