@@ -17511,7 +17511,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </button>
           </main>
         ) : (
-          <div className="flex-1 overflow-y-auto pb-64">
+          <div className="flex-1 overflow-y-auto pb-64 print:hidden">
             {/* Configuration de l'émetteur Collapsible */}
             <div className="p-4 pb-0">
               <div
