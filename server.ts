@@ -1157,6 +1157,120 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── Client invoices: email a real one-click send on behalf of an AutoCompt
+  // user's own company (property manager -> their tenant/client). Distinct
+  // from /api/send-invoice-email above, which is AutoCompt's own subscription
+  // billing to beta users with hardcoded AutoCompt branding — this route is
+  // dynamic per company (name/color from the caller's own userProfile) and
+  // requires the caller to be authenticated, since it's sent as them.
+  app.post("/api/send-client-invoice-email", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
+
+      const {
+        pdfBase64, clientEmail, clientName, companyName, companyColor,
+        invoiceId, invoiceTotal, invoiceDate, replyToEmail, docType,
+      } = req.body;
+
+      if (!pdfBase64 || !clientEmail || !invoiceId) {
+        return res.status(400).json({ success: false, error: "pdfBase64, clientEmail et invoiceId sont requis" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+        return res.status(400).json({ success: false, error: "Courriel du client invalide" });
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        return res.status(500).json({ success: false, error: "RESEND_API_KEY not configured" });
+      }
+
+      // Basic HTML-escaping for values interpolated into the email body —
+      // these come from user-editable company/client fields, not just IDs.
+      const esc = (v: any) => String(v ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+      // Separate sanitizer for header fields (From display name, Subject) —
+      // strips line breaks (header-injection) and characters that would
+      // confuse the "Display Name <email>" syntax; must NOT be HTML-escaped
+      // or "&amp;" would show up literally in the client's inbox.
+      const headerSafe = (v: any) => String(v ?? "").replace(/[\r\n<>"]/g, "").trim();
+
+      const safeCompany = esc(companyName || "Votre entreprise");
+      const safeClient = esc(clientName || "");
+      const safeDocType = esc(docType || "Facture");
+      const fromName = headerSafe(companyName || "Votre entreprise") || "Votre entreprise";
+      const subjectDocType = headerSafe(docType || "Facture") || "Facture";
+      const subjectInvoiceId = headerSafe(invoiceId);
+      const accent = /^#[0-9a-fA-F]{6}$/.test(companyColor || "") ? companyColor : "#059669";
+      const total = Number(invoiceTotal || 0).toFixed(2);
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+          <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:${accent};padding:32px 40px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">${safeCompany}</div>
+              <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">${safeDocType} ${esc(invoiceId)}</div>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                Bonjour ${safeClient}, veuillez trouver ci-joint votre ${safeDocType.toLowerCase()}.
+              </p>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px">
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Montant à payer</div>
+                <div style="font-size:22px;font-weight:900;color:${accent}">${total} $</div>
+                ${invoiceDate ? `<div style="font-size:11px;color:#9ca3af;margin-top:8px">Émise le ${esc(invoiceDate)}</div>` : ""}
+              </div>
+              <p style="color:#6b7280;font-size:13px;margin:0">
+                Si vous avez des questions, répondez simplement à ce courriel — il sera lu directement par ${safeCompany}.
+              </p>
+            </div>
+            <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+              <p style="color:#9ca3af;font-size:10px;margin:0">
+                Envoyé via AutoCompt · <a href="https://www.autocompt.ca" style="color:${accent}">www.autocompt.ca</a>
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || "");
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `${fromName} via AutoCompt <factures@autocompt.ca>`,
+          to: [clientEmail],
+          reply_to: isValidEmail(replyToEmail) ? [replyToEmail] : undefined,
+          subject: `${subjectDocType} ${subjectInvoiceId} — ${fromName}`,
+          html: emailHtml,
+          attachments: [{
+            filename: `${headerSafe(docType) || "Facture"}_${subjectInvoiceId}.pdf`,
+            content: pdfBase64,
+          }],
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error("[Client invoice email] Resend error:", errBody);
+        return res.status(502).json({ success: false, error: "Resend a refusé l'envoi du courriel" });
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("send-client-invoice-email error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // ── Google Drive: connect a company's Drive permanently (authorization-code flow) ──
   // The client sends the one-time `code` from google.accounts.oauth2.initCodeClient.
   // We exchange it for a refresh token here (needs the Client Secret, server-only) and

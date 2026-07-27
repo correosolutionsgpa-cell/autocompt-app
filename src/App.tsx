@@ -3768,30 +3768,109 @@ const App = () => {
     playNotificationSound();
   };
 
-  const handleSendFacture = (fac: any) => {
-    const subject = `Nouvelle Facture : ${fac.id} / New Invoice - ${currentCompany?.nombre || "Solutions GPA"}`;
-    const body = `Bonjour ${fac.cliente},
+  // Envoi reel en un clic (remplace l'ancien mailto: qui n'ouvrait qu'un
+  // brouillon dans le client de courriel de l'utilisateur — Fabiola voulait
+  // un vrai envoi automatise, comme les rappels d'essai). Genere le PDF a
+  // partir du DOM #invoice-content (rendu par le modal d'apercu) puis
+  // l'envoie via /api/send-client-invoice-email, cote serveur.
+  const [pendingSendFacId, setPendingSendFacId] = useState<string | null>(null);
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
 
-Veuillez trouver les détails concernant votre nouvelle facture.
-
-Montant à payer : ${fac.total.toFixed(2)} $
-Facture n° : ${fac.id}
-
-▶ VOIR ET TÉLÉCHARGER LA FACTURE : https://app.autocompt.ca/portail/${fac.id}
-
-Instructions de paiement :
-Vous pouvez effectuer le paiement selon les instructions suivantes :
-${currentCompany?.userProfile?.pago || "[Configurez votre mode de paiement dans Paramètres avant d'envoyer cette facture]"}
-
-Si vous avez des questions, n'hésitez pas à nous contacter. Merci de votre confiance !
-
-${currentCompany?.nombre || "Solutions GPA Inc."}
-Ceci est un message automatisé généré par AutoCompt.`;
-
-    const mailtoUrl = `mailto:${fac.email || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoUrl;
-    if (typeof playNotificationSound === "function") playNotificationSound();
+  const generateInvoicePdfBase64 = async (): Promise<string> => {
+    if (!(window as any).html2pdf) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Failed to load html2pdf.js"));
+        document.body.appendChild(script);
+      });
+    }
+    const element = document.getElementById("invoice-content");
+    if (!element) throw new Error("Invoice content not found");
+    const dataUri: string = await (window as any).html2pdf().set({
+      margin: 0.5,
+      filename: "Facture_AutoCompt.pdf",
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+    }).from(element).outputPdf("datauristring");
+    return dataUri.split(",")[1];
   };
+
+  const actuallySendInvoiceEmail = async (fac: any) => {
+    const clientInfo = clientes.find((c) => c.nom === fac.cliente) || fac;
+    const clientEmail = clientInfo.email || fac.email;
+    if (!clientEmail) {
+      setDispatcherSuccessToast({
+        text: "Courriel manquant ⚠️",
+        channel: "Facturation",
+        customMessage: `Aucun courriel enregistré pour « ${fac.cliente} ». Ajoutez-en un dans la Banque de Clients puis réessayez.`,
+      });
+      playNotificationSound();
+      return;
+    }
+    setIsSendingInvoice(true);
+    try {
+      const pdfBase64 = await generateInvoicePdfBase64();
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch("/api/send-client-invoice-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+          pdfBase64,
+          clientEmail,
+          clientName: clientInfo.nom || fac.cliente,
+          companyName: userProfile.nom || "Votre entreprise",
+          companyColor: userProfile.color || "#059669",
+          invoiceId: fac.id,
+          invoiceTotal: fac.total,
+          invoiceDate: fac.fecha,
+          replyToEmail: adminEmail || auth.currentUser?.email || "",
+          docType: fac.tipoDoc || "Facture",
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `Erreur ${resp.status}`);
+      setDispatcherSuccessToast({
+        text: "Envoyée avec succès ✉️",
+        channel: "Facturation",
+        customMessage: `${fac.tipoDoc || "Facture"} ${fac.id} envoyée à ${clientEmail}.`,
+      });
+    } catch (err: any) {
+      console.error("send invoice email failed:", err);
+      setDispatcherSuccessToast({
+        text: "Échec de l'envoi ⚠️",
+        channel: "Facturation",
+        customMessage: err.message || "Impossible d'envoyer le courriel. Vérifiez votre connexion et réessayez.",
+      });
+    } finally {
+      setIsSendingInvoice(false);
+      playNotificationSound();
+    }
+  };
+
+  // Point d'entree public: ouvre (ou garde ouvert) le modal d'apercu pour que
+  // #invoice-content existe dans le DOM, puis declenche l'envoi une fois peint
+  // (voir l'effet sur pendingSendFacId plus bas dans le composant).
+  const handleSendFacture = (fac: any) => {
+    setSelectedFac(fac);
+    setShowPreview(true);
+    setPendingSendFacId(fac.id);
+  };
+
+  // Le clic peut venir de la liste (modal pas encore ouvert) ou du bouton
+  // "Envoyer" a l'interieur du modal (deja ouvert, showPreview ne change
+  // donc pas) — on se declenche sur pendingSendFacId lui-meme, pas sur
+  // showPreview, pour couvrir les deux cas. Petit delai pour laisser le
+  // logo / la mise en page finir de peindre avant la capture html2canvas.
+  useEffect(() => {
+    if (!pendingSendFacId || !showPreview || !selectedFac || (selectedFac as any).id !== pendingSendFacId) return;
+    const facToSend = selectedFac;
+    setPendingSendFacId(null);
+    const timer = setTimeout(() => { actuallySendInvoiceEmail(facToSend); }, 150);
+    return () => clearTimeout(timer);
+  }, [pendingSendFacId, showPreview, selectedFac]);
 
   // --- TENUE DE LIVRES (BASE DE DATOS) ---
   const [historique, _setHistorique] = useState<any[]>([]);
@@ -17759,9 +17838,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                       </p>
                       {fac.status === "En attente" && (
                         <button
+                          disabled={isSendingInvoice}
                           onClick={() => handleSendFacture(fac)}
-                          className={`p-2 rounded-lg ${darkMode ? "bg-zinc-900 text-emerald-500" : "bg-emerald-50 text-emerald-600"} animate-pulse`}
-                          title="Envoyer Nouvelle Facture"
+                          className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-wait ${darkMode ? "bg-zinc-900 text-emerald-500" : "bg-emerald-50 text-emerald-600"} animate-pulse`}
+                          title="Envoyer par courriel"
                         >
                           <Send size={16} />
                         </button>
@@ -18102,11 +18182,12 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             <span>Imprimer</span>
                           </button>
                           <button
+                            disabled={isSendingInvoice}
                             onClick={() => handleSendFacture(selectedFac)}
-                            className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-[9px] font-black uppercase italic transition-all active:scale-95 flex items-center justify-center space-x-2 border border-slate-700"
+                            className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait text-white rounded-2xl text-[9px] font-black uppercase italic transition-all active:scale-95 flex items-center justify-center space-x-2 border border-slate-700"
                           >
                             <Mail size={14} />
-                            <span>Envoyer</span>
+                            <span>{isSendingInvoice ? "Envoi..." : "Envoyer"}</span>
                           </button>
                         </div>
                         <button
