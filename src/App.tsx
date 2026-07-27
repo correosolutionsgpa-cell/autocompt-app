@@ -3783,6 +3783,11 @@ const App = () => {
   // l'envoie via /api/send-client-invoice-email, cote serveur.
   const [pendingSendFacId, setPendingSendFacId] = useState<string | null>(null);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  // Résultat final de l'envoi — Fabiola a signalé que le petit toast en coin
+  // (auto-disparaît en 4.5s) passait inaperçu, surtout sur mobile. Ce state
+  // pilote une grande bannière fixe en bas de l'écran, avec fermeture
+  // manuelle, pour que le succès/échec soit impossible à manquer.
+  const [sendInvoiceResult, setSendInvoiceResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const generateInvoicePdfBase64 = async (): Promise<string> => {
     if (!(window as any).html2pdf) {
@@ -3810,15 +3815,15 @@ const App = () => {
     const clientInfo = clientes.find((c) => c.nom === fac.cliente) || fac;
     const clientEmail = clientInfo.email || fac.email;
     if (!clientEmail) {
-      setDispatcherSuccessToast({
-        text: "Courriel manquant ⚠️",
-        channel: "Facturation",
-        customMessage: `Aucun courriel enregistré pour « ${fac.cliente} ». Ajoutez-en un dans la Banque de Clients puis réessayez.`,
+      setSendInvoiceResult({
+        type: "error",
+        message: `Aucun courriel enregistré pour « ${fac.cliente} ». Ajoutez-en un dans Clients puis réessayez.`,
       });
       playNotificationSound();
       return;
     }
     setIsSendingInvoice(true);
+    setSendInvoiceResult(null);
     try {
       const pdfBase64 = await generateInvoicePdfBase64();
       const idToken = await auth.currentUser?.getIdToken();
@@ -3840,17 +3845,15 @@ const App = () => {
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || `Erreur ${resp.status}`);
-      setDispatcherSuccessToast({
-        text: "Envoyée avec succès ✉️",
-        channel: "Facturation",
-        customMessage: `${fac.tipoDoc || "Facture"} ${fac.id} envoyée à ${clientEmail}.`,
+      setSendInvoiceResult({
+        type: "success",
+        message: `${fac.tipoDoc || "Facture"} ${fac.id} envoyée à ${clientEmail}.`,
       });
     } catch (err: any) {
       console.error("send invoice email failed:", err);
-      setDispatcherSuccessToast({
-        text: "Échec de l'envoi ⚠️",
-        channel: "Facturation",
-        customMessage: err.message || "Impossible d'envoyer le courriel. Vérifiez votre connexion et réessayez.",
+      setSendInvoiceResult({
+        type: "error",
+        message: err.message || "Impossible d'envoyer le courriel. Vérifiez votre connexion et réessayez.",
       });
     } finally {
       setIsSendingInvoice(false);
@@ -17120,6 +17123,61 @@ const App = () => {
         className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 print:pl-0 relative transition-all duration-300 print:bg-white print:m-0 print:p-0 print:h-auto`}
       >
         <WorkspaceSidebar />
+
+        {/* ── Grande bannière d'envoi de facture — remplace le petit toast en
+              coin qui passait inaperçu (signalé par Fabiola). Fixe, centrée,
+              fermeture manuelle sur le résultat final pour qu'elle ne
+              disparaisse pas avant d'être vue. ─────────────────────────── */}
+        {(isSendingInvoice || sendInvoiceResult) && (
+          <div className="fixed bottom-6 inset-x-0 z-[200] flex justify-center px-4 print:hidden pointer-events-none">
+            <div
+              className={`pointer-events-auto flex items-center gap-3 rounded-2xl border shadow-2xl px-5 py-4 max-w-md w-full sm:w-auto ${isSendingInvoice
+                ? (darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-slate-200")
+                : sendInvoiceResult?.type === "success"
+                  ? (darkMode ? "bg-emerald-950/90 border-emerald-500/40" : "bg-emerald-600 border-emerald-500")
+                  : (darkMode ? "bg-rose-950/90 border-rose-500/40" : "bg-rose-600 border-rose-500")
+                }`}
+            >
+              <div className="shrink-0">
+                {isSendingInvoice ? (
+                  <Mail size={22} className={darkMode ? "text-zinc-300 animate-pulse" : "text-slate-500 animate-pulse"} />
+                ) : sendInvoiceResult?.type === "success" ? (
+                  <CheckCircle2 size={22} className="text-white" />
+                ) : (
+                  <span className="text-2xl leading-none">⚠️</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-black uppercase tracking-widest ${isSendingInvoice ? (darkMode ? "text-zinc-200" : "text-slate-800") : "text-white"}`}>
+                  {isSendingInvoice ? "Envoi de la facture en cours..." : sendInvoiceResult?.type === "success" ? "✓ Facture envoyée !" : "Échec de l'envoi"}
+                </p>
+                {isSendingInvoice ? (
+                  <div className={`mt-2 h-1 w-full rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-slate-200"}`}>
+                    <div className="h-full w-1/3 bg-emerald-500 rounded-full animate-[toastbar_1s_ease-in-out_infinite]" />
+                  </div>
+                ) : (
+                  <p className="text-[9px] font-medium text-white/90 mt-0.5">{sendInvoiceResult?.message}</p>
+                )}
+              </div>
+              {!isSendingInvoice && (
+                <button
+                  onClick={() => setSendInvoiceResult(null)}
+                  className="shrink-0 p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <style>{`
+              @keyframes toastbar {
+                0% { margin-left: 0%; width: 30%; }
+                50% { margin-left: 70%; width: 30%; }
+                100% { margin-left: 0%; width: 30%; }
+              }
+            `}</style>
+          </div>
+        )}
+
         <header
           className={`print:hidden ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm`}
           style={{
