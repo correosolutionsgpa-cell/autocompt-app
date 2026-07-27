@@ -179,6 +179,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     catch { return []; }
   })();
   const [profileSaveStatus, setProfileSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  // Partagee par les deux boutons "Sauvegarder" (profil d'entreprise + Personnalisation
+  // de la facture) — un seul et meme userProfile, donc un seul enregistrement suffit
+  // peu importe lequel des deux boutons on utilise.
+  const handleSaveProfileClick = async () => {
+    playNotificationSound();
+    setProfileSaveStatus("saving");
+    await onSaveProfileNow();
+    setProfileSaveStatus("saved");
+    setTimeout(() => setProfileSaveStatus("idle"), 2500);
+    if (showSettingsTour) {
+      setShowSettingsTour(false);
+      localStorage.setItem("autocompt_settings_tour_shown", "true");
+    }
+  };
   const [vehMarque, setVehMarque] = useState("");
   const [vehModele, setVehModele] = useState("");
   const [vehAnnee, setVehAnnee] = useState("");
@@ -703,17 +717,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="mt-6 flex items-center justify-end gap-3">
             <button
               disabled={profileSaveStatus === "saving"}
-              onClick={async () => {
-                playNotificationSound();
-                setProfileSaveStatus("saving");
-                await onSaveProfileNow();
-                setProfileSaveStatus("saved");
-                setTimeout(() => setProfileSaveStatus("idle"), 2500);
-                if (showSettingsTour) {
-                  setShowSettingsTour(false);
-                  localStorage.setItem("autocompt_settings_tour_shown", "true");
-                }
-              }}
+              onClick={handleSaveProfileClick}
               className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-emerald-600/25 to-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:from-emerald-600/35 hover:to-emerald-500/25 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0_20px_rgba(16,185,129,0.08)] disabled:opacity-60 disabled:cursor-wait"
             >
               <CheckCircle2 size={14} />
@@ -835,6 +839,73 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          {/* Aperçu en direct — reflète exactement la couleur/police/modèle
+              choisis ci-dessus, pour répondre a la question de Fabiola:
+              "comment saurai-je à quoi ressemblera ma facture ?" sans avoir
+              à ouvrir une vraie facture pour vérifier. */}
+          <div className="mt-6 space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
+              Aperçu en direct
+            </label>
+            {(() => {
+              const accent = userProfile.color || "#059669";
+              const fontStack = INVOICE_FONT_STACKS[userProfile.font || "Moderne"] || INVOICE_FONT_STACKS.Moderne;
+              const isBandeau = (userProfile.invoiceTemplate || "epure") === "bandeau";
+              return (
+                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white" style={{ fontFamily: fontStack }}>
+                  {isBandeau ? (
+                    <div className="flex items-center justify-between px-5 py-4" style={{ backgroundColor: accent }}>
+                      <div className="flex items-center gap-3">
+                        {userProfile.logo ? (
+                          <img src={userProfile.logo} alt="Logo" className="w-9 h-9 object-contain rounded-lg bg-white/90 p-1" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-white/20 border border-white/40" />
+                        )}
+                        <p className="text-white font-black uppercase text-xs">{userProfile.nom || "Votre entreprise"}</p>
+                      </div>
+                      <p className="text-white font-black italic uppercase text-sm">Facture</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between px-5 py-4 border-b-2" style={{ borderColor: accent }}>
+                      <div className="flex items-center gap-3">
+                        {userProfile.logo ? (
+                          <img src={userProfile.logo} alt="Logo" className="w-9 h-9 object-contain rounded-lg" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg" style={{ backgroundColor: accent }} />
+                        )}
+                        <p className="text-slate-900 font-black uppercase text-xs">{userProfile.nom || "Votre entreprise"}</p>
+                      </div>
+                      <p className="font-black italic uppercase text-sm" style={{ color: accent }}>Facture</p>
+                    </div>
+                  )}
+                  <div className="p-5 space-y-3">
+                    <div className="h-1.5 w-2/3 rounded bg-slate-100" />
+                    <div className="h-1.5 w-1/2 rounded bg-slate-100" />
+                    <div className="flex justify-between items-center rounded-xl px-3 py-2 text-white text-[10px] font-black uppercase" style={{ backgroundColor: accent }}>
+                      <span>Total</span>
+                      <span>300.00 $</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Save CTA — dupliqué ici: le premier bouton (haut de page) est
+              hors de vue une fois qu'on choisit couleur/police/modèle plus
+              bas, Fabiola n'avait alors aucune confirmation que son choix
+              avait été enregistré. */}
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <button
+              disabled={profileSaveStatus === "saving"}
+              onClick={handleSaveProfileClick}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-gradient-to-r from-amber-600/25 to-orange-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:from-amber-600/35 hover:to-orange-500/25 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <CheckCircle2 size={14} />
+              {profileSaveStatus === "saving" ? "Enregistrement..." : "Sauvegarder la personnalisation"}
+            </button>
           </div>
         </div>
 
