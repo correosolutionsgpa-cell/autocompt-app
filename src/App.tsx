@@ -17817,210 +17817,188 @@ Ceci est un message automatisé généré par AutoCompt.`;
                         </button>
                       </div>
                       <div className="p-6 md:p-8 flex-1 overflow-y-auto pr-2 scrollbar-thin text-[10px] print:max-h-none print:overflow-visible print:p-0">
-                        <div id="invoice-content" className={`space-y-6 p-4 print:p-0 print:bg-white print:text-black print:m-0 print:w-full ${darkMode ? "bg-zinc-950 text-white" : "bg-white text-slate-900"}`}>
-                          {/* Header Facture Dynamic */}
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-2">
-                              {userProfile.logo ? (
-                                <img
-                                  src={userProfile.logo}
-                                  alt="Logo"
-                                  className="w-16 h-16 object-contain rounded-xl shadow-sm"
-                                />
-                              ) : (
-                                <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-[10px] text-white font-black italic shadow-lg">
-                                  LOGO
-                                </div>
-                              )}
-                              <div className="space-y-0.5">
-                                <p
-                                  className={`font-black uppercase text-sm leading-tight ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                                >
-                                  {userProfile.nom}
-                                </p>
-                                <p
-                                  className={`uppercase text-[7px] leading-tight font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                                >
-                                  {userProfile.adresse}
-                                  <br />
-                                  {userProfile.tel && (
-                                    <span>
-                                      Tél: {userProfile.tel}
-                                      <br />
-                                    </span>
-                                  )}
-                                  {userProfile.site && (
-                                    <span>
-                                      {userProfile.site}
-                                      <br />
-                                    </span>
-                                  )}
-                                  {userProfile.neq && (
-                                    <span>NEQ: {userProfile.neq}</span>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <h4
-                                className={`text-2xl font-black italic uppercase leading-none tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                              >
-                                {(selectedFac as any).tipoDoc || "Facture"}
-                              </h4>
-                              <p className="font-black text-emerald-600 mt-2 text-base leading-none">
-                                {(selectedFac as any).id}
-                              </p>
-                              <p
-                                className={`mt-1 font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                              >
-                                Émise le: {(selectedFac as any).fecha}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Client Expanded Display */}
-                          <div
-                            className={`p-4 rounded-2xl ${darkMode ? "bg-zinc-900" : "bg-slate-50"}`}
-                          >
-                            <p
-                              className={`text-[7px] font-black uppercase mb-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                            >
-                              Facturé à:
-                            </p>
-                            {(() => {
-                              const clientInfo =
-                                clientes.find(
-                                  (c) => c.nom === (selectedFac as any).cliente,
-                                ) || (selectedFac as any);
-                              return (
-                                <div className="space-y-0.5">
-                                  <p
-                                    className={`font-black text-sm italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                                  >
-                                    {clientInfo.nom || clientInfo.cliente}
-                                  </p>
-                                  {clientInfo.adresse && (
-                                    <p
-                                      className={`text-[8px] font-bold uppercase leading-tight ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
-                                    >
-                                      {clientInfo.adresse}
-                                    </p>
-                                  )}
-                                  {(clientInfo.email ||
-                                    (selectedFac as any).email) && (
-                                      <p
-                                        className={`text-[8px] font-bold lowercase opacity-70 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                        {/* Document professionnel — toujours rendu en theme clair,
+                            peu importe le mode sombre de l'appli: c'est un document
+                            formel envoye a un client / imprime sur papier blanc, pas
+                            un ecran de l'appli. Avant, le texte heritait des couleurs
+                            claires du mode sombre (text-zinc-100 etc.) sur un fond
+                            d'impression blanc — illisible sur papier en mode sombre. */}
+                        <div id="invoice-content" className="space-y-6 p-6 print:p-0 bg-white text-slate-900 rounded-2xl print:rounded-none">
+                          {(() => {
+                            const accent = userProfile.color || "#059669";
+                            const statusLabel = (selectedFac as any).status;
+                            return (
+                              <>
+                                {/* Header */}
+                                <div className="flex justify-between items-start gap-4 pb-6 border-b-2" style={{ borderColor: accent }}>
+                                  <div className="space-y-2 min-w-0">
+                                    {userProfile.logo ? (
+                                      <img
+                                        src={userProfile.logo}
+                                        alt="Logo"
+                                        className="w-16 h-16 object-contain rounded-xl"
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-12 h-12 rounded-2xl flex items-center justify-center text-[10px] text-white font-black italic shadow-lg"
+                                        style={{ backgroundColor: accent }}
                                       >
-                                        {clientInfo.email ||
-                                          (selectedFac as any).email}
-                                      </p>
+                                        LOGO
+                                      </div>
                                     )}
-                                  {clientInfo.neq && (
-                                    <p
-                                      className={`text-[7px] font-bold uppercase mt-1 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}
+                                    <div className="space-y-0.5">
+                                      <p className="font-black uppercase text-sm leading-tight text-slate-900">
+                                        {userProfile.nom || "Votre entreprise"}
+                                      </p>
+                                      <p className="text-[9px] leading-relaxed font-medium text-slate-500">
+                                        {userProfile.adresse}
+                                        {userProfile.tel && (
+                                          <>
+                                            <br />
+                                            Tél : {userProfile.tel}
+                                          </>
+                                        )}
+                                        {userProfile.site && (
+                                          <>
+                                            <br />
+                                            {userProfile.site}
+                                          </>
+                                        )}
+                                      </p>
+                                      {userProfile.neq && (
+                                        <p className="text-[8px] font-bold text-slate-400">NEQ : {userProfile.neq}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <h4
+                                      className="text-2xl font-black italic uppercase leading-none tracking-tighter"
+                                      style={{ color: accent }}
                                     >
-                                      NEQ (Client): {clientInfo.neq}
+                                      {(selectedFac as any).tipoDoc || "Facture"}
+                                    </h4>
+                                    <p className="font-black mt-2 text-base leading-none text-slate-900">
+                                      {(selectedFac as any).id}
+                                    </p>
+                                    <p className="mt-1 text-[9px] font-bold text-slate-400">
+                                      Émise le : {(selectedFac as any).fecha}
+                                    </p>
+                                    {statusLabel && (
+                                      <span
+                                        className="inline-block mt-2 px-2.5 py-1 rounded-full text-[8px] font-black uppercase"
+                                        style={{ backgroundColor: `${accent}1A`, color: accent }}
+                                      >
+                                        {statusLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Facturé à */}
+                                <div className="p-4 rounded-2xl bg-slate-50">
+                                  <p className="text-[8px] font-black uppercase mb-1 text-slate-400">Facturé à</p>
+                                  {(() => {
+                                    const clientInfo =
+                                      clientes.find(
+                                        (c) => c.nom === (selectedFac as any).cliente,
+                                      ) || (selectedFac as any);
+                                    return (
+                                      <div className="space-y-0.5">
+                                        <p className="font-black text-sm italic text-slate-900">
+                                          {clientInfo.nom || clientInfo.cliente}
+                                        </p>
+                                        {clientInfo.adresse && (
+                                          <p className="text-[9px] font-medium text-slate-500">{clientInfo.adresse}</p>
+                                        )}
+                                        {(clientInfo.email || (selectedFac as any).email) && (
+                                          <p className="text-[9px] font-medium lowercase text-slate-500">
+                                            {clientInfo.email || (selectedFac as any).email}
+                                          </p>
+                                        )}
+                                        {clientInfo.neq && (
+                                          <p className="text-[8px] font-bold text-slate-300">NEQ (Client) : {clientInfo.neq}</p>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* Table */}
+                                <table className="w-full text-left border-collapse">
+                                  <thead>
+                                    <tr className="text-[8px] font-black uppercase" style={{ backgroundColor: `${accent}12`, color: accent }}>
+                                      <th className="py-2.5 px-3 rounded-l-lg font-black">Description</th>
+                                      <th className="py-2.5 px-3 text-center font-black w-16">Qté</th>
+                                      <th className="py-2.5 px-3 text-right rounded-r-lg font-black w-24">Total</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(
+                                      (selectedFac as any).items || [
+                                        {
+                                          descripcion: "Services Professionnels",
+                                          cantidad: 1,
+                                          precioUnitario: (selectedFac as any).subtotal,
+                                        },
+                                      ]
+                                    ).map((item: any, idx: number) => (
+                                      <tr key={idx} className="border-b border-slate-100">
+                                        <td className="py-3 px-3 font-semibold leading-snug text-slate-900 text-xs">
+                                          {item.descripcion}
+                                        </td>
+                                        <td className="py-3 px-3 text-center font-bold text-slate-700 text-xs">
+                                          {item.cantidad}
+                                        </td>
+                                        <td className="py-3 px-3 text-right font-black text-slate-900 text-xs">
+                                          {(item.cantidad * item.precioUnitario).toFixed(2)}$
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+
+                                {/* Totaux */}
+                                <div className="space-y-2 pt-2">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">Sous-total</span>
+                                    <span className="font-bold text-slate-900">{(selectedFac as any).subtotal.toFixed(2)}$</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">TPS ({userProfile.tpsRate}%)</span>
+                                    <span className="font-bold text-slate-700">{(selectedFac as any).tps.toFixed(2)}$</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">TVQ ({userProfile.tvqRate}%)</span>
+                                    <span className="font-bold text-slate-700">{(selectedFac as any).tvq.toFixed(2)}$</span>
+                                  </div>
+                                  <div
+                                    className="flex justify-between items-center text-white rounded-2xl px-4 py-3 mt-3"
+                                    style={{ backgroundColor: accent }}
+                                  >
+                                    <span className="text-xs font-black uppercase tracking-wide">Total</span>
+                                    <span className="text-lg font-black italic">{(selectedFac as any).total.toFixed(2)}$</span>
+                                  </div>
+                                </div>
+
+                                {/* Footer fiscal */}
+                                <div className="pt-4 mt-2 border-t border-slate-100 space-y-1">
+                                  {(userProfile.tps || userProfile.tvq) && (
+                                    <p className="text-[8px] font-bold uppercase text-slate-400">
+                                      {userProfile.tps && <>TPS : {userProfile.tps}</>}
+                                      {userProfile.tps && userProfile.tvq && "  ·  "}
+                                      {userProfile.tvq && <>TVQ : {userProfile.tvq}</>}
                                     </p>
                                   )}
+                                  {userProfile.pago && (
+                                    <p className="text-[9px] italic whitespace-pre-line text-slate-500">{userProfile.pago}</p>
+                                  )}
+                                  <p className="text-[8px] font-semibold text-center pt-3" style={{ color: accent }}>
+                                    Merci de votre confiance !
+                                  </p>
                                 </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Table simple pour l'aperçu */}
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr
-                                className={`border-b text-[7px] font-black uppercase ${darkMode ? "border-zinc-900 text-zinc-700" : "text-slate-300"}`}
-                              >
-                                <th className="pb-2 font-black">Description</th>
-                                <th className="text-center pb-2 font-black">
-                                  Qté
-                                </th>
-                                <th className="text-right pb-2 font-black">
-                                  Total
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(
-                                (selectedFac as any).items || [
-                                  {
-                                    descripcion: "Services Professionnels",
-                                    cantidad: 1,
-                                    precioUnitario: (selectedFac as any).subtotal,
-                                  },
-                                ]
-                              ).map((item: any, idx: number) => (
-                                <tr
-                                  key={idx}
-                                  className={`border-b ${darkMode ? "border-zinc-900/50 text-zinc-300" : "border-slate-50 text-slate-900"}`}
-                                >
-                                  <td className="py-2.5 font-bold leading-tight pr-4">
-                                    {item.descripcion}
-                                  </td>
-                                  <td className="py-2.5 text-center font-bold">
-                                    {item.cantidad}
-                                  </td>
-                                  <td
-                                    className={`py-2.5 text-right font-black italic ${darkMode ? "text-zinc-100" : ""}`}
-                                  >
-                                    {(
-                                      item.cantidad * item.precioUnitario
-                                    ).toFixed(2)}
-                                    $
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-
-                          {/* Totaux */}
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span
-                                className={`${darkMode ? "text-zinc-500" : ""}`}
-                              >
-                                Sous-total
-                              </span>
-                              <span
-                                className={`font-bold ${darkMode ? "text-zinc-100" : ""}`}
-                              >
-                                {(selectedFac as any).subtotal.toFixed(2)}$
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-emerald-600">
-                              <span>TPS ({userProfile.tpsRate}%)</span>
-                              <span className="font-bold">
-                                {(selectedFac as any).tps.toFixed(2)}$
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-blue-600">
-                              <span>TVQ ({userProfile.tvqRate}%)</span>
-                              <span className="font-bold">
-                                {(selectedFac as any).tvq.toFixed(2)}$
-                              </span>
-                            </div>
-                            <div
-                              className={`flex justify-between text-lg font-black italic border-t pt-2 ${darkMode ? "border-zinc-900 text-zinc-100" : "text-slate-900"}`}
-                            >
-                              <span>TOTAL</span>
-                              <span>
-                                {(selectedFac as any).total.toFixed(2)}$
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Fiscal Infos */}
-                          <div
-                            className={`pt-4 text-[7px] font-bold uppercase leading-relaxed border-t ${darkMode ? "border-zinc-900 text-zinc-600" : "text-slate-400"}`}
-                          >
-                            <p>TPS: {userProfile.tps}</p>
-                            <p>TVQ: {userProfile.tvq}</p>
-                            <div className="mt-4 italic whitespace-pre-line">
-                              {userProfile.pago}
-                            </div>
-                          </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                       <div className="shrink-0 p-6 bg-slate-900 flex flex-col space-y-3 print:hidden">
