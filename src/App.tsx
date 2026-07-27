@@ -17528,9 +17528,14 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </button>
           </main>
         ) : (
-          <div className="flex-1 overflow-y-auto pb-64 print:hidden">
-            {/* Configuration de l'émetteur Collapsible */}
-            <div className="p-4 pb-0">
+          <div className="flex-1 overflow-y-auto pb-64">
+            {/* Configuration de l'émetteur Collapsible — print:hidden ici et pas
+                sur le conteneur parent: le Preview Modal (#invoice-content) vit
+                plus bas dans le meme arbre JSX, et un ancetre display:none
+                masquerait aussi le modal a l'impression, meme si LUI a ses
+                propres classes print:*. D'ou le bug rapporte par Fabiola
+                (apercu avant impression totalement blanc). */}
+            <div className="p-4 pb-0 print:hidden">
               <div
                 className={`rounded-[32px] border shadow-sm overflow-hidden transition-all duration-300 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
               >
@@ -17646,7 +17651,7 @@ Ceci est un message automatisé généré par AutoCompt.`;
             </div>
 
             {subVistaFactura === "clients" ? (
-              <main className="p-4 space-y-6 animate-in slide-in-from-bottom duration-300">
+              <main className="p-4 space-y-6 animate-in slide-in-from-bottom duration-300 print:hidden">
                 <div
                   className={`p-6 rounded-[32px] border shadow-sm space-y-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
                 >

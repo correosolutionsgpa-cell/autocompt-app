@@ -697,24 +697,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
 
-            {/* ── Courriel ─────────────────────────────────────────────── */}
-            <div className="space-y-1 text-left">
+            {/* ── Instructions de paiement ─────────────────────────────── */}
+            <div className="md:col-span-2 space-y-1 text-left">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
                 <Mail size={11} className="text-violet-500" />
-                Courriel de facturation
+                Instructions de paiement (Virement Interac, coordonnées bancaires...)
               </label>
-              <input
+              <textarea
                 id="settings-email"
-                type="email"
                 value={userProfile.pago || ""}
                 onChange={(e) => {
                   setUserProfile((prev: any) => ({ ...prev, pago: e.target.value }));
                   localStorage.setItem("autocompt_company_email", e.target.value);
                 }}
-                placeholder="Ex: info@entreprise.com"
-                className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-violet-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                placeholder={"Ex : Virement Interac à info@entreprise.com\nMot de passe : ..."}
+                rows={4}
+                className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold leading-relaxed resize-y transition-all focus:ring-2 focus:ring-violet-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
                   }`}
               />
+              <p className="text-[8px] font-medium text-slate-400 dark:text-zinc-600 pl-2">
+                Utilisez la touche Entrée pour aller à la ligne — ce texte apparaît tel quel au bas de vos factures.
+              </p>
             </div>
 
           </div>{/* /.grid */}
