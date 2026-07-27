@@ -1719,6 +1719,7 @@ const App = () => {
       nom: "Jean Tremblay",
       adresse: "123 Rue de la Montagne, Montréal",
       email: "jean.tremblay@email.com",
+      tel: "",
       neq: "1112223334",
     },
     {
@@ -1726,6 +1727,7 @@ const App = () => {
       nom: "Marie Cote",
       adresse: "456 Boul. Taschereau, Longueuil",
       email: "marie.cote@email.com",
+      tel: "",
       neq: "2223334445",
     },
     {
@@ -1733,6 +1735,7 @@ const App = () => {
       nom: "Proprio Plus Inc.",
       adresse: "789 Rue Sherbrooke, Montréal",
       email: "contact@proprioplus.ca",
+      tel: "",
       neq: "3334445556",
     },
   ]);
@@ -1740,6 +1743,7 @@ const App = () => {
     nom: "",
     adresse: "",
     email: "",
+    tel: "",
     neq: "",
   });
   const [newInvoiceData, setNewInvoiceData] = useState({
@@ -17747,7 +17751,7 @@ const App = () => {
                     <button
                       onClick={() => {
                         setEditingClientId(null);
-                        setNewClient({ nom: "", adresse: "", email: "", neq: "" });
+                        setNewClient({ nom: "", adresse: "", email: "", tel: "", neq: "" });
                         setShowAddClientModal(true);
                       }}
                       className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase italic ${darkMode ? "bg-zinc-100 text-black" : "bg-slate-900 text-white"}`}
@@ -17785,6 +17789,13 @@ const App = () => {
                             ⚠ Aucun courriel — factures non envoyables
                           </p>
                         )}
+                        {c.tel && (
+                          <p
+                            className={`text-[8px] font-bold mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                          >
+                            {c.tel}
+                          </p>
+                        )}
                         {c.neq && (
                           <p
                             className={`text-[7px] font-bold uppercase mt-0.5 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}
@@ -17799,6 +17810,7 @@ const App = () => {
                             nom: c.nom || "",
                             adresse: c.adresse || "",
                             email: c.email || "",
+                            tel: c.tel || "",
                             neq: c.neq || "",
                           });
                           setEditingClientId(c.id);
@@ -18414,8 +18426,10 @@ const App = () => {
                               nom: "",
                               adresse: "",
                               email: "",
+                              tel: "",
                               neq: "",
                             });
+                            setEditingClientId(null);
                             setShowAddClientModal(true);
                             playNotificationSound();
                           }}
@@ -18676,6 +18690,7 @@ const App = () => {
                                     adresse:
                                       newInvoiceData.nouveauClientAdresse,
                                     email: newInvoiceData.nouveauClientEmail,
+                                    tel: "",
                                     neq: "",
                                   };
                                   setClientes((prev) => [
@@ -18821,15 +18836,16 @@ const App = () => {
                         <label
                           className={`text-[8px] font-black uppercase italic ml-2 tracking-widest leading-none ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
                         >
-                          NEQ
+                          Téléphone
                         </label>
                         <input
-                          value={newClient.neq}
+                          type="tel"
+                          value={newClient.tel}
                           onChange={(e) =>
-                            setNewClient({ ...newClient, neq: e.target.value })
+                            setNewClient({ ...newClient, tel: e.target.value })
                           }
                           className={`w-full p-5 rounded-3xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-[#059669] font-sans ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800 placeholder-zinc-700" : "bg-slate-50 text-slate-900 border-slate-100"}`}
-                          placeholder="1112223334"
+                          placeholder="(450) 123-4567"
                         />
                       </div>
                       <div className="space-y-1">
@@ -18850,6 +18866,21 @@ const App = () => {
                           placeholder="jean@email.com"
                         />
                       </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label
+                        className={`text-[8px] font-black uppercase italic ml-2 tracking-widest leading-none ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
+                      >
+                        NEQ (optionnel — seulement si le client est une entreprise)
+                      </label>
+                      <input
+                        value={newClient.neq}
+                        onChange={(e) =>
+                          setNewClient({ ...newClient, neq: e.target.value })
+                        }
+                        className={`w-full p-5 rounded-3xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-[#059669] font-sans ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-800 placeholder-zinc-700" : "bg-slate-50 text-slate-900 border-slate-100"}`}
+                        placeholder="1112223334"
+                      />
                     </div>
                   </div>
 
@@ -18886,6 +18917,7 @@ const App = () => {
                         nom: "",
                         adresse: "",
                         email: "",
+                        tel: "",
                         neq: "",
                       });
                     }}
