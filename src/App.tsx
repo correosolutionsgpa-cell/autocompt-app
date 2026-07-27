@@ -18447,18 +18447,16 @@ Ceci est un message automatisé généré par AutoCompt.`;
                             }}
                             rows={2}
                           />
-                          <div className="grid grid-cols-3 gap-3">
-                            <div
-                              className={`space-y-1 col-span-1 border-r pr-3 ${darkMode ? "border-zinc-800" : "border-slate-100"}`}
-                            >
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="space-y-1">
                               <label
-                                className={`text-[7px] font-black uppercase italic ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                className={`text-[7px] font-black uppercase italic pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                               >
                                 Qté
                               </label>
                               <input
                                 type="number"
-                                className={`w-full p-1 bg-transparent text-sm font-bold border-none outline-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                                className={`w-full p-3 rounded-xl border text-sm font-bold outline-none focus:ring-1 focus:ring-emerald-500 ${darkMode ? "bg-zinc-900 text-zinc-100 border-zinc-700" : "bg-slate-50 text-slate-900 border-slate-200"}`}
                                 value={item.cantidad}
                                 onChange={(e) => {
                                   const newItems = [...items];
@@ -18468,25 +18466,28 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 }}
                               />
                             </div>
-                            <div
-                              className={`space-y-1 col-span-1 border-r pr-3 ${darkMode ? "border-zinc-800" : "border-slate-100"}`}
-                            >
+                            <div className="space-y-1">
                               <label
-                                className={`text-[7px] font-black uppercase italic ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                                className={`text-[7px] font-black uppercase italic pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                               >
                                 Prix Unitaire
                               </label>
-                              <input
-                                type="number"
-                                className={`w-full p-1 bg-transparent text-sm font-bold border-none outline-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                                value={item.precioUnitario || ""}
-                                onChange={(e) => {
-                                  const newItems = [...items];
-                                  newItems[idx].precioUnitario =
-                                    parseFloat(e.target.value) || 0;
-                                  setItems(newItems);
-                                }}
-                              />
+                              <div
+                                className={`flex items-center rounded-xl border focus-within:ring-1 focus-within:ring-emerald-500 ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-slate-50 border-slate-200"}`}
+                              >
+                                <span className={`pl-3 text-sm font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>$</span>
+                                <input
+                                  type="number"
+                                  className={`w-full p-3 pl-1 bg-transparent text-sm font-bold outline-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                                  value={item.precioUnitario || ""}
+                                  onChange={(e) => {
+                                    const newItems = [...items];
+                                    newItems[idx].precioUnitario =
+                                      parseFloat(e.target.value) || 0;
+                                    setItems(newItems);
+                                  }}
+                                />
+                              </div>
                             </div>
                             <button
                               onClick={() => {
@@ -18494,9 +18495,10 @@ Ceci est un message automatisé généré par AutoCompt.`;
                                 newItems[idx].taxable = !newItems[idx].taxable;
                                 setItems(newItems);
                               }}
-                              className={`col-span-1 flex items-center justify-center rounded-xl text-[6px] font-black uppercase italic tracking-tighter ${item.taxable ? (darkMode ? "bg-emerald-950/30 text-emerald-500" : "bg-emerald-50 text-emerald-600") : darkMode ? "bg-zinc-900 text-zinc-700" : "bg-slate-50 text-slate-300"}`}
+                              className={`col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-xl border-2 py-3 text-[9px] font-black uppercase tracking-wide transition-all ${item.taxable ? "bg-emerald-500 border-emerald-500 text-white" : darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-400" : "bg-white border-slate-300 text-slate-500"}`}
                             >
-                              {item.taxable ? "Taxable (QC)" : "Non Taxable"}
+                              {item.taxable ? <CheckCircle2 size={14} /> : <span className="w-3.5 h-3.5 rounded-full border-2 border-current" />}
+                              {item.taxable ? "Taxable (QC)" : "Non taxable"}
                             </button>
                           </div>
                         </div>
