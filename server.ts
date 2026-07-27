@@ -1166,22 +1166,30 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
   app.post("/api/send-client-invoice-email", async (req, res) => {
     try {
       const auth = await verifyRequestAuth(req.headers.authorization);
-      if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
+      if (!auth) {
+        console.error("[send-client-invoice-email] 401: no/invalid auth token");
+        return res.status(401).json({ success: false, error: "Non authentifié" });
+      }
 
       const {
         pdfBase64, clientEmail, clientName, companyName, companyColor,
         invoiceId, invoiceTotal, invoiceDate, replyToEmail, docType,
       } = req.body;
 
+      console.log(`[send-client-invoice-email] request from uid=${auth.uid} -> clientEmail=${clientEmail} invoiceId=${invoiceId} pdfBase64Length=${pdfBase64 ? pdfBase64.length : 0}`);
+
       if (!pdfBase64 || !clientEmail || !invoiceId) {
+        console.error(`[send-client-invoice-email] 400: missing required field(s) — pdfBase64=${!!pdfBase64} clientEmail=${!!clientEmail} invoiceId=${!!invoiceId}`);
         return res.status(400).json({ success: false, error: "pdfBase64, clientEmail et invoiceId sont requis" });
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+        console.error(`[send-client-invoice-email] 400: invalid clientEmail format: ${clientEmail}`);
         return res.status(400).json({ success: false, error: "Courriel du client invalide" });
       }
 
       const resendApiKey = process.env.RESEND_API_KEY;
       if (!resendApiKey) {
+        console.error("[send-client-invoice-email] 500: RESEND_API_KEY not configured");
         return res.status(500).json({ success: false, error: "RESEND_API_KEY not configured" });
       }
 
@@ -1260,13 +1268,15 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
 
       if (!resp.ok) {
         const errBody = await resp.json().catch(() => ({}));
-        console.error("[Client invoice email] Resend error:", errBody);
+        console.error(`[send-client-invoice-email] Resend rejected (status ${resp.status}):`, JSON.stringify(errBody));
         return res.status(502).json({ success: false, error: "Resend a refusé l'envoi du courriel" });
       }
 
+      const resendData = await resp.json().catch(() => ({}));
+      console.log(`[send-client-invoice-email] sent OK — resend id=${resendData?.id} to=${clientEmail}`);
       res.json({ success: true });
     } catch (error: any) {
-      console.error("send-client-invoice-email error:", error);
+      console.error("[send-client-invoice-email] uncaught exception:", error?.message || error, error?.stack);
       res.status(500).json({ success: false, error: error.message });
     }
   });
