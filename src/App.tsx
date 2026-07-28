@@ -3842,23 +3842,22 @@ const App = () => {
   // defaut de Tailwind CSS v4, et echoue avec "Attempting to parse an
   // unsupported color function" des qu'un seul element de la page (meme un
   // ancetre du modal) utilise une classe de couleur Tailwind standard.
-  // html2canvas-pro est un fork qui ajoute ce support, en gardant la meme
-  // API globale `html2canvas` — remplace html2pdf.js par un appel manuel
-  // html2canvas-pro + jsPDF (jsPDF est deja une dependance npm du projet,
-  // deja utilisee telle quelle dans SuperAdminPanel.tsx).
+  // html2canvas-pro est un fork qui ajoute ce support — remplace html2pdf.js
+  // par un appel manuel html2canvas-pro + jsPDF (jsPDF est deja une
+  // dependance npm du projet, deja utilisee telle quelle dans
+  // SuperAdminPanel.tsx). La version recente d'html2canvas-pro ne publie
+  // plus de bundle UMD pret pour <script src>, seulement des modules ESM —
+  // import() dynamique direct de l'URL CDN au lieu d'un tag <script> +
+  // variable globale window.html2canvas.
   const generateInvoicePdfDoc = async (): Promise<jsPDF> => {
-    if (!(window as any).html2canvas) {
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas.min.js";
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load html2canvas-pro"));
-        document.body.appendChild(script);
-      });
-    }
+    // Passe par une variable (pas un litteral inline) pour que TypeScript ne
+    // tente pas de resoudre cette URL comme un module local a la compilation.
+    const html2canvasProUrl = "https://cdn.jsdelivr.net/npm/html2canvas-pro@2.3.2/dist/html2canvas-pro.esm.js";
+    const html2canvasMod: any = await import(/* @vite-ignore */ html2canvasProUrl);
+    const html2canvas = html2canvasMod.default;
     const element = document.getElementById("invoice-content");
     if (!element) throw new Error("Invoice content not found");
-    const canvas = await (window as any).html2canvas(element, { scale: 2 });
+    const canvas = await html2canvas(element, { scale: 2 });
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
     const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
     const margin = 0.5;
