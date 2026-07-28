@@ -723,8 +723,11 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     "Chambres individuelles (Colocation)" ||
                   plexManagementForm.typeLocation === "Habitation/Chambre"
                 ) {
-                  for (const c of plexManagementForm.chambres || []) {
-                    if (c.status === "Actif" && (!c.locataire || !c.montant)) {
+                  // Validate against units[] (the field the "Configuration des
+                  // Unités" grid actually edits) — vacant units are exempt,
+                  // only occupied ("Actif") units need a tenant + rent.
+                  for (const u of plexManagementForm.units || []) {
+                    if (u.isActive && (!u.tenantName || !u.monthlyRent)) {
                       allRoomsValid = false;
                     }
                   }
