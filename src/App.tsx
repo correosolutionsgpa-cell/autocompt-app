@@ -17665,21 +17665,6 @@ const App = () => {
                       )
                     </span>
                   </button>
-                  <button
-                    onClick={() => {
-                      // Le formulaire de depense n'existe que dans l'ecran
-                      // Tenue de Livres (RapportComptable) — ce bouton ne
-                      // faisait que changer un state jamais lu depuis
-                      // Facturation, donc rien ne s'affichait au clic.
-                      // Navigue vers l'ecran ou le modal existe reellement.
-                      setVista("rapports");
-                      setShowManualExpenseModal(true);
-                    }}
-                    className={`flex-1 py-5 rounded-[32px] shadow-2xl flex items-center justify-center space-x-2 text-[9px] font-black uppercase italic border ${darkMode ? "bg-zinc-900 text-rose-500 border-zinc-800" : "bg-white text-rose-600 border-slate-200"}`}
-                  >
-                    <Plus size={18} />
-                    <span>Ajouter manuellement (Dépense)</span>
-                  </button>
                 </div>
 
                 {/* Preview Modal */}
