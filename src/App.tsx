@@ -3857,19 +3857,23 @@ const App = () => {
     const html2canvas = html2canvasMod.default;
     const element = document.getElementById("invoice-content");
     if (!element) throw new Error("Invoice content not found");
-    // scale 4 (au lieu de 2) + PNG (sans perte, au lieu de JPEG) — Fabiola a
-    // signale que la facture etait floue/pixelisee au zoom. La facture est
-    // surtout du texte sur fond blanc, PNG la compresse tres bien (pas plus
-    // lourd que le JPEG pour ce type de contenu) sans les artefacts de
-    // compression avec perte qui rendent le texte flou sur les bords.
-    const canvas = await html2canvas(element, { scale: 4 });
-    const imgData = canvas.toDataURL("image/png");
+    // scale 4 + PNG (tente pour corriger le flou signale par Fabiola) a
+    // produit un PDF trop volumineux sur mobile, depassant la limite dure de
+    // 4.5 Mo par requete des fonctions serverless Vercel (non configurable
+    // via express.json({limit}) — c'est une limite de plateforme, pas de
+    // l'appli) — echec silencieux avec un message d'erreur illisible
+    // ("Unexpected token 'R', is not valid JSON", en realite une reponse
+    // "Request Entity Too Large" non-JSON de Vercel). scale 3 + JPEG qualite
+    // 0.95 reste nettement plus net que l'original (scale 2, qualite 0.98)
+    // tout en gardant une marge de securite confortable sous cette limite.
+    const canvas = await html2canvas(element, { scale: 3 });
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
     const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
     const margin = 0.5;
     const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
     const maxContentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
     const imgHeight = Math.min((canvas.height * contentWidth) / canvas.width, maxContentHeight);
-    pdf.addImage(imgData, "PNG", margin, margin, contentWidth, imgHeight);
+    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight);
     return pdf;
   };
 
@@ -3910,7 +3914,22 @@ const App = () => {
           docType: fac.tipoDoc || "Facture",
         }),
       });
-      const data = await resp.json();
+      // La reponse n'est pas toujours du JSON — une requete rejetee avant
+      // meme d'atteindre le code de l'appli (ex: "Request Entity Too Large"
+      // de la plateforme Vercel si le PDF est trop volumineux) renvoie du
+      // texte brut, et .json() plantait alors avec une erreur illisible
+      // ("Unexpected token... is not valid JSON") au lieu du vrai probleme.
+      const rawBody = await resp.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawBody);
+      } catch {
+        throw new Error(
+          resp.status === 413 || /entity too large/i.test(rawBody)
+            ? "La facture est trop volumineuse pour être envoyée. Réessayez — un correctif a réduit sa taille."
+            : `Erreur inattendue du serveur (${resp.status}). Réessayez dans un instant.`
+        );
+      }
       if (!resp.ok || !data.success) throw new Error(data.error || `Erreur ${resp.status}`);
       setSendInvoiceResult({
         type: "success",
