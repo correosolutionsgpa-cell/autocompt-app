@@ -6295,10 +6295,15 @@ const App = () => {
           "Electricité",
           "Frais de gestion / Exploitation",
           "Relevé 31",
+          "Essence / Carburant",
+          "Entretien Véhicule",
+          "Assurance auto",
+          "Déplacements / Automobile",
+          "Immatriculation / Permis",
         ];
 
-        const matchAppCategory = (rawCat: string): string => {
-          if (!rawCat) return "À classer";
+        const matchAppCategory = (rawCat: string): { category: string, catConfidence: 'high' | 'medium' | 'low' } => {
+          if (!rawCat) return { category: "À classer", catConfidence: 'low' };
           const normalizedStr = rawCat
             .toLowerCase()
             .normalize("NFD")
@@ -6307,7 +6312,7 @@ const App = () => {
             .trim();
 
           if (/releve\s*31/i.test(normalizedStr)) {
-            return "Relevé 31";
+            return { category: "Relevé 31", catConfidence: 'high' };
           }
 
           // 1. Direct match on normalized strings
@@ -6323,27 +6328,46 @@ const App = () => {
               normalizedStr.includes(vcNorm) ||
               vcNorm.includes(normalizedStr)
             ) {
-              return vc;
+              return { category: vc, catConfidence: 'high' };
             }
           }
 
-          // 2. Keyword mapping in French / English
+          // 2. Keyword mapping in French / English (Medium Confidence)
           if (
             /telecom|internet|mobile|phone|telephone|bell|videotron|cellulaire|wifi/i.test(
               normalizedStr,
             )
           ) {
-            return "Télécommunications";
+            return { category: "Télécommunications", catConfidence: 'medium' };
           }
           if (/bureau|home\s*office|domicile/i.test(normalizedStr)) {
-            return "Bureau à domicile";
+            return { category: "Bureau à domicile", catConfidence: 'medium' };
           }
           if (
             /equipement|equipment|outil|appareil|ordi|macbook|computer|laptop|it|tech/i.test(
               normalizedStr,
             )
           ) {
-            return "Équipement";
+            return { category: "Équipement", catConfidence: 'medium' };
+          }
+          // Vehicule — doit passer AVANT "Assurance" (sinon "assurance auto"
+          // tombe dans la categorie generique "Assurance") et avant "Frais de
+          // gestion" (dont le mot-cle generique "frais" attraperait "frais de
+          // stationnement"/"frais de deplacement").
+          if (/essence|carburant|gas\s*station|petro|esso|shell|ultramar|couche\s*tard|circle\s*k/i.test(normalizedStr)) {
+            return { category: "Essence / Carburant", catConfidence: 'medium' };
+          }
+          if (/pneu|tire|garage|mecanicien|vidange|huile|carwash|lave\s*auto/i.test(normalizedStr)) {
+            return { category: "Entretien Véhicule", catConfidence: 'medium' };
+          }
+          if (/assurance\s*auto|car\s*insurance|assurance\s*vehicule/i.test(normalizedStr)) {
+            return { category: "Assurance auto", catConfidence: 'medium' };
+          }
+          if (/stationnement|parking|peage|toll|kilometrage|deplacement.*auto|auto.*deplacement/i.test(normalizedStr)) {
+            return { category: "Déplacements / Automobile", catConfidence: 'medium' };
+          }
+          if (/saaq|immatriculation|permis\s*de\s*conduire/i.test(normalizedStr)) {
+            return "Immatriculation / Permis";
           }
           if (
             /reparation|entretien|maintenance|repairs|repair/i.test(
@@ -6384,7 +6408,9 @@ const App = () => {
           return "À classer";
         };
 
-        const finalCatMapped = matchAppCategory(extractedCat);
+        const categoryMatchResult = matchAppCategory(extractedCat);
+        const finalCatMapped = categoryMatchResult.category;
+        const finalCatConfidence = categoryMatchResult.catConfidence;
 
         // ── S.O.F.I. Address → Building Matcher ───────────────────────────────
         // Normalises an address string to lowercase alphanum tokens for fuzzy compare
@@ -6497,6 +6523,7 @@ const App = () => {
           fecha: extractedDate,
           fournisseur: supplierName,
           cat: finalCatMapped,
+          catConfidence: finalCatConfidence,
           subtotal: subtotalToUse,
           tps: tpsToUse,
           tvq: tvqToUse,
