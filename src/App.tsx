@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
+import jsPDF from "jspdf";
 import {
   ArrowLeft,
   Save,
@@ -3834,26 +3835,43 @@ const App = () => {
   // manuelle, pour que le succès/échec soit impossible à manquer.
   const [sendInvoiceResult, setSendInvoiceResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const generateInvoicePdfBase64 = async (): Promise<string> => {
-    if (!(window as any).html2pdf) {
+  // Genere le PDF de la facture en capturant #invoice-content. Utilisait
+  // html2pdf.js (qui embarque sa propre copie interne, ancienne, de
+  // html2canvas) — cette version ne sait pas lire les fonctions de couleur
+  // modernes (oklch/oklab/lab/lch/color-mix) qu'utilise la palette par
+  // defaut de Tailwind CSS v4, et echoue avec "Attempting to parse an
+  // unsupported color function" des qu'un seul element de la page (meme un
+  // ancetre du modal) utilise une classe de couleur Tailwind standard.
+  // html2canvas-pro est un fork qui ajoute ce support, en gardant la meme
+  // API globale `html2canvas` — remplace html2pdf.js par un appel manuel
+  // html2canvas-pro + jsPDF (jsPDF est deja une dependance npm du projet,
+  // deja utilisee telle quelle dans SuperAdminPanel.tsx).
+  const generateInvoicePdfDoc = async (): Promise<jsPDF> => {
+    if (!(window as any).html2canvas) {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.src = "https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas.min.js";
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load html2pdf.js"));
+        script.onerror = () => reject(new Error("Failed to load html2canvas-pro"));
         document.body.appendChild(script);
       });
     }
     const element = document.getElementById("invoice-content");
     if (!element) throw new Error("Invoice content not found");
-    const dataUri: string = await (window as any).html2pdf().set({
-      margin: 0.5,
-      filename: "Facture_AutoCompt.pdf",
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-    }).from(element).outputPdf("datauristring");
-    return dataUri.split(",")[1];
+    const canvas = await (window as any).html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
+    const margin = 0.5;
+    const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+    const maxContentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+    const imgHeight = Math.min((canvas.height * contentWidth) / canvas.width, maxContentHeight);
+    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight);
+    return pdf;
+  };
+
+  const generateInvoicePdfBase64 = async (): Promise<string> => {
+    const pdf = await generateInvoicePdfDoc();
+    return pdf.output("datauristring").split(",")[1];
   };
 
   const actuallySendInvoiceEmail = async (fac: any) => {
@@ -17939,26 +17957,8 @@ const App = () => {
                             btn.disabled = true;
 
                             try {
-                              if (!(window as any).html2pdf) {
-                                await new Promise<void>((resolve, reject) => {
-                                  const script = document.createElement("script");
-                                  script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-                                  script.onload = () => resolve();
-                                  script.onerror = () => reject(new Error("Failed to load html2pdf.js"));
-                                  document.body.appendChild(script);
-                                });
-                              }
-
-                              const element = document.getElementById("invoice-content");
-                              if (!element) throw new Error("Invoice content not found");
-
-                              await (window as any).html2pdf().set({
-                                margin: 0.5,
-                                filename: 'Facture_AutoCompt.pdf',
-                                image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { scale: 2 },
-                                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-                              }).from(element).save();
+                              const pdf = await generateInvoicePdfDoc();
+                              pdf.save("Facture_AutoCompt.pdf");
                             } catch (error) {
                               console.error("PDF generation failed, falling back to print:", error);
                               alert("Le téléchargement PDF a échoué. Impression en cours...");
