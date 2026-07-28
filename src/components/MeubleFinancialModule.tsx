@@ -16,6 +16,7 @@ import {
   Download, Home, Wifi, Zap, Sparkles, Settings, ChevronLeft,
   ChevronRight, X, TrendingUp, TrendingDown, Info,
   Percent, Star, Check, AlertCircle, ShieldCheck, Building2, Loader2,
+  Upload, FileSpreadsheet,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { dataService, type FideicommisClientDoc } from '../lib/dataService';
@@ -112,6 +113,61 @@ const nightsBetween = (ci: string, co: string) => {
   return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000));
 };
 
+// ─── CSV import helpers (Airbnb / Vrbo / Booking.com transaction exports) ─────
+
+/** Minimal RFC4180-ish CSV parser — handles quoted fields containing commas/newlines. */
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r') { /* skip, \n handles the line break */ }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+/** Best-effort date parser: accepts ISO, "Jan 5, 2026", "01/05/2026", etc. */
+function normalizeDate(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+/** Guesses which CSV column matches a field by scanning header names for keywords. */
+function guessColumn(headers: string[], keywords: string[]): number | null {
+  const lower = headers.map(h => h.toLowerCase());
+  for (const kw of keywords) {
+    const idx = lower.findIndex(h => h.includes(kw));
+    if (idx !== -1) return idx;
+  }
+  return null;
+}
+
+interface CsvColumnMap {
+  guest: number | null;
+  checkIn: number | null;
+  checkOut: number | null;
+  amount: number | null;
+  amountIsTotal: boolean; // true = "Montant total du séjour", false = "Tarif par nuit"
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MeubleFinancialModule({
@@ -200,6 +256,134 @@ export default function MeubleFinancialModule({
   // New reservation form
   const [showResForm, setShowResForm] = useState(false);
   const [newRes, setNewRes] = useState<Partial<Reservation>>({ platform: 'airbnb', status: 'confirmed', taxeSejour: taxeSejourRegion, platformFeePercent: 3 });
+
+  // ── CSV import (Airbnb / Vrbo / Booking.com transaction exports) ──────────
+  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [csvPlatform, setCsvPlatform] = useState<Platform>('airbnb');
+  const [csvClientId, setCsvClientId] = useState<string>('');
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvMap, setCsvMap] = useState<CsvColumnMap>({ guest: null, checkIn: null, checkOut: null, amount: null, amountIsTotal: true });
+  const [csvIncluded, setCsvIncluded] = useState<boolean[]>([]);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+
+  const resetCsvState = () => {
+    setCsvHeaders([]);
+    setCsvRows([]);
+    setCsvIncluded([]);
+    setCsvMap({ guest: null, checkIn: null, checkOut: null, amount: null, amountIsTotal: true });
+  };
+
+  const handleCsvFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length < 2) {
+        alert('Le fichier CSV semble vide ou invalide.');
+        return;
+      }
+      const headers = parsed[0];
+      const rows = parsed.slice(1);
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setCsvIncluded(rows.map(() => true));
+      setCsvMap({
+        guest: guessColumn(headers, ['guest', 'voyageur', 'client', 'name']),
+        checkIn: guessColumn(headers, ['start date', 'check-in', 'checkin', 'arriv', 'début']),
+        checkOut: guessColumn(headers, ['end date', 'check-out', 'checkout', 'départ', 'fin']),
+        amount: guessColumn(headers, ['gross earnings', 'earnings', 'payout', 'amount', 'montant', 'total']),
+        amountIsTotal: true,
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  // Live preview of parsed rows under the current column mapping
+  const csvPreview = useMemo(() => {
+    return csvRows.map((row) => {
+      const guestName = csvMap.guest !== null ? (row[csvMap.guest] || '').trim() : '';
+      const checkIn = csvMap.checkIn !== null ? normalizeDate(row[csvMap.checkIn]) : null;
+      const checkOut = csvMap.checkOut !== null ? normalizeDate(row[csvMap.checkOut]) : null;
+      const amountRaw = csvMap.amount !== null ? row[csvMap.amount] : '';
+      const amount = parseFloat((amountRaw || '').replace(/[^0-9.-]/g, ''));
+      const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
+      const nightlyRate = csvMap.amountIsTotal
+        ? (nights > 0 && !isNaN(amount) ? amount / nights : 0)
+        : (!isNaN(amount) ? amount : 0);
+      const valid = !!guestName && !!checkIn && !!checkOut && nights > 0 && nightlyRate > 0;
+      return { guestName, checkIn, checkOut, nights, nightlyRate, valid };
+    });
+  }, [csvRows, csvMap]);
+
+  const csvValidCount = csvPreview.filter((r, i) => r.valid && csvIncluded[i]).length;
+
+  const runCsvImport = async () => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    setIsImportingCsv(true);
+    const selectedClient = csvClientId ? fideicommisClients.find(c => c.id === csvClientId) : undefined;
+    const modeGestion: 'proprietaire' | 'gestionnaire' = selectedClient ? 'gestionnaire' : 'proprietaire';
+    const platFee = PLATFORMS[csvPlatform].feePercent;
+    const taxeSejourRemisePlateforme = csvPlatform !== 'direct';
+    let successCount = 0;
+
+    for (let idx = 0; idx < csvPreview.length; idx++) {
+      if (!csvIncluded[idx] || !csvPreview[idx].valid) continue;
+      const row = csvPreview[idx];
+      const localId = genId();
+      const gross = row.nights * row.nightlyRate;
+      const tpsAmt = !selectedClient && registeredTPS ? parseFloat((gross * tpsRate / 100).toFixed(2)) : 0;
+      const tvqAmt = !selectedClient && registeredTVQ ? parseFloat((gross * tvqRate / 100).toFixed(2)) : 0;
+      const localRes: Reservation = {
+        id: localId,
+        guestName: row.guestName,
+        checkIn: row.checkIn!,
+        checkOut: row.checkOut!,
+        nights: row.nights,
+        nightlyRate: row.nightlyRate,
+        platform: csvPlatform,
+        platformFeePercent: platFee,
+        taxeSejour: taxeSejourRegion,
+        status: 'confirmed',
+        fideicommisClientId: selectedClient?.id,
+        fideicommisClientName: selectedClient?.nom,
+      };
+      setReservations(prev => [...prev, localRes]);
+      try {
+        await dataService.saveMeubleReservation(userId, {
+          id: localId,
+          companyId,
+          modeGestion,
+          fideicommisClientId: selectedClient?.id,
+          fideicommisClientName: selectedClient?.nom,
+          commissionRatePercent: selectedClient?.tauxHonoraires,
+          guestName: localRes.guestName,
+          checkIn: localRes.checkIn,
+          checkOut: localRes.checkOut,
+          nights: localRes.nights,
+          nightlyRate: localRes.nightlyRate,
+          platform: localRes.platform,
+          platformFeePercent: localRes.platformFeePercent,
+          taxeSejour: localRes.taxeSejour,
+          taxeSejourRemisePlateforme,
+          tpsCollected: tpsAmt,
+          tvqCollected: tvqAmt,
+          status: localRes.status,
+          notes: `Importé depuis CSV ${PLATFORMS[csvPlatform].label}`,
+          journalPosted: false,
+        });
+        successCount++;
+      } catch (err) {
+        console.error('[CSV import] échec ligne', idx, err);
+      }
+    }
+
+    setIsImportingCsv(false);
+    setShowCsvImport(false);
+    resetCsvState();
+    alert(`${successCount} réservation(s) importée(s) avec succès.`);
+  };
 
   // New expense form
   const [showExpForm, setShowExpForm] = useState(false);
@@ -460,10 +644,16 @@ export default function MeubleFinancialModule({
             <ChevronRight size={16} />
           </button>
         </div>
-        <button onClick={() => setShowResForm(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
-          <Plus size={13} /><span>Nouvelle réservation</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCsvImport(true)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            <Upload size={13} /><span>Importer CSV</span>
+          </button>
+          <button onClick={() => setShowResForm(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
+            <Plus size={13} /><span>Nouvelle réservation</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick stats */}
@@ -968,6 +1158,132 @@ export default function MeubleFinancialModule({
               <div className="flex gap-3 mt-5">
                 <button onClick={() => setShowExpForm(false)} className={`flex-1 py-3 rounded-2xl border text-[10px] font-black uppercase ${D?'border-zinc-700 text-zinc-400':'border-slate-200 text-slate-500'}`}>Annuler</button>
                 <button onClick={addExpense} className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[10px] font-black uppercase">Ajouter</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: CSV Import (Airbnb / Vrbo / Booking.com) */}
+      <AnimatePresence>
+        {showCsvImport && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => { setShowCsvImport(false); resetCsvState(); }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className={`${D?'bg-zinc-900 border-zinc-800':'bg-white border-slate-200'} border rounded-3xl shadow-2xl p-7 w-full max-w-2xl max-h-[85vh] overflow-y-auto`}
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-black text-base flex items-center gap-2"><FileSpreadsheet size={18} className="text-emerald-600" />Importer des réservations (CSV)</h2>
+                <button onClick={() => { setShowCsvImport(false); resetCsvState(); }} className={`p-2 rounded-xl ${D?'hover:bg-zinc-800 text-zinc-500':'hover:bg-slate-100 text-slate-400'}`}><X size={16}/></button>
+              </div>
+
+              {csvHeaders.length === 0 ? (
+                <div className="space-y-4">
+                  <div className={`p-3 rounded-xl text-[10px] leading-relaxed ${D ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-50 text-slate-500'}`}>
+                    <Info size={12} className="inline mr-1 text-blue-500" />
+                    Téléchargez d'abord le fichier depuis votre plateforme: <strong>Airbnb</strong> → Revenus → Transactions historiques → Exporter le CSV. <strong>Vrbo</strong> / <strong>Booking.com</strong> → section Réservations/Extranet → Exporter.
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className={label}>Plateforme</label>
+                      <select className={input} value={csvPlatform} onChange={e => setCsvPlatform(e.target.value as Platform)}>
+                        {(Object.entries(PLATFORMS) as [Platform, any][]).filter(([k]) => k !== 'direct').map(([k,v]) => <option key={k} value={k}>{v.logo} {v.label}</option>)}
+                      </select>
+                    </div>
+                    {isGestionnaire && (
+                      <div><label className={label}>Propriétaire du logement</label>
+                        <select className={input} value={csvClientId} onChange={e => setCsvClientId(e.target.value)}>
+                          <option value="">Moi-même (compte courant)</option>
+                          {fideicommisClients.map(c => <option key={c.id} value={c.id}>{c.nom} — honoraires {c.tauxHonoraires}%</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <label className={`flex flex-col items-center justify-center gap-2 py-10 rounded-2xl border-2 border-dashed cursor-pointer transition-colors ${D ? 'border-zinc-700 hover:bg-zinc-800' : 'border-slate-300 hover:bg-slate-50'}`}>
+                    <Upload size={22} className={D ? 'text-zinc-500' : 'text-slate-400'} />
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${D ? 'text-zinc-400' : 'text-slate-500'}`}>Choisir le fichier CSV</span>
+                    <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); }} />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Column mapping */}
+                  <div className={`p-4 rounded-2xl ${D ? 'bg-zinc-800/60' : 'bg-slate-50'}`}>
+                    <h3 className={`text-[9px] font-black uppercase tracking-widest mb-3 ${D?'text-zinc-400':'text-slate-400'}`}>Correspondance des colonnes — vérifiez avant d'importer</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className={label}>Nom du voyageur</label>
+                        <select className={input} value={csvMap.guest ?? ''} onChange={e => setCsvMap(m => ({...m, guest: e.target.value === '' ? null : +e.target.value}))}>
+                          <option value="">— Aucune —</option>
+                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
+                        </select></div>
+                      <div><label className={label}>Montant</label>
+                        <select className={input} value={csvMap.amount ?? ''} onChange={e => setCsvMap(m => ({...m, amount: e.target.value === '' ? null : +e.target.value}))}>
+                          <option value="">— Aucune —</option>
+                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
+                        </select></div>
+                      <div><label className={label}>Date d'arrivée</label>
+                        <select className={input} value={csvMap.checkIn ?? ''} onChange={e => setCsvMap(m => ({...m, checkIn: e.target.value === '' ? null : +e.target.value}))}>
+                          <option value="">— Aucune —</option>
+                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
+                        </select></div>
+                      <div><label className={label}>Date de départ</label>
+                        <select className={input} value={csvMap.checkOut ?? ''} onChange={e => setCsvMap(m => ({...m, checkOut: e.target.value === '' ? null : +e.target.value}))}>
+                          <option value="">— Aucune —</option>
+                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
+                        </select></div>
+                    </div>
+                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                      <input type="checkbox" checked={csvMap.amountIsTotal} onChange={e => setCsvMap(m => ({...m, amountIsTotal: e.target.checked}))} />
+                      <span className={`text-[10px] font-semibold ${D?'text-zinc-400':'text-slate-500'}`}>Le montant est le total du séjour (décoché = tarif par nuit)</span>
+                    </label>
+                  </div>
+
+                  {/* Preview table */}
+                  <div className={`rounded-2xl border overflow-hidden ${D ? 'border-zinc-800' : 'border-slate-200'}`}>
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-[10px]">
+                        <thead className={`sticky top-0 ${D ? 'bg-zinc-800' : 'bg-slate-100'}`}>
+                          <tr>
+                            <th className="p-2 text-left w-8"></th>
+                            <th className="p-2 text-left">Voyageur</th>
+                            <th className="p-2 text-left">Arrivée</th>
+                            <th className="p-2 text-left">Départ</th>
+                            <th className="p-2 text-right">Nuits</th>
+                            <th className="p-2 text-right">Tarif/nuit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {csvPreview.map((r, i) => (
+                            <tr key={i} className={`border-t ${D ? 'border-zinc-800' : 'border-slate-100'} ${!r.valid ? (D ? 'bg-rose-500/10' : 'bg-rose-50') : ''}`}>
+                              <td className="p-2">
+                                <input type="checkbox" checked={csvIncluded[i] ?? true} disabled={!r.valid}
+                                  onChange={e => setCsvIncluded(prev => prev.map((v,idx) => idx===i ? e.target.checked : v))} />
+                              </td>
+                              <td className="p-2">{r.guestName || <span className="text-rose-500">manquant</span>}</td>
+                              <td className="p-2">{r.checkIn || <span className="text-rose-500">invalide</span>}</td>
+                              <td className="p-2">{r.checkOut || <span className="text-rose-500">invalide</span>}</td>
+                              <td className="p-2 text-right">{r.nights || '—'}</td>
+                              <td className="p-2 text-right">{r.nightlyRate ? r.nightlyRate.toFixed(2) + ' $' : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <p className={`text-[10px] ${D?'text-zinc-500':'text-slate-400'}`}>
+                    {csvValidCount} réservation(s) valide(s) et sélectionnée(s) sur {csvPreview.length} ligne(s) lues. Les lignes en rouge ont une correspondance de colonne incorrecte — ajustez les menus ci-dessus.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => { setShowCsvImport(false); resetCsvState(); }} className={`flex-1 py-3 rounded-2xl border text-[10px] font-black uppercase ${D?'border-zinc-700 text-zinc-400':'border-slate-200 text-slate-500'}`}>Annuler</button>
+                {csvHeaders.length > 0 && (
+                  <button onClick={runCsvImport} disabled={csvValidCount === 0 || isImportingCsv}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2">
+                    {isImportingCsv ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                    Importer {csvValidCount > 0 ? csvValidCount : ''} réservation{csvValidCount !== 1 ? 's' : ''}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
