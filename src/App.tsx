@@ -4043,7 +4043,7 @@ const App = () => {
     const addedOrModified = next.filter(n => {
       const p = prev.find(x => x.id === n.id);
       if (!p) return true;
-      return p.total !== n.total || p.fecha !== n.fecha || p.fournisseur !== n.fournisseur || p.cat !== n.cat || p.status !== n.status || p.lien !== n.lien;
+      return p.total !== n.total || p.fecha !== n.fecha || p.fournisseur !== n.fournisseur || p.cat !== n.cat || p.status !== n.status || p.lien !== n.lien || p.catConfidence !== n.catConfidence || JSON.stringify(p.auditLogs) !== JSON.stringify(n.auditLogs);
     });
     for (const item of addedOrModified) {
       try {
@@ -6367,45 +6367,45 @@ const App = () => {
             return { category: "Déplacements / Automobile", catConfidence: 'medium' };
           }
           if (/saaq|immatriculation|permis\s*de\s*conduire/i.test(normalizedStr)) {
-            return "Immatriculation / Permis";
+            return { category: "Immatriculation / Permis", catConfidence: 'medium' };
           }
           if (
             /reparation|entretien|maintenance|repairs|repair/i.test(
               normalizedStr,
             )
           ) {
-            return "Réparations / Entretien";
+            return { category: "Réparations / Entretien", catConfidence: 'medium' };
           }
           if (
             /renovation|construction|remodel|materiaux|rona|depot|renov|quincailler/i.test(
               normalizedStr,
             )
           ) {
-            return "Rénovation / Construction";
+            return { category: "Rénovation / Construction", catConfidence: 'medium' };
           }
           if (/tax|taxes|municipale|scolaire|impot/i.test(normalizedStr)) {
-            return "Taxes";
+            return { category: "Taxes", catConfidence: 'medium' };
           }
           if (/assurance|insurance/i.test(normalizedStr)) {
-            return "Assurance";
+            return { category: "Assurance", catConfidence: 'medium' };
           }
           if (/chauffage|heating|gaz|gas/i.test(normalizedStr)) {
-            return "Chauffage";
+            return { category: "Chauffage", catConfidence: 'medium' };
           }
           if (
             /electricite|electricity|hydro|light|power/i.test(normalizedStr)
           ) {
-            return "Electricité";
+            return { category: "Electricité", catConfidence: 'medium' };
           }
           if (
             /gestion|exploitation|management|operation|frais/i.test(
               normalizedStr,
             )
           ) {
-            return "Frais de gestion / Exploitation";
+            return { category: "Frais de gestion / Exploitation", catConfidence: 'medium' };
           }
 
-          return "À classer";
+          return { category: "À classer", catConfidence: 'low' };
         };
 
         const categoryMatchResult = matchAppCategory(extractedCat);
@@ -15972,17 +15972,49 @@ const App = () => {
               <div className="space-y-4 w-full border-t border-slate-100 dark:border-zinc-900/50 pt-6">
                 <div className="flex justify-between items-center w-full">
                   <h4 className="text-[11px] font-black uppercase tracking-widest text-left text-slate-400">Tableau d'Audit & Validation IA (8 Colonnes)</h4>
-                  <button
-                    onClick={() => {
-                      setNewTxData({ fecha: new Date().toISOString().split("T")[0], tiers: "", cat: "", total: "", isTaxable: activeCompanyId !== "3", unitId: "", buildingId: "", noReceiptConfirmed: false });
-                      setShowAddTxModal(true);
-                      playNotificationSound();
-                    }}
-                    className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm flex items-center space-x-2 ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}
-                  >
-                    <Plus size={14} />
-                    <span>Ajouter une dépense</span>
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        const toApprove = filteredDepensesByMonth.filter(d => d.catConfidence === 'high' && (!d.auditLogs || d.auditLogs.length === 0));
+                        if (toApprove.length === 0) {
+                          alert("Aucune dépense à approuver automatiquement.");
+                          return;
+                        }
+                        // Ne touche PAS catConfidence — c'est le niveau de
+                        // confiance original de l'IA (un fait historique),
+                        // pas un statut de revue. Seul auditLogs.length > 0
+                        // indique "deja revu" (voir le point de couleur dans
+                        // le tableau, qui distingue maintenant confirme vs
+                        // encore a revoir au lieu de les confondre au meme
+                        // point ambre).
+                        const now = new Date().toISOString();
+                        setDepenses(prev => prev.map(p => {
+                          const found = toApprove.find(a => a.id === p.id);
+                          if (found) {
+                            return { ...p, auditLogs: [...(p.auditLogs || []), { originalCat: p.cat, newCat: p.cat, confirmedBy: activeUser || 'Système', timestamp: now }] };
+                          }
+                          return p;
+                        }));
+                        playNotificationSound();
+                        alert(`${toApprove.length} dépenses approuvées avec succès.`);
+                      }}
+                      className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm flex items-center space-x-2 ${darkMode ? "bg-emerald-900/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/50" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"}`}
+                    >
+                      <span className="font-bold text-[10px]">✓</span>
+                      <span>Tout approuver</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNewTxData({ fecha: new Date().toISOString().split("T")[0], tiers: "", cat: "", total: "", isTaxable: activeCompanyId !== "3", unitId: "", buildingId: "", noReceiptConfirmed: false });
+                        setShowAddTxModal(true);
+                        playNotificationSound();
+                      }}
+                      className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm flex items-center space-x-2 ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      <Plus size={14} />
+                      <span>Ajouter une dépense</span>
+                    </button>
+                  </div>
                 </div>
                 {filteredDepensesByMonth.length === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
@@ -16027,7 +16059,35 @@ const App = () => {
                                 </td>
                                 <td className={`py-4 px-6 font-bold uppercase max-w-[180px] ${darkMode ? "text-[#059669]" : "text-teal-600"}`}>
                                   <div className="flex flex-col gap-1">
-                                    <span className="truncate">{depense.cat}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      {(() => {
+                                        // Bleu = deja revu/confirme par un humain (auditLogs),
+                                        // peu importe le niveau de confiance original de l'IA —
+                                        // sinon un point ambre "deja approuve" et un point ambre
+                                        // "l'IA n'est pas sure, a revoir" etaient indistinguables,
+                                        // ce qui annulait l'interet de la revue.
+                                        const reviewed = !!(depense.auditLogs && depense.auditLogs.length > 0);
+                                        if (reviewed) {
+                                          const lastLog = depense.auditLogs![depense.auditLogs!.length - 1];
+                                          return (
+                                            <div
+                                              title={`Vérifié par ${lastLog.confirmedBy} le ${new Date(lastLog.timestamp).toLocaleDateString('fr-CA')}`}
+                                              className="w-2 h-2 rounded-full flex-shrink-0 bg-sky-500"
+                                            />
+                                          );
+                                        }
+                                        if (depense.catConfidence) {
+                                          return (
+                                            <div
+                                              title={`Confiance IA: ${depense.catConfidence} — à vérifier`}
+                                              className={`w-2 h-2 rounded-full flex-shrink-0 ${depense.catConfidence === 'high' ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                                            />
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                      <span className="truncate">{depense.cat}</span>
+                                    </div>
                                     {depense.buildingId && (!depense.cat || depense.cat === 'À classer' || depense.cat === 'A classer') && (
                                       <span
                                         title={`S.O.F.I. a associé cette dépense à un immeuble (buildingId: ${depense.buildingId}). Veuillez confirmer ou corriger la catégorie.`}
@@ -16740,11 +16800,33 @@ const App = () => {
                                 tauxApplique: Number((porcVehicule * 100).toFixed(1)),
                                 vehicleRateApplied: true,
                               } : {};
-                              setDepenses(prev => prev.map(d =>
-                                d.id === editingExpense.id
-                                  ? { ...d, ...editingExpense, ...stampedVehicleFields, status: "Vérifiée" }
-                                  : d
-                              ));
+                              setDepenses(prev => prev.map(d => {
+                                if (d.id === editingExpense.id) {
+                                  let updatedAuditLogs = d.auditLogs || [];
+                                  // Log if category was changed OR if it was just manually confirmed from a high/low state
+                                  updatedAuditLogs = [
+                                    ...updatedAuditLogs,
+                                    {
+                                      originalCat: d.cat,
+                                      newCat: editingExpense.cat,
+                                      confirmedBy: activeUser || 'Système',
+                                      timestamp: new Date().toISOString()
+                                    }
+                                  ];
+                                  return {
+                                    ...d,
+                                    ...editingExpense,
+                                    ...stampedVehicleFields,
+                                    // catConfidence n'est PAS touche ici — c'est le niveau
+                                    // de confiance original de l'IA (fait historique), pas
+                                    // un statut de revue. auditLogs.length > 0 (ajoute
+                                    // ci-dessus) suffit a marquer cette depense comme revue.
+                                    auditLogs: updatedAuditLogs,
+                                    status: "Vérifiée"
+                                  };
+                                }
+                                return d;
+                              }));
                               setEditingExpense(null);
                             }}
                             className={`w-full py-5 rounded-[24px] text-[10px] font-black uppercase italic tracking-widest transition-all shadow-xl flex items-center justify-center space-x-2 ${addressBlocked

@@ -140,6 +140,13 @@ export interface UnitDoc {
 
 // ── ExpenseDoc — Firestore `expenses` collection ──────────────────────────────
 
+export interface ExpenseAuditLog {
+  originalCat: string;
+  newCat: string;
+  confirmedBy: string;
+  timestamp: string;
+}
+
 export interface ExpenseDoc {
   id: string;
   companyId: string;
@@ -152,6 +159,10 @@ export interface ExpenseDoc {
   total: number;
   lien: string | null;
   partnerTag: string;
+  /** Nivel de confianza de la categorización por IA */
+  catConfidence?: 'high' | 'medium' | 'low';
+  /** Historial de auditoría para revisión human-in-the-loop */
+  auditLogs?: ExpenseAuditLog[];
   /** Receipt confirmed missing — set by disclaimer checkbox */
   noReceiptConfirmed?: boolean;
   /** FK → UnitDoc.id (optional, for property-linked expenses) */
