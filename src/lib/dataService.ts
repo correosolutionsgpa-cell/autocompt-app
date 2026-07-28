@@ -173,6 +173,88 @@ export interface ExpenseDoc {
   createdAt: string;
 }
 
+// ── MeubleReservationDoc — Firestore `meubleReservations` collection ──────────
+/**
+ * Une réservation Airbnb / courte durée persistée en Firestore.
+ * Document ID: `{userId}_meubleres_{id}`
+ *
+ * Comptabilité: le champ `modeGestion` détermine quel grand livre est alimenté.
+ * - 'proprietaire' → livre de la compagnie courante (revenu + frais)
+ * - 'gestionnaire' → CompteFidéicommis (passif fonds clients + honoraires)
+ */
+export interface MeubleReservationDoc {
+  id: string;
+  companyId: string;
+  /** FK → UnitDoc.id (unité spécifique si multi-unités) */
+  unitId?: string;
+  /** FK → BuildingLedger.id */
+  buildingId?: string;
+  /** Mode comptable déterminé par le profil onboarding */
+  modeGestion: 'proprietaire' | 'gestionnaire';
+  /** Pour le mode gestionnaire: FK → FideicommisClientDoc.id */
+  fideicommisClientId?: string;
+  fideicommisClientName?: string;
+  guestName: string;
+  checkIn: string;           // YYYY-MM-DD
+  checkOut: string;          // YYYY-MM-DD
+  nights: number;
+  nightlyRate: number;
+  platform: 'airbnb' | 'direct' | 'vrbo' | 'booking';
+  platformFeePercent: number;
+  /** Taux taxe de séjour appliqué (% — lu depuis userProfile.taxeSejourRegion) */
+  taxeSejour: number;
+  /** true = Airbnb/plateforme a remis la taxe de séjour directement au gouvernement.
+   *  false = réservation directe, l'hôte doit la remettre lui-même. */
+  taxeSejourRemisePlateforme: boolean;
+  /** TPS collectée par l'hôte (seulement si inscrit TPS — userProfile.tps non vide) */
+  tpsCollected?: number;
+  /** TVQ collectée par l'hôte (seulement si inscrit TVQ — userProfile.tvq non vide) */
+  tvqCollected?: number;
+  /** Frais de plateforme déduits (platformFeePercent × gross) */
+  platformFeeDeduit?: number;
+  status: 'confirmed' | 'pending' | 'cancelled';
+  notes?: string;
+  /** true si le JournalEntry double-entrée a été généré avec succès */
+  journalPosted: boolean;
+  ownerId: string;
+  createdAt: string;
+}
+
+// ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
+/**
+ * Configuration fiscale et opérationnelle d'une unité meublée.
+ * Stockée par (userId, companyId) — une config par workspace meublé.
+ * Document ID: `{userId}_meubleconfig_{companyId}`
+ *
+ * NOTE: Les champs fiscaux (tps/tvq/taxeSejourRegion) sont lus depuis
+ * userProfile (Paramètres) et dupliqués ici pour snapshot historique.
+ */
+export interface MeubleUnitConfigDoc {
+  id: string;
+  companyId: string;
+  unitId?: string;
+  name: string;
+  address?: string;
+  /** Snapshot du taux de taxe de séjour régional au moment de la config */
+  taxeSejourDefault: number;
+  /** true si inscrit aux fichiers TPS (userProfile.tps non vide) */
+  registeredTPS: boolean;
+  /** true si inscrit aux fichiers TVQ (userProfile.tvq non vide) */
+  registeredTVQ: boolean;
+  /** Numéro CITQ (Corporation de l'industrie touristique du Québec) */
+  numeroCITQ?: string;
+  /** Mode: propriétaire qui autogère vs gestionnaire pour un client tiers */
+  modeGestion: 'proprietaire' | 'gestionnaire';
+  /** FK → FideicommisClientDoc.id (mode gestionnaire seulement) */
+  fideicommisClientId?: string;
+  fideicommisClientName?: string;
+  /** Taux de commission du gestionnaire (% des revenus bruts) */
+  commissionGestionnaire?: number;
+  platformFeeDefault: Partial<Record<'airbnb' | 'direct' | 'vrbo' | 'booking', number>>;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── LoyerDoc — Firestore `loyers` collection ─────────────────────────────────
 
 export interface LoyerDoc {
@@ -2021,5 +2103,203 @@ export const dataService = {
     const docId = userId ? `${userId}_aireport_${reportId}` : reportId;
     await deleteDoc(doc(db, 'aiReports', docId));
     return true;
+  },
+
+  // ── Location Meublée / Airbnb ──────────────────────────────────────────────
+
+  /**
+   * Persist a short-term rental reservation and post the correct
+   * double-entry journal based on modeGestion.
+   *
+   * Tax model: `gross` (nights × nightlyRate) is always the pure rental price.
+   * The taxe de séjour is an amount charged ON TOP of the rental price.
+   * - If a platform (Airbnb/VRBO/Booking) collects & remits it, that money
+   *   never touches the host's bank or books at all — it is not computed here.
+   * - If the host must self-remit (direct bookings), the host collects
+   *   gross + taxeSejourAmount from the guest, and owes taxeSejourAmount to
+   *   Revenu Québec — recorded as a liability (acc-taxe-sejour-payable), never
+   *   silently netted out of the deposit.
+   *
+   * Mode 'proprietaire': posts to the company's own grand livre —
+   *   Debit Banque (+ Frais plateforme) / Credit Revenu-Location
+   *   (+ TPS/TVQ payables si inscrit, + Taxe de séjour payable si auto-remise)
+   * Mode 'gestionnaire': does NOT use generic journal accounts (there is no
+   *   "acc-fideicommis-*" ledger read anywhere in the app). Instead it writes
+   *   directly to the same `fideicommisDepots` collection the Compte en
+   *   Fidéicommis screen (CompteFideicommis.tsx) reads, so the reservation
+   *   actually shows up in that OACIQ trust registry. TPS/TVQ and honoraires
+   *   du gestionnaire are NOT calculated here — the registration numbers and
+   *   commission rate belong to the client-owner, not to this reservation, and
+   *   should be entered manually via the Fidéicommis "Retraits" tab until a
+   *   client-selection UI exists for meublé units.
+   */
+  async saveMeubleReservation(
+    userId: string,
+    res: Omit<MeubleReservationDoc, 'ownerId' | 'createdAt'>
+  ): Promise<MeubleReservationDoc> {
+    assertCanWrite();
+    const originalId = res.id || `meubleres_${Date.now()}`;
+    const docId = `${userId}_meubleres_${originalId}`;
+    const docCompanyId = `${userId}_company_${res.companyId}`;
+    const now = new Date().toISOString();
+
+    const gross = res.nights * res.nightlyRate;
+    const platformFee = gross * (res.platformFeePercent / 100);
+    const taxeSejourAmount = gross * (res.taxeSejour / 100);
+    // Only a liability on the host's own books if the host — not the platform — must remit it
+    const taxeSejourLiability = res.taxeSejourRemisePlateforme ? 0 : taxeSejourAmount;
+
+    const tpsAmt = res.tpsCollected ?? 0;
+    const tvqAmt = res.tvqCollected ?? 0;
+
+    const data: MeubleReservationDoc = {
+      ...res,
+      id: docId,
+      companyId: docCompanyId,
+      platformFeeDeduit: platformFee,
+      journalPosted: false,
+      ownerId: userId,
+      createdAt: now,
+    };
+
+    // Persist the reservation document first
+    await setDoc(doc(db, 'meubleReservations', docId), data);
+
+    if (auth.currentUser) {
+      try {
+        if (res.modeGestion === 'gestionnaire') {
+          // === GESTIONNAIRE MODE: real OACIQ trust-account integration ===
+          const depotId = `${userId}_fiddepot_${docId}`;
+          const depotDoc = {
+            id: depotId,
+            companyId: docCompanyId,
+            numeroRecu: `MEU-${Date.now().toString().slice(-8)}`,
+            date: now.slice(0, 10),
+            locataireName: res.guestName,
+            propertyAddress: 'Location meublée courte durée',
+            periodeDebut: res.checkIn,
+            periodeFin: res.checkOut,
+            montant: gross,
+            modePaiement: 'virement' as const,
+            clientId: res.fideicommisClientId || '',
+            clientName: res.fideicommisClientName || 'Client non spécifié',
+            notes: `Réservation ${res.platform} — ${res.nights} nuit(s) à ${res.nightlyRate}$/nuit. Frais plateforme: ${platformFee.toFixed(2)}$.`,
+            ownerId: userId,
+            createdAt: now,
+          };
+          await setDoc(doc(db, 'fideicommisDepots', depotId), depotDoc);
+        } else {
+          // === PROPRIÉTAIRE MODE: post to the company's own grand livre ===
+          const entryId = `${docId}-journal`;
+          const entryData = {
+            id: entryId,
+            date: now,
+            description: `Location meublée — ${res.guestName} (${res.platform}) · ${res.checkIn} → ${res.checkOut}`,
+            documentReference: docId,
+            createdAt: now,
+            ownerId: userId,
+          };
+
+          const revenueNet = gross - tpsAmt - tvqAmt;
+          // Cash landed in the bank: gross rent + tax collected for remittance, minus the platform's cut.
+          // Algebraically equals revenueNet + tpsAmt + tvqAmt + taxeSejourLiability, so debits == credits below.
+          const cashIn = gross + taxeSejourLiability - platformFee;
+
+          const linesData: any[] = [
+            { id: `${entryId}-d1`, journalEntryId: entryId, accountId: 'acc-bank', type: 'Debit', amount: cashIn, ownerId: userId },
+          ];
+          if (platformFee > 0) {
+            linesData.push({ id: `${entryId}-d2`, journalEntryId: entryId, accountId: 'acc-frais-plateforme', type: 'Debit', amount: platformFee, ownerId: userId });
+          }
+          linesData.push({ id: `${entryId}-c1`, journalEntryId: entryId, accountId: 'acc-revenue-meuble', type: 'Credit', amount: revenueNet, ownerId: userId });
+          if (tpsAmt > 0) {
+            linesData.push({ id: `${entryId}-c2`, journalEntryId: entryId, accountId: 'acc-tps-payable', type: 'Credit', amount: tpsAmt, ownerId: userId });
+          }
+          if (tvqAmt > 0) {
+            linesData.push({ id: `${entryId}-c3`, journalEntryId: entryId, accountId: 'acc-tvq-payable', type: 'Credit', amount: tvqAmt, ownerId: userId });
+          }
+          if (taxeSejourLiability > 0) {
+            linesData.push({ id: `${entryId}-c4`, journalEntryId: entryId, accountId: 'acc-taxe-sejour-payable', type: 'Credit', amount: taxeSejourLiability, ownerId: userId });
+          }
+
+          await postJournalEntry(entryData, linesData);
+        }
+
+        // Mark as posted
+        await setDoc(doc(db, 'meubleReservations', docId), { journalPosted: true }, { merge: true });
+        data.journalPosted = true;
+      } catch (err: any) {
+        console.warn('[MeubleReservation] Journal/dépôt posting failed (reservation still saved):', err.message);
+      }
+    }
+
+    return { ...data, id: originalId, companyId: res.companyId };
+  },
+
+  async fetchMeubleReservations(
+    userId: string,
+    companyId: string
+  ): Promise<MeubleReservationDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'meubleReservations'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId),
+        orderBy('checkIn', 'desc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data() as MeubleReservationDoc;
+        const idParts = d.id.split('_meubleres_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId };
+      });
+    } catch (e) {
+      console.error('fetchMeubleReservations failed:', e);
+      return [];
+    }
+  },
+
+  async deleteMeubleReservation(userId: string, resId: string): Promise<void> {
+    const docId = `${userId}_meubleres_${resId}`;
+    await deleteDoc(doc(db, 'meubleReservations', docId));
+  },
+
+  /**
+   * Upsert the meublé unit configuration for a workspace.
+   * Called when the user updates CITQ, commission rate, or modeGestion.
+   */
+  async saveMeubleUnitConfig(
+    userId: string,
+    config: Omit<MeubleUnitConfigDoc, 'ownerId' | 'createdAt'>
+  ): Promise<MeubleUnitConfigDoc> {
+    assertCanWrite();
+    const docId = `${userId}_meubleconfig_${config.companyId}`;
+    const docCompanyId = `${userId}_company_${config.companyId}`;
+    const data: MeubleUnitConfigDoc = {
+      ...config,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'meubleUnitConfigs', docId), data, { merge: true });
+    return { ...data, companyId: config.companyId };
+  },
+
+  async fetchMeubleUnitConfig(
+    userId: string,
+    companyId: string
+  ): Promise<MeubleUnitConfigDoc | null> {
+    try {
+      const docId = `${userId}_meubleconfig_${companyId}`;
+      const snap = await getDoc(doc(db, 'meubleUnitConfigs', docId));
+      if (!snap.exists()) return null;
+      const data = snap.data() as MeubleUnitConfigDoc;
+      return { ...data, companyId };
+    } catch (e) {
+      console.error('fetchMeubleUnitConfig failed:', e);
+      return null;
+    }
   },
 };

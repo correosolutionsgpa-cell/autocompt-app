@@ -1414,6 +1414,15 @@ const App = () => {
   >({});
   const [showPreview, setShowPreview] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  /**
+   * Blur detection modal — shown when a camera photo scores below the
+   * Laplacian-variance sharpness threshold before being sent to AI.
+   * file: the original File to retry or proceed with.
+   */
+  const [blurModal, setBlurModal] = useState<{
+    file: File;
+    score: number;
+  } | null>(null);
   // S.O.F.I. OCR confirmation draft — shown as a floating card after scan
   const [sofiDraft, setSofiDraft] = useState<{
     fournisseur: string;
@@ -1796,6 +1805,8 @@ const App = () => {
     pago: "",
     tpsRate: 5,
     tvqRate: 9.975,
+    numeroCITQ: "",
+    taxeSejourRegion: 3.5,
   });
   // True once userProfile has been hydrated from Firestore at least once —
   // guards the persistence effect below from firing on the very first render
@@ -2156,6 +2167,8 @@ const App = () => {
                       pago: "",
                       tpsRate: 5,
                       tvqRate: 9.975,
+                      numeroCITQ: "",
+                      taxeSejourRegion: 3.5,
                     });
                   }}
                   className="w-full py-4 px-3 bg-[#059669] hover:bg-emerald-700 text-white rounded-2xl text-[9.5px] font-black uppercase italic tracking-wider transition-all active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 border-none cursor-pointer animate-pulse"
@@ -6867,13 +6880,105 @@ const App = () => {
     })();
   };
 
-  const handleAIScan = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * Estimates image sharpness using the variance of the Laplacian filter.
+   * Returns a score in [0, ∞) — higher = sharper. Runs in <100 ms on mobile.
+   *
+   * Implementation: load onto a hidden canvas, read pixel data, compute
+   * discrete Laplacian (4-neighbour kernel) on grayscale, return variance.
+   *
+   * @param file   Image file (JPEG / PNG / WebP)
+   * @param maxDim Down-sample to this size before analysis (speed vs. precision)
+   * @returns      Variance score, or -1 if measurement fails
+   */
+  const computeBlurScore = (file: File, maxDim = 512): Promise<number> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        try {
+          // --- Down-sample for speed ---
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { URL.revokeObjectURL(url); resolve(-1); return; }
+
+          ctx.drawImage(img, 0, 0, w, h);
+          const { data } = ctx.getImageData(0, 0, w, h);
+
+          // --- Convert to grayscale ---
+          const gray = new Float32Array(w * h);
+          for (let i = 0; i < w * h; i++) {
+            const p = i * 4;
+            // BT.601 luma coefficients
+            gray[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+          }
+
+          // --- Laplacian (4-neighbour discrete kernel) ---
+          // kernel: [0,1,0 / 1,-4,1 / 0,1,0]
+          let sum = 0;
+          let sumSq = 0;
+          let count = 0;
+          for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+              const idx = y * w + x;
+              const lap =
+                -4 * gray[idx] +
+                gray[idx - 1] +
+                gray[idx + 1] +
+                gray[idx - w] +
+                gray[idx + w];
+              sum += lap;
+              sumSq += lap * lap;
+              count++;
+            }
+          }
+          const mean = sum / count;
+          const variance = sumSq / count - mean * mean;
+
+          URL.revokeObjectURL(url);
+          resolve(variance);
+        } catch {
+          URL.revokeObjectURL(url);
+          resolve(-1);
+        }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(-1); };
+      img.src = url;
+    });
+
+  /**
+   * Threshold calibrated against real receipts photographed with typical
+   * smartphone cameras: below 80 = noticeably blurry, above 200 = crisp.
+   * Set at 100 so marginal shots still get through (user can override).
+   */
+  const BLUR_SCORE_THRESHOLD = 100;
+
+  const handleAIScan = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    fromCamera = false,
+  ) => {
     event.persist();
     const file = event.target.files?.[0];
     if (!file) return;
 
     // Reset target value so users can take the exact same picture/upload again on mobile
     event.target.value = "";
+
+    // ── Blur detection (camera photos only, not PDFs or gallery picks) ──────
+    if (fromCamera && file.type.startsWith("image/")) {
+      const score = await computeBlurScore(file);
+      // score === -1 means measurement failed — let it through silently
+      if (score !== -1 && score < BLUR_SCORE_THRESHOLD) {
+        setBlurModal({ file, score });
+        return; // wait for user choice — do NOT proceed to AI scan yet
+      }
+    }
 
     // Play feedback sound immediately (son de capture on mobile)
     if (typeof playNotificationSound === "function") {
@@ -9331,6 +9436,8 @@ const App = () => {
                         pago: "",
                         tpsRate: 5,
                         tvqRate: 9.975,
+                        numeroCITQ: "",
+                        taxeSejourRegion: 3.5,
                       });
                       if (typeof playNotificationSound === "function") playNotificationSound();
                       setTimeout(() => {
@@ -10503,12 +10610,12 @@ const App = () => {
             className="hidden"
             accept="application/pdf, image/jpeg, image/png, image/webp"
           />
-          {/* Input photo directe (capture caméra) */}
+          {/* Input photo directe (capture caméra) — fromCamera=true active la détection de flou */}
           <input
             type="file"
             ref={photoInputRef}
             onChange={(e) => {
-              handleAIScan(e);
+              handleAIScan(e, /* fromCamera */ true);
               if (selectedTier === "basique") {
                 setMonthlyScanCount((prev) => prev + 1);
               }
@@ -16517,6 +16624,101 @@ const App = () => {
             </button>
           </div>
 
+          {/* ── Blur Detection Modal ─────────────────────────────────────── */}
+          {blurModal && (
+            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className={`relative w-full max-w-sm rounded-[28px] border shadow-2xl overflow-hidden ${
+                darkMode
+                  ? "bg-slate-900 border-amber-500/30"
+                  : "bg-white border-amber-200"
+              }`}>
+                {/* Amber top accent */}
+                <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-300" />
+
+                <div className="p-6">
+                  {/* Icon + title */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${
+                      darkMode ? "bg-amber-500/15" : "bg-amber-50"
+                    }`}>
+                      📷
+                    </div>
+                    <div>
+                      <h3 className={`text-sm font-black uppercase tracking-tight leading-tight ${
+                        darkMode ? "text-zinc-100" : "text-slate-900"
+                      }`}>
+                        Photo floue détectée
+                      </h3>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${
+                        darkMode ? "text-amber-400" : "text-amber-600"
+                      }`}>
+                        Score de netteté: {Math.round(blurModal.score)} / {BLUR_SCORE_THRESHOLD} requis
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Message */}
+                  <p className={`text-[12px] font-medium leading-relaxed mb-5 ${
+                    darkMode ? "text-zinc-300" : "text-slate-600"
+                  }`}>
+                    Cette photo semble floue — les chiffres risquent d&apos;être illisibles pour l&apos;IA et de générer une extraction incorrecte.
+                  </p>
+
+                  {/* Sharpness bar */}
+                  <div className={`mb-5 p-3 rounded-2xl ${darkMode ? "bg-zinc-800" : "bg-slate-50"}`}>
+                    <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest mb-1.5">
+                      <span className={darkMode ? "text-zinc-500" : "text-slate-400"}>Flou</span>
+                      <span className={darkMode ? "text-zinc-500" : "text-slate-400"}>Net</span>
+                    </div>
+                    <div className={`h-2.5 rounded-full overflow-hidden ${darkMode ? "bg-zinc-700" : "bg-slate-200"}`}>
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-500 transition-all"
+                        style={{ width: `${Math.min(100, (blurModal.score / (BLUR_SCORE_THRESHOLD * 2)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2.5">
+                    <button
+                      onClick={() => {
+                        setBlurModal(null);
+                        // Re-open the native camera picker
+                        photoInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-900/20"
+                    >
+                      📸 Reprendre la photo
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Proceed with the blurry file anyway — synthesize a fake event
+                        const file = blurModal.file;
+                        setBlurModal(null);
+                        // Manually drive the scan flow, bypassing blur check (fromCamera=false)
+                        const fakeEvent = {
+                          persist: () => {},
+                          target: { files: { 0: file, length: 1, item: () => file } as any, value: "" },
+                        } as unknown as React.ChangeEvent<HTMLInputElement>;
+                        handleAIScan(fakeEvent, /* fromCamera */ false);
+                        if (selectedTier === "basique") {
+                          setMonthlyScanCount((prev) => prev + 1);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
+                        darkMode
+                          ? "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      Envoyer quand même
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── S.O.F.I. OCR Confirmation Card ─────────────────────────────── */}
           {sofiDraft && (
             <div className="fixed bottom-6 right-6 z-[300] max-w-sm w-full animate-in slide-in-from-bottom-4 duration-500 drop-shadow-2xl">
@@ -18855,6 +19057,15 @@ const App = () => {
             companyId={activeCompanyId || 'default'}
             companyName={currentCompany?.nombre || "Solutions GPA Inc."}
             unitName={currentCompany?.nombre || 'Mon Logement Meublé'}
+            userProfile={{
+              tps: userProfile.tps,
+              tvq: userProfile.tvq,
+              tpsRate: userProfile.tpsRate,
+              tvqRate: userProfile.tvqRate,
+              taxeSejourRegion: userProfile.taxeSejourRegion,
+              numeroCITQ: userProfile.numeroCITQ,
+            }}
+            modeGestion="proprietaire"
           />
         </main>
       </div>

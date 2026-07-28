@@ -29,6 +29,7 @@ import {
   Gauge,
   Globe,
   Hash,
+  Home,
   Mail,
   MapPin,
   Moon,
@@ -43,6 +44,7 @@ import {
   User,
   Image as ImageIcon,
 } from "lucide-react";
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -644,6 +646,58 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   }`}
               />
             </div>
+
+            {/* ── Location Meublée / Airbnb — affiché si profil investisseur ou gestionnaire ── */}
+            {(selectedProfile === 'investisseur' || selectedProfile === 'gestionnaire') && (<>
+
+              {/* ── Numéro CITQ ─────────────────────────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Home size={11} className="text-rose-500" />
+                  Numéro CITQ — Location Touristique &lt; 31 jours
+                </label>
+                <input
+                  id="settings-citq"
+                  type="text"
+                  value={userProfile.numeroCITQ || ""}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, numeroCITQ: e.target.value }));
+                  }}
+                  placeholder="Ex: 0123456 — obligatoire pour Airbnb / VRBO / direct"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-rose-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+                <p className="text-[8px] font-medium text-slate-400 dark:text-zinc-600 pl-2">
+                  📋 Obligatoire au Québec (Loi sur les établissements d&apos;hébergement touristique). À obtenir auprès de la CITQ avant de publier une annonce.
+                </p>
+              </div>
+
+              {/* ── Taux taxe de séjour régionale ───────────────────────── */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                  <Percent size={11} className="text-amber-500" />
+                  Taux Taxe de Séjour Régionale (%)
+                </label>
+                <input
+                  id="settings-taxe-sejour"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  value={userProfile.taxeSejourRegion ?? 3.5}
+                  onChange={(e) => {
+                    setUserProfile((prev: any) => ({ ...prev, taxeSejourRegion: parseFloat(e.target.value) || 3.5 }));
+                  }}
+                  placeholder="3.5"
+                  className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold tracking-widest transition-all focus:ring-2 focus:ring-amber-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                    }`}
+                />
+                <p className="text-[8px] font-medium text-slate-400 dark:text-zinc-600 pl-2">
+                  Montréal, Québec, Laval : 3,5 % · Cantons-de-l&apos;Est : varie · Remis par Airbnb automatiquement pour les réservations sur plateforme.
+                </p>
+              </div>
+
+            </>)}
 
             {/* ── Adresse professionnelle ─────────────────────────────── */}
             <div className="md:col-span-2 space-y-1 text-left">

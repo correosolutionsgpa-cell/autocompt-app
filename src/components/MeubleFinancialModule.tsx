@@ -2,17 +2,24 @@
  * MeubleFinancialModule.tsx
  * Complete financial module for short-term rentals (Airbnb / Direct bookings).
  * 4 tabs: Calendrier, Revenus Plateformes, Dépenses, Rapport Fiscal
+ *
+ * Architecture: Lecture du profil fiscal depuis userProfile (Paramètres).
+ * Aucune saisie redondante. Tenue de livres adaptée selon modeGestion:
+ *   'proprietaire' → revenu direct dans le grand livre de la compagnie
+ *   'gestionnaire'  → fidéicommis + honoraires de gestion
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar, DollarSign, Receipt, BarChart2, Plus, Trash2,
   Download, Home, Wifi, Zap, Sparkles, Settings, ChevronLeft,
   ChevronRight, X, TrendingUp, TrendingDown, Info,
-  Percent, Star, Check, AlertCircle,
+  Percent, Star, Check, AlertCircle, ShieldCheck, Building2, Loader2,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { dataService } from '../lib/dataService';
+import { auth } from '../lib/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +63,20 @@ interface MeubleFinancialModuleProps {
   companyId: string;
   companyName?: string;
   unitName?: string;
+  /** Profil fiscal lu depuis Paramètres — pas saisi à nouveau ici */
+  userProfile?: {
+    tps?: string;
+    tvq?: string;
+    tpsRate?: number;
+    tvqRate?: number;
+    taxeSejourRegion?: number;
+    numeroCITQ?: string;
+  };
+  /** Déterminé depuis le profil d'onboarding — 'proprietaire' si absent */
+  modeGestion?: 'proprietaire' | 'gestionnaire';
+  /** Nom du propriétaire tiers (mode gestionnaire) */
+  fideicommisClientName?: string;
+  fideicommisClientId?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -93,25 +114,62 @@ const nightsBetween = (ci: string, co: string) => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MeubleFinancialModule({
-  darkMode, companyId, companyName = 'Mon Logement', unitName = 'Unité Meublée'
+  darkMode,
+  companyId,
+  companyName = 'Mon Logement',
+  unitName = 'Unité Meublée',
+  userProfile,
+  modeGestion = 'proprietaire',
+  fideicommisClientName,
+  fideicommisClientId,
 }: MeubleFinancialModuleProps) {
+  // Derived fiscal parameters from userProfile (single source of truth)
+  const registeredTPS = !!(userProfile?.tps && userProfile.tps.trim().length > 3);
+  const registeredTVQ = !!(userProfile?.tvq && userProfile.tvq.trim().length > 3);
+  const taxeSejourRegion = userProfile?.taxeSejourRegion ?? 3.5;
+  const numeroCITQ = userProfile?.numeroCITQ || '';
+  const tpsRate = userProfile?.tpsRate ?? 5;
+  const tvqRate = userProfile?.tvqRate ?? 9.975;
   const D = darkMode;
   const now = new Date();
   const [tab, setTab] = useState<'calendrier' | 'revenus' | 'depenses' | 'rapport'>('calendrier');
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [calYear, setCalYear] = useState(now.getFullYear());
-  const [reservations, setReservations] = useState<Reservation[]>([
-    {
-      id: genId(), guestName: 'Marie Dupont', checkIn: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-05`,
-      checkOut: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-09`,
-      nights: 4, nightlyRate: 120, platform: 'airbnb', platformFeePercent: 3, taxeSejour: 3.5, status: 'confirmed',
-    },
-    {
-      id: genId(), guestName: 'Jean Martin', checkIn: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-15`,
-      checkOut: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-18`,
-      nights: 3, nightlyRate: 135, platform: 'direct', platformFeePercent: 0, taxeSejour: 3.5, status: 'confirmed',
-    },
-  ]);
+  // ─── State: Reservations (loaded from Firestore, seed shown while loading) ──
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [loadingRes, setLoadingRes] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load existing reservations from Firebase on mount
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !companyId) {
+      setLoadingRes(false);
+      return;
+    }
+    dataService.fetchMeubleReservations(userId, companyId)
+      .then((docs) => {
+        if (docs.length > 0) {
+          setReservations(docs.map(d => ({
+            id: d.id,
+            guestName: d.guestName,
+            checkIn: d.checkIn,
+            checkOut: d.checkOut,
+            nights: d.nights,
+            nightlyRate: d.nightlyRate,
+            platform: d.platform,
+            platformFeePercent: d.platformFeePercent,
+            taxeSejour: d.taxeSejour,
+            status: d.status,
+            notes: d.notes,
+          })));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoadingRes(false));
+  }, [companyId]);
+
+
   const [expenses, setExpenses] = useState<MeubleExpense[]>([
     { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, category: 'hydro', description: 'Hydro-Québec', amount: 85 },
     { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, category: 'internet', description: 'Bell Fibe', amount: 75 },
@@ -120,13 +178,13 @@ export default function MeubleFinancialModule({
   ]);
   const [unitConfig, setUnitConfig] = useState<UnitConfig>({
     name: unitName, address: '',
-    taxeSejourDefault: 3.5,
+    taxeSejourDefault: taxeSejourRegion,
     platformFeeDefault: { airbnb: 3, direct: 0, vrbo: 5, booking: 15 },
   });
 
   // New reservation form
   const [showResForm, setShowResForm] = useState(false);
-  const [newRes, setNewRes] = useState<Partial<Reservation>>({ platform: 'airbnb', status: 'confirmed', taxeSejour: 3.5, platformFeePercent: 3 });
+  const [newRes, setNewRes] = useState<Partial<Reservation>>({ platform: 'airbnb', status: 'confirmed', taxeSejour: taxeSejourRegion, platformFeePercent: 3 });
 
   // New expense form
   const [showExpForm, setShowExpForm] = useState(false);
@@ -197,25 +255,72 @@ export default function MeubleFinancialModule({
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const addReservation = () => {
+  const addReservation = async () => {
     if (!newRes.guestName || !newRes.checkIn || !newRes.checkOut) return;
     const nights = nightsBetween(newRes.checkIn!, newRes.checkOut!);
-    const platFee = PLATFORMS[newRes.platform || 'airbnb'].feePercent;
-    setReservations(prev => [...prev, {
-      id: genId(),
+    const platform = newRes.platform || 'airbnb';
+    const platFee = PLATFORMS[platform].feePercent;
+    const gross = (newRes.nightlyRate || 100) * nights;
+
+    // Determine tax amounts if registered
+    const tpsAmt = registeredTPS ? parseFloat((gross * tpsRate / 100).toFixed(2)) : 0;
+    const tvqAmt = registeredTVQ ? parseFloat((gross * tvqRate / 100).toFixed(2)) : 0;
+
+    // Platform remits taxe de séjour automatically for Airbnb/VRBO/Booking
+    const taxeSejourRemisePlateforme = platform !== 'direct';
+
+    const localId = genId();
+    const localRes: Reservation = {
+      id: localId,
       guestName: newRes.guestName!,
       checkIn: newRes.checkIn!,
       checkOut: newRes.checkOut!,
       nights,
       nightlyRate: newRes.nightlyRate || 100,
-      platform: newRes.platform || 'airbnb',
+      platform,
       platformFeePercent: newRes.platformFeePercent ?? platFee,
-      taxeSejour: newRes.taxeSejour ?? unitConfig.taxeSejourDefault,
+      taxeSejour: newRes.taxeSejour ?? taxeSejourRegion,
       status: newRes.status || 'confirmed',
       notes: newRes.notes,
-    }]);
-    setNewRes({ platform: 'airbnb', status: 'confirmed', taxeSejour: unitConfig.taxeSejourDefault, platformFeePercent: 3 });
+    };
+
+    // Optimistic update — show in UI immediately
+    setReservations(prev => [...prev, localRes]);
+    setNewRes({ platform: 'airbnb', status: 'confirmed', taxeSejour: taxeSejourRegion, platformFeePercent: 3 });
     setShowResForm(false);
+
+    // Persist to Firebase + post journal entry (async, non-blocking for UX)
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      setIsSaving(true);
+      try {
+        await dataService.saveMeubleReservation(userId, {
+          id: localId,
+          companyId,
+          modeGestion,
+          fideicommisClientId,
+          fideicommisClientName,
+          guestName: localRes.guestName,
+          checkIn: localRes.checkIn,
+          checkOut: localRes.checkOut,
+          nights: localRes.nights,
+          nightlyRate: localRes.nightlyRate,
+          platform: localRes.platform,
+          platformFeePercent: localRes.platformFeePercent,
+          taxeSejour: localRes.taxeSejour,
+          taxeSejourRemisePlateforme,
+          tpsCollected: tpsAmt,
+          tvqCollected: tvqAmt,
+          status: localRes.status,
+          notes: localRes.notes,
+          journalPosted: false,
+        });
+      } catch (err: any) {
+        console.error('[MeubleModule] Save failed:', err.message);
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const addExpense = () => {
@@ -641,6 +746,60 @@ export default function MeubleFinancialModule({
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
+
+      {/* ── Bandeau conformité Revenu Québec ─────────────────────────────── */}
+      <div className={`rounded-2xl border px-4 py-3 flex flex-wrap items-center gap-3 ${
+        D ? 'bg-zinc-900/70 border-zinc-800' : 'bg-white border-slate-200'
+      }`}>
+        {/* Mode gestion badge */}
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+          modeGestion === 'gestionnaire'
+            ? (D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700')
+            : (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+        }`}>
+          {modeGestion === 'gestionnaire' ? <Building2 size={10} /> : <Home size={10} />}
+          {modeGestion === 'gestionnaire'
+            ? `Gestionnaire${fideicommisClientName ? ` — ${fideicommisClientName}` : ''}`
+            : 'Propriétaire Direct'}
+        </div>
+
+        {/* CITQ status */}
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+          numeroCITQ
+            ? (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+            : (D ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700')
+        }`}>
+          {numeroCITQ ? <ShieldCheck size={10} /> : <AlertCircle size={10} />}
+          {numeroCITQ ? `CITQ #${numeroCITQ}` : 'CITQ requis — voir Paramètres'}
+        </div>
+
+        {/* TPS/TVQ status */}
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+          registeredTPS
+            ? (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+            : (D ? 'bg-zinc-800 border-zinc-700 text-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-400')
+        }`}>
+          <Percent size={10} />
+          {registeredTPS ? 'TPS/TVQ inscrits' : 'Non inscrit TPS/TVQ'}
+        </div>
+
+        {/* Taxe séjour info */}
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+          D ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-500'
+        }`}>
+          <Star size={10} />
+          Taxe séjour: {taxeSejourRegion}%
+        </div>
+
+        {/* Saving spinner */}
+        {isSaving && (
+          <div className="ml-auto flex items-center gap-1.5 text-[9px] font-black uppercase text-emerald-500">
+            <Loader2 size={12} className="animate-spin" />
+            Enregistrement dans le grand livre…
+          </div>
+        )}
+      </div>
+
       {/* Tab bar */}
       <div className={`flex gap-1 border-b ${D?'border-zinc-800':'border-slate-200'} overflow-x-auto`}>
         {TABS.map(t => (
