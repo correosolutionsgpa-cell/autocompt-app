@@ -19065,7 +19065,7 @@ const App = () => {
               taxeSejourRegion: userProfile.taxeSejourRegion,
               numeroCITQ: userProfile.numeroCITQ,
             }}
-            modeGestion="proprietaire"
+            isGestionnaire={hasAccess(activeProfile, 'fideicommis')}
           />
         </main>
       </div>

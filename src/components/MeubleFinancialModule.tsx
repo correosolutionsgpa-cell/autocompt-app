@@ -18,7 +18,7 @@ import {
   Percent, Star, Check, AlertCircle, ShieldCheck, Building2, Loader2,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { dataService } from '../lib/dataService';
+import { dataService, type FideicommisClientDoc } from '../lib/dataService';
 import { auth } from '../lib/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,6 +40,9 @@ interface Reservation {
   taxeSejour: number;   // %
   status: 'confirmed' | 'pending' | 'cancelled';
   notes?: string;
+  /** Si présent: réservation gérée en fidéicommis pour ce client-propriétaire */
+  fideicommisClientId?: string;
+  fideicommisClientName?: string;
 }
 
 interface MeubleExpense {
@@ -72,11 +75,9 @@ interface MeubleFinancialModuleProps {
     taxeSejourRegion?: number;
     numeroCITQ?: string;
   };
-  /** Déterminé depuis le profil d'onboarding — 'proprietaire' si absent */
-  modeGestion?: 'proprietaire' | 'gestionnaire';
-  /** Nom du propriétaire tiers (mode gestionnaire) */
-  fideicommisClientName?: string;
-  fideicommisClientId?: string;
+  /** true si le compte actif a le profil Gestionnaire Immobilier (RBAC "fideicommis") —
+   *  affiche le sélecteur de client permettant de mettre une réservation en fidéicommis. */
+  isGestionnaire?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -119,9 +120,7 @@ export default function MeubleFinancialModule({
   companyName = 'Mon Logement',
   unitName = 'Unité Meublée',
   userProfile,
-  modeGestion = 'proprietaire',
-  fideicommisClientName,
-  fideicommisClientId,
+  isGestionnaire = false,
 }: MeubleFinancialModuleProps) {
   // Derived fiscal parameters from userProfile (single source of truth)
   const registeredTPS = !!(userProfile?.tps && userProfile.tps.trim().length > 3);
@@ -139,6 +138,8 @@ export default function MeubleFinancialModule({
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loadingRes, setLoadingRes] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  // Property-owner clients available for fidéicommis assignment (gestionnaire profile only)
+  const [fideicommisClients, setFideicommisClients] = useState<FideicommisClientDoc[]>([]);
 
   // Load existing reservations from Firebase on mount
   useEffect(() => {
@@ -162,12 +163,26 @@ export default function MeubleFinancialModule({
             taxeSejour: d.taxeSejour,
             status: d.status,
             notes: d.notes,
+            fideicommisClientId: d.fideicommisClientId,
+            fideicommisClientName: d.fideicommisClientName,
           })));
         }
       })
       .catch(console.error)
       .finally(() => setLoadingRes(false));
   }, [companyId]);
+
+  // Load the gestionnaire's property-owner clients (for the fidéicommis picker)
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!isGestionnaire || !userId || !companyId) {
+      setFideicommisClients([]);
+      return;
+    }
+    dataService.fetchFideicommisClients(userId, companyId)
+      .then(setFideicommisClients)
+      .catch(console.error);
+  }, [isGestionnaire, companyId]);
 
 
   const [expenses, setExpenses] = useState<MeubleExpense[]>([
@@ -262,9 +277,17 @@ export default function MeubleFinancialModule({
     const platFee = PLATFORMS[platform].feePercent;
     const gross = (newRes.nightlyRate || 100) * nights;
 
-    // Determine tax amounts if registered
-    const tpsAmt = registeredTPS ? parseFloat((gross * tpsRate / 100).toFixed(2)) : 0;
-    const tvqAmt = registeredTVQ ? parseFloat((gross * tvqRate / 100).toFixed(2)) : 0;
+    // If a client was picked, this reservation is managed in fidéicommis on their
+    // behalf — the client's own TPS/TVQ registration (not this account's) would
+    // apply, so we don't compute those here (see saveMeubleReservation docstring).
+    const selectedClient = newRes.fideicommisClientId
+      ? fideicommisClients.find(c => c.id === newRes.fideicommisClientId)
+      : undefined;
+    const modeGestion: 'proprietaire' | 'gestionnaire' = selectedClient ? 'gestionnaire' : 'proprietaire';
+
+    // Determine tax amounts if registered (propriétaire mode only)
+    const tpsAmt = !selectedClient && registeredTPS ? parseFloat((gross * tpsRate / 100).toFixed(2)) : 0;
+    const tvqAmt = !selectedClient && registeredTVQ ? parseFloat((gross * tvqRate / 100).toFixed(2)) : 0;
 
     // Platform remits taxe de séjour automatically for Airbnb/VRBO/Booking
     const taxeSejourRemisePlateforme = platform !== 'direct';
@@ -282,6 +305,8 @@ export default function MeubleFinancialModule({
       taxeSejour: newRes.taxeSejour ?? taxeSejourRegion,
       status: newRes.status || 'confirmed',
       notes: newRes.notes,
+      fideicommisClientId: selectedClient?.id,
+      fideicommisClientName: selectedClient?.nom,
     };
 
     // Optimistic update — show in UI immediately
@@ -289,7 +314,7 @@ export default function MeubleFinancialModule({
     setNewRes({ platform: 'airbnb', status: 'confirmed', taxeSejour: taxeSejourRegion, platformFeePercent: 3 });
     setShowResForm(false);
 
-    // Persist to Firebase + post journal entry (async, non-blocking for UX)
+    // Persist to Firebase + post journal entry / dépôt fidéicommis (async, non-blocking for UX)
     const userId = auth.currentUser?.uid;
     if (userId) {
       setIsSaving(true);
@@ -298,8 +323,9 @@ export default function MeubleFinancialModule({
           id: localId,
           companyId,
           modeGestion,
-          fideicommisClientId,
-          fideicommisClientName,
+          fideicommisClientId: selectedClient?.id,
+          fideicommisClientName: selectedClient?.nom,
+          commissionRatePercent: selectedClient?.tauxHonoraires,
           guestName: localRes.guestName,
           checkIn: localRes.checkIn,
           checkOut: localRes.checkOut,
@@ -516,6 +542,11 @@ export default function MeubleFinancialModule({
                 <div className="flex items-center gap-2">
                   <p className={`text-[12px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{r.guestName}</p>
                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${platConf.bg} ${platConf.color}`}>{platConf.label}</span>
+                  {r.fideicommisClientName && (
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                      <Building2 size={8} className="inline mr-0.5" />{r.fideicommisClientName}
+                    </span>
+                  )}
                 </div>
                 <p className={`text-[10px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
                   {new Date(r.checkIn).toLocaleDateString('fr-CA', { day:'2-digit', month:'short' })} →{' '}
@@ -752,16 +783,21 @@ export default function MeubleFinancialModule({
         D ? 'bg-zinc-900/70 border-zinc-800' : 'bg-white border-slate-200'
       }`}>
         {/* Mode gestion badge */}
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
-          modeGestion === 'gestionnaire'
-            ? (D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700')
-            : (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
-        }`}>
-          {modeGestion === 'gestionnaire' ? <Building2 size={10} /> : <Home size={10} />}
-          {modeGestion === 'gestionnaire'
-            ? `Gestionnaire${fideicommisClientName ? ` — ${fideicommisClientName}` : ''}`
-            : 'Propriétaire Direct'}
-        </div>
+        {isGestionnaire ? (
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+            D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+          }`}>
+            <Building2 size={10} />
+            Compte Gestionnaire — {fideicommisClients.length} client{fideicommisClients.length !== 1 ? 's' : ''} fidéicommis
+          </div>
+        ) : (
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+            D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            <Home size={10} />
+            Propriétaire Direct
+          </div>
+        )}
 
         {/* CITQ status */}
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
@@ -836,6 +872,29 @@ export default function MeubleFinancialModule({
                 <button onClick={() => setShowResForm(false)} className={`p-2 rounded-xl ${D?'hover:bg-zinc-800 text-zinc-500':'hover:bg-slate-100 text-slate-400'}`}><X size={16}/></button>
               </div>
               <div className="space-y-3">
+                {isGestionnaire && fideicommisClients.length === 0 && (
+                  <div className={`p-3 rounded-xl text-[10px] ${D ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700'}`}>
+                    <Info size={12} className="inline mr-1" />
+                    Aucun client fidéicommis enregistré — ajoutez-en un dans « Compte en Fidéicommis » pour pouvoir gérer des unités meublées pour vos clients.
+                  </div>
+                )}
+                {isGestionnaire && fideicommisClients.length > 0 && (
+                  <div>
+                    <label className={label}>Propriétaire du logement</label>
+                    <select className={input} value={newRes.fideicommisClientId || ''} onChange={e => setNewRes(r => ({ ...r, fideicommisClientId: e.target.value || undefined }))}>
+                      <option value="">Moi-même (compte courant)</option>
+                      {fideicommisClients.map(c => (
+                        <option key={c.id} value={c.id}>{c.nom} — honoraires {c.tauxHonoraires}%</option>
+                      ))}
+                    </select>
+                    {newRes.fideicommisClientId && (
+                      <p className={`text-[9px] mt-1 ${D ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                        <Building2 size={10} className="inline mr-1" />
+                        Cette réservation sera déposée en fidéicommis pour ce client — vos honoraires seront retirés automatiquement.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div><label className={label}>Nom du voyageur</label>
                   <input className={input} placeholder="Marie Dupont" value={newRes.guestName||''} onChange={e => setNewRes(r=>({...r, guestName: e.target.value}))} /></div>
                 <div className="grid grid-cols-2 gap-3">

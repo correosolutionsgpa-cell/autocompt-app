@@ -194,6 +194,9 @@ export interface MeubleReservationDoc {
   /** Pour le mode gestionnaire: FK → FideicommisClientDoc.id */
   fideicommisClientId?: string;
   fideicommisClientName?: string;
+  /** Taux d'honoraires du gestionnaire (%), lu depuis FideicommisClientDoc.tauxHonoraires
+   *  au moment de la réservation — génère un retrait "honoraires" automatique. */
+  commissionRatePercent?: number;
   guestName: string;
   checkIn: string;           // YYYY-MM-DD
   checkOut: string;          // YYYY-MM-DD
@@ -2169,10 +2172,13 @@ export const dataService = {
       try {
         if (res.modeGestion === 'gestionnaire') {
           // === GESTIONNAIRE MODE: real OACIQ trust-account integration ===
+          // IMPORTANT: fideicommisDepots/fideicommisRetraits use the RAW companyId
+          // (activeCompanyId), NOT the `${userId}_company_${id}` prefix used by
+          // meubleReservations — CompteFideicommis.tsx queries on the raw value.
           const depotId = `${userId}_fiddepot_${docId}`;
           const depotDoc = {
             id: depotId,
-            companyId: docCompanyId,
+            companyId: res.companyId,
             numeroRecu: `MEU-${Date.now().toString().slice(-8)}`,
             date: now.slice(0, 10),
             locataireName: res.guestName,
@@ -2188,6 +2194,29 @@ export const dataService = {
             createdAt: now,
           };
           await setDoc(doc(db, 'fideicommisDepots', depotId), depotDoc);
+
+          // Honoraires de gestion (commission) — only if a rate was supplied
+          // (looked up from the selected FideicommisClientDoc.tauxHonoraires).
+          if (res.commissionRatePercent && res.commissionRatePercent > 0) {
+            const honorairesAmount = gross * (res.commissionRatePercent / 100);
+            const retraitId = `${userId}_fidretrait_${docId}`;
+            const retraitDoc = {
+              id: retraitId,
+              companyId: res.companyId,
+              date: now.slice(0, 10),
+              beneficiaire: 'Honoraires de gestion',
+              propertyAddress: 'Location meublée courte durée',
+              montant: honorairesAmount,
+              type: 'honoraires' as const,
+              description: `Honoraires (${res.commissionRatePercent}%) — Réservation ${res.platform}, ${res.guestName} (${res.checkIn} → ${res.checkOut})`,
+              clientId: res.fideicommisClientId || '',
+              clientName: res.fideicommisClientName || 'Client non spécifié',
+              notes: '',
+              ownerId: userId,
+              createdAt: now,
+            };
+            await setDoc(doc(db, 'fideicommisRetraits', retraitId), retraitDoc);
+          }
         } else {
           // === PROPRIÉTAIRE MODE: post to the company's own grand livre ===
           const entryId = `${docId}-journal`;
@@ -2263,6 +2292,30 @@ export const dataService = {
   async deleteMeubleReservation(userId: string, resId: string): Promise<void> {
     const docId = `${userId}_meubleres_${resId}`;
     await deleteDoc(doc(db, 'meubleReservations', docId));
+  },
+
+  /**
+   * Fetch the property-owner clients (fideicommisClients) available for the
+   * gestionnaire to select as "propriétaire de ce logement" when booking a
+   * meublé reservation. Same collection/query shape as CompteFideicommis.tsx —
+   * NOTE: uses the RAW companyId (activeCompanyId), not the meublé-prefixed one.
+   */
+  async fetchFideicommisClients(
+    userId: string,
+    companyId: string
+  ): Promise<FideicommisClientDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'fideicommisClients'),
+        where('companyId', '==', companyId),
+        where('ownerId', '==', userId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as FideicommisClientDoc);
+    } catch (e) {
+      console.error('fetchFideicommisClients failed:', e);
+      return [];
+    }
   },
 
   /**
