@@ -16051,17 +16051,19 @@ const App = () => {
                                       <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm ${depense.concilied ? "left-[18px]" : "left-[3px]"}`} />
                                     </button>
 
-                                    {(depense.lien || depense.documentUrl) ? (
-                                      <button
-                                        onClick={() => setEditingExpense(depense)}
-                                        className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
-                                        title="Voir le document"
-                                      >
-                                        <Eye size={15} />
-                                      </button>
-                                    ) : (
-                                      <div className="w-[27px]"></div>
-                                    )}
+                                    {/* Toujours visible — avant, ce bouton (seul moyen de changer
+                                        la categorie, cf. le champ editable dans le modal
+                                        editingExpense plus bas) n'apparaissait que si un document
+                                        etait rattache, laissant les depenses sans document
+                                        (notamment "A classer" avec 0$) totalement bloquees, sans
+                                        aucun moyen de les classer. */}
+                                    <button
+                                      onClick={() => setEditingExpense(depense)}
+                                      className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+                                      title={(depense.lien || depense.documentUrl) ? "Voir le document" : "Modifier / Classer"}
+                                    >
+                                      {(depense.lien || depense.documentUrl) ? <Eye size={15} /> : <PenLine size={15} />}
+                                    </button>
                                     {depense.noteComptable && (
                                       <button
                                         onClick={() => alert(`Note pour le comptable :\n\n${depense.noteComptable}`)}
