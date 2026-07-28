@@ -3857,14 +3857,19 @@ const App = () => {
     const html2canvas = html2canvasMod.default;
     const element = document.getElementById("invoice-content");
     if (!element) throw new Error("Invoice content not found");
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    // scale 4 (au lieu de 2) + PNG (sans perte, au lieu de JPEG) — Fabiola a
+    // signale que la facture etait floue/pixelisee au zoom. La facture est
+    // surtout du texte sur fond blanc, PNG la compresse tres bien (pas plus
+    // lourd que le JPEG pour ce type de contenu) sans les artefacts de
+    // compression avec perte qui rendent le texte flou sur les bords.
+    const canvas = await html2canvas(element, { scale: 4 });
+    const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
     const margin = 0.5;
     const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
     const maxContentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
     const imgHeight = Math.min((canvas.height * contentWidth) / canvas.width, maxContentHeight);
-    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight);
+    pdf.addImage(imgData, "PNG", margin, margin, contentWidth, imgHeight);
     return pdf;
   };
 
