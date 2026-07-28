@@ -346,7 +346,11 @@ JSON schema to return:
   "tvq": number,        // QST/TVQ (9.975%) amount. Calculate as subtotal*0.09975 if not printed.
   "total": number,      // Grand total all-taxes-included (CAD). Never invent.
   "category": string,   // One of: ["À classer","Télécommunications","Bureau à domicile","Équipement","Réparations / Entretien","Rénovation / Construction","Taxes","Assurance","Chauffage","Electricité","Frais de gestion / Exploitation","Essence / Carburant","Entretien Véhicule","Assurance auto","Déplacements / Automobile","Immatriculation / Permis"]
-  // Vehicle rule: parking/stationnement, gas/essence/carburant, car repairs/garage/pneus, car insurance, and SAAQ/immatriculation charges are VEHICLE expenses — use "Déplacements / Automobile" for parking/tolls/mileage-type charges, never "Frais de gestion / Exploitation" (that category is for property management/admin fees only, not vehicle costs).
+  // Vehicle rule: gas/essence/carburant, car repairs/garage/pneus, car insurance, and SAAQ/immatriculation charges are VEHICLE expenses — never "Frais de gestion / Exploitation" (that category is for property management/admin fees only, not vehicle costs).
+  // Parking rule (depends on purpose, per Quebec real-estate accounting practice):
+  //   - Meter, short-term/temporary lot (e.g. "Stationnement de Montréal", Indigo, Vinci), or any SMALL one-off amount (a few hours, under ~$30) => "Déplacements / Automobile" (this is a work-trip cost: showing a property, meeting a client, notary signing, property visit).
+  //   - RECURRING monthly charge for a FIXED reserved spot at the business's own office/agency (higher amount, e.g. $100-$250, from a property-management/parking-management company, billed monthly) => "Frais de gestion / Exploitation" instead (it's an office/operating cost, not a trip).
+  //   - When genuinely ambiguous between these two, prefer "Déplacements / Automobile" (the more common real-estate case) but this is exactly the kind of borderline call the human should double-check — do not guess confidently.
   "propertyAddress": string | null  // The PROPERTY/CIVIC ADDRESS this document concerns (e.g. the address on a municipal tax bill, insurance policy, or utility bill) — NOT the supplier's own business address. Only fill this when a real property address is printed on the document (street + city). If the document doesn't reference a specific property (e.g. a generic retail receipt), return null. Never confuse a municipality/city name alone with a full address — only return it if it's part of a real civic address.
 }`;
 
