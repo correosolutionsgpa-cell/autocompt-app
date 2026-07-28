@@ -312,7 +312,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             <label
               className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}
             >
-              Nombre de pièces (appellation commerciale)
+              Nombre de pièces (format immobilier standard)
             </label>
             <input
               type="text"
