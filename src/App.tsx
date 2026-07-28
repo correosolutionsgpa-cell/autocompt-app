@@ -6333,8 +6333,16 @@ const App = () => {
           }
 
           // 2. Keyword mapping in French / English (Medium Confidence)
+          // Apps/marques de stationnement quebecoises — DOIT passer avant
+          // "Telecommunications": "PayByPhone" (tres repandu pour payer les
+          // parcometres au Quebec) contient litteralement "phone", donc un
+          // ticket paye via cette app se faisait happer par erreur par le
+          // mot-cle telecom au lieu d'etre reconnu comme deplacement/vehicule.
+          if (/paybyphone|pay\s*by\s*phone|honkmobile|honk\s*mobile|vinci\s*park|indigo\s*park|stationnement\s*de\s*montreal/i.test(normalizedStr)) {
+            return { category: "Déplacements / Automobile", catConfidence: 'medium' };
+          }
           if (
-            /telecom|internet|mobile|phone|telephone|bell|videotron|cellulaire|wifi/i.test(
+            /telecom|internet|\bmobile\b|\bphone\b|telephone|bell|videotron|cellulaire|wifi/i.test(
               normalizedStr,
             )
           ) {
