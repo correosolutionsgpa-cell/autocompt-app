@@ -7600,13 +7600,18 @@ const App = () => {
     const amount = bankEntry.amt;
     const desc = cleanStr(bankEntry.desc);
 
-    // Flatten plex structures into expected deposits
+    // Flatten plex structures into expected deposits — reads from the real
+    // `units` collection (allUnits), NOT the legacy `chambres[]` field, which
+    // is frozen at its initial placeholder value and never reflects what the
+    // "Configuration des Unités" grid actually saves (same bug already fixed
+    // in GestionPlex.tsx's save validation — this was a second occurrence).
     const plexExpected: any[] = [];
     plexManagementProperties.forEach(door => {
-      if (door.isContainer && door.chambres) {
-        door.chambres.forEach((chambre: any) => {
-          if (chambre.status !== "Vacant") {
-            plexExpected.push({ type: "loyer", id: chambre.id, locataire: chambre.locataire, expectedAmount: parseFloat(chambre.montant || 0), source: `Puerta: ${door.adresse} - ${chambre.identifiantChambre}` });
+      const doorUnits = allUnits.filter(u => u.buildingId === door.id);
+      if (doorUnits.length > 0) {
+        doorUnits.forEach((unit) => {
+          if (unit.isActive) {
+            plexExpected.push({ type: "loyer", id: unit.id, locataire: unit.tenantName, expectedAmount: parseFloat(String(unit.monthlyRent || 0)), source: `Puerta: ${door.adresse} - ${unit.unitName}` });
           }
         });
       } else if (door.status !== "Vacant") {

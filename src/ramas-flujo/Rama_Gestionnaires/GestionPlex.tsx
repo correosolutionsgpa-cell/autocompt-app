@@ -17,7 +17,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { UnitDoc } from "../../lib/dataService";
 import {
@@ -28,10 +28,12 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
+  PenLine,
   Save,
   Sparkles,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -98,6 +100,13 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   fideicommisClients = [],
 }) => {
   const taxScanInputRef = useRef<HTMLInputElement>(null);
+  const formTopRef = useRef<HTMLDivElement>(null);
+  // Which existing property (by id) the form above is currently editing —
+  // null means the form is in "create new" mode. There was previously NO way
+  // to modify an already-saved property/unit at all (only delete + recreate
+  // from scratch), which blocked correcting a mistake like a wrong "durée
+  // minimale" value on an existing room.
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
 
   // Only show this company's properties. Untagged (`companyId` missing) entries
   // are properties saved before this feature existed — keep showing them until
@@ -168,6 +177,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
 
       {/* Formulaire d'ajout de propriété */}
       <div
+        ref={formTopRef}
         className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
       >
         <div className="flex items-center space-x-3 mb-6">
@@ -179,8 +189,36 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
           <h3
             className={`text-xl font-black uppercase italic tracking-tighter ${darkMode ? "text-white" : "text-slate-900"}`}
           >
-            Ajouter une Propriété
+            {editingPropertyId ? "Modifier la Propriété" : "Ajouter une Propriété"}
           </h3>
+          {editingPropertyId && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingPropertyId(null);
+                setPlexManagementForm({
+                  typeLocation: "Logement entier",
+                  nombrePieces: "",
+                  adresse: "",
+                  montant: "",
+                  locataire: "",
+                  nomBail: "",
+                  status: "Actif",
+                  nombreChambres: 1,
+                  estMeuble: false,
+                  isContainer: false,
+                  fideicommisClientId: undefined,
+                  fideicommisClientName: undefined,
+                  units: [
+                    { id: `unit_${Date.now()}`, buildingId: "", unitName: "Habitation 1", tenantName: "", monthlyRent: 0, isActive: true },
+                  ],
+                });
+              }}
+              className={`ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-800" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+            >
+              <X size={11} /> Annuler la modification
+            </button>
+          )}
 
           {/* ── S.O.F.I. Tax Scanner ──────────────────────────────────────── */}
           <div className="ml-auto flex-shrink-0">
@@ -768,31 +806,37 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   return;
                 }
 
-                const newId = `prop_${Date.now()}`;
+                const propId = editingPropertyId || `prop_${Date.now()}`;
                 // Build units from the form (single unit for Logement entier, or multiple for Colocation)
                 const formUnits: any[] =
                   plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" ||
                   plexManagementForm.typeLocation === "Habitation/Chambre"
-                    ? (plexManagementForm.units || [])
+                    ? (plexManagementForm.units || []).map((u: any) => ({ ...u, buildingId: propId }))
                     : [{
-                        id: `unit_${Date.now()}`,
-                        buildingId: newId,
+                        id: (plexManagementForm.units || [])[0]?.id || `unit_${Date.now()}`,
+                        buildingId: propId,
                         unitName: plexManagementForm.nombrePieces || "Unité principale",
                         tenantName: plexManagementForm.locataire || "",
                         monthlyRent: parseFloat(plexManagementForm.montant) || 0,
                         isActive: plexManagementForm.status !== "Vacant",
                       }];
 
-                setPlexManagementProperties([
-                  ...plexManagementProperties,
-                  {
-                    ...plexManagementForm,
-                    id: newId,
-                    companyId: activeCompanyId,
-                    isContainer: formUnits.length > 1,
-                    units: formUnits,
-                  },
-                ]);
+                const savedProperty = {
+                  ...plexManagementForm,
+                  id: propId,
+                  companyId: activeCompanyId,
+                  isContainer: formUnits.length > 1,
+                  units: formUnits,
+                };
+
+                if (editingPropertyId) {
+                  setPlexManagementProperties(
+                    plexManagementProperties.map((x) => x.id === editingPropertyId ? savedProperty : x)
+                  );
+                  setEditingPropertyId(null);
+                } else {
+                  setPlexManagementProperties([...plexManagementProperties, savedProperty]);
+                }
                 setPlexManagementForm({
                   typeLocation: "Logement entier",
                   nombrePieces: "",
@@ -827,7 +871,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
               className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 border-0 text-white font-black uppercase tracking-widest rounded-xl text-[10px] transition-transform active:scale-95 shadow-md hover:from-emerald-600 hover:to-emerald-700 hover:shadow-emerald-500/40 inline-flex items-center space-x-2"
             >
               <Save size={14} />
-              <span>Enregistrer l'unité</span>
+              <span>{editingPropertyId ? "Enregistrer les modifications" : "Enregistrer l'unité"}</span>
             </button>
           </div>
         </div>
@@ -902,6 +946,45 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     </div>
                     <div className="flex flex-col items-end space-y-2">
                       <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => {
+                            const isColoc = p.typeLocation === "Chambres individuelles (Colocation)" || p.typeLocation === "Habitation/Chambre";
+                            const formUnits = buildingUnits.map((u) => ({
+                              id: u.id,
+                              buildingId: u.buildingId,
+                              unitName: u.unitName,
+                              tenantName: u.tenantName,
+                              monthlyRent: u.monthlyRent,
+                              isActive: u.isActive,
+                              courteDuree: u.courteDuree,
+                              dureeMinimaleJours: (u as any).dureeMinimaleJours,
+                            }));
+                            const singleUnit = buildingUnits[0];
+                            setEditingPropertyId(p.id);
+                            setPlexManagementForm({
+                              typeLocation: p.typeLocation || "Logement entier",
+                              adresse: p.adresse || "",
+                              nombrePieces: p.nombrePieces || "",
+                              nombreChambres: isColoc ? (formUnits.length || 1) : 1,
+                              estMeuble: !!p.estMeuble,
+                              status: singleUnit ? (singleUnit.isActive ? "Actif" : "Vacant") : (p.status || "Actif"),
+                              montant: singleUnit ? String(singleUnit.monthlyRent || "") : (p.montant || ""),
+                              locataire: singleUnit ? (singleUnit.tenantName || "") : (p.locataire || ""),
+                              nomBail: p.nomBail || "",
+                              isContainer: isColoc,
+                              fideicommisClientId: p.fideicommisClientId,
+                              fideicommisClientName: p.fideicommisClientName,
+                              units: formUnits.length > 0 ? formUnits : [
+                                { id: `unit_${Date.now()}`, buildingId: p.id, unitName: "Habitation 1", tenantName: "", monthlyRent: 0, isActive: true },
+                              ],
+                            });
+                            formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className={`p-2 transition-colors rounded-xl ${darkMode ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-slate-100 text-slate-800 hover:bg-slate-200"}`}
+                          title="Modifier cette propriété"
+                        >
+                          <PenLine size={16} />
+                        </button>
                         <button
                           onClick={() =>
                             setPlexManagementProperties(
