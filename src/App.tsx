@@ -16958,6 +16958,29 @@ const App = () => {
                         <input type="text" value={editingExpense.fournisseur || editingExpense.tiers || editingExpense.proveedor || ""} onChange={e => setEditingExpense({ ...editingExpense, fournisseur: e.target.value })} className={`w-full p-4 rounded-[20px] text-xs font-bold border-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`} />
                       </div>
 
+                      {/* ── Immeuble — S.O.F.I. suggère via correspondance d'adresse, ────────
+                          toujours corrigible ici (utile dès qu'il y a 2+ immeubles). */}
+                      {visiblePlexManagementProperties.length > 0 && (
+                        <div className="space-y-1 text-left">
+                          <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 flex items-center gap-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                            Immeuble
+                            {editingExpense.aiSuggestedBuilding && (
+                              <span className="text-amber-500 normal-case italic">⚡ suggéré par S.O.F.I. — vérifiez</span>
+                            )}
+                          </label>
+                          <select
+                            value={editingExpense.buildingId || ""}
+                            onChange={e => setEditingExpense({ ...editingExpense, buildingId: e.target.value || undefined, aiSuggestedBuilding: false })}
+                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                          >
+                            <option value="">— Aucun immeuble lié —</option>
+                            {visiblePlexManagementProperties.map((p: any) => (
+                              <option key={p.buildingId || p.id} value={p.buildingId || p.id}>{p.adresse}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-zinc-900/50">
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Sous-total Net ($)</label>

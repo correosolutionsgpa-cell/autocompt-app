@@ -1587,13 +1587,20 @@ export const dataService = {
     assertCanWrite();
     const originalCompanyId = expenseData.companyId;
     const docCompanyId = `${userId}_company_${originalCompanyId}`;
-    const data = {
+    const data: any = {
       ...expenseData,
       companyId: docCompanyId,
       ownerId: userId,
       createdAt: expenseData.createdAt || new Date().toISOString(),
     };
-    
+    // Optional fields (buildingId, unitId, etc.) are sometimes passed as explicit
+    // `undefined` by callers when a selection is cleared. Firestore's setDoc
+    // rejects any field with an undefined value — strip them here so the write
+    // never fails silently (see saveMeubleReservation for the same fix).
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+
     // Derive a STABLE, per-user document id from whatever id the caller passed in
     // (a raw numeric client-side timestamp on first save, or this same prefixed id
     // on every later save as the OCR pipeline fills in more data). Reusing the same

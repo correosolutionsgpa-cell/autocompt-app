@@ -18,6 +18,7 @@ import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
 import { motion } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
+import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
 import { INVOICE_COLOR_PALETTE, INVOICE_FONT_STACKS, INVOICE_TEMPLATES } from "../../lib/invoiceTemplates";
 import {
   ArrowLeft,
@@ -32,6 +33,7 @@ import {
   Home,
   Mail,
   MapPin,
+  MessageSquare,
   Moon,
   Palette,
   Percent,
@@ -172,6 +174,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   selectedProfile,
   updateSelectedProfile,
 }) => {
+  const { toastDurationMs, setToastDurationMs } = useToast();
+
   // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
   // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
   // uniquement pour lire d'anciennes données locales lors de la migration ponctuelle
@@ -1387,6 +1391,40 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${darkMode ? 'translate-x-7' : 'translate-x-1'}`}
               />
             </button>
+          </div>
+
+          <div className="mt-4 p-4 bg-slate-50/50 dark:bg-zinc-950/50 rounded-2xl border border-slate-100 dark:border-zinc-800">
+            <div className="flex items-center space-x-4 mb-3">
+              <div className={`p-3 rounded-xl ${darkMode ? "bg-sky-500/10 text-sky-400" : "bg-sky-500/10 text-sky-600"}`}>
+                <MessageSquare size={20} />
+              </div>
+              <div>
+                <h3 className="text-[11px] font-black uppercase tracking-wider mb-0.5">Durée des messages de Sofi</h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Combien de temps les notifications restent affichées</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "Rapide", ms: 3000 },
+                { label: "Normal", ms: DEFAULT_TOAST_DURATION_MS },
+                { label: "Long", ms: 8000 },
+                { label: "Très long", ms: 15000 },
+              ].map((opt) => (
+                <button
+                  key={opt.ms}
+                  onClick={() => setToastDurationMs(opt.ms)}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                    toastDurationMs === opt.ms
+                      ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                      : darkMode
+                        ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+                        : "bg-white text-slate-500 hover:bg-slate-100 border border-slate-200"
+                  }`}
+                >
+                  {opt.label} ({(opt.ms / 1000).toFixed(0)}s)
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </main>
