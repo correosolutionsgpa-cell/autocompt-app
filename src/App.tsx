@@ -17051,7 +17051,20 @@ const App = () => {
                           <label className="flex items-center justify-between cursor-pointer">
                             <div className="flex flex-col text-left">
                               <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Cette dépense profite aussi à MA partie personnelle</span>
-                              <span className="text-[8px] font-bold text-slate-500">Ne pas activer pour une dépense qui concerne une chambre louée (déjà 100% déductible) — seulement pour un frais partagé comme le déneigement, l'entretien du terrain, la toiture, le chauffage central ou l'assurance de tout l'immeuble.</span>
+                              <span className="text-[8px] font-bold text-slate-500">
+                                {(() => {
+                                  // Adapte le mot selon le type de l'immeuble lié (Chambres
+                                  // individuelles = colocation → "chambre" ; sinon des
+                                  // logements séparés → "unité/logement") — pas de "chambre
+                                  // louée" pour un utilisateur qui loue des unités entières.
+                                  const linkedProp = (visiblePlexManagementProperties as any[]).find(
+                                    (p) => (p.buildingId || p.id) === editingExpense.buildingId
+                                  );
+                                  const isColocation = linkedProp?.typeLocation === "Chambres individuelles (Colocation)" || linkedProp?.typeLocation === "Habitation/Chambre";
+                                  const rentedWord = isColocation ? "une chambre louée" : "une unité/un logement loué";
+                                  return `Ne pas activer pour une dépense qui concerne ${rentedWord} (déjà 100% déductible) — seulement pour un frais partagé comme le déneigement, l'entretien du terrain, la toiture, le chauffage central ou l'assurance de tout l'immeuble.`;
+                                })()}
+                              </span>
                             </div>
                             <button
                               type="button"
