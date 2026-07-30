@@ -19,7 +19,7 @@ import {
   Upload, FileSpreadsheet,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { dataService, type FideicommisClientDoc } from '../lib/dataService';
+import { dataService, type FideicommisClientDoc, type PropertyDoc, type UnitDoc } from '../lib/dataService';
 import { auth } from '../lib/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +44,12 @@ interface Reservation {
   /** Si présent: réservation gérée en fidéicommis pour ce client-propriétaire */
   fideicommisClientId?: string;
   fideicommisClientName?: string;
+  /** FK → PropertyDoc.id (Gestion Immobilière) — l'immeuble auquel appartient cette réservation */
+  buildingId?: string;
+  /** FK → UnitDoc.id — l'unité spécifique (porte) */
+  unitId?: string;
+  /** Étiquette d'affichage de l'unité (dénormalisé pour rendu rapide) */
+  unitName?: string;
 }
 
 interface MeubleExpense {
@@ -196,6 +202,15 @@ export default function MeubleFinancialModule({
   const [isSaving, setIsSaving] = useState(false);
   // Property-owner clients available for fidéicommis assignment (gestionnaire profile only)
   const [fideicommisClients, setFideicommisClients] = useState<FideicommisClientDoc[]>([]);
+  // ─── State: Buildings + Units (Gestion Immobilière) ──────────────────────────
+  const [buildings, setBuildings] = useState<PropertyDoc[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string>('');
+  const [availableUnits, setAvailableUnits] = useState<UnitDoc[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
+  // For CSV import
+  const [csvBuildingId, setCsvBuildingId] = useState<string>('');
+  const [csvUnitId, setCsvUnitId] = useState<string>('');
+  const [csvAvailableUnits, setCsvAvailableUnits] = useState<UnitDoc[]>([]);
 
   // Load existing reservations from Firebase on mount
   useEffect(() => {
@@ -221,12 +236,56 @@ export default function MeubleFinancialModule({
             notes: d.notes,
             fideicommisClientId: d.fideicommisClientId,
             fideicommisClientName: d.fideicommisClientName,
+            buildingId: d.buildingId,
+            unitId: d.unitId,
           })));
         }
       })
       .catch(console.error)
       .finally(() => setLoadingRes(false));
   }, [companyId]);
+
+  // Load buildings for the current user — reuses the SAME `properties` collection
+  // as Gestion Immobilière (GestionPlex.tsx), not BuildingLedger (a separate
+  // fiscal-proration entity used only by Taxes & Assurances) — otherwise this
+  // selector would never show the user's actual registered rental properties.
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    dataService.fetchProperties(userId)
+      .then((allProperties) => {
+        // Filter to properties belonging to this workspace
+        const ws = allProperties.filter(p => p.companyId === companyId);
+        setBuildings(ws);
+      })
+      .catch(console.error);
+  }, [companyId]);
+
+  // Load units whenever the selected building changes (reservation form)
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !selectedBuildingId) {
+      setAvailableUnits([]);
+      setSelectedUnitId('');
+      return;
+    }
+    dataService.fetchUnitsByBuilding(userId, selectedBuildingId)
+      .then(setAvailableUnits)
+      .catch(console.error);
+  }, [selectedBuildingId]);
+
+  // Load units for CSV import when building changes
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !csvBuildingId) {
+      setCsvAvailableUnits([]);
+      setCsvUnitId('');
+      return;
+    }
+    dataService.fetchUnitsByBuilding(userId, csvBuildingId)
+      .then(setCsvAvailableUnits)
+      .catch(console.error);
+  }, [csvBuildingId]);
 
   // Load the gestionnaire's property-owner clients (for the fidéicommis picker)
   useEffect(() => {
@@ -335,6 +394,7 @@ export default function MeubleFinancialModule({
       const gross = row.nights * row.nightlyRate;
       const tpsAmt = !selectedClient && registeredTPS ? parseFloat((gross * tpsRate / 100).toFixed(2)) : 0;
       const tvqAmt = !selectedClient && registeredTVQ ? parseFloat((gross * tvqRate / 100).toFixed(2)) : 0;
+      const csvSelUnit = csvAvailableUnits.find(u => u.id === csvUnitId);
       const localRes: Reservation = {
         id: localId,
         guestName: row.guestName,
@@ -348,6 +408,9 @@ export default function MeubleFinancialModule({
         status: 'confirmed',
         fideicommisClientId: selectedClient?.id,
         fideicommisClientName: selectedClient?.nom,
+        buildingId: csvBuildingId || undefined,
+        unitId: csvUnitId || undefined,
+        unitName: csvSelUnit?.unitName,
       };
       setReservations(prev => [...prev, localRes]);
       try {
@@ -358,6 +421,8 @@ export default function MeubleFinancialModule({
           fideicommisClientId: selectedClient?.id,
           fideicommisClientName: selectedClient?.nom,
           commissionRatePercent: selectedClient?.tauxHonoraires,
+          buildingId: localRes.buildingId,
+          unitId: localRes.unitId,
           guestName: localRes.guestName,
           checkIn: localRes.checkIn,
           checkOut: localRes.checkOut,
@@ -382,6 +447,8 @@ export default function MeubleFinancialModule({
     setIsImportingCsv(false);
     setShowCsvImport(false);
     resetCsvState();
+    setCsvBuildingId('');
+    setCsvUnitId('');
     alert(`${successCount} réservation(s) importée(s) avec succès.`);
   };
 
@@ -477,6 +544,7 @@ export default function MeubleFinancialModule({
     const taxeSejourRemisePlateforme = platform !== 'direct';
 
     const localId = genId();
+    const selUnit = availableUnits.find(u => u.id === selectedUnitId);
     const localRes: Reservation = {
       id: localId,
       guestName: newRes.guestName!,
@@ -491,11 +559,16 @@ export default function MeubleFinancialModule({
       notes: newRes.notes,
       fideicommisClientId: selectedClient?.id,
       fideicommisClientName: selectedClient?.nom,
+      buildingId: selectedBuildingId || undefined,
+      unitId: selectedUnitId || undefined,
+      unitName: selUnit?.unitName,
     };
 
     // Optimistic update — show in UI immediately
     setReservations(prev => [...prev, localRes]);
     setNewRes({ platform: 'airbnb', status: 'confirmed', taxeSejour: taxeSejourRegion, platformFeePercent: 3 });
+    setSelectedBuildingId('');
+    setSelectedUnitId('');
     setShowResForm(false);
 
     // Persist to Firebase + post journal entry / dépôt fidéicommis (async, non-blocking for UX)
@@ -510,6 +583,8 @@ export default function MeubleFinancialModule({
           fideicommisClientId: selectedClient?.id,
           fideicommisClientName: selectedClient?.nom,
           commissionRatePercent: selectedClient?.tauxHonoraires,
+          buildingId: localRes.buildingId,
+          unitId: localRes.unitId,
           guestName: localRes.guestName,
           checkIn: localRes.checkIn,
           checkOut: localRes.checkOut,
@@ -735,6 +810,11 @@ export default function MeubleFinancialModule({
                   {r.fideicommisClientName && (
                     <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
                       <Building2 size={8} className="inline mr-0.5" />{r.fideicommisClientName}
+                    </span>
+                  )}
+                  {r.unitName && (
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                      🚪 {r.unitName}
                     </span>
                   )}
                 </div>
@@ -1085,6 +1165,38 @@ export default function MeubleFinancialModule({
                     )}
                   </div>
                 )}
+                {/* ── Sélecteur d'immeuble / unité (Gestion Immobilière) ── */}
+                {buildings.length > 0 && (
+                  <div>
+                    <label className={label}>Immeuble (optionnel)</label>
+                    <select className={input} value={selectedBuildingId}
+                      onChange={e => { setSelectedBuildingId(e.target.value); setSelectedUnitId(''); }}>
+                      <option value="">— Aucun immeuble lié —</option>
+                      {buildings.map(b => (
+                        <option key={b.id} value={b.id}>{b.adresse}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {selectedBuildingId && availableUnits.length > 0 && (
+                  <div>
+                    <label className={label}>Unité / Porte</label>
+                    <select className={input} value={selectedUnitId} onChange={e => setSelectedUnitId(e.target.value)}>
+                      <option value="">— Toutes les unités —</option>
+                      {availableUnits.map(u => (
+                        <option key={u.id} value={u.id}>{u.unitName}{u.tenantName ? ` · ${u.tenantName}` : ''}</option>
+                      ))}
+                    </select>
+                    {selectedUnitId && (
+                      <p className={`text-[9px] mt-1 text-emerald-600`}>🚪 Cette réservation sera enregistrée dans le livre de l'immeuble sélectionné.</p>
+                    )}
+                  </div>
+                )}
+                {selectedBuildingId && availableUnits.length === 0 && (
+                  <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
+                    Aucune unité configurée pour cet immeuble — ajoutez-en dans Gestion Immobilière.
+                  </p>
+                )}
                 <div><label className={label}>Nom du voyageur</label>
                   <input className={input} placeholder="Marie Dupont" value={newRes.guestName||''} onChange={e => setNewRes(r=>({...r, guestName: e.target.value}))} /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1198,6 +1310,27 @@ export default function MeubleFinancialModule({
                       </div>
                     )}
                   </div>
+                  {buildings.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={label}>Immeuble (optionnel)</label>
+                        <select className={input} value={csvBuildingId}
+                          onChange={e => { setCsvBuildingId(e.target.value); setCsvUnitId(''); }}>
+                          <option value="">— Aucun immeuble —</option>
+                          {buildings.map(b => <option key={b.id} value={b.id}>{b.adresse}</option>)}
+                        </select>
+                      </div>
+                      {csvBuildingId && csvAvailableUnits.length > 0 && (
+                        <div>
+                          <label className={label}>Unité / Porte</label>
+                          <select className={input} value={csvUnitId} onChange={e => setCsvUnitId(e.target.value)}>
+                            <option value="">— Toutes —</option>
+                            {csvAvailableUnits.map(u => <option key={u.id} value={u.id}>{u.unitName}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <label className={`flex flex-col items-center justify-center gap-2 py-10 rounded-2xl border-2 border-dashed cursor-pointer transition-colors ${D ? 'border-zinc-700 hover:bg-zinc-800' : 'border-slate-300 hover:bg-slate-50'}`}>
                     <Upload size={22} className={D ? 'text-zinc-500' : 'text-slate-400'} />
                     <span className={`text-[10px] font-black uppercase tracking-wider ${D ? 'text-zinc-400' : 'text-slate-500'}`}>Choisir le fichier CSV</span>

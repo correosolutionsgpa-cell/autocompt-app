@@ -115,6 +115,7 @@ import { SiteFooter } from "./components/SiteFooter";
 import { NotFound404 } from "./components/NotFound404";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 import MeubleFinancialModule from "./components/MeubleFinancialModule";
+import ComptableExportView from "./components/ComptableExportView";
 import SofiOnboarding from "./components/SofiOnboarding";
 import ProfilEtEquipe from "./components/ProfilEtEquipe";
 import { SofiPresence } from "./components/SofiPresence";
@@ -4105,6 +4106,13 @@ const App = () => {
   // keep showing them everywhere until they're next saved, instead of hiding real data.
   const visiblePlexManagementProperties = plexManagementProperties.filter(
     (p) => !p.companyId || p.companyId === activeCompanyId,
+  );
+  // Journal entries predating the companyId tag (added 2026-07-29) stay visible
+  // everywhere too, same reasoning as visiblePlexManagementProperties above —
+  // otherwise a multi-entreprise account's ledgers would mix every company's
+  // books together, which defeats the whole point of having separate workspaces.
+  const filteredJournalEntries = journalEntries.filter(
+    (e: any) => !e.companyId || e.companyId === activeCompanyId,
   );
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -15511,10 +15519,10 @@ const App = () => {
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
         >
           {(() => {
-            let activeTabs = ["ventes", "taxes", "banque", "resume", "grand_livre"];
+            let activeTabs = ["ventes", "taxes", "banque", "resume", "grand_livre", "export_comptable"];
             if (getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin") {
               if (activeUser === "Fabiola") {
-                activeTabs = ["ventes", "taxes", "paie", "banque", "resume", "grand_livre"];
+                activeTabs = ["ventes", "taxes", "paie", "banque", "resume", "grand_livre", "export_comptable"];
               }
             }
             return activeTabs.map((tab) => (
@@ -15535,7 +15543,9 @@ const App = () => {
                         ? "Banque"
                         : tab === "grand_livre"
                           ? "Grand Livre"
-                          : "Résumé Annuel"}
+                          : tab === "export_comptable"
+                            ? "Export Comptable"
+                            : "Résumé Annuel"}
               </button>
             ));
           })()}
@@ -16519,10 +16529,10 @@ const App = () => {
               </div>
 
               <div className="space-y-6">
-                {journalEntries.length === 0 ? (
+                {filteredJournalEntries.length === 0 ? (
                   <p className="text-sm font-black text-slate-400 italic">Aucune transaction trouvée.</p>
                 ) : (
-                  journalEntries.map((entry: any) => {
+                  filteredJournalEntries.map((entry: any) => {
                     const totalDebits = entry.lines?.filter((l: any) => l.type === 'Debit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
                     const totalCredits = entry.lines?.filter((l: any) => l.type === 'Credit').reduce((sum: number, l: any) => sum + Number(l.amount), 0) || 0;
 
@@ -16570,6 +16580,23 @@ const App = () => {
                   })
                 )}
               </div>
+            </div>
+          )}
+
+          {tabReporte === "export_comptable" && (
+            <div className="w-full px-4 sm:px-6 pb-8">
+              <ComptableExportView
+                darkMode={darkMode}
+                companyId={activeCompanyId || 'default'}
+                companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+                userProfile={{
+                  nom: userProfile.nom,
+                  neq: userProfile.neq,
+                  tps: userProfile.tps,
+                  tvq: userProfile.tvq,
+                  adresse: userProfile.adresse,
+                }}
+              />
             </div>
           )}
         </main>

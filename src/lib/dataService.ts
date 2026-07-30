@@ -1266,6 +1266,7 @@ export const dataService = {
     
     const entryData = {
       id: docId,
+      companyId: loyerData.companyId,
       date: new Date().toISOString(),
       description: `Income: Rent collection from ${data.locataire || 'Unknown'} - Unit: ${data.uniteAdresse || 'Unknown'}`,
       documentReference: docId,
@@ -1602,6 +1603,7 @@ export const dataService = {
 
     const entryData = {
       id: id,
+      companyId: originalCompanyId,
       date: data.fecha || new Date().toISOString(),
       description: `Expense: ${data.fournisseur || 'Unknown'} - ${data.cat || 'General'}`,
       documentReference: id,
@@ -1692,6 +1694,7 @@ export const dataService = {
 
     const entryData = {
       id,
+      companyId: originalCompanyId,
       date: data.fecha || new Date().toISOString(),
       description: `Revenue: ${data.cliente || 'Unknown'} - ${data.cat || 'Ventes'}`,
       documentReference: id,
@@ -2164,6 +2167,13 @@ export const dataService = {
       ownerId: userId,
       createdAt: now,
     };
+    // Optional fields (buildingId, unitId, fideicommisClientId, notes, etc.) are
+    // frequently passed as explicit `undefined` by callers when nothing was
+    // selected. Firestore's setDoc rejects any field with an undefined value —
+    // strip them here so the write never fails silently for the common case.
+    Object.keys(data).forEach((k) => {
+      if ((data as any)[k] === undefined) delete (data as any)[k];
+    });
 
     // Persist the reservation document first
     await setDoc(doc(db, 'meubleReservations', docId), data);
@@ -2222,6 +2232,7 @@ export const dataService = {
           const entryId = `${docId}-journal`;
           const entryData = {
             id: entryId,
+            companyId: res.companyId,
             date: now,
             description: `Location meublée — ${res.guestName} (${res.platform}) · ${res.checkIn} → ${res.checkOut}`,
             documentReference: docId,
