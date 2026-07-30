@@ -671,7 +671,13 @@ export default function MeubleFinancialModule({
     }
   };
 
-  const deleteReservation = (id: string) => setReservations(prev => prev.filter(r => r.id !== id));
+  const deleteReservation = (id: string) => {
+    setReservations(prev => prev.filter(r => r.id !== id));
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      dataService.deleteMeubleReservation(userId, id).catch((err) => console.error('[MeubleModule] Delete reservation failed:', err));
+    }
+  };
   const deleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
     const userId = auth.currentUser?.uid;
