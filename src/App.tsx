@@ -17050,8 +17050,8 @@ const App = () => {
                         <div className={`p-4 rounded-2xl border space-y-2 ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
                           <label className="flex items-center justify-between cursor-pointer">
                             <div className="flex flex-col text-left">
-                              <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Partagée avec ma partie occupée</span>
-                              <span className="text-[8px] font-bold text-slate-500">Ex: toiture, chauffage commun — pas une réparation faite uniquement dans une chambre louée</span>
+                              <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Cette dépense profite aussi à MA partie personnelle</span>
+                              <span className="text-[8px] font-bold text-slate-500">Ne pas activer pour une dépense qui concerne une chambre louée (déjà 100% déductible) — seulement pour un frais partagé comme la toiture ou le chauffage central de tout l'immeuble.</span>
                             </div>
                             <button
                               type="button"
