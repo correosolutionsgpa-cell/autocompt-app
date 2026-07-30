@@ -16286,6 +16286,18 @@ const App = () => {
                                         <MessageSquare size={15} />
                                       </button>
                                     )}
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Supprimer définitivement la dépense "${depense.fournisseur || 'sans fournisseur'}" (${(depense.total || 0).toFixed(2)} $) ? Cette action est irréversible.`)) {
+                                          setDepenses(prev => prev.filter(d => d.id !== depense.id));
+                                          playNotificationSound();
+                                        }
+                                      }}
+                                      className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-rose-500 hover:bg-rose-900/30" : "text-rose-400 hover:bg-rose-50"}`}
+                                      title="Supprimer la dépense"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
