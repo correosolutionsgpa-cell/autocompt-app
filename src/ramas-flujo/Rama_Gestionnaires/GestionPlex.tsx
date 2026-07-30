@@ -598,29 +598,33 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <div>
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
-                              Location courte durée
-                            </p>
-                            <p className={`text-[8px] mt-0.5 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
-                              Airbnb/touristique (&lt; 31 nuits) — CITQ requis
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = (plexManagementForm.units || []).map((u: any) =>
-                                u.id === unit.id ? { ...u, courteDuree: !u.courteDuree } : u
-                              );
-                              setPlexManagementForm({ ...plexManagementForm, units: updated });
-                            }}
-                            className={`relative w-10 h-5.5 rounded-full transition-colors shrink-0 ${unit.courteDuree ? "bg-indigo-500" : darkMode ? "bg-zinc-700" : "bg-slate-300"}`}
-                          >
-                            <span
-                              className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${unit.courteDuree ? "translate-x-4.5" : "translate-x-0"}`}
+                        <div className="pt-1">
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
+                            Durée minimale de location (nuits)
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input
+                              type="number"
+                              min={1}
+                              placeholder="Ex: 30"
+                              value={unit.dureeMinimaleJours ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                                const updated = (plexManagementForm.units || []).map((u: any) =>
+                                  u.id === unit.id
+                                    ? { ...u, dureeMinimaleJours: val, courteDuree: val != null && val > 0 && val < 31 }
+                                    : u
+                                );
+                                setPlexManagementForm({ ...plexManagementForm, units: updated });
+                              }}
+                              className={`w-20 p-2 rounded-xl border text-xs font-bold ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
                             />
-                          </button>
+                            {unit.dureeMinimaleJours != null && unit.dureeMinimaleJours > 0 && (
+                              <span className={`text-[8px] font-black uppercase tracking-widest ${unit.courteDuree ? "text-indigo-500" : "text-emerald-500"}`}>
+                                {unit.courteDuree ? "→ Touristique — CITQ requis (Meublé/Airbnb)" : "→ Bail résidentiel normal"}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ),

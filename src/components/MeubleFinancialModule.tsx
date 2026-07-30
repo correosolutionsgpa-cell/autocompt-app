@@ -21,6 +21,7 @@ import {
 import jsPDF from 'jspdf';
 import { dataService, type FideicommisClientDoc, type PropertyDoc, type UnitDoc } from '../lib/dataService';
 import { auth } from '../lib/firebase';
+import { getCompanyDriveConfig, uploadDocumentToDrive } from '../lib/driveService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,10 @@ interface MeubleExpense {
   description: string;
   amount: number;
   reservationId?: string; // linked to specific reservation
+  /** Lien Google Drive du reçu — présent si scanné ou joint */
+  lien?: string;
+  /** true si les valeurs viennent du scan IA — pré-remplies, jamais auto-confirmées */
+  aiScanned?: boolean;
 }
 
 interface UnitConfig {
@@ -303,12 +308,32 @@ export default function MeubleFinancialModule({
   }, [isGestionnaire, companyId]);
 
 
-  const [expenses, setExpenses] = useState<MeubleExpense[]>([
-    { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, category: 'hydro', description: 'Hydro-Québec', amount: 85 },
-    { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, category: 'internet', description: 'Bell Fibe', amount: 75 },
-    { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-05`, category: 'menage', description: 'Nettoyage entre réservations', amount: 60 },
-    { id: genId(), date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-15`, category: 'menage', description: 'Nettoyage entre réservations', amount: 60 },
-  ]);
+  const [expenses, setExpenses] = useState<MeubleExpense[]>([]);
+  const [loadingExp, setLoadingExp] = useState(true);
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+
+  // Load existing expenses from Firestore on mount
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !companyId) {
+      setLoadingExp(false);
+      return;
+    }
+    dataService.fetchMeubleExpenses(userId, companyId)
+      .then((docs) => {
+        setExpenses(docs.map(d => ({
+          id: d.id,
+          date: d.date,
+          category: d.category as ExpenseCategory,
+          description: d.description,
+          amount: d.amount,
+          lien: d.lien,
+          aiScanned: d.aiScanned,
+        })));
+      })
+      .catch(console.error)
+      .finally(() => setLoadingExp(false));
+  }, [companyId]);
   const [unitConfig, setUnitConfig] = useState<UnitConfig>({
     name: unitName, address: '',
     taxeSejourDefault: taxeSejourRegion,
@@ -611,21 +636,133 @@ export default function MeubleFinancialModule({
     }
   };
 
-  const addExpense = () => {
+  const addExpense = async () => {
     if (!newExp.amount || !newExp.date) return;
-    setExpenses(prev => [...prev, {
-      id: genId(),
+    const localId = newExp.id || genId();
+    const localExp: MeubleExpense = {
+      id: localId,
       date: newExp.date!,
       category: newExp.category || 'autre',
       description: newExp.description || EXPENSE_CATS[newExp.category || 'autre'].label,
       amount: newExp.amount!,
-    }]);
+      lien: newExp.lien,
+      aiScanned: newExp.aiScanned,
+    };
+    setExpenses(prev => [...prev, localExp]);
     setNewExp({ category: 'menage' });
     setShowExpForm(false);
+
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      try {
+        await dataService.saveMeubleExpense(userId, {
+          id: localId,
+          companyId,
+          date: localExp.date,
+          category: localExp.category,
+          description: localExp.description,
+          amount: localExp.amount,
+          lien: localExp.lien,
+          aiScanned: localExp.aiScanned,
+        });
+      } catch (err) {
+        console.error('[MeubleModule] Save expense failed:', err);
+      }
+    }
   };
 
   const deleteReservation = (id: string) => setReservations(prev => prev.filter(r => r.id !== id));
-  const deleteExpense = (id: string) => setExpenses(prev => prev.filter(e => e.id !== id));
+  const deleteExpense = (id: string) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      dataService.deleteMeubleExpense(userId, id).catch((err) => console.error('[MeubleModule] Delete expense failed:', err));
+    }
+  };
+
+  // ─── Scan de reçu (S.O.F.I.) — ménage, fournitures, hydro, etc. ─────────────
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = reader.result as string;
+        const commaIndex = res.indexOf(',');
+        resolve(commaIndex !== -1 ? res.substring(commaIndex + 1) : res);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  // Best-effort keyword mapping from the general Sofi category/supplier to the
+  // Meublé module's own categories — the shared /api/scan prompt doesn't know
+  // about "ménage"/"fournitures", so this is a heuristic hint, never final:
+  // the user always reviews/corrects in the pre-filled form before saving.
+  const guessMeubleCategory = (supplier: string, category: string): ExpenseCategory => {
+    const s = `${supplier} ${category}`.toLowerCase();
+    if (/hydro|électric|electric/.test(s)) return 'hydro';
+    if (/bell|videotron|telus|fido|rogers|internet|wifi|télécom|telecom/.test(s)) return 'internet';
+    if (/ménage|menage|nettoyage|cleaning|femme de ménage/.test(s)) return 'menage';
+    if (/assurance|insurance/.test(s)) return 'assurance';
+    if (/entretien|réparation|reparation|repair/.test(s)) return 'entretien';
+    if (/fourniture|papier|toilette|toilet|linge|sabana|sheet|serviette|savon|soap/.test(s)) return 'fournitures';
+    return 'autre';
+  };
+
+  const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    setIsScanningReceipt(true);
+    try {
+      const base64Data = await fileToBase64(file);
+
+      // Upload to Drive if connected — best-effort, the scan still proceeds without it.
+      let driveLink = '';
+      try {
+        const driveStatus = await getCompanyDriveConfig(companyId, userId);
+        if (driveStatus?.connected) {
+          const result = await uploadDocumentToDrive(
+            companyId, userId, base64Data, file.name,
+            file.type || 'application/octet-stream',
+            companyName || 'Entreprise', 'Meuble'
+          );
+          if (result.success) driveLink = result.webViewLink || '';
+        }
+      } catch (driveErr) {
+        console.error('[MeubleModule] Drive upload failed (scan continues):', driveErr);
+      }
+
+      const scanResp = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data, mimeType: file.type || 'application/octet-stream', filename: file.name }),
+      });
+      if (!scanResp.ok) throw new Error(`/api/scan status ${scanResp.status}`);
+      const scanData = await scanResp.json();
+
+      // Pre-fill the existing "Nouvelle dépense" form — user reviews/corrects
+      // and clicks "Ajouter" themselves, exactly like every other AI extraction
+      // in the app. Nothing is saved until she confirms.
+      setNewExp({
+        id: genId(),
+        date: scanData.date || new Date().toISOString().split('T')[0],
+        category: guessMeubleCategory(scanData.supplier || '', scanData.category || ''),
+        description: scanData.supplier || file.name,
+        amount: Number(scanData.total) || 0,
+        lien: driveLink || undefined,
+        aiScanned: true,
+      });
+      setShowExpForm(true);
+    } catch (err) {
+      console.error('[MeubleModule] Receipt scan failed:', err);
+      alert("Impossible d'analyser ce reçu — vous pouvez ajouter la dépense manuellement.");
+    } finally {
+      setIsScanningReceipt(false);
+    }
+  };
 
   // ── Export PDF ────────────────────────────────────────────────────────────────
 
@@ -912,10 +1049,17 @@ export default function MeubleFinancialModule({
           <TrendingDown size={14} className="text-rose-500" />
           <span className={`text-[11px] font-bold ${D?'text-zinc-300':'text-slate-700'}`}>Total ce mois: <strong className="text-rose-600">{totalExpenses.toFixed(2)} $</strong></span>
         </div>
-        <button onClick={() => setShowExpForm(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
-          <Plus size={13}/><span>Ajouter dépense</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <label className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer border ${D ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} ${isScanningReceipt ? 'opacity-60 pointer-events-none' : ''}`}>
+            {isScanningReceipt ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            <span>{isScanningReceipt ? 'Analyse…' : 'Scanner un reçu'}</span>
+            <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScanReceipt} disabled={isScanningReceipt} />
+          </label>
+          <button onClick={() => setShowExpForm(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
+            <Plus size={13}/><span>Ajouter dépense</span>
+          </button>
+        </div>
       </div>
 
       {/* By category */}
@@ -948,9 +1092,19 @@ export default function MeubleFinancialModule({
             <div key={e.id} className={`${card} p-4 flex items-center gap-4`}>
               <div className={`p-2 rounded-xl ${D?'bg-zinc-800':'bg-slate-100'} ${catConf.color}`}>{catConf.icon}</div>
               <div className="flex-1">
-                <p className={`text-[11px] font-bold ${D?'text-zinc-200':'text-slate-800'}`}>{e.description}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={`text-[11px] font-bold ${D?'text-zinc-200':'text-slate-800'}`}>{e.description}</p>
+                  {e.aiScanned && (
+                    <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded-md border ${D ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>⚡ IA</span>
+                  )}
+                </div>
                 <p className={`text-[9px] ${D?'text-zinc-500':'text-slate-400'}`}>{new Date(e.date).toLocaleDateString('fr-CA')} · {catConf.label}</p>
               </div>
+              {e.lien && (
+                <a href={e.lien} target="_blank" rel="noreferrer" className={`p-1.5 rounded-lg ${D?'hover:bg-zinc-800 text-zinc-500':'hover:bg-slate-100 text-slate-400'}`} title="Voir le reçu">
+                  <FileSpreadsheet size={13}/>
+                </a>
+              )}
               <p className="text-[13px] font-black text-rose-600">{e.amount.toFixed(2)} $</p>
               <button onClick={() => deleteExpense(e.id)} className={`p-1.5 rounded-lg ${D?'hover:bg-zinc-800 text-zinc-600':'hover:bg-slate-100 text-slate-300'}`}>
                 <Trash2 size={13}/>
@@ -1256,6 +1410,11 @@ export default function MeubleFinancialModule({
                 <h2 className="font-black text-base">Nouvelle dépense</h2>
                 <button onClick={() => setShowExpForm(false)} className={`p-2 rounded-xl ${D?'hover:bg-zinc-800 text-zinc-500':'hover:bg-slate-100 text-slate-400'}`}><X size={16}/></button>
               </div>
+              {newExp.aiScanned && (
+                <div className={`mb-4 p-3 rounded-xl text-[10px] font-semibold ${D ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-700'}`}>
+                  ⚡ Données extraites du reçu par Sofi — vérifiez la catégorie et le montant avant d'ajouter.
+                </div>
+              )}
               <div className="space-y-3">
                 <div><label className={label}>Catégorie</label>
                   <select className={input} value={newExp.category||'menage'} onChange={e => setNewExp(x=>({...x, category: e.target.value as ExpenseCategory, description: EXPENSE_CATS[e.target.value as ExpenseCategory].label}))}>

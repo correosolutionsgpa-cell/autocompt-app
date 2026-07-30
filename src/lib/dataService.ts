@@ -137,8 +137,12 @@ export interface UnitDoc {
   /** true = location touristique/courte durée (< 31 nuits) — soumise à la CITQ
    *  et à la taxe de séjour, suivie dans le module Meublé/Airbnb.
    *  false/absent (défaut) = bail résidentiel normal, même si réservé via une
-   *  plateforme comme Airbnb pour des séjours de 32+ jours. */
+   *  plateforme comme Airbnb pour des séjours de 32+ jours.
+   *  Dérivé automatiquement de `dureeMinimaleJours` — jamais choisi à l'aveugle. */
   courteDuree?: boolean;
+  /** Durée MINIMALE de location de cette unité, en jours/nuits — saisie par
+   *  l'utilisateur, détermine courteDuree (< 31 → touristique, ≥ 31 → résidentiel). */
+  dureeMinimaleJours?: number;
   ownerId: string;
   createdAt: string;
 }
@@ -224,6 +228,30 @@ export interface MeubleReservationDoc {
   notes?: string;
   /** true si le JournalEntry double-entrée a été généré avec succès */
   journalPosted: boolean;
+  ownerId: string;
+  createdAt: string;
+}
+
+// ── MeubleExpenseDoc — Firestore `meubleExpenses` collection ─────────────────
+/**
+ * Une dépense d'exploitation d'une location meublée (ménage, fournitures,
+ * hydro, internet, etc.) — séparée des `ExpenseDoc` du Tenue de Livres
+ * général car les catégories et la logique diffèrent (pas de TPS/TVQ ligne
+ * par ligne, catégories propres à la courte durée).
+ */
+export interface MeubleExpenseDoc {
+  id: string;
+  companyId: string;
+  date: string;              // YYYY-MM-DD
+  category: string;          // ExpenseCategory du module Meublé (menage, hydro, etc.)
+  description: string;
+  amount: number;
+  /** Lien Google Drive du reçu (si scanné par S.O.F.I. ou joint manuellement) */
+  lien?: string;
+  /** true si extrait par le scan IA — jamais auto-confirmé, juste un indicateur d'origine */
+  aiScanned?: boolean;
+  buildingId?: string;
+  unitId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -2315,6 +2343,59 @@ export const dataService = {
   async deleteMeubleReservation(userId: string, resId: string): Promise<void> {
     const docId = `${userId}_meubleres_${resId}`;
     await deleteDoc(doc(db, 'meubleReservations', docId));
+  },
+
+  async saveMeubleExpense(
+    userId: string,
+    expense: Omit<MeubleExpenseDoc, 'ownerId' | 'createdAt'>
+  ): Promise<MeubleExpenseDoc> {
+    assertCanWrite();
+    const originalId = expense.id || `meubleexp_${Date.now()}`;
+    const docId = `${userId}_meubleexp_${originalId}`;
+    const docCompanyId = `${userId}_company_${expense.companyId}`;
+    const data: any = {
+      ...expense,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    // Optional fields (lien, buildingId, unitId) come through as explicit
+    // `undefined` whenever nothing was selected — Firestore rejects those.
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+    await setDoc(doc(db, 'meubleExpenses', docId), data);
+    return { ...data, id: originalId, companyId: expense.companyId };
+  },
+
+  async fetchMeubleExpenses(
+    userId: string,
+    companyId: string
+  ): Promise<MeubleExpenseDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'meubleExpenses'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId),
+        orderBy('date', 'desc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_meubleexp_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as MeubleExpenseDoc;
+      });
+    } catch (e) {
+      console.error('fetchMeubleExpenses failed:', e);
+      return [];
+    }
+  },
+
+  async deleteMeubleExpense(userId: string, expId: string): Promise<void> {
+    const docId = `${userId}_meubleexp_${expId}`;
+    await deleteDoc(doc(db, 'meubleExpenses', docId));
   },
 
   /**

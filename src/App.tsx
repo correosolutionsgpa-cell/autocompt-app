@@ -960,6 +960,7 @@ const App = () => {
             monthlyRent: parseFloat(u.monthlyRent || u.montant || 0),
             isActive: u.isActive !== undefined ? u.isActive : (u.status !== "Vacant"),
             courteDuree: !!u.courteDuree,
+            ...(u.dureeMinimaleJours != null ? { dureeMinimaleJours: u.dureeMinimaleJours } : {}),
           });
           savedUnits.push(savedUnit);
         }
