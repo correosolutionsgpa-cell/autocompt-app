@@ -17005,6 +17005,52 @@ const App = () => {
                         </div>
                       )}
 
+                      {/* ── Dépense partagée avec la partie occupée par le propriétaire ──────
+                          Un gasto normal du Tenue de Livres n'est jamais réduit automatiquement
+                          par l'occupation (contrairement aux imports Taxes & Assurances) — la
+                          plupart des dépenses (ex: réparation dans une chambre louée) sont 100%
+                          déductibles. Cette option couvre le cas inverse: une dépense qui profite
+                          AUSSI à la partie occupée par le propriétaire (toiture, chauffage commun...). */}
+                      {!editingExpense.occupancyPctApplied && (
+                        <div className={`p-4 rounded-2xl border space-y-2 ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <div className="flex flex-col text-left">
+                              <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Partagée avec ma partie occupée</span>
+                              <span className="text-[8px] font-bold text-slate-500">Ex: toiture, chauffage commun — pas une réparation faite uniquement dans une chambre louée</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEditingExpense({ ...editingExpense, occupancySharedToggle: !editingExpense.occupancySharedToggle })}
+                              className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${editingExpense.occupancySharedToggle ? "bg-amber-500" : "bg-slate-300 dark:bg-zinc-700"}`}
+                            >
+                              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${editingExpense.occupancySharedToggle ? "left-5.5" : "left-0.5"}`} />
+                            </button>
+                          </label>
+                          {editingExpense.occupancySharedToggle && (
+                            <div className="pt-2 space-y-1">
+                              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">% déductible (partie louée)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                placeholder="Ex: 52"
+                                value={editingExpense.occupancyPctManual ?? ""}
+                                onChange={(e) => setEditingExpense({ ...editingExpense, occupancyPctManual: e.target.value })}
+                                className={`w-24 p-2 rounded-xl border text-xs font-bold ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+                              />
+                              <p className="text-[8px] font-semibold text-amber-600 dark:text-amber-400">
+                                Vérifiez le % déductible de cet immeuble dans Taxes & Assurances si vous ne le connaissez pas par cœur.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {editingExpense.occupancyPctApplied != null && (
+                        <div className={`p-3 rounded-2xl text-[10px] font-bold ${darkMode ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
+                          🏠 {editingExpense.occupancyPctApplied}% déductible appliqué — montant brut original: {editingExpense.montantBrut?.toFixed(2)} $
+                        </div>
+                      )}
+
                       {/* Admin Toggle Concilié */}
                       {activeCompanyId === "1" && ( /* Adjust conditionally based on admin check */
                         <div className={`p-4 rounded-2xl flex items-center justify-between border ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
@@ -17038,6 +17084,29 @@ const App = () => {
                                 tauxApplique: Number((porcVehicule * 100).toFixed(1)),
                                 vehicleRateApplied: true,
                               } : {};
+                              // Freeze the owner-occupancy split at save time, once — same
+                              // math as the Taxes & Assurances import pipeline, but here it's
+                              // an explicit opt-in per expense instead of automatic-by-category.
+                              const manualPct = parseFloat(editingExpense.occupancyPctManual);
+                              const stampedOccupancyFields = (
+                                editingExpense.occupancySharedToggle &&
+                                editingExpense.occupancyPctApplied == null &&
+                                !isNaN(manualPct) && manualPct > 0 && manualPct < 100
+                              ) ? (() => {
+                                const deductiblePct = (100 - manualPct) / 100;
+                                const rawSubtotal = editingExpense.subtotal || 0;
+                                const rawTps = editingExpense.tps || 0;
+                                const rawTvq = editingExpense.tvq || 0;
+                                const rawTotal = editingExpense.total || 0;
+                                return {
+                                  subtotal: parseFloat((rawSubtotal * deductiblePct).toFixed(2)),
+                                  tps: parseFloat((rawTps * deductiblePct).toFixed(2)),
+                                  tvq: parseFloat((rawTvq * deductiblePct).toFixed(2)),
+                                  total: parseFloat((rawTotal * deductiblePct).toFixed(2)),
+                                  montantBrut: rawTotal,
+                                  occupancyPctApplied: manualPct,
+                                };
+                              })() : {};
                               setDepenses(prev => prev.map(d => {
                                 if (d.id === editingExpense.id) {
                                   let updatedAuditLogs = d.auditLogs || [];
@@ -17054,6 +17123,7 @@ const App = () => {
                                   return {
                                     ...d,
                                     ...editingExpense,
+                                    ...stampedOccupancyFields,
                                     ...stampedVehicleFields,
                                     // catConfidence n'est PAS touche ici — c'est le niveau
                                     // de confiance original de l'IA (fait historique), pas
