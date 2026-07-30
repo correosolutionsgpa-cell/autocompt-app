@@ -1394,11 +1394,33 @@ export default function SofiOnboarding({
                           <div className={`mt-3 space-y-3 rounded-xl border p-3 ${
                             darkMode ? "bg-black/20 border-emerald-500/20" : "bg-white/70 border-emerald-300/50"
                           }`}>
-                            {taxScanReview.adresse && (
+                            {taxScanReview.adresse ? (
                               <p className={`text-[11px] font-semibold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
                                 {lang === "FR" ? "Adresse détectée : " : lang === "EN" ? "Detected address: " : "Dirección detectada: "}
                                 <span className="font-black">{taxScanReview.adresse}</span>
                               </p>
+                            ) : (
+                              <div>
+                                <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                  {lang === "FR" ? "Adresse de la propriété" : lang === "EN" ? "Property address" : "Dirección de la propiedad"}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={taxScanReview.adresse}
+                                  onChange={(e) => setTaxScanReview((prev) => prev ? { ...prev, adresse: e.target.value } : prev)}
+                                  placeholder={lang === "FR" ? "Ex: 1841-1843 Rue Le Royer, Laval" : lang === "EN" ? "e.g. 1841-1843 Rue Le Royer, Laval" : "Ej: 1841-1843 Rue Le Royer, Laval"}
+                                  className={`w-full px-2 py-1.5 rounded-lg border bg-transparent outline-none text-[13px] font-extrabold ${
+                                    darkMode ? "border-white/10 text-white" : "border-slate-200 text-slate-900"
+                                  }`}
+                                />
+                                <p className={`text-[9px] mt-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                                  {lang === "FR"
+                                    ? "Nous n'avons pas trouvé l'adresse dans ce document — vous pouvez la saisir ci-dessus."
+                                    : lang === "EN"
+                                    ? "We couldn't find the address in this document — you can enter it above."
+                                    : "No encontramos la dirección en este documento — puedes ingresarla arriba."}
+                                </p>
+                              </div>
                             )}
 
                             {!taxScanReview.superficieTotale && (
@@ -1513,11 +1535,12 @@ export default function SofiOnboarding({
                             <button
                               onClick={handleConfirmTaxScanReview}
                               disabled={
+                                !taxScanReview.adresse.trim() ||
                                 !taxScanReview.superficieTotale.trim() ||
                                 (taxScanReview.addressMismatch && !taxScanReview.mismatchAcknowledged)
                               }
                               className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border cursor-pointer ${
-                                taxScanReview.superficieTotale.trim() && (!taxScanReview.addressMismatch || taxScanReview.mismatchAcknowledged)
+                                taxScanReview.adresse.trim() && taxScanReview.superficieTotale.trim() && (!taxScanReview.addressMismatch || taxScanReview.mismatchAcknowledged)
                                   ? darkMode ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30" : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
                                   : "opacity-30 cursor-not-allowed border-slate-300/20 bg-transparent"
                               }`}
