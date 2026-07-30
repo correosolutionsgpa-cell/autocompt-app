@@ -12,10 +12,14 @@ const DRIVE_CATEGORY_BY_TAB: Record<"Municipales" | "Scolaires" | "Assurances", 
 };
 
 // Maps to the app's expense category dropdown (see validCategories in App.tsx's OCR pipeline).
+// Values must match the <option> values in App.tsx's "Validation IA" category
+// dropdown EXACTLY — a <select> silently shows nothing selected (not the first
+// option) when its value doesn't match any option, which is what made every
+// Taxes & Assurances import show "Sélectionner..." despite cat being set.
 const EXPENSE_CATEGORY_BY_TAB: Record<"Municipales" | "Scolaires" | "Assurances", string> = {
-  Municipales: "Taxes",
-  Scolaires: "Taxes",
-  Assurances: "Assurance",
+  Municipales: "Taxes foncières et scolaires",
+  Scolaires: "Taxes foncières et scolaires",
+  Assurances: "Assurances",
 };
 
 // Converts "X units occupied out of Y total" into a 0-100 occupancy %.

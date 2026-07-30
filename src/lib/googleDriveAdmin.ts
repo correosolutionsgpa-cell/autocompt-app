@@ -166,5 +166,28 @@ export async function uploadBase64ToDrive(
     const err = await resp.text();
     throw new Error(`Drive upload failed (${resp.status}): ${err}`);
   }
-  return resp.json();
+  const file = await resp.json();
+
+  // A freshly uploaded file is only accessible to whichever Google account is
+  // behind the stored refresh token — nobody else (the uploader viewing from a
+  // different session, an invited collaborator, or the in-app "eye"/preview
+  // icon) can open its link without this. Every viewer link in the app
+  // (embedded /preview iframes) already assumes anyone holding the link can
+  // open it, with no per-viewer Google identity check — this permission was
+  // simply never granted. Best-effort: a failure here shouldn't fail the
+  // whole upload, since the file is already saved either way.
+  try {
+    const permResp = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'anyone', role: 'reader' }),
+    });
+    if (!permResp.ok) {
+      console.error(`[Drive] Failed to set public-read permission on file ${file.id}:`, await permResp.text());
+    }
+  } catch (permErr) {
+    console.error(`[Drive] Error setting permission on file ${file.id}:`, permErr);
+  }
+
+  return file;
 }
