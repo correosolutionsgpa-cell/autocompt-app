@@ -959,6 +959,7 @@ const App = () => {
             tenantName: u.tenantName || u.locataire || "",
             monthlyRent: parseFloat(u.monthlyRent || u.montant || 0),
             isActive: u.isActive !== undefined ? u.isActive : (u.status !== "Vacant"),
+            courteDuree: !!u.courteDuree,
           });
           savedUnits.push(savedUnit);
         }

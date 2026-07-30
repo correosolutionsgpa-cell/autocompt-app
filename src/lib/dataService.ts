@@ -134,6 +134,11 @@ export interface UnitDoc {
   tenantName: string;
   monthlyRent: number;
   isActive: boolean;
+  /** true = location touristique/courte durée (< 31 nuits) — soumise à la CITQ
+   *  et à la taxe de séjour, suivie dans le module Meublé/Airbnb.
+   *  false/absent (défaut) = bail résidentiel normal, même si réservé via une
+   *  plateforme comme Airbnb pour des séjours de 32+ jours. */
+  courteDuree?: boolean;
   ownerId: string;
   createdAt: string;
 }

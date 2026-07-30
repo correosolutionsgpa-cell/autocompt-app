@@ -269,8 +269,11 @@ export default function MeubleFinancialModule({
       setSelectedUnitId('');
       return;
     }
+    // Only units flagged "courte durée" belong in the Meublé/Airbnb book — a
+    // unit rented for 32+ day stays (even via Airbnb as a booking channel) is
+    // a regular bail résidentiel and stays out of this short-term ledger.
     dataService.fetchUnitsByBuilding(userId, selectedBuildingId)
-      .then(setAvailableUnits)
+      .then((units) => setAvailableUnits(units.filter(u => u.courteDuree)))
       .catch(console.error);
   }, [selectedBuildingId]);
 
@@ -283,7 +286,7 @@ export default function MeubleFinancialModule({
       return;
     }
     dataService.fetchUnitsByBuilding(userId, csvBuildingId)
-      .then(setCsvAvailableUnits)
+      .then((units) => setCsvAvailableUnits(units.filter(u => u.courteDuree)))
       .catch(console.error);
   }, [csvBuildingId]);
 
@@ -1194,7 +1197,7 @@ export default function MeubleFinancialModule({
                 )}
                 {selectedBuildingId && availableUnits.length === 0 && (
                   <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>
-                    Aucune unité configurée pour cet immeuble — ajoutez-en dans Gestion Immobilière.
+                    Aucune unité « courte durée » pour cet immeuble — activez l'interrupteur sur l'unité concernée dans Gestion Immobilière.
                   </p>
                 )}
                 <div><label className={label}>Nom du voyageur</label>

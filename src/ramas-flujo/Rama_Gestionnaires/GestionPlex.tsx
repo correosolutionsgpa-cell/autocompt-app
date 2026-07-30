@@ -598,6 +598,30 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             </span>
                           </div>
                         </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <div>
+                            <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
+                              Location courte durée
+                            </p>
+                            <p className={`text-[8px] mt-0.5 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                              Airbnb/touristique (&lt; 31 nuits) — CITQ requis
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (plexManagementForm.units || []).map((u: any) =>
+                                u.id === unit.id ? { ...u, courteDuree: !u.courteDuree } : u
+                              );
+                              setPlexManagementForm({ ...plexManagementForm, units: updated });
+                            }}
+                            className={`relative w-10 h-5.5 rounded-full transition-colors shrink-0 ${unit.courteDuree ? "bg-indigo-500" : darkMode ? "bg-zinc-700" : "bg-slate-300"}`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${unit.courteDuree ? "translate-x-4.5" : "translate-x-0"}`}
+                            />
+                          </button>
+                        </div>
                       </div>
                     ),
                   )}
