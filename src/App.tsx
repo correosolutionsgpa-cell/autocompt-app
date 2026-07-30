@@ -17051,7 +17051,7 @@ const App = () => {
                           <label className="flex items-center justify-between cursor-pointer">
                             <div className="flex flex-col text-left">
                               <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Cette dépense profite aussi à MA partie personnelle</span>
-                              <span className="text-[8px] font-bold text-slate-500">Ne pas activer pour une dépense qui concerne une chambre louée (déjà 100% déductible) — seulement pour un frais partagé comme la toiture ou le chauffage central de tout l'immeuble.</span>
+                              <span className="text-[8px] font-bold text-slate-500">Ne pas activer pour une dépense qui concerne une chambre louée (déjà 100% déductible) — seulement pour un frais partagé comme le déneigement, l'entretien du terrain, la toiture, le chauffage central ou l'assurance de tout l'immeuble.</span>
                             </div>
                             <button
                               type="button"
