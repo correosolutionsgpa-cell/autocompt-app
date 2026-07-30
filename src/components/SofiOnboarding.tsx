@@ -915,23 +915,39 @@ export default function SofiOnboarding({
         };
         upsertBuilding(ledger);
 
-        // Seed empty UnitDoc placeholders for the scanned doors of the residence building,
-        // so the gestion-immobiliaire module already shows every door once the user opens it.
-        if (i === 0 && scannedDoors.length > 0) {
-          const userId = auth.currentUser?.uid ?? "";
-          if (userId) {
-            scannedDoors.forEach((doorName, doorIdx) => {
-              dataService.saveUnit(userId, {
-                id: `onboarding_unit_${Date.now()}_${doorIdx}`,
-                companyId: "1",
-                buildingId: ledger.id,
-                unitName: doorName,
-                tenantName: "",
-                monthlyRent: 0,
-                isActive: true,
-              }).catch((e) => console.error("[Onboarding] saveUnit failed:", e));
-            });
-          }
+        // Data Bridge #2 — also seed a real PropertyDoc/UnitDoc pair, linked to
+        // this BuildingLedger via buildingId. BuildingLedger alone is never read
+        // by any screen (Gestion Immobilière reads PropertyDoc/UnitDoc, Taxes &
+        // Assurances reads PropertyDoc.occupancyPct) — without this, everything
+        // answered above (propriétaire occupant, superficie, copropriétaires)
+        // silently went nowhere.
+        const userId = auth.currentUser?.uid ?? "";
+        if (userId) {
+          dataService.saveProperty(userId, {
+            id: `onboarding_property_${Date.now()}_${i}`,
+            companyId: "1",
+            buildingId: ledger.id,
+            typeLocation: i === 0 && scannedDoors.length > 1 ? "Chambres individuelles (Colocation)" : "Appartement/Maison",
+            adresse: i === 0 ? scannedAddress : "",
+            status: "Actif",
+            ...(isFirstOccupied ? { occupancyPct } : {}),
+          }).then((savedProperty) => {
+            // Seed empty UnitDoc placeholders for the scanned doors of the residence
+            // building, so Gestion Immobilière already shows every door once opened.
+            if (i === 0 && scannedDoors.length > 0) {
+              scannedDoors.forEach((doorName, doorIdx) => {
+                dataService.saveUnit(userId, {
+                  id: `onboarding_unit_${Date.now()}_${doorIdx}`,
+                  companyId: "1",
+                  buildingId: savedProperty.id,
+                  unitName: doorName,
+                  tenantName: "",
+                  monthlyRent: 0,
+                  isActive: true,
+                }).catch((e) => console.error("[Onboarding] saveUnit failed:", e));
+              });
+            }
+          }).catch((e) => console.error("[Onboarding] saveProperty failed:", e));
         }
       }
 
