@@ -7721,9 +7721,26 @@ const App = () => {
         await user.getIdToken(true);
         setCurrentUserEmail(user.email);
         setIsLoadingData(true);
+        // Same founder allowlist as getEffectiveTier()/the trial-bypass check below.
+        const authedEmail = (user.email ?? "").toLowerCase().trim();
+        const isFounderAccount =
+          authedEmail === "correo.solutionsgpa@gmail.com" ||
+          authedEmail === "solutionsgpa@gmail.com" ||
+          authedEmail.startsWith("fabiola") ||
+          authedEmail.includes("solutionsgpa") ||
+          authedEmail.endsWith("@autocompt.ca");
         try {
-          // Seed the user's data if they're logging in for the first time
-          await dataService.seedUserData(user.uid);
+          // Seed demo/dev data (company "Solutions GPA Inc.", sample expenses,
+          // properties, units, loyers) ONLY for founder accounts — this is
+          // Fabiola's own real company name and Syndicat profile, meant purely
+          // as a pre-populated sandbox for her own dev/testing convenience.
+          // It was previously seeded for EVERY brand-new signup, so every beta
+          // tester's first login silently created a company literally named
+          // "Solutions GPA Inc." in Syndicat mode before onboarding ever ran —
+          // found 2026-07-31 testing a real beta signup end-to-end.
+          if (isFounderAccount) {
+            await dataService.seedUserData(user.uid);
+          }
 
           // Get or create user profile in Firestore
           let role = "admin";
@@ -7780,15 +7797,9 @@ const App = () => {
             if (userData.adminPhoto) { setAdminPhoto(userData.adminPhoto); localStorage.setItem("autocompt_admin_photo", userData.adminPhoto); }
             else { setAdminPhoto(""); localStorage.removeItem("autocompt_admin_photo"); }
 
-            // Beta trial status — same founder allowlist as getEffectiveTier().
-            const userEmail = (user.email ?? "").toLowerCase().trim();
-            const isFounder =
-              userEmail === "correo.solutionsgpa@gmail.com" ||
-              userEmail === "solutionsgpa@gmail.com" ||
-              userEmail.startsWith("fabiola") ||
-              userEmail.includes("solutionsgpa") ||
-              userEmail.endsWith("@autocompt.ca");
-            if (isFounder || !userData.trialStartDate) {
+            // Beta trial status — same founder allowlist as getEffectiveTier()
+            // and the seedUserData gate above.
+            if (isFounderAccount || !userData.trialStartDate) {
               // Founder accounts, or accounts predating this feature — never blocked.
               setTrialExpired(false);
               setTrialStatus(null);
