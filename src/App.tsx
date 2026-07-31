@@ -9643,7 +9643,22 @@ const App = () => {
         setIsPhoneVerified(true);
         setVista("dashboard");
       } catch (err: any) {
-        setPhoneVerifyError("Code invalide ou expiré. Réessayez.");
+        // This used to always show "Code invalide ou expiré" no matter what
+        // actually failed — including auth/credential-already-in-use, which
+        // means the CODE was correct but this phone number is already linked
+        // to a DIFFERENT AutoCompt account (Firebase requires phone numbers
+        // to be unique per account). That's a completely different problem
+        // from a wrong/expired code and needs a different message so the
+        // user isn't sent down the wrong troubleshooting path.
+        if (err?.code === "auth/credential-already-in-use" || err?.code === "auth/phone-number-already-exists") {
+          setPhoneVerifyError("Ce numéro est déjà associé à un autre compte AutoCompt.");
+        } else if (err?.code === "auth/code-expired") {
+          setPhoneVerifyError("Le code a expiré. Cliquez sur \"Changer de numéro\" pour en redemander un.");
+        } else if (err?.code === "auth/invalid-verification-code") {
+          setPhoneVerifyError("Code invalide. Vérifiez les 6 chiffres et réessayez.");
+        } else {
+          setPhoneVerifyError(err?.message || "Code invalide ou expiré. Réessayez.");
+        }
       } finally {
         setPhoneVerifyBusy(false);
       }
