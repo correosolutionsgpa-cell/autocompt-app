@@ -724,14 +724,20 @@ const App = () => {
   }
 
   // --- ADMIN PROFILE STATE ---
-  const [adminName, setAdminName] = useState(() => localStorage.getItem("autocompt_admin_name") || "Fabiola Beatriz");
+  // No hardcoded personal defaults here on purpose — this localStorage isn't
+  // namespaced per Firebase uid, so a brand-new account logging in on a
+  // browser/device previously used by a different AutoCompt account would
+  // otherwise inherit that other person's name/email until onAuthStateChanged
+  // resolves (and, worse, silently keep it if Firestore has no value yet for
+  // this new user — see the explicit resets added in onAuthStateChanged below).
+  const [adminName, setAdminName] = useState(() => localStorage.getItem("autocompt_admin_name") || "");
   const [adminRole, setAdminRole] = useState(() => localStorage.getItem("autocompt_admin_role") || "Administratrice");
   // No default stock photo — showing a stranger's face by default is worse
   // than showing nothing. Empty means "no photo set", handled by falling
   // back to an initials avatar wherever adminPhoto is displayed.
   const [adminPhoto, setAdminPhoto] = useState(() => localStorage.getItem("autocompt_admin_photo") || "");
-  const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem("autocompt_admin_phone") || "+1 (514) 555-0199");
-  const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem("autocompt_admin_email") || "fabiola@autocompt.ca");
+  const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem("autocompt_admin_phone") || "");
+  const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem("autocompt_admin_email") || "");
 
   // Persist admin profile fields (name/role/photo) to Firestore, not just
   // localStorage — otherwise an edit made on one device/browser silently
@@ -791,6 +797,9 @@ const App = () => {
   const updateSelectedProfile = async (profile: string) => {
     setSelectedProfile(profile);
     localStorage.setItem("autocompt_selected_profile", profile);
+    // Tags which account this cache belongs to — see the splash-screen routing
+    // effect below, which refuses to trust this cache for a different account.
+    if (auth.currentUser?.email) localStorage.setItem("autocompt_cached_email", auth.currentUser.email);
 
     // Keep dashboardMode (Plex vs Syndic) in sync with the profile — it's
     // derived, not independently stored, so it can't drift out of sync.
@@ -1410,6 +1419,26 @@ const App = () => {
       setVista("phone-verify");
     }
   }, [isPhoneVerified, vista]);
+
+  // Corrective redirect: the splash-timer shortcut above trusts
+  // autocompt_selected_profile/dashboard_mode/user_level from raw localStorage
+  // BEFORE Firebase auth has necessarily resolved, to skip a loading spinner
+  // for returning users. But that localStorage isn't namespaced per uid — on a
+  // browser/device previously used by a DIFFERENT AutoCompt account, it fast-
+  // paths a brand-new login straight to that other account's dashboard,
+  // skipping onboarding entirely. Once auth resolves and we know who's really
+  // logged in, bounce back to onboarding if the cache we trusted belonged to
+  // someone else. Only acts once `autocompt_cached_email` has actually been
+  // recorded (see updateSelectedProfile / onAuthStateChanged / SofiOnboarding
+  // onComplete) — a missing tag from before this check existed is not treated
+  // as a mismatch, so already-logged-in sessions are never bounced.
+  useEffect(() => {
+    if (!currentUserEmail) return;
+    const cachedEmail = localStorage.getItem("autocompt_cached_email");
+    if (cachedEmail && cachedEmail !== currentUserEmail && (vista === "dashboard" || vista === "phone-verify")) {
+      setVista("sofi-onboarding");
+    }
+  }, [currentUserEmail, vista]);
 
   // Inverse correction: if some race landed on "phone-verify" before Firestore
   // confirmed the phone was already verified, move on to the dashboard as soon
@@ -7716,6 +7745,7 @@ const App = () => {
             if (userData.selectedProfile) {
               setSelectedProfile(userData.selectedProfile);
               localStorage.setItem("autocompt_selected_profile", userData.selectedProfile);
+              if (user.email) localStorage.setItem("autocompt_cached_email", user.email);
 
               // dashboardMode (Plex vs Syndic) was NEVER persisted to Firestore —
               // only localStorage, set once during onboarding. On a new device/
@@ -7725,14 +7755,30 @@ const App = () => {
               const modeForProfile = userData.selectedProfile === "syndicat" ? "Syndic" : "Plex";
               setDashboardMode(modeForProfile);
               localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
+            } else {
+              // This account hasn't picked a profile yet (pre-onboarding). Since
+              // `autocompt_selected_profile` isn't namespaced per uid, it can still
+              // hold a DIFFERENT account's profile from an earlier session on this
+              // same browser/device — which made a brand-new signup skip onboarding
+              // entirely and land straight in the previous user's profile/dashboard.
+              // Clear it explicitly so onboarding always runs for a fresh account.
+              setSelectedProfile(null);
+              localStorage.removeItem("autocompt_selected_profile");
+              localStorage.removeItem("autocompt_cached_email");
+              setDashboardMode("Plex");
+              localStorage.removeItem("autocompt_dashboard_mode");
             }
 
             // Admin profile display (name/role/photo) — same Firestore-over-
             // localStorage fix, requested after a photo change didn't survive
-            // switching devices.
+            // switching devices. Same stale-cross-account risk as selectedProfile
+            // above when Firestore has no value yet — clear rather than keep.
             if (userData.adminName) { setAdminName(userData.adminName); localStorage.setItem("autocompt_admin_name", userData.adminName); }
+            else { setAdminName(""); localStorage.removeItem("autocompt_admin_name"); }
             if (userData.adminRole) { setAdminRole(userData.adminRole); localStorage.setItem("autocompt_admin_role", userData.adminRole); }
+            else { setAdminRole("Administratrice"); localStorage.removeItem("autocompt_admin_role"); }
             if (userData.adminPhoto) { setAdminPhoto(userData.adminPhoto); localStorage.setItem("autocompt_admin_photo", userData.adminPhoto); }
+            else { setAdminPhoto(""); localStorage.removeItem("autocompt_admin_photo"); }
 
             // Beta trial status — same founder allowlist as getEffectiveTier().
             const userEmail = (user.email ?? "").toLowerCase().trim();
@@ -7769,6 +7815,21 @@ const App = () => {
             setTrialExpired(false);
             setTrialStatus(null);
             setIsPhoneVerified(false);
+
+            // First login ever for this uid — same stale-cross-account risk as
+            // above, but guaranteed here since there's no Firestore data at all
+            // yet to override localStorage. Clear it so onboarding always shows.
+            setSelectedProfile(null);
+            localStorage.removeItem("autocompt_selected_profile");
+            localStorage.removeItem("autocompt_cached_email");
+            setDashboardMode("Plex");
+            localStorage.removeItem("autocompt_dashboard_mode");
+            setAdminName("");
+            localStorage.removeItem("autocompt_admin_name");
+            setAdminRole("Administratrice");
+            localStorage.removeItem("autocompt_admin_role");
+            setAdminPhoto("");
+            localStorage.removeItem("autocompt_admin_photo");
           }
 
           // Fetch user's dynamic workspace list
@@ -7944,6 +8005,7 @@ const App = () => {
           onLoginClick={() => setVista("login")}
           onComplete={(profile, lang, answers) => {
             localStorage.setItem("autocompt_selected_profile", profile);
+            if (auth.currentUser?.email) localStorage.setItem("autocompt_cached_email", auth.currentUser.email);
             if (answers) {
               localStorage.setItem("autocompt_onboarding_answers", JSON.stringify(answers));
             }
