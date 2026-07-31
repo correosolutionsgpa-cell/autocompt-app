@@ -139,6 +139,7 @@ import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
 import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
 import PortefeuilleClientView from "./ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView";
+import TenueLivresImmeubleView from "./ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView";
 
 import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
 import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
@@ -844,6 +845,9 @@ const App = () => {
   const [plexExpenseEditingId, setPlexExpenseEditingId] = useState<number | null>(null);
 
   const [allUnits, setAllUnits] = useState<UnitDoc[]>([]);
+  // Fidéicommis clients (propriétaires gérés) — used to link a building to its
+  // owner-client in Gestion Immobilière (GestionPlex "Propriétaire-client" selector).
+  const [fideicommisClients, setFideicommisClients] = useState<Array<{ id: string; nom: string }>>([]);
   const [plexLoyers, _setPlexLoyers] = useState<any[]>([]);
   const reconcileLoyers = async (prev: any[], next: any[]) => {
     const userId = auth.currentUser?.uid;
@@ -928,6 +932,7 @@ const App = () => {
         p.status !== n.status ||
         p.locataire !== n.locataire ||
         p.adresse !== n.adresse ||
+        p.fideicommisClientId !== n.fideicommisClientId ||
         JSON.stringify(p.units) !== JSON.stringify(n.units)
       );
     });
@@ -944,6 +949,7 @@ const App = () => {
           typeLocation: item.typeLocation || "Logement entier",
           adresse: item.adresse,
           status: (item.status as 'Actif' | 'Vacant' | 'Archivé') || "Actif",
+          ...(item.fideicommisClientId ? { fideicommisClientId: item.fideicommisClientId, fideicommisClientName: item.fideicommisClientName } : {}),
         });
         const resolvedPropId = saved.id || item.id;
 
@@ -1232,6 +1238,15 @@ const App = () => {
     localStorage.setItem("autocompt_user_level", userLevel);
   }, [userLevel]);
   const [activeCompanyId, setActiveCompanyId] = useState("1");
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !activeCompanyId) { setFideicommisClients([]); return; }
+    dataService.fetchFideicommisClients(userId, activeCompanyId)
+      .then(setFideicommisClients)
+      .catch(console.error);
+  }, [activeCompanyId]);
+  // Which building's ledger to open when vista === "tenue_livres_immeuble"
+  const [selectedLedgerBuildingId, setSelectedLedgerBuildingId] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     const saved = localStorage.getItem("autocompt_sound");
@@ -17379,14 +17394,18 @@ const App = () => {
                       )}
                     </div>
 
-                    {/* ── Unité locative — visible pour toute catégorie loyer / location / bail ── */}
+                    {/* ── Unité locative — visible pour toute catégorie loyer / location / bail,
+                        ou pour n'importe quelle catégorie dès que l'entreprise gère des
+                        édifices (permet de rattacher toute dépense à son édifice, requis
+                        pour que la Tenue de Livres par Édifice soit complète) ── */}
                     {(() => {
                       const isRentCategory =
                         newTxData.cat?.toLowerCase().includes('loyer') ||
                         newTxData.cat?.toLowerCase().includes('location') ||
                         newTxData.cat?.toLowerCase().includes('bail') ||
                         newTxData.cat?.toLowerCase().includes('rent');
-                      return isRentCategory && (
+                      const hasManagedBuildings = visiblePlexManagementProperties.length > 0;
+                      return (isRentCategory || hasManagedBuildings) && (
                         <div className="space-y-1">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                             Unité locative liée
@@ -19333,6 +19352,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         WorkspaceSidebar={WorkspaceSidebar}
         onTaxScan={handleTaxScan}
         sofiPrefillMessage={sofiPrefillMessage}
+        fideicommisClients={fideicommisClients}
       />
     );
   }
@@ -19718,6 +19738,25 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         currentCompany={currentCompany}
         adminName={adminName}
         adminEmail={adminEmail}
+        setSelectedLedgerBuildingId={setSelectedLedgerBuildingId}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+      />
+    );
+  }
+
+  // TenueLivresImmeubleView → src/ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView.tsx
+  // Livre comptable indépendant d'UN SEUL édifice (loyers + dépenses de ce buildingId).
+  if (vista === "tenue_livres_immeuble") {
+    return (
+      <TenueLivresImmeubleView
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        adminName={adminName}
+        adminEmail={adminEmail}
+        buildingId={selectedLedgerBuildingId}
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}

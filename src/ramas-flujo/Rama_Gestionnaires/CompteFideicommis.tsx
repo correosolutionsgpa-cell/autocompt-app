@@ -29,12 +29,13 @@ import {
   collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+import { dataService } from "../../lib/dataService";
 import type {
   FideicommisClientDoc,
   FideicommisDepotDoc,
   FideicommisRetraitDoc,
   FideicommisConciliationDoc,
-  BuildingLedger,
+  PropertyDoc,
   UnitDoc,
 } from "../../lib/dataService";
 
@@ -291,7 +292,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const [depots, setDepots] = useState<FideicommisDepotDoc[]>([]);
   const [retraits, setRetraits] = useState<FideicommisRetraitDoc[]>([]);
   const [conciliations, setConciliations] = useState<FideicommisConciliationDoc[]>([]);
-  const [buildings, setBuildings] = useState<BuildingLedger[]>([]);
+  const [buildings, setBuildings] = useState<PropertyDoc[]>([]);
   const [units, setUnits] = useState<UnitDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -340,19 +341,22 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     if (!uid || !activeCompanyId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const [cSnap, dSnap, rSnap, conSnap, bSnap, uSnap] = await Promise.all([
+      const [cSnap, dSnap, rSnap, conSnap, props, uSnap] = await Promise.all([
         getDocs(query(collection(db, "fideicommisClients"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
         getDocs(query(collection(db, "fideicommisDepots"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
         getDocs(query(collection(db, "fideicommisRetraits"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
         getDocs(query(collection(db, "fideicommisConciliations"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
-        getDocs(query(collection(db, "buildings"), where("ownerId", "==", uid))),
+        // Buildings live in Gestion Immobilière's `properties` collection
+        // (PropertyDoc), not the legacy `buildings`/BuildingLedger collection —
+        // see fetchProperties for the id/companyId unprefixing it handles.
+        dataService.fetchProperties(uid),
         getDocs(query(collection(db, "units"), where("ownerId", "==", uid))),
       ]);
       setClients(cSnap.docs.map(d => d.data() as FideicommisClientDoc));
       setDepots(dSnap.docs.map(d => d.data() as FideicommisDepotDoc));
       setRetraits(rSnap.docs.map(d => d.data() as FideicommisRetraitDoc));
       setConciliations(conSnap.docs.map(d => d.data() as FideicommisConciliationDoc));
-      setBuildings(bSnap.docs.map(d => d.data() as BuildingLedger));
+      setBuildings(props.filter(p => p.companyId === activeCompanyId));
       setUnits(uSnap.docs.map(d => d.data() as UnitDoc));
     } catch (e) { console.error("[Fidéicommis] load error:", e); }
     finally { setIsLoading(false); }
@@ -393,13 +397,13 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       const newDepot: FideicommisDepotDoc = {
         id, companyId: activeCompanyId, numeroRecu,
         date: depotForm.date, locataireName: depotForm.locataireName,
-        propertyAddress: depotForm.propertyAddress || selectedBuilding?.address || "",
+        propertyAddress: depotForm.propertyAddress || selectedBuilding?.adresse || "",
         periodeDebut: depotForm.periodeDebut, periodeFin: depotForm.periodeFin,
         montant: parseFloat(depotForm.montant),
         modePaiement: depotForm.modePaiement,
         clientId: depotForm.clientId, clientName: client?.nom || "",
         buildingId: depotForm.buildingId || undefined,
-        buildingAddress: selectedBuilding?.address || undefined,
+        buildingAddress: selectedBuilding?.adresse || undefined,
         unitId: depotForm.unitId || undefined,
         unitName: selectedUnit?.unitName || undefined,
         notes: depotForm.notes, ownerId: uid,
@@ -807,9 +811,9 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                               const clientBuildings = buildings.filter(b => b.fideicommisClientId === depotForm.clientId);
                               return clientBuildings.length > 0 ? (
                                 <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Immeuble</label>
-                                  <select value={depotForm.buildingId} onChange={e => setDepotForm(p => ({ ...p, buildingId: e.target.value, unitId: "", propertyAddress: buildings.find(b => b.id === e.target.value)?.address || p.propertyAddress }))} className={inputCls}>
+                                  <select value={depotForm.buildingId} onChange={e => setDepotForm(p => ({ ...p, buildingId: e.target.value, unitId: "", propertyAddress: buildings.find(b => b.id === e.target.value)?.adresse || p.propertyAddress }))} className={inputCls}>
                                     <option value="">— Sélectionner l’immeuble —</option>
-                                    {clientBuildings.map(b => <option key={b.id} value={b.id}>{b.address}</option>)}
+                                    {clientBuildings.map(b => <option key={b.id} value={b.id}>{b.adresse}</option>)}
                                   </select></div>
                               ) : null;
                             })()}

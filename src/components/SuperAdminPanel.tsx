@@ -1219,12 +1219,18 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
       <main className="max-w-6xl mx-auto p-6">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-            {activeTab === 'overview'  && <OverviewTab />}
-            {activeTab === 'users'     && <UsersTab />}
-            {activeTab === 'billing'   && <BillingTab />}
-            {activeTab === 'doculegal' && <DocuLegalTab />}
-            {activeTab === 'ia'        && <IaUsageTab />}
-            {activeTab === 'codes'     && <CodesTab />}
+            {/* Called as plain functions (not JSX components) — these Tab consts are
+                redefined on every render since they close over local state, so
+                rendering them as <XTab /> makes React see a new component type each
+                keystroke and remount the whole subtree, killing input focus. Calling
+                them directly embeds their JSX into this component's own render
+                output instead, so no remount happens. */}
+            {activeTab === 'overview'  && OverviewTab()}
+            {activeTab === 'users'     && UsersTab()}
+            {activeTab === 'billing'   && BillingTab()}
+            {activeTab === 'doculegal' && DocuLegalTab()}
+            {activeTab === 'ia'        && IaUsageTab()}
+            {activeTab === 'codes'     && CodesTab()}
           </motion.div>
         </AnimatePresence>
       </main>

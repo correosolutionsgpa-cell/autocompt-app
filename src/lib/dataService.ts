@@ -114,6 +114,13 @@ export interface PropertyDoc {
   occupancyPct?: number;
   ownerId: string;
   createdAt: string;
+  // ── Gestionnaire Immobilier ──
+  /** FK → FideicommisClientDoc.id
+   *  Present only when this property belongs to a client managed by the
+   *  gestionnaire. Null/absent for properties owned directly by the account. */
+  fideicommisClientId?: string;
+  /** Denormalised display name for fast render without a join. */
+  fideicommisClientName?: string;
 }
 
 // ── UnitDoc — Firestore `units` collection ────────────────────────────────────
@@ -301,6 +308,11 @@ export interface LoyerDoc {
   locataire: string;
   loyer: number;
   statut: 'Payé' | 'En retard' | 'En attente';
+  /** FK → UnitDoc.id, resolved from allUnits when saved via App.tsx's handleSaveLoyer */
+  unitId?: string;
+  /** FK → PropertyDoc.id, resolved from allUnits when saved via App.tsx's handleSaveLoyer */
+  buildingId?: string;
+  date?: string;
   ownerId: string;
   createdAt: string;
 }

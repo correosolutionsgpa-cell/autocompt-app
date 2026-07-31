@@ -5,14 +5,14 @@
  * Module: Portefeuille par Propriétaire-Client
  *
  * Vue complète du portefeuille d'un propriétaire-client :
- *   • Liste de tous ses immeubles (BuildingLedger avec fideicommisClientId)
+ *   • Liste de tous ses immeubles (PropertyDoc avec fideicommisClientId)
  *   • Par immeuble : unités/portes, loyers du mois, dépenses, solde net
  *   • KPIs globaux du client : revenus totaux, taux d'occupation, honoraires dus
  *   • Navigation rapide vers le livre comptable de chaque immeuble
  *   • Bouton "Nouveau dépôt" pré-rempli avec le client et l'immeuble
  *
  * Ce composant ferme le cycle gestionnaire :
- *   FideicommisClient → BuildingLedger → UnitDoc → LoyerDoc / ExpenseDoc
+ *   FideicommisClient → PropertyDoc → UnitDoc → LoyerDoc / ExpenseDoc
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -39,6 +39,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Home,
+  BookOpen,
 } from "lucide-react";
 import {
   collection,
@@ -47,8 +48,9 @@ import {
   where,
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+import { dataService } from "../../lib/dataService";
 import type {
-  BuildingLedger,
+  PropertyDoc,
   FideicommisClientDoc,
   FideicommisDepotDoc,
   FideicommisRetraitDoc,
@@ -68,6 +70,8 @@ export interface PortefeuilleClientViewProps {
   adminEmail: string;
   /** Pre-selected client ID — passed when navigating from fidéicommis */
   preSelectedClientId?: string;
+  /** Sets which building's ledger to open when navigating to "tenue_livres_immeuble" */
+  setSelectedLedgerBuildingId: (id: string) => void;
   setVista: (v: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
@@ -84,7 +88,7 @@ interface ClientPortefeuille extends FideicommisClientDoc {
   nbUniteActives: number;
 }
 
-interface BuildingWithStats extends BuildingLedger {
+interface BuildingWithStats extends PropertyDoc {
   units: UnitDoc[];
   loyersMois: number;
   depensesMois: number;
@@ -99,12 +103,13 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
   adminName,
   adminEmail,
   preSelectedClientId,
+  setSelectedLedgerBuildingId,
   setVista,
   setIsSidebarOpen,
   WorkspaceSidebar,
 }) => {
   const [clients, setClients] = useState<FideicommisClientDoc[]>([]);
-  const [buildings, setBuildings] = useState<BuildingLedger[]>([]);
+  const [buildings, setBuildings] = useState<PropertyDoc[]>([]);
   const [units, setUnits] = useState<UnitDoc[]>([]);
   const [depots, setDepots] = useState<FideicommisDepotDoc[]>([]);
   const [retraits, setRetraits] = useState<FideicommisRetraitDoc[]>([]);
@@ -125,15 +130,18 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
     if (!uid || !activeCompanyId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const [cSnap, bSnap, uSnap, dSnap, rSnap] = await Promise.all([
+      const [cSnap, props, uSnap, dSnap, rSnap] = await Promise.all([
         getDocs(query(collection(db, "fideicommisClients"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
-        getDocs(query(collection(db, "buildings"), where("ownerId", "==", uid))),
+        // Buildings live in Gestion Immobilière's `properties` collection
+        // (PropertyDoc), not the legacy `buildings`/BuildingLedger collection —
+        // see fetchProperties for the id/companyId unprefixing it handles.
+        dataService.fetchProperties(uid),
         getDocs(query(collection(db, "units"), where("ownerId", "==", uid))),
         getDocs(query(collection(db, "fideicommisDepots"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
         getDocs(query(collection(db, "fideicommisRetraits"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
       ]);
       setClients(cSnap.docs.map(d => d.data() as FideicommisClientDoc));
-      setBuildings(bSnap.docs.map(d => d.data() as BuildingLedger));
+      setBuildings(props.filter(p => p.companyId === activeCompanyId));
       setUnits(uSnap.docs.map(d => d.data() as UnitDoc));
       setDepots(dSnap.docs.map(d => d.data() as FideicommisDepotDoc));
       setRetraits(rSnap.docs.map(d => d.data() as FideicommisRetraitDoc));
@@ -474,10 +482,10 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
                               <Home size={16} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-black truncate">{building.address}</p>
+                              <p className="text-[13px] font-black truncate">{building.adresse}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className={`text-[8px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
-                                  {building.type === "full_rental" ? "Entièrement locatif" : building.type === "owner_occupied" ? "Propriétaire occupant" : "Mixte"}
+                                  {building.typeLocation}
                                 </span>
                                 <span className={`text-[8px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
                                   · {building.units.length} unité(s)
@@ -550,6 +558,12 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
                                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${darkMode ? "border-zinc-700 text-zinc-400 hover:border-indigo-500 hover:text-indigo-400" : "border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"}`}
                                     >
                                       <ExternalLink size={10} />Livre comptable
+                                    </button>
+                                    <button
+                                      onClick={() => { setSelectedLedgerBuildingId(building.id); setVista("tenue_livres_immeuble"); }}
+                                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${darkMode ? "border-indigo-700/40 text-indigo-400 hover:bg-indigo-900/20" : "border-indigo-200 text-indigo-600 hover:bg-indigo-50"}`}
+                                    >
+                                      <BookOpen size={10} />Tenue de livres
                                     </button>
                                     <button
                                       onClick={() => setVista("depots_fideicommis")}
