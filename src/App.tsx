@@ -8064,6 +8064,23 @@ const App = () => {
             setDashboardMode(mode);
             setUserLevel(level);
             setSetupComplet(true);
+
+            // Persist the profile choice to Firestore — this used to be saved
+            // ONLY to localStorage/React state, so the account's Firestore
+            // doc never actually recorded that onboarding had run. Onboarding
+            // must happen exactly once, at signup, when the user picks their
+            // profile type; every login after that must go straight to the
+            // dashboard. That guarantee lives in onAuthStateChanged's routing
+            // (checks userData.selectedProfile) and in handleConfirmPhoneCode
+            // — both would otherwise send this account back to onboarding on
+            // its very next login, since Firestore had no record of the
+            // choice made here. Same write path as updateSelectedProfile
+            // (used when changing profile later from Paramètres).
+            const uidAtOnboarding = auth.currentUser?.uid;
+            if (uidAtOnboarding) {
+              setDoc(doc(db, "users", uidAtOnboarding), { selectedProfile: profile, level }, { merge: true })
+                .catch((err) => console.error("Failed to persist selectedProfile after onboarding:", err));
+            }
             // Phase 4 / Bug Fix #3: Always trigger tour when onboarding completes.
             // Remove stale key so the tour shows even after dev resets / repeat testing.
             localStorage.removeItem("autocompt_settings_tour_shown");
