@@ -16,8 +16,6 @@ import React, { useState } from "react";
 import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
-import candadoLockedLight from "../../assets/sofi/candado fondo blanco.png";
-import candadoLockedDark from "../../assets/sofi/candado fondo negro.png";
 import { motion } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
 import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
@@ -33,6 +31,7 @@ import {
   Globe,
   Hash,
   Home,
+  Lock,
   Mail,
   MapPin,
   MessageSquare,
@@ -413,7 +412,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-between gap-2">
                         <span className="truncate">{p.label}</span>
-                        <img src={darkMode ? candadoLockedDark : candadoLockedLight} alt="Verrouillé" className="w-7 h-7 shrink-0 rounded-md opacity-90" />
+                        <Lock
+                          size={15}
+                          className={`shrink-0 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}
+                          style={{ filter: `drop-shadow(0 0 4px ${darkMode ? "rgba(52,211,153,0.7)" : "rgba(5,150,105,0.5)"})` }}
+                        />
                       </span>
                     </button>
                   );
