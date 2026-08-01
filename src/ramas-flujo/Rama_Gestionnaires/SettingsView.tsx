@@ -16,7 +16,8 @@ import React, { useState } from "react";
 import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
-import candadoLocked from "../../assets/sofi/candado fondo blanco.png";
+import candadoLockedLight from "../../assets/sofi/candado fondo blanco.png";
+import candadoLockedDark from "../../assets/sofi/candado fondo negro.png";
 import { motion } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
 import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
@@ -412,7 +413,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-between gap-2">
                         <span className="truncate">{p.label}</span>
-                        <img src={candadoLocked} alt="Verrouillé" className="w-7 h-7 shrink-0 opacity-80 mix-blend-multiply dark:mix-blend-screen" />
+                        <img src={darkMode ? candadoLockedDark : candadoLockedLight} alt="Verrouillé" className="w-7 h-7 shrink-0 rounded-md opacity-90" />
                       </span>
                     </button>
                   );

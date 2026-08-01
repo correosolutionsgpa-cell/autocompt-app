@@ -8039,6 +8039,7 @@ const App = () => {
           setDarkMode={setDarkMode}
           playNotificationSound={playNotificationSound}
           onLoginClick={() => setVista("login")}
+          isAuthenticated={!!currentUserEmail}
           onComplete={(profile, lang, answers) => {
             localStorage.setItem("autocompt_selected_profile", profile);
             if (auth.currentUser?.email) localStorage.setItem("autocompt_cached_email", auth.currentUser.email);

@@ -437,6 +437,12 @@ interface SofiOnboardingProps {
   onComplete: (profile: string, lang: "FR" | "EN" | "ES", answers?: OnboardingAnswers) => void;
   playNotificationSound?: () => void;
   onLoginClick?: () => void;
+  // True once Firebase Auth already has a signed-in user — i.e. this account
+  // already redeemed a beta code and is going through the real post-signup
+  // onboarding, not an anonymous visitor exploring profiles pre-signup. Hides
+  // the "need a beta code?" banner and the login shortcut in that case, since
+  // both are nonsensical for someone who is already logged in.
+  isAuthenticated?: boolean;
 }
 
 // ─── Translations (shared UI strings) ────────────────────────────────────────
@@ -543,7 +549,7 @@ function computeOccupancyDeductible(answers: OnboardingAnswers): { occupancyPct:
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SofiOnboarding({
-  darkMode, setDarkMode, onComplete, playNotificationSound, onLoginClick,
+  darkMode, setDarkMode, onComplete, playNotificationSound, onLoginClick, isAuthenticated,
 }: SofiOnboardingProps) {
   const [lang, setLang]       = useState<"FR" | "EN" | "ES">("FR");
   const [audioPlayed, setAudioPlayed] = useState(false);
@@ -1042,7 +1048,7 @@ export default function SofiOnboarding({
 
         {/* Header controls */}
         <div className="absolute top-4 right-6 flex items-center space-x-3">
-          {onLoginClick && (
+          {onLoginClick && !isAuthenticated && (
             <button
               type="button"
               onClick={onLoginClick}
@@ -1078,6 +1084,7 @@ export default function SofiOnboarding({
         {/* ══ STEP 1: Profile Select ══════════════════════════════════════════ */}
         {step === "profile_select" && (
           <div className="w-full md:w-[50%] flex flex-col space-y-6 text-left">
+            {!isAuthenticated && (
             <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2 rounded-2xl border text-[11px] font-bold ${
               darkMode ? "border-amber-900/40 bg-amber-950/20 text-amber-300" : "border-amber-200 bg-amber-50 text-amber-800"
             }`}>
@@ -1091,6 +1098,7 @@ export default function SofiOnboarding({
                 {t.requestBetaCode}
               </a>
             </div>
+            )}
             <div className="space-y-1">
               <h2 className="text-xl md:text-2xl font-extrabold uppercase tracking-tight italic text-black dark:text-white">
                 {t.profileHeading}
