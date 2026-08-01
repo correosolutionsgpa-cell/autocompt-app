@@ -7745,6 +7745,10 @@ const App = () => {
           // Get or create user profile in Firestore
           let role = "admin";
           let phoneAlreadyVerified = false;
+          // Used below by the final setVista redirect — a phone-verified
+          // account with NO profile yet must land on onboarding, not the
+          // dashboard (see that redirect for the bug this guards against).
+          let hasSelectedProfile = false;
           const userDocRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -7754,6 +7758,7 @@ const App = () => {
             setUserLevel(userData.level || "Gestion Immobilière");
             phoneAlreadyVerified = !!userData.phoneVerified;
             setIsPhoneVerified(phoneAlreadyVerified);
+            hasSelectedProfile = !!userData.selectedProfile;
             setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 
             // Selected profile (prospecteur/investisseur/flippeur/gestionnaire/syndicat)
@@ -7914,10 +7919,22 @@ const App = () => {
           // Only redirect on initial login — preserve active module navigation
           // if the auth token refreshes silently in the background. A phone
           // number verified via SMS is mandatory before reaching the dashboard.
+          //
+          // This used to route straight to "dashboard" for ANY phone-verified
+          // account, ignoring whether onboarding had ever run — since every
+          // real signup logs in through the "login" screen (itself listed in
+          // preAuthScreens) right after phone verification, this silently
+          // skipped onboarding for every single new beta account, no matter
+          // what selectedProfile/localStorage said. Found 2026-08-01 testing
+          // a fresh beta signup end-to-end after two other onboarding-skip
+          // fixes the same week didn't stick — this was the actual redirect
+          // doing it, every time, unconditionally.
           setVista((prev) => {
             const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal"];
             if (!preAuthScreens.includes(prev)) return prev;
-            return phoneAlreadyVerified ? "dashboard" : "phone-verify";
+            if (!phoneAlreadyVerified) return "phone-verify";
+            if (!hasSelectedProfile) return "sofi-onboarding";
+            return "dashboard";
           });
         } catch (err) {
           console.error("Error loading user data from Firestore:", err);
@@ -9618,7 +9635,9 @@ const App = () => {
           // Already linked from a previous attempt — treat as verified.
           await setDoc(doc(db, "users", auth.currentUser!.uid), { phoneVerified: true, phoneVerifiedAt: new Date().toISOString() }, { merge: true });
           setIsPhoneVerified(true);
-          setVista("dashboard");
+          // A phone-verified account with no profile yet still needs
+          // onboarding — see the matching fix on handleConfirmPhoneCode below.
+          setVista(selectedProfile ? "dashboard" : "sofi-onboarding");
         } else if (err?.code === "auth/operation-not-allowed") {
           setPhoneVerifyError("La vérification par téléphone n'est pas encore activée côté serveur (Firebase Authentication → Sign-in method → Téléphone).");
         } else {
@@ -9641,7 +9660,12 @@ const App = () => {
           { merge: true }
         );
         setIsPhoneVerified(true);
-        setVista("dashboard");
+        // This used to always jump to "dashboard" regardless of whether the
+        // account had ever picked a profile — since phone verification is
+        // the very first thing a brand-new signup does (right after account
+        // creation, before onboarding ever ran), this was the main reason
+        // real beta signups never saw onboarding at all. Found 2026-08-01.
+        setVista(selectedProfile ? "dashboard" : "sofi-onboarding");
       } catch (err: any) {
         // This used to always show "Code invalide ou expiré" no matter what
         // actually failed — including auth/credential-already-in-use, which
