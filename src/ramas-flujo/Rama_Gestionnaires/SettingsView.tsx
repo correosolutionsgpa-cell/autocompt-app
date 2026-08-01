@@ -31,7 +31,6 @@ import {
   Globe,
   Hash,
   Home,
-  Lock,
   Mail,
   MapPin,
   MessageSquare,
@@ -118,6 +117,67 @@ export interface SettingsViewProps {
   setShowPaywallModal?: (val: boolean) => void;
   setPaywallTargetTier?: (val: string) => void;
 }
+
+// Custom neon padlock — hand-drawn SVG instead of Fabiola's raster
+// illustrations, which look great large but turn to mush at ~15-28px icon
+// size no matter the source resolution. SVG is transparent by construction
+// and the glow comes from an actual filter, so it scales crisply on any
+// screen/density and needs no separate light/dark asset — colored via
+// `currentColor`, same pattern as every lucide-react icon in this file.
+export const NeonLockIcon: React.FC<{ className?: string }> = ({ className }) => {
+  // This renders once per locked profile button (up to 4 on screen at once),
+  // so the filter id must be unique per instance — a hardcoded id would be
+  // duplicated in the DOM and only the first instance's glow would resolve
+  // reliably across browsers.
+  const filterId = `neonLockGlow-${React.useId()}`;
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id={filterId} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="1.1" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g filter={`url(#${filterId})`} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <rect x="5" y="11" width="14" height="9.5" rx="2.4" />
+        <path d="M8 11V7.3a4 4 0 0 1 8 0V11" />
+        <circle cx="12" cy="15.3" r="1.15" fill="currentColor" stroke="none" />
+        <path d="M12 16.4v1.6" />
+      </g>
+    </svg>
+  );
+};
+
+// Open-shackle companion to NeonLockIcon — not wired to anything yet (no
+// real unlock/purchase flow exists), but ready for the "profile just got
+// unlocked" moment (e.g. swap icon + brief transition) once that's built.
+export const NeonLockOpenIcon: React.FC<{ className?: string }> = ({ className }) => {
+  const filterId = `neonLockOpenGlow-${React.useId()}`;
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id={filterId} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="1.1" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g filter={`url(#${filterId})`} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <rect x="5" y="11" width="14" height="9.5" rx="2.4" />
+        <path d="M8 11V7.3a4 4 0 0 1 7.5-1.5" />
+        <circle cx="12" cy="15.3" r="1.15" fill="currentColor" stroke="none" />
+        <path d="M12 16.4v1.6" />
+      </g>
+    </svg>
+  );
+};
 
 const PROFILE_OPTIONS: { id: string; label: string }[] = [
   { id: "prospecteur", label: "Prospecteur Immobilier" },
@@ -412,11 +472,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-between gap-2">
                         <span className="truncate">{p.label}</span>
-                        <Lock
-                          size={15}
-                          className={`shrink-0 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}
-                          style={{ filter: `drop-shadow(0 0 4px ${darkMode ? "rgba(52,211,153,0.7)" : "rgba(5,150,105,0.5)"})` }}
-                        />
+                        <NeonLockIcon className={`w-4 h-4 shrink-0 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`} />
                       </span>
                     </button>
                   );
