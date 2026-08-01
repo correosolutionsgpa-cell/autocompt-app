@@ -31,6 +31,7 @@ import {
   Globe,
   Hash,
   Home,
+  Lock,
   Mail,
   MapPin,
   MessageSquare,
@@ -110,6 +111,12 @@ export interface SettingsViewProps {
   // change quel module grid + RBAC s'applique. Persisté dans Firestore.
   selectedProfile?: string | null;
   updateSelectedProfile?: (profile: string) => void;
+  // Profils déjà débloqués pour ce compte — base pour un futur forfait
+  // "multi-profil" payant. Absent/vide = seul selectedProfile compte comme
+  // débloqué (compte legacy d'avant ce champ, ou onboarding tout juste fini).
+  unlockedProfiles?: string[] | null;
+  setShowPaywallModal?: (val: boolean) => void;
+  setPaywallTargetTier?: (val: string) => void;
 }
 
 const PROFILE_OPTIONS: { id: string; label: string }[] = [
@@ -173,6 +180,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   ownerId,
   selectedProfile,
   updateSelectedProfile,
+  unlockedProfiles,
+  setShowPaywallModal,
+  setPaywallTargetTier,
 }) => {
   const { toastDurationMs, setToastDurationMs } = useToast();
 
@@ -355,19 +365,59 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {PROFILE_OPTIONS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => updateSelectedProfile(p.id)}
-                  className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
-                    selectedProfile === p.id
-                      ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")
-                      : (darkMode ? "border-zinc-800 text-zinc-400 hover:border-zinc-700" : "border-slate-200 text-slate-600 hover:border-slate-300")
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {(() => {
+                // Legacy accounts (from before this field existed) or accounts
+                // that just finished onboarding only have their own chosen
+                // profile unlocked — every other profile shows as locked,
+                // ready for a future paid "multi-profil" upsell.
+                const effectiveUnlocked =
+                  unlockedProfiles && unlockedProfiles.length > 0
+                    ? unlockedProfiles
+                    : selectedProfile
+                      ? [selectedProfile]
+                      : [];
+                return PROFILE_OPTIONS.map((p) => {
+                  const isActive = selectedProfile === p.id;
+                  const isUnlocked = effectiveUnlocked.includes(p.id);
+                  if (isUnlocked) {
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => updateSelectedProfile(p.id)}
+                        className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
+                          isActive
+                            ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")
+                            : (darkMode ? "border-zinc-800 text-zinc-400 hover:border-zinc-700" : "border-slate-200 text-slate-600 hover:border-slate-300")
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  }
+                  // Locked — futuristic translucent emerald glass, opens the
+                  // upgrade modal instead of switching for free.
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setPaywallTargetTier?.("pro_multi");
+                        setShowPaywallModal?.(true);
+                      }}
+                      className={`group relative p-3 rounded-2xl border text-left text-xs font-bold transition-all overflow-hidden backdrop-blur-md ${
+                        darkMode
+                          ? "border-emerald-400/20 bg-emerald-500/[0.04] text-emerald-300/50 hover:border-emerald-400/40 hover:bg-emerald-500/[0.08]"
+                          : "border-emerald-500/20 bg-emerald-500/[0.03] text-emerald-700/50 hover:border-emerald-500/40 hover:bg-emerald-500/[0.06]"
+                      }`}
+                    >
+                      <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-between gap-2">
+                        <span className="truncate">{p.label}</span>
+                        <Lock size={12} className="shrink-0 opacity-70" />
+                      </span>
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

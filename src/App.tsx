@@ -790,6 +790,13 @@ const App = () => {
   const [selectedProfile, setSelectedProfile] = useState<string | null>(
     () => localStorage.getItem("autocompt_selected_profile") || null
   );
+  // Which of the 5 profiles this account can switch to for free — groundwork
+  // for a future paid "multi-profil" upsell (Paramètres shows the rest
+  // locked). Loaded from Firestore users/{uid}.unlockedProfiles in
+  // onAuthStateChanged; null/empty means "only selectedProfile" (legacy
+  // accounts, or right after onboarding). No purchase flow writes to this
+  // yet — the paywall modal it opens is UI-only for now.
+  const [unlockedProfiles, setUnlockedProfiles] = useState<string[] | null>(null);
   // Changes the active profile from within the app (e.g. Paramètres), unlike
   // the onboarding-only setSelectedProfile — this also persists to Firestore
   // so it survives across browsers/sessions instead of living only in
@@ -7777,6 +7784,7 @@ const App = () => {
               const modeForProfile = userData.selectedProfile === "syndicat" ? "Syndic" : "Plex";
               setDashboardMode(modeForProfile);
               localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
+              setUnlockedProfiles(Array.isArray(userData.unlockedProfiles) ? userData.unlockedProfiles : null);
             } else {
               // This account hasn't picked a profile yet (pre-onboarding). Since
               // `autocompt_selected_profile` isn't namespaced per uid, it can still
@@ -8077,8 +8085,12 @@ const App = () => {
             // choice made here. Same write path as updateSelectedProfile
             // (used when changing profile later from Paramètres).
             const uidAtOnboarding = auth.currentUser?.uid;
+            // The profile chosen at signup is the only one unlocked for free —
+            // every other profile shows locked in Paramètres until a future
+            // paid upsell unlocks it (see unlockedProfiles above).
+            setUnlockedProfiles([profile]);
             if (uidAtOnboarding) {
-              setDoc(doc(db, "users", uidAtOnboarding), { selectedProfile: profile, level }, { merge: true })
+              setDoc(doc(db, "users", uidAtOnboarding), { selectedProfile: profile, level, unlockedProfiles: [profile] }, { merge: true })
                 .catch((err) => console.error("Failed to persist selectedProfile after onboarding:", err));
             }
             // Phase 4 / Bug Fix #3: Always trigger tour when onboarding completes.
@@ -19797,6 +19809,9 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         ownerId={currentCompany?.ownerId || auth.currentUser?.uid}
         selectedProfile={selectedProfile}
         updateSelectedProfile={updateSelectedProfile}
+        unlockedProfiles={unlockedProfiles}
+        setShowPaywallModal={setShowPaywallModal}
+        setPaywallTargetTier={setPaywallTargetTier}
       />
     );
   }
