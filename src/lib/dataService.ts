@@ -1046,8 +1046,16 @@ export const dataService = {
       }
       return results;
     } catch (e) {
-      console.error('fetchWorkspaces failed, returning local default:', e);
-      return defaultWorkspaces;
+      // Used to fall back to `defaultWorkspaces` — Fabiola's own real company
+      // names/NEQ/TPS-TVQ numbers — on ANY error, including the transient
+      // "Missing or insufficient permissions" race a brand-new account can
+      // hit before its Firestore token fully propagates (see getIdToken(true)
+      // above in App.tsx's onAuthStateChanged). That fallback then got
+      // auto-saved back to Firestore by the userProfile hydration effect,
+      // silently creating a company literally named "Solutions GPA Inc." for
+      // real beta testers — found 2026-08-01 testing a real beta signup.
+      console.error('fetchWorkspaces failed:', e);
+      return [];
     }
   },
 
@@ -1189,8 +1197,10 @@ export const dataService = {
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as PropertyDoc;
       });
     } catch (e) {
-      console.error('fetchProperties failed, returning local default:', e);
-      return defaultPropertiesSeed;
+      // See fetchWorkspaces above — a hardcoded demo-data fallback on error
+      // is not safe for a shared production function; return empty instead.
+      console.error('fetchProperties failed:', e);
+      return [];
     }
   },
 
@@ -1297,8 +1307,9 @@ export const dataService = {
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as LoyerDoc;
       });
     } catch (e) {
-      console.error('fetchLoyers failed, returning local default:', e);
-      return defaultLoyersSeed;
+      // See fetchWorkspaces above — no hardcoded demo-data fallback on error.
+      console.error('fetchLoyers failed:', e);
+      return [];
     }
   },
 
@@ -1618,8 +1629,9 @@ export const dataService = {
         return { ...data, id: d.id, companyId: originalCompanyId } as ExpenseDoc;
       });
     } catch (e) {
-      console.error('fetchExpenses failed, returning local default:', e);
-      return defaultDepenses;
+      // See fetchWorkspaces above — no hardcoded demo-data fallback on error.
+      console.error('fetchExpenses failed:', e);
+      return [];
     }
   },
 
