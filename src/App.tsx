@@ -756,6 +756,9 @@ const App = () => {
 
   // --- PERFIL Y CONFIGURACIÓN ---
   const [setupComplet, setSetupComplet] = useState(false);
+  // Guards the "setup" screen's create-workspace button while its Firestore
+  // write is in flight (prevents a double-click creating two companies).
+  const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   // NOTE: homeOfficeFiles, showHomeOfficeConfig, hoConfigForm
   // → Déplacés dans src/ramas-flujo/Rama_Entrepreneurs/BureauDomicile.tsx (Fase 2)
   const [hasAcceptedLoi25, setHasAcceptedLoi25] = useState(false);
@@ -9041,12 +9044,20 @@ const App = () => {
               </button>
               <button
                 type="button"
-                disabled={!hasAcceptedLoi25}
-                onClick={() => {
-                  const newCompanyId = "syndic-" + Date.now();
-                  setListaEmpresas((prev) => [
-                    ...prev,
-                    {
+                disabled={!hasAcceptedLoi25 || isCreatingCompany}
+                onClick={async () => {
+                  // Same fix as the Plex "setup" screen below — this only ever
+                  // wrote to local React state, never to Firestore, and
+                  // overwrote the real logged-in email with a hardcoded one.
+                  const uid = auth.currentUser?.uid;
+                  if (!uid) {
+                    alert("Session expirée — veuillez vous reconnecter.");
+                    return;
+                  }
+                  setIsCreatingCompany(true);
+                  try {
+                    const newCompanyId = "syndic-" + Date.now();
+                    const saved = await dataService.saveWorkspace(uid, {
                       id: newCompanyId,
                       nombre: "Syndicat de Copropriété",
                       industry: "Syndicat",
@@ -9057,24 +9068,29 @@ const App = () => {
                       hasPlex: false,
                       nombrePortes: 1, // Doesn't matter
                       gradientFromTo: "from-amber-500 to-orange-600",
-                    }
-                  ]);
-                  setActiveCompanyId(newCompanyId);
-                  setSetupComplet(true);
-                  setIsForfaitSelected(true);
-                  setCurrentUserEmail("admin.syndicat@autocompt.ca");
-                  setActiveUser("Président");
+                    });
+                    setListaEmpresas((prev) => [...prev, saved]);
+                    setActiveCompanyId(saved.id);
+                    setSetupComplet(true);
+                    setIsForfaitSelected(true);
+                    setActiveUser("Président");
 
-                  if (isCreatingSecondCompany) {
-                    setIsCreatingSecondCompany(false);
-                    localStorage.setItem("MultiEntrepriseActive", "true");
+                    if (isCreatingSecondCompany) {
+                      setIsCreatingSecondCompany(false);
+                      localStorage.setItem("MultiEntrepriseActive", "true");
+                    }
+                    setVista("dashboard");
+                    if (typeof playNotificationSound === "function") playNotificationSound();
+                  } catch (err: any) {
+                    console.error("Failed to save new Syndic workspace:", err);
+                    alert("Erreur lors de la création du syndicat. Veuillez réessayer.");
+                  } finally {
+                    setIsCreatingCompany(false);
                   }
-                  setVista("dashboard");
-                  if (typeof playNotificationSound === "function") playNotificationSound();
                 }}
-                className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/30 hover:shadow-amber-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+                className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/30 hover:shadow-amber-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
               >
-                Commencer
+                {isCreatingCompany ? "Création..." : "Commencer"}
               </button>
             </div>
           </div>
@@ -9440,12 +9456,27 @@ const App = () => {
             </button>
             <button
               type="button"
-              disabled={!hasAcceptedLoi25}
-              onClick={() => {
-                const newCompanyId = "custom-" + Date.now();
-                setListaEmpresas((prev) => [
-                  ...prev,
-                  {
+              disabled={!hasAcceptedLoi25 || isCreatingCompany}
+              onClick={async () => {
+                // This used to only push into local React state (setListaEmpresas
+                // with the raw setter, no Firestore write anywhere) and even
+                // overwrote the real logged-in user's email with a hardcoded
+                // "nouveau.client@autocompt.ca" — leftover from before this app
+                // was wired to Firestore. Meant the company vanished on the next
+                // login/refresh, and every field on this screen (NEQ, address,
+                // phone...) had to be re-entered in Paramètres, which silently
+                // discarded it too for the same reason (no company yet to hydrate
+                // from, so its save-guard never fires — see userProfileHydratedRef
+                // above). Found 2026-08-01 testing a real beta signup end-to-end.
+                const uid = auth.currentUser?.uid;
+                if (!uid) {
+                  alert("Session expirée — veuillez vous reconnecter.");
+                  return;
+                }
+                setIsCreatingCompany(true);
+                try {
+                  const newCompanyId = "custom-" + Date.now();
+                  const saved = await dataService.saveWorkspace(uid, {
                     id: newCompanyId,
                     nombre: userProfile.nom || (isCreatingSecondCompany ? "Entreprise 2" : "Nouvelle Entreprise"),
                     industry: industry,
@@ -9456,30 +9487,35 @@ const App = () => {
                     hasPlex: hasPlex,
                     nombrePortes: nombrePortes,
                     gradientFromTo: "from-emerald-500 to-teal-600",
-                  }
-                ]);
-                setActiveCompanyId(newCompanyId);
-                setSetupComplet(true);
-                setIsForfaitSelected(true);
-                setCurrentUserEmail("nouveau.client@autocompt.ca");
-                setActiveUser("Nouveau");
+                  });
+                  setListaEmpresas((prev) => [...prev, saved]);
+                  setActiveCompanyId(saved.id);
+                  setSetupComplet(true);
+                  setIsForfaitSelected(true);
+                  setActiveUser("Nouveau");
 
-                const currentTier = getEffectiveTier();
-                if ((currentTier === "integral" || selectedTier === "multi_entreprise" || selectedTier === "integral" || selectedTier === "pro_multi") && !isCreatingSecondCompany) {
-                  setShowMultiPrompt(true);
-                  if (typeof playNotificationSound === "function") playNotificationSound();
-                } else {
-                  if (isCreatingSecondCompany) {
-                    setIsCreatingSecondCompany(false);
-                    localStorage.setItem("MultiEntrepriseActive", "true");
+                  const currentTier = getEffectiveTier();
+                  if ((currentTier === "integral" || selectedTier === "multi_entreprise" || selectedTier === "integral" || selectedTier === "pro_multi") && !isCreatingSecondCompany) {
+                    setShowMultiPrompt(true);
+                    if (typeof playNotificationSound === "function") playNotificationSound();
+                  } else {
+                    if (isCreatingSecondCompany) {
+                      setIsCreatingSecondCompany(false);
+                      localStorage.setItem("MultiEntrepriseActive", "true");
+                    }
+                    setVista("dashboard");
+                    if (typeof playNotificationSound === "function") playNotificationSound();
                   }
-                  setVista("dashboard");
-                  if (typeof playNotificationSound === "function") playNotificationSound();
+                } catch (err: any) {
+                  console.error("Failed to save new workspace:", err);
+                  alert("Erreur lors de la création de l'entreprise. Veuillez réessayer.");
+                } finally {
+                  setIsCreatingCompany(false);
                 }
               }}
-              className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/30 hover:shadow-emerald-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+              className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/30 hover:shadow-emerald-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
             >
-              Commencer
+              {isCreatingCompany ? "Création..." : "Commencer"}
             </button>
           </div>
         </div>
