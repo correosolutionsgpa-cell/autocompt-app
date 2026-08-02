@@ -139,6 +139,7 @@ import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
 import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
 import PortefeuilleClientView from "./ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView";
+import PortefeuilleClientsComptableView from "./ramas-flujo/Rama_Comptables/PortefeuilleClientsComptableView";
 import TenueLivresImmeubleView from "./ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView";
 
 import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
@@ -838,7 +839,7 @@ const App = () => {
   // Defined here at App scope so it is available in both the sidebar inner
   // component (which captures it via closure) and in every vista renderer.
   const _RBAC_VALID_PROFILES: ProfileId[] = [
-    "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat",
+    "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable",
   ];
   const activeProfile: ProfileId = _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
     ? (selectedProfile as ProfileId)
@@ -2077,7 +2078,7 @@ const App = () => {
 
     // RBAC filter: keep items whose mapped moduleId is granted, or null (always-on items)
     const VALID_PROFILES_SIDEBAR: ProfileId[] = [
-      "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat",
+      "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable",
     ];
     const sidebarProfile: ProfileId =
       VALID_PROFILES_SIDEBAR.includes(selectedProfile as ProfileId)
@@ -8076,6 +8077,9 @@ const App = () => {
             } else if (profile === "syndicat") {
               mode = "Syndic";
               level = "Syndicat de Copropriété";
+            } else if (profile === "comptable") {
+              mode = "Plex";
+              level = "Comptable";
             }
 
             localStorage.setItem("autocompt_dashboard_mode", mode);
@@ -12482,6 +12486,11 @@ const App = () => {
         "Contrats & Résolutions",
         "Documents Syndicat",
       ],
+      comptable: [
+        "Ententes de Confidentialité",
+        "Documents Corporatifs",
+        "Contrats de Partenariat",
+      ],
     };
     const allowedCats = DOCULEGAL_ALLOWED_CATS[activeProfile] ?? [];
 
@@ -12493,6 +12502,7 @@ const App = () => {
       gestionnaire: ["promesse", "gestion", "bail", "corporatif", "nda", "confidentialité"],
       investisseur: ["promesse", "cession", "entente", "confidentialité", "nda", "partenariat"],
       syndicat: ["résolution", "contrat", "syndicat"],
+      comptable: ["entente", "confidentialité", "nda", "corporatif", "partenariat"],
     };
     const templateKeywords = DOCULEGAL_TEMPLATE_KEYWORDS[activeProfile] ?? [];
     const profileSmartTemplates = smartTemplates.filter((t) => {
@@ -19930,6 +19940,24 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminName={adminName}
         adminEmail={adminEmail}
         setSelectedLedgerBuildingId={setSelectedLedgerBuildingId}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+      />
+    );
+  }
+
+  // PortefeuilleClientsComptableView → src/ramas-flujo/Rama_Comptables/PortefeuilleClientsComptableView.tsx
+  // Portefeuille multi-client du comptable — même shell partagé que
+  // PortefeuilleClientView ci-dessus, sans les modules immobiliers.
+  if (vista === "portefeuille_clients_comptable") {
+    return (
+      <PortefeuilleClientsComptableView
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        adminName={adminName}
+        adminEmail={adminEmail}
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}

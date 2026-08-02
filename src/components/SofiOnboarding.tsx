@@ -6,7 +6,7 @@ import {
   ArrowRight, ArrowLeft, CheckCircle2,
   Building2, UserCheck, Home,
   Plus, Trash2, Info, AlertTriangle,
-  Scan, Loader2, Camera, X, LogIn,
+  Scan, Loader2, Camera, X, LogIn, Calculator,
 } from "lucide-react";
 import GlassRoleButton from "./GlassRoleButton";
 import { SofiAvatarSVG } from "./SofiAvatarSVG";
@@ -22,7 +22,8 @@ export type OnboardingProfile =
   | "investisseur"
   | "flippeur"
   | "gestionnaire"
-  | "syndicat";
+  | "syndicat"
+  | "comptable";
 
 export interface CoOwnerEntry {
   name: string;
@@ -416,12 +417,29 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       ],
     },
   ],
+
+  // ── F. Comptable — portefeuille multi-client ─────────────────────────────────
+  comptable: [
+    {
+      id: "nb_clients_comptable",
+      type: "single_choice",
+      titleFR: "Combien de clients gérez-vous actuellement ?",
+      titleEN: "How many clients do you currently manage?",
+      titleES: "¿Cuántos clientes gestionas actualmente?",
+      options: [
+        { value: "small",  labelFR: "1 à 5 clients",      labelEN: "1 to 5 clients",  labelES: "1 a 5 clientes"     },
+        { value: "medium", labelFR: "6 à 20 clients",     labelEN: "6 to 20 clients", labelES: "6 a 20 clientes"    },
+        { value: "large",  labelFR: "Plus de 20 clients", labelEN: "20+ clients",      labelES: "Más de 20 clientes" },
+      ],
+    },
+  ],
 };
 
 // ─── Profile color tokens ─────────────────────────────────────────────────────
 const PROFILE_COLOR: Record<OnboardingProfile, { rgb: string }> = {
   prospecteur:  { rgb: "6,182,212"   },
   investisseur: { rgb: "16,185,129"  },
+  comptable:    { rgb: "59,130,246"  },
   flippeur:     { rgb: "245,158,11"  },
   gestionnaire: { rgb: "99,102,241"  },
   syndicat:     { rgb: "139,92,246"  },
@@ -466,6 +484,7 @@ const T = {
       flippeur:     { label: "Flippeur Immobilier",     desc: "Centralisez votre comptabilité de chantier. Ne perdez plus aucune facture !" },
       gestionnaire: { label: "Gestionnaire Immobilier", desc: "Automatisez et organisez la comptabilité pour le portefeuille de chaque client." },
       syndicat:     { label: "Syndicat de Copropriété", desc: "Une administration transparente pour bâtir la confiance des copropriétaires." },
+      comptable:    { label: "Comptable",               desc: "Gérez la comptabilité de tous vos clients depuis un seul tableau de bord." },
     },
   },
   EN: {
@@ -487,6 +506,7 @@ const T = {
       flippeur:     { label: "Property Flipper",        desc: "Centralize your construction site accounting. Never lose a single invoice!" },
       gestionnaire: { label: "Property Manager",        desc: "Automate and organize accounting for each client's portfolio." },
       syndicat:     { label: "Condominium Association", desc: "Transparent administration to build co-owners' trust." },
+      comptable:    { label: "Accountant",              desc: "Manage the bookkeeping for all your clients from a single dashboard." },
     },
   },
   ES: {
@@ -508,6 +528,7 @@ const T = {
       flippeur:     { label: "Flippeur Inmobiliario",          desc: "Centraliza la contabilidad de tu obra. ¡No pierdas ninguna factura!" },
       gestionnaire: { label: "Gestor Inmobiliario",            desc: "Automatiza y organiza la contabilidad para la cartera de cada cliente." },
       syndicat:     { label: "Asociación de Copropietarios",   desc: "Una administración transparente para generar confianza en los copropietarios." },
+      comptable:    { label: "Contador",                       desc: "Gestiona la contabilidad de todos tus clientes desde un solo panel." },
     },
   },
 };
@@ -1132,9 +1153,9 @@ export default function SofiOnboarding({
             <div className="space-y-2.5">
               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>ROLES DISPONIBLES</label>
               <div className="flex flex-col gap-2.5 w-full max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                {(["prospecteur","investisseur","flippeur","gestionnaire","syndicat"] as OnboardingProfile[]).map((p, i) => {
-                  const themes = ["cyan","emerald","amber","indigo","purple"] as const;
-                  const icons = [<FileSearch className="w-5 h-5"/>, <Building className="w-5 h-5"/>, <Hammer className="w-5 h-5"/>, <Briefcase className="w-5 h-5"/>, <Users className="w-5 h-5"/>];
+                {(["prospecteur","investisseur","flippeur","gestionnaire","syndicat","comptable"] as OnboardingProfile[]).map((p, i) => {
+                  const themes = ["cyan","emerald","amber","indigo","purple","blue"] as const;
+                  const icons = [<FileSearch className="w-5 h-5"/>, <Building className="w-5 h-5"/>, <Hammer className="w-5 h-5"/>, <Briefcase className="w-5 h-5"/>, <Users className="w-5 h-5"/>, <Calculator className="w-5 h-5"/>];
                   return (
                     <React.Fragment key={p}>
                       <GlassRoleButton

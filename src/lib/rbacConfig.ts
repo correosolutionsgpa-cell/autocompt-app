@@ -56,6 +56,7 @@ export type ModuleId =
   | "gestion_immo"
   | "taxes_assurances"
   | "fideicommis"         // Compte en Fidéicommis (gestionnaire only)
+  | "portefeuille_clients" // Portefeuille Clients (gestionnaire + comptable)
   | "assistant_ia"        // Universal (all Plex profiles)
   // ── Syndicat modules ──
   | "cotisations"
@@ -71,7 +72,8 @@ export type ProfileId =
   | "investisseur"
   | "flippeur"
   | "gestionnaire"
-  | "syndicat";
+  | "syndicat"
+  | "comptable";
 
 // ─── Module metadata ────────────────────────────────────────────────────────
 export interface ModuleDefinition {
@@ -154,6 +156,12 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
     id: "fideicommis",
     label: "Compte en Fidéicommis",
     description: "Gestion OACIQ: dépôts, retraits, conciliation mensuelle, relevés propriétaires",
+    dashboard: "Plex",
+  },
+  portefeuille_clients: {
+    id: "portefeuille_clients",
+    label: "Portefeuille Clients",
+    description: "Vue consolidée de vos clients : revenus, dépenses, solde net par client",
     dashboard: "Plex",
   },
   // ── Syndicat modules ──────────────────────────────────────────────────────
@@ -286,8 +294,9 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "conciliation",
     "gestion_immo",
     "taxes_assurances",
-    "fideicommis",        // Compte en fidéicommis OACIQ — gestion des fonds clients
-    "assistant_ia",       // Universal
+    "fideicommis",         // Compte en fidéicommis OACIQ — gestion des fonds clients
+    "portefeuille_clients", // Vue consolidée des clients (nouvelle entrée directe depuis la grille)
+    "assistant_ia",        // Universal
   ],
 
   /**
@@ -304,6 +313,24 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "loi16",
     "mur_communication",
     "rapport_ia",
+  ],
+
+  /**
+   * F. Comptable
+   * Focus: multi-client bookkeeping — one accountant, many independent
+   * businesses, each with their own tenue de livres, from a single AutoCompt
+   * account. No real-estate modules (gestion_immo, fideicommis) — those are
+   * specific to property management, not generic bookkeeping.
+   * + Universal: Dossiers Fiscaux, Assistant IA.
+   */
+  comptable: [
+    "tenue_livres",
+    "dossiers_fiscaux",    // Universal
+    "conciliation",
+    "taxes_assurances",
+    "doculegal",
+    "portefeuille_clients", // Portefeuille multi-client — coeur du profil
+    "assistant_ia",         // Universal
   ],
 };
 

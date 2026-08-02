@@ -12,7 +12,7 @@ import React from "react";
 
 // ─── Color theme tokens ────────────────────────────────────────────────────────
 // Per design_system_rules.md §2 — Profile Color Tokens
-type ColorTheme = "cyan" | "emerald" | "amber" | "indigo" | "purple";
+type ColorTheme = "cyan" | "emerald" | "amber" | "indigo" | "purple" | "blue";
 
 interface ThemeTokens {
   borderRest:   string; // border-[color]/50
@@ -82,6 +82,17 @@ const THEME_MAP: Record<ColorTheme, ThemeTokens> = {
     labelHover:   "group-hover:text-purple-600 dark:group-hover:text-purple-400",
     arrowColor:   "text-purple-500 dark:text-purple-400",
     shadowRgb:    "139,92,246",
+  },
+  blue: {
+    borderRest:   "border-blue-500/50",
+    borderHover:  "hover:border-blue-500/80",
+    bgHoverLight: "hover:bg-blue-500/15",
+    bgHoverDark:  "dark:hover:bg-blue-500/20",
+    iconBg:       "bg-blue-500/10",
+    iconText:     "text-blue-600 dark:text-blue-400",
+    labelHover:   "group-hover:text-blue-600 dark:group-hover:text-blue-400",
+    arrowColor:   "text-blue-500 dark:text-blue-400",
+    shadowRgb:    "59,130,246",
   },
 };
 

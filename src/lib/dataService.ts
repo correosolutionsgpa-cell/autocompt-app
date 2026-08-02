@@ -185,6 +185,9 @@ export interface ExpenseDoc {
   unitId?: string;
   /** FK → BuildingLedger.id (optional, for property-linked expenses) */
   buildingId?: string;
+  /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
+   *  gestionnaire profiles), distinct from fideicommisClientId. */
+  clientId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -454,6 +457,9 @@ export interface InvoiceDoc {
   noteComptable?: string;
   unitId?: string;
   buildingId?: string;
+  /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
+   *  gestionnaire profiles), distinct from fideicommisClientId. */
+  clientId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -564,6 +570,32 @@ export interface FideicommisClientDoc {
   proprietes: string[];
   /** Taux d'honoraires de gestion (%) */
   tauxHonoraires: number;
+  ownerId: string;
+  createdAt: string;
+}
+
+/**
+ * BookkeepingClientDoc — `bookkeepingClients` collection
+ * One document per end-client whose books are kept from a single AutoCompt
+ * account/company (comptable profile — any small business, not necessarily
+ * real estate; also usable by gestionnaire for non-property clients).
+ * Deliberately generic and separate from FideicommisClientDoc above: no
+ * buildings, no management-fee %, no trust-account (fidéicommis) fields —
+ * those stay exclusive to the real-estate/OACIQ trust-account model.
+ * `companyId` is the RAW (unprefixed) activeCompanyId, same convention as
+ * FideicommisClientDoc — NOT the `{userId}_company_` prefixed form used by
+ * properties/units/expenses/invoices.
+ * Document ID: `{userId}_bkclient_{id}`
+ */
+export interface BookkeepingClientDoc {
+  id: string;
+  companyId: string;
+  nom: string;
+  email: string;
+  telephone?: string;
+  /** Free-text business type, e.g. "Restaurant", "Salon de coiffure" */
+  secteurActivite?: string;
+  notes?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -2444,6 +2476,72 @@ export const dataService = {
       console.error('fetchFideicommisClients failed:', e);
       return [];
     }
+  },
+
+  // ── Generic multi-client bookkeeping (comptable, and any profile with
+  //    non-real-estate clients) — `bookkeepingClients` collection. Kept
+  //    entirely separate from fideicommisClients above (real-estate/trust-
+  //    account specific). Same RAW-companyId convention as fideicommisClients. ──
+
+  async fetchClients(userId: string, companyId: string): Promise<BookkeepingClientDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'bookkeepingClients'),
+        where('companyId', '==', companyId),
+        where('ownerId', '==', userId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as BookkeepingClientDoc);
+    } catch (e) {
+      console.error('fetchClients failed:', e);
+      return [];
+    }
+  },
+
+  async saveClient(
+    userId: string,
+    clientData: Partial<BookkeepingClientDoc> & { companyId: string; nom: string }
+  ): Promise<BookkeepingClientDoc> {
+    assertCanWrite();
+    const id = clientData.id || `${userId}_bkclient_${Date.now()}`;
+    const data: any = {
+      ...clientData,
+      id,
+      ownerId: userId,
+      createdAt: clientData.createdAt || new Date().toISOString(),
+    };
+    // Firestore's setDoc rejects any field with an explicit undefined value
+    // (e.g. an empty optional form field) — strip them before writing, same
+    // fix already applied to saveExpense/saveMeubleReservation.
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+    await setDoc(doc(db, 'bookkeepingClients', id), data, { merge: true });
+    return data as BookkeepingClientDoc;
+  },
+
+  async deleteClient(clientId: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'bookkeepingClients', String(clientId)));
+    return true;
+  },
+
+  /**
+   * Thin client-side filters over the already-fetched expense/invoice lists
+   * (fetchExpenses/fetchInvoices already return unprefixed companyId) — this
+   * mirrors the exact filter pattern PortefeuilleClientView already uses for
+   * fideicommisClientId, so no new Firestore query or composite index is
+   * introduced. Intended for a single client's drill-down view; a portfolio
+   * screen showing ALL clients at once should call fetchExpenses/fetchInvoices
+   * once and reduce in memory instead of calling these in a loop.
+   */
+  async fetchExpensesForClient(userId: string, companyId: string, clientId: string): Promise<ExpenseDoc[]> {
+    const all = await this.fetchExpenses(userId);
+    return all.filter((e) => e.companyId === companyId && e.clientId === clientId);
+  },
+
+  async fetchInvoicesForClient(userId: string, companyId: string, clientId: string): Promise<InvoiceDoc[]> {
+    const all = await this.fetchInvoices(userId);
+    return all.filter((inv) => inv.companyId === companyId && inv.clientId === clientId);
   },
 
   /**

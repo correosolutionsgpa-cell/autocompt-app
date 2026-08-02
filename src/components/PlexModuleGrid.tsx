@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Scale,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { hasAccess, type ProfileId } from "../lib/rbacConfig";
 
@@ -55,6 +56,7 @@ const PROFILE_RGB: Record<ProfileId, string> = {
   flippeur:     "245,158,11",   // amber-500
   gestionnaire: "99,102,241",   // indigo-500
   syndicat:     "139,92,246",   // purple-500
+  comptable:    "59,130,246",   // blue-500
 };
 
 // ── Shadow helpers ────────────────────────────────────────────────────────────
@@ -369,6 +371,29 @@ export default function PlexModuleGrid({
             Fidéicommis
           </span>
           <span className="text-[7px] font-bold text-indigo-500/70 dark:text-indigo-400/60 uppercase tracking-wider">OACIQ</span>
+        </button>
+      )}
+
+      {/* Portefeuille Clients — gestionnaire (propriétaires-clients) et
+          comptable (clients génériques). Une seule carte/module partagés,
+          seule la vista de destination diffère selon le profil actif. */}
+      {can("portefeuille_clients") && (
+        <button
+          onClick={() => setVista(activeProfile === "comptable" ? "portefeuille_clients_comptable" : "portefeuille_client")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-indigo-500/10", "text-indigo-600 dark:text-indigo-400")}>
+            <Users size={22} />
+          </div>
+          <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+            Portefeuille
+            <br />
+            Clients
+          </span>
+          <span className="text-[7px] font-bold text-indigo-500/70 dark:text-indigo-400/60 uppercase tracking-wider">Multi-client</span>
         </button>
       )}
 

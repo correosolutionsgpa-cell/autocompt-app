@@ -184,6 +184,7 @@ const PROFILE_OPTIONS: { id: string; label: string }[] = [
   { id: "flippeur", label: "Flippeur Immobilier" },
   { id: "gestionnaire", label: "Gestionnaire Immobilier" },
   { id: "syndicat", label: "Syndicat de Copropriété" },
+  { id: "comptable", label: "Comptable" },
 ];
 
 // ── Registre Véhicules — Single Source of Truth ──────────────────────────────
