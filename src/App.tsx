@@ -8804,20 +8804,20 @@ const App = () => {
   if (vista === "setup") {
     if (dashboardMode === "Syndic") {
       return (
-        <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
+        <div className={darkMode ? "min-h-screen relative bg-zinc-950 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased" : "min-h-screen relative bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased"}>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-amber-500/10 blur-[100px] pointer-events-none" />
           <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
-            <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
+            <LogoPrincipal size={24} showText={true} textColor={darkMode ? "text-white" : "text-slate-900"} />
           </div>
 
           <div className="w-full max-w-2xl relative pt-8 px-6 pb-10 mt-12 md:mt-0 md:p-8 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col space-y-8 z-10 animate-in slide-in-from-right-8 mx-auto isolate">
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-[32px] border border-white/40 -z-10" />
+            <div className={darkMode ? "absolute inset-0 bg-zinc-900/60 backdrop-blur-xl rounded-[32px] border border-white/[0.08] -z-10" : "absolute inset-0 bg-white/80 backdrop-blur-xl rounded-[32px] border border-white/40 -z-10"} />
             <div className="space-y-3 text-left">
               <div className="inline-block px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 font-bold text-[10px] uppercase tracking-widest mb-2">Profil Syndicat de Copropriété</div>
-              <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 md:pr-10">
+              <h2 className={darkMode ? "text-xl md:text-2xl font-extrabold tracking-tight text-zinc-100 md:pr-10" : "text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 md:pr-10"}>
                 Configuration du Syndicat
               </h2>
-              <p className="text-sm font-medium text-slate-500 leading-relaxed">
+              <p className={darkMode ? "text-sm font-medium text-zinc-400 leading-relaxed" : "text-sm font-medium text-slate-500 leading-relaxed"}>
                 Veuillez renseigner les informations légales de l'immeuble et la composition de votre conseil d'administration. Un module comptable simplifié (Fonds de prévoyance) sera activé.
               </p>
             </div>
@@ -8825,10 +8825,10 @@ const App = () => {
             <div className="space-y-6 text-left">
               {/* Informations de l'immeuble */}
               <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#1e293b]">1. Informations de l'immeuble</h3>
+                <h3 className={darkMode ? "text-sm font-black uppercase tracking-widest text-zinc-100" : "text-sm font-black uppercase tracking-widest text-[#1e293b]"}>1. Informations de l'immeuble</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 col-span-1 sm:col-span-2">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Adresse complète de l'immeuble
                     </label>
                     <input
@@ -8836,11 +8836,11 @@ const App = () => {
                       value={syndicatSetup.adresse}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, adresse: e.target.value })}
                       placeholder="Ex: 123 Rue des Copropriétaires..."
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Total d'appartements (unités)
                     </label>
                     <input
@@ -8849,11 +8849,11 @@ const App = () => {
                       value={syndicatSetup.unites}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, unites: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 12"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Année de construction
                     </label>
                     <input
@@ -8862,11 +8862,11 @@ const App = () => {
                       value={syndicatSetup.construction}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, construction: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 2010"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Nombre de niveaux (étages)
                     </label>
                     <input
@@ -8875,11 +8875,11 @@ const App = () => {
                       value={syndicatSetup.etages}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, etages: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 3"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Nombre de stationnements (Int./Ext.)
                     </label>
                     <input
@@ -8888,11 +8888,11 @@ const App = () => {
                       value={syndicatSetup.stationnements}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, stationnements: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 10"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Nombre de casiers (lockers)
                     </label>
                     <input
@@ -8901,7 +8901,7 @@ const App = () => {
                       value={syndicatSetup.casiers}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, casiers: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 12"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                 </div>
@@ -8909,10 +8909,10 @@ const App = () => {
 
               {/* Conseil d'administration */}
               <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#1e293b]">2. Conseil d'administration</h3>
+                <h3 className={darkMode ? "text-sm font-black uppercase tracking-widest text-zinc-100" : "text-sm font-black uppercase tracking-widest text-[#1e293b]"}>2. Conseil d'administration</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Président(e) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -8921,11 +8921,11 @@ const App = () => {
                       value={syndicatSetup.president}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, president: e.target.value })}
                       placeholder="Nom complet"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Trésorier(ère) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -8934,11 +8934,11 @@ const App = () => {
                       value={syndicatSetup.tresorier}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, tresorier: e.target.value })}
                       placeholder="Nom complet"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Secrétaire <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -8947,11 +8947,11 @@ const App = () => {
                       value={syndicatSetup.secretaire}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, secretaire: e.target.value })}
                       placeholder="Nom complet"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Administrateurs (Autres) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -8960,7 +8960,7 @@ const App = () => {
                       value={syndicatSetup.administrateurs}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, administrateurs: e.target.value })}
                       placeholder="Nom des autres administrateurs"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                 </div>
@@ -8968,15 +8968,15 @@ const App = () => {
 
               {/* Actifs et Équipements */}
               <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#1e293b]">3. Actifs et Équipements</h3>
+                <h3 className={darkMode ? "text-sm font-black uppercase tracking-widest text-zinc-100" : "text-sm font-black uppercase tracking-widest text-[#1e293b]"}>3. Actifs et Équipements</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {(selectedTier === "syndicat_essentiel"
                     ? ["Salle communautaire", "Espaces de rangement", "Stationnement extérieur"]
                     : ["Piscine / Spa", "Salle communautaire", "Ascenseur(s)", "Garage intérieur", "Salle de Gym", "Concierge résident", "Stationnement extérieur"]
                   ).map((actif) => (
-                    <label key={actif} className="flex items-center space-x-2 p-3 border border-slate-200/60 rounded-xl bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors">
-                      <input type="checkbox" className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500" />
-                      <span className="text-[11px] font-bold text-slate-700">{actif}</span>
+                    <label key={actif} className={darkMode ? "flex items-center space-x-2 p-3 border border-zinc-800 rounded-xl bg-zinc-950 cursor-pointer hover:bg-zinc-900 transition-colors" : "flex items-center space-x-2 p-3 border border-slate-200/60 rounded-xl bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors"}>
+                      <input type="checkbox" className={darkMode ? "w-4 h-4 text-amber-600 border-amber-700 rounded focus:ring-amber-500" : "w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"} />
+                      <span className={darkMode ? "text-[11px] font-bold text-zinc-300" : "text-[11px] font-bold text-slate-700"}>{actif}</span>
                     </label>
                   ))}
                 </div>
@@ -8984,10 +8984,10 @@ const App = () => {
 
               {/* Données Légales */}
               <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#1e293b]">4. Données Légales</h3>
+                <h3 className={darkMode ? "text-sm font-black uppercase tracking-widest text-zinc-100" : "text-sm font-black uppercase tracking-widest text-[#1e293b]"}>4. Données Légales</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Numéro de cadastre
                     </label>
                     <input
@@ -8995,18 +8995,18 @@ const App = () => {
                       value={syndicatSetup.cadastre}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, cadastre: e.target.value.replace(/[^0-9 ]/g, '') })}
                       placeholder="Ex: 1 234 567"
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                    <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                       Vencimiento de seguro (Renouvellement)
                     </label>
                     <input
                       type="date"
                       value={syndicatSetup.renouvellement}
                       onChange={(e) => setSyndicatSetup({ ...syndicatSetup, renouvellement: e.target.value })}
-                      className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                      className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                     />
                   </div>
                 </div>
@@ -9014,13 +9014,13 @@ const App = () => {
             </div>
 
             {/* Loi 25 */}
-            <div className="mt-8 mb-6 p-5 rounded-2xl bg-amber-50/50 border border-amber-500/10">
+            <div className={darkMode ? "mt-8 mb-6 p-5 rounded-2xl bg-amber-950/20 border border-amber-800/30" : "mt-8 mb-6 p-5 rounded-2xl bg-amber-50/50 border border-amber-500/10"}>
               <div className="flex space-x-3">
-                <div className="text-amber-600 mt-0.5">
+                <div className={darkMode ? "text-amber-400 mt-0.5" : "text-amber-600 mt-0.5"}>
                   <ShieldCheck size={18} />
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1.5">
+                  <h4 className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1.5" : "text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1.5"}>
                     Conformité Légale & Loi 25
                   </h4>
                   <label className="flex items-start space-x-2 mt-2 cursor-pointer">
@@ -9028,24 +9028,24 @@ const App = () => {
                       type="checkbox"
                       checked={hasAcceptedLoi25}
                       onChange={(e) => setHasAcceptedLoi25(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
+                      className={darkMode ? "mt-0.5 w-4 h-4 text-amber-600 border-amber-700 rounded focus:ring-amber-500" : "mt-0.5 w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"}
                     />
-                    <span className="text-[10px] text-amber-800/80 leading-relaxed font-medium">
-                      J'accepte les <button type="button" onClick={(e) => { e.preventDefault(); setShowConditionsModal(true); }} className="text-amber-600 underline hover:text-amber-700">conditions d'utilisation</button> et la <button type="button" onClick={(e) => { e.preventDefault(); setShowPolitiqueModal(true); }} className="text-amber-600 underline hover:text-amber-700">politique de confidentialité</button>.
+                    <span className={darkMode ? "text-[10px] text-amber-300/90 leading-relaxed font-medium" : "text-[10px] text-amber-800/80 leading-relaxed font-medium"}>
+                      J'accepte les <button type="button" onClick={(e) => { e.preventDefault(); setShowConditionsModal(true); }} className={darkMode ? "text-amber-400 underline hover:text-amber-300" : "text-amber-600 underline hover:text-amber-700"}>conditions d'utilisation</button> et la <button type="button" onClick={(e) => { e.preventDefault(); setShowPolitiqueModal(true); }} className={darkMode ? "text-amber-400 underline hover:text-amber-300" : "text-amber-600 underline hover:text-amber-700"}>politique de confidentialité</button>.
                     </span>
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-slate-100 gap-4 sm:gap-0">
+            <div className={darkMode ? "flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-zinc-800 gap-4 sm:gap-0" : "flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-slate-100 gap-4 sm:gap-0"}>
               <button
                 type="button"
                 onClick={() => {
                   setVista("pricing");
                   if (typeof playNotificationSound === "function") playNotificationSound();
                 }}
-                className="w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"
+                className={darkMode ? "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-all cursor-pointer border border-transparent order-2 sm:order-1" : "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"}
               >
                 Retour
               </button>
@@ -9095,7 +9095,7 @@ const App = () => {
                     setIsCreatingCompany(false);
                   }
                 }}
-                className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/30 hover:shadow-amber-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+                className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/30 hover:shadow-amber-500/50' : (darkMode ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed shadow-none' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none')}`}
               >
                 {isCreatingCompany ? "Création..." : "Commencer"}
               </button>
@@ -9108,19 +9108,19 @@ const App = () => {
     }
 
     return (
-      <div className="min-h-screen relative bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased">
+      <div className={darkMode ? "min-h-screen relative bg-zinc-950 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased" : "min-h-screen relative bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-hidden text-center antialiased"}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-emerald-500/10 blur-[100px] pointer-events-none" />
         <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
-          <LogoPrincipal size={24} showText={true} textColor="text-slate-900" />
+          <LogoPrincipal size={24} showText={true} textColor={darkMode ? "text-white" : "text-slate-900"} />
         </div>
 
         <div className="w-full max-w-2xl relative pt-8 px-6 pb-10 mt-12 md:mt-0 md:p-8 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col space-y-8 z-10 animate-in slide-in-from-right-8 mx-auto isolate">
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-[32px] border border-white/40 -z-10" />
+          <div className={darkMode ? "absolute inset-0 bg-zinc-900/60 backdrop-blur-xl rounded-[32px] border border-white/[0.08] -z-10" : "absolute inset-0 bg-white/80 backdrop-blur-xl rounded-[32px] border border-white/40 -z-10"} />
           <div className="space-y-3 text-left">
-            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 md:pr-10">
+            <h2 className={darkMode ? "text-xl md:text-2xl font-extrabold tracking-tight text-zinc-100 md:pr-10" : "text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 md:pr-10"}>
               Derniers ajustements de votre entreprise
             </h2>
-            <p className="text-sm font-medium text-slate-500 leading-relaxed">
+            <p className={darkMode ? "text-sm font-medium text-zinc-400 leading-relaxed" : "text-sm font-medium text-slate-500 leading-relaxed"}>
               Ces informations apparaîtront sur vos factures et configureront
               vos déductions fiscales.
             </p>
@@ -9131,7 +9131,7 @@ const App = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-1 sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Nom de l'entreprise ou du professionnel
                   </label>
                   <input
@@ -9139,11 +9139,11 @@ const App = () => {
                     value={userProfile.nom}
                     onChange={(e) => setUserProfile({ ...userProfile, nom: e.target.value })}
                     placeholder="Entrez le nom légal..."
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     NEQ (Numéro d'entreprise du Québec)
                   </label>
                   <input
@@ -9151,11 +9151,11 @@ const App = () => {
                     value={userProfile.neq}
                     onChange={(e) => setUserProfile({ ...userProfile, neq: e.target.value.replace(/[^0-9 ]/g, '') })}
                     placeholder="Ex: 1144556677"
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Téléphone
                   </label>
                   <input
@@ -9163,11 +9163,11 @@ const App = () => {
                     value={userProfile.tel}
                     onChange={(e) => setUserProfile({ ...userProfile, tel: e.target.value })}
                     placeholder="(514) 000-0000"
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
                 <div className="space-y-1.5 col-span-1 sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Adresse officielle
                   </label>
                   <input
@@ -9175,11 +9175,11 @@ const App = () => {
                     value={userProfile.adresse}
                     onChange={(e) => setUserProfile({ ...userProfile, adresse: e.target.value })}
                     placeholder="Numéro, rue, ville, code postal..."
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
                 <div className="space-y-1.5 col-span-1 sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Site Web (Optionnel)
                   </label>
                   <input
@@ -9187,17 +9187,17 @@ const App = () => {
                     value={userProfile.site}
                     onChange={(e) => setUserProfile({ ...userProfile, site: e.target.value })}
                     placeholder="https://..."
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
                 <div className="space-y-1.5 col-span-1 sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 pl-1">
+                  <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Fréquence de déclaration TPS/TVQ <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={frequenceTpsTvq}
                     onChange={(e) => setFrequenceTpsTvq(e.target.value)}
-                    className="w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   >
                     <option value="Mensuelle">Mensuelle</option>
                     <option value="Trimestrielle">Trimestrielle</option>
@@ -9210,28 +9210,28 @@ const App = () => {
             {/* Section B: Structure Légale */}
             {dashboardMode !== "Plex" && (
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Structure Légale
                 </label>
-                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-2xl sm:rounded-full">
+                <div className={darkMode ? "flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-2xl sm:rounded-full" : "flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-2xl sm:rounded-full"}>
                   <button
                     type="button"
                     onClick={() => setLegalEntity("Travailleur Autonome")}
-                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Travailleur Autonome" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Travailleur Autonome" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Travailleur Autonome
                   </button>
                   <button
                     type="button"
                     onClick={() => setLegalEntity("Société (INC)")}
-                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Société (INC)" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Société (INC)" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Société (INC)
                   </button>
                   <button
                     type="button"
                     onClick={() => setLegalEntity("Syndicat de copropriété")}
-                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Syndicat de copropriété" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-3 px-2 rounded-xl sm:rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${legalEntity === "Syndicat de copropriété" ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Syndicat de copropriété
                   </button>
@@ -9241,21 +9241,21 @@ const App = () => {
 
             {/* Section C: Déduction Bureau à domicile */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+              <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                 Avez-vous un bureau à domicile ?
               </label>
-              <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+              <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                 <button
                   type="button"
                   onClick={() => setOnboardingPorcBureau(0.15)}
-                  className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${onboardingPorcBureau > 0 ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                  className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${onboardingPorcBureau > 0 ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                 >
                   Oui
                 </button>
                 <button
                   type="button"
                   onClick={() => setOnboardingPorcBureau(0)}
-                  className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${onboardingPorcBureau === 0 ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                  className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${onboardingPorcBureau === 0 ? "border-emerald-500/50 bg-gradient-to-tr from-emerald-50/80 to-teal-50/80 text-emerald-700 shadow-sm" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                 >
                   Non
                 </button>
@@ -9265,7 +9265,7 @@ const App = () => {
                 <div className="pl-4 border-l-2 border-emerald-500/20 pt-2 pb-1 animate-in fade-in slide-in-from-top-2 duration-300 space-y-4 mt-2">
                   <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                     <div className="flex-1 space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-600">
+                      <label className={darkMode ? "text-[10px] font-bold text-zinc-400" : "text-[10px] font-bold text-slate-600"}>
                         Superficie totale de la résidence (pi²)
                       </label>
                       <input
@@ -9279,11 +9279,11 @@ const App = () => {
                           const bureau = parseInt(superficiBureau) || 0;
                           if (total > 0) setOnboardingPorcBureau(bureau / total);
                         }}
-                        className="w-full p-3 rounded-xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                        className={darkMode ? "w-full p-3 rounded-xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3 rounded-xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                       />
                     </div>
                     <div className="flex-1 space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-600">
+                      <label className={darkMode ? "text-[10px] font-bold text-zinc-400" : "text-[10px] font-bold text-slate-600"}>
                         Superficie occupée par le bureau (pi²)
                       </label>
                       <input
@@ -9297,7 +9297,7 @@ const App = () => {
                           const bureau = parseInt(val) || 0;
                           if (total > 0) setOnboardingPorcBureau(bureau / total);
                         }}
-                        className="w-full p-3 rounded-xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"
+                        className={darkMode ? "w-full p-3 rounded-xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3 rounded-xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                       />
                     </div>
                   </div>
@@ -9308,21 +9308,21 @@ const App = () => {
             {/* Section D: Ajustements Additionnels (Progressive Disclosure) */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Avez-vous un emploi salarié en plus de vos activités indépendantes ? (T4)
                 </label>
-                <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
                     type="button"
                     onClick={() => setHasEmployment(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasEmployment === true ? "border-[#38bdf8]/50 bg-sky-50 text-[#38bdf8] shadow-sm ring-1 ring-[#38bdf8]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasEmployment === true ? "border-[#38bdf8]/50 bg-sky-50 text-[#38bdf8] shadow-sm ring-1 ring-[#38bdf8]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Oui
                   </button>
                   <button
                     type="button"
                     onClick={() => setHasEmployment(false)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasEmployment === false ? "border-[#38bdf8]/50 bg-sky-50 text-[#38bdf8] shadow-sm ring-1 ring-[#38bdf8]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasEmployment === false ? "border-[#38bdf8]/50 bg-sky-50 text-[#38bdf8] shadow-sm ring-1 ring-[#38bdf8]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Non
                   </button>
@@ -9330,21 +9330,21 @@ const App = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Percevez-vous des commissions (ex. immobilier, courtage, ventes) ?
                 </label>
-                <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
                     type="button"
                     onClick={() => setHasCommissions(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === true ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === true ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Oui
                   </button>
                   <button
                     type="button"
                     onClick={() => setHasCommissions(false)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === false ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === false ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Non
                   </button>
@@ -9352,21 +9352,21 @@ const App = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Vendez-vous des services ou opérez-vous comme travailleur autonome (Dépenses) ?
                 </label>
-                <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
                     type="button"
                     onClick={() => setHasServices(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasServices === true ? "border-[#10b981]/50 bg-emerald-50 text-[#10b981] shadow-sm ring-1 ring-[#10b981]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasServices === true ? "border-[#10b981]/50 bg-emerald-50 text-[#10b981] shadow-sm ring-1 ring-[#10b981]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Oui
                   </button>
                   <button
                     type="button"
                     onClick={() => setHasServices(false)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasServices === false ? "border-[#10b981]/50 bg-emerald-50 text-[#10b981] shadow-sm ring-1 ring-[#10b981]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasServices === false ? "border-[#10b981]/50 bg-emerald-50 text-[#10b981] shadow-sm ring-1 ring-[#10b981]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Non
                   </button>
@@ -9374,21 +9374,21 @@ const App = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Kilométrage professionnel (véhicule personnel/loué) ?
                 </label>
-                <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
                     type="button"
                     onClick={() => setHasVehicle(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasVehicle === true ? "border-[#84cc16]/50 bg-lime-50 text-[#84cc16] shadow-sm ring-1 ring-[#84cc16]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasVehicle === true ? "border-[#84cc16]/50 bg-lime-50 text-[#84cc16] shadow-sm ring-1 ring-[#84cc16]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Oui
                   </button>
                   <button
                     type="button"
                     onClick={() => setHasVehicle(false)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasVehicle === false ? "border-[#84cc16]/50 bg-lime-50 text-[#84cc16] shadow-sm ring-1 ring-[#84cc16]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasVehicle === false ? "border-[#84cc16]/50 bg-lime-50 text-[#84cc16] shadow-sm ring-1 ring-[#84cc16]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Non
                   </button>
@@ -9396,14 +9396,14 @@ const App = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">
+                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Possédez-vous un Plex (Immobilier à revenus) ?
                 </label>
-                <div className="flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]">
+                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
                     type="button"
                     onClick={() => setHasPlex(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasPlex === true ? "border-[#fbbf24]/50 bg-amber-50 text-orange-500 shadow-sm ring-1 ring-[#fbbf24]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasPlex === true ? "border-[#fbbf24]/50 bg-amber-50 text-orange-500 shadow-sm ring-1 ring-[#fbbf24]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Oui
                   </button>
@@ -9413,7 +9413,7 @@ const App = () => {
                       setHasPlex(false);
                       setNombrePortes(1);
                     }}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasPlex === false ? "border-[#fbbf24]/50 bg-amber-50 text-orange-500 shadow-sm ring-1 ring-[#fbbf24]/20" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasPlex === false ? "border-[#fbbf24]/50 bg-amber-50 text-orange-500 shadow-sm ring-1 ring-[#fbbf24]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
                   >
                     Non
                   </button>
@@ -9425,13 +9425,13 @@ const App = () => {
           </div>
 
           {/* Bloc d'information Loi 25 */}
-          <div className="mb-6 p-5 rounded-2xl bg-emerald-50/50 border border-emerald-500/10">
+          <div className={darkMode ? "mb-6 p-5 rounded-2xl bg-emerald-950/20 border border-emerald-900" : "mb-6 p-5 rounded-2xl bg-emerald-50/50 border border-emerald-500/10"}>
             <div className="flex space-x-3">
-              <div className="text-[#059669] mt-0.5">
+              <div className={darkMode ? "text-emerald-400 mt-0.5" : "text-[#059669] mt-0.5"}>
                 <ShieldCheck size={18} />
               </div>
               <div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-[#059669] mb-1.5">
+                <h4 className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1.5" : "text-[10px] font-black uppercase tracking-widest text-[#059669] mb-1.5"}>
                   Conformité Loi 25 (Québec)
                 </h4>
                 <label className="flex items-start space-x-2 mt-2 cursor-pointer">
@@ -9439,17 +9439,17 @@ const App = () => {
                     type="checkbox"
                     checked={hasAcceptedLoi25}
                     onChange={(e) => setHasAcceptedLoi25(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 text-emerald-600 border-emerald-300 rounded focus:ring-emerald-500"
+                    className={darkMode ? "mt-0.5 w-4 h-4 text-emerald-600 border-emerald-700 rounded focus:ring-emerald-500" : "mt-0.5 w-4 h-4 text-emerald-600 border-emerald-300 rounded focus:ring-emerald-500"}
                   />
-                  <span className="text-[10px] text-emerald-800/80 leading-relaxed font-medium">
-                    J'accepte les <button type="button" onClick={(e) => { e.preventDefault(); setShowConditionsModal(true); }} className="text-emerald-600 underline hover:text-emerald-700">conditions d'utilisation</button> et la <button type="button" onClick={(e) => { e.preventDefault(); setShowPolitiqueModal(true); }} className="text-emerald-600 underline hover:text-emerald-700">politique de confidentialité</button>.
+                  <span className={darkMode ? "text-[10px] text-emerald-300/90 leading-relaxed font-medium" : "text-[10px] text-emerald-800/80 leading-relaxed font-medium"}>
+                    J'accepte les <button type="button" onClick={(e) => { e.preventDefault(); setShowConditionsModal(true); }} className={darkMode ? "text-emerald-400 underline hover:text-emerald-300" : "text-emerald-600 underline hover:text-emerald-700"}>conditions d'utilisation</button> et la <button type="button" onClick={(e) => { e.preventDefault(); setShowPolitiqueModal(true); }} className={darkMode ? "text-emerald-400 underline hover:text-emerald-300" : "text-emerald-600 underline hover:text-emerald-700"}>politique de confidentialité</button>.
                   </span>
                 </label>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-slate-100 gap-4 sm:gap-0">
+          <div className={darkMode ? "flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-zinc-800 gap-4 sm:gap-0" : "flex flex-col sm:flex-row justify-between items-center sm:items-stretch pt-6 border-t border-slate-100 gap-4 sm:gap-0"}>
             <button
               type="button"
               onClick={() => {
@@ -9457,7 +9457,7 @@ const App = () => {
                 if (typeof playNotificationSound === "function")
                   playNotificationSound();
               }}
-              className="w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"
+              className={darkMode ? "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-all cursor-pointer border border-transparent order-2 sm:order-1" : "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"}
             >
               Retour aux Forfaits
             </button>
@@ -9520,7 +9520,7 @@ const App = () => {
                   setIsCreatingCompany(false);
                 }
               }}
-              className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/30 hover:shadow-emerald-500/50' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+              className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/30 hover:shadow-emerald-500/50' : (darkMode ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed shadow-none' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none')}`}
             >
               {isCreatingCompany ? "Création..." : "Commencer"}
             </button>
@@ -9540,20 +9540,20 @@ const App = () => {
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl p-6 text-center"
+                className={darkMode ? "relative w-full max-w-sm bg-zinc-950 border border-zinc-800 text-white rounded-[24px] shadow-2xl p-6 text-center" : "relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl p-6 text-center"}
               >
-                <div className="mx-auto w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mb-4 text-amber-500">
+                <div className={darkMode ? "mx-auto w-12 h-12 bg-amber-950/30 rounded-full flex items-center justify-center mb-4 text-amber-400" : "mx-auto w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mb-4 text-amber-500"}>
                   <ShieldAlert size={24} />
                 </div>
-                <h3 className="text-lg font-black text-slate-900 mb-2 tracking-tight">Mise à niveau requise</h3>
-                <p className="text-[13px] font-medium text-slate-500 mb-6 leading-relaxed">
+                <h3 className={darkMode ? "text-lg font-black text-white mb-2 tracking-tight" : "text-lg font-black text-slate-900 mb-2 tracking-tight"}>Mise à niveau requise</h3>
+                <p className={darkMode ? "text-[13px] font-medium text-zinc-400 mb-6 leading-relaxed" : "text-[13px] font-medium text-slate-500 mb-6 leading-relaxed"}>
                   La gestion de 5 portes et plus, ainsi que l'accès partagé, sont exclusifs au Forfait Partenaire Multi-Plex. Souhaitez-vous mettre à niveau votre forfait ?
                 </p>
                 <div className="flex space-x-3">
                   <button
                     type="button"
                     onClick={() => setShowUpsellModal(false)}
-                    className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all border-none"
+                    className={darkMode ? "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-zinc-400 bg-zinc-900 hover:bg-zinc-800 transition-all border-none" : "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all border-none"}
                   >
                     Plus tard
                   </button>
@@ -9569,7 +9569,7 @@ const App = () => {
                     Voir le Forfait Partenaire
                   </button>
                 </div>
-                <p className="mt-4 text-[10px] text-slate-400 font-medium italic">
+                <p className={darkMode ? "mt-4 text-[10px] text-zinc-500 font-medium italic" : "mt-4 text-[10px] text-slate-400 font-medium italic"}>
                   * Aucun montant ne sera facturé sans votre confirmation préalable.
                 </p>
               </motion.div>
@@ -9587,13 +9587,13 @@ const App = () => {
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl p-6 text-center"
+                className={darkMode ? "relative w-full max-w-sm bg-zinc-950 border border-zinc-800 text-white rounded-[24px] shadow-2xl p-6 text-center" : "relative w-full max-w-sm bg-white rounded-[24px] shadow-2xl p-6 text-center"}
               >
-                <div className="mx-auto w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mb-4 text-indigo-500">
+                <div className={darkMode ? "mx-auto w-12 h-12 bg-indigo-950/30 rounded-full flex items-center justify-center mb-4 text-indigo-400" : "mx-auto w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mb-4 text-indigo-500"}>
                   <Building size={24} />
                 </div>
-                <h3 className="text-lg font-black text-slate-900 mb-2 tracking-tight">Maximisez votre forfait</h3>
-                <p className="text-[13px] font-medium text-slate-500 mb-6 leading-relaxed">
+                <h3 className={darkMode ? "text-lg font-black text-white mb-2 tracking-tight" : "text-lg font-black text-slate-900 mb-2 tracking-tight"}>Maximisez votre forfait</h3>
+                <p className={darkMode ? "text-[13px] font-medium text-zinc-400 mb-6 leading-relaxed" : "text-[13px] font-medium text-slate-500 mb-6 leading-relaxed"}>
                   Vous avez le forfait « Multi-Entreprise ». Souhaitez-vous ajouter votre deuxième entreprise maintenant ?
                 </p>
                 <div className="flex space-x-3">
@@ -9605,7 +9605,7 @@ const App = () => {
                       setVista("dashboard");
                       if (typeof playNotificationSound === "function") playNotificationSound();
                     }}
-                    className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all border-none"
+                    className={darkMode ? "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-zinc-400 bg-zinc-900 hover:bg-zinc-800 transition-all border-none" : "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all border-none"}
                   >
                     Plus tard
                   </button>
