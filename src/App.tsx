@@ -19847,8 +19847,6 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         selectedProfile={selectedProfile}
         updateSelectedProfile={updateSelectedProfile}
         unlockedProfiles={unlockedProfiles}
-        setShowPaywallModal={setShowPaywallModal}
-        setPaywallTargetTier={setPaywallTargetTier}
       />
     );
   }

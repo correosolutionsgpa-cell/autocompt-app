@@ -16,7 +16,7 @@ import React, { useState } from "react";
 import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
 import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
 import { INVOICE_COLOR_PALETTE, INVOICE_FONT_STACKS, INVOICE_TEMPLATES } from "../../lib/invoiceTemplates";
@@ -45,6 +45,7 @@ import {
   Upload,
   User,
   Image as ImageIcon,
+  X,
 } from "lucide-react";
 
 
@@ -114,8 +115,6 @@ export interface SettingsViewProps {
   // "multi-profil" payant. Absent/vide = seul selectedProfile compte comme
   // débloqué (compte legacy d'avant ce champ, ou onboarding tout juste fini).
   unlockedProfiles?: string[] | null;
-  setShowPaywallModal?: (val: boolean) => void;
-  setPaywallTargetTier?: (val: string) => void;
 }
 
 // Custom neon padlock — hand-drawn SVG instead of Fabiola's raster
@@ -241,10 +240,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   selectedProfile,
   updateSelectedProfile,
   unlockedProfiles,
-  setShowPaywallModal,
-  setPaywallTargetTier,
 }) => {
   const { toastDurationMs, setToastDurationMs } = useToast();
+  // Version bêta : un seul profil actif par compte — le clic sur un profil
+  // verrouillé ouvre ce message plutôt que la grille de tarifs (le prix
+  // multi-profil n'est pas encore fixé).
+  const [showBetaProfileLockMessage, setShowBetaProfileLockMessage] = useState(false);
 
   // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
   // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
@@ -459,10 +460,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   return (
                     <button
                       key={p.id}
-                      onClick={() => {
-                        setPaywallTargetTier?.("pro_multi");
-                        setShowPaywallModal?.(true);
-                      }}
+                      onClick={() => setShowBetaProfileLockMessage(true)}
                       className={`group relative p-3 rounded-2xl border text-left text-xs font-bold transition-all overflow-hidden backdrop-blur-md ${
                         darkMode
                           ? "border-emerald-400/20 bg-emerald-500/[0.04] text-emerald-300/50 hover:border-emerald-400/40 hover:bg-emerald-500/[0.08]"
@@ -1538,6 +1536,61 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Message flottant — profils verrouillés en version bêta. Remplace
+          l'ancienne grille de tarifs (setShowPaywallModal) : le prix du
+          forfait multi-profil n'est pas encore fixé, donc on informe plutôt
+          que de vendre un chiffre qu'on n'a pas encore. */}
+      <AnimatePresence>
+        {showBetaProfileLockMessage && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className={`relative w-full max-w-sm rounded-[24px] shadow-2xl p-8 text-center border ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100"}`}
+            >
+              <button
+                onClick={() => setShowBetaProfileLockMessage(false)}
+                className={`absolute top-4 right-4 p-2 rounded-full transition-colors ${darkMode ? "text-zinc-500 hover:bg-zinc-900 hover:text-white" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
+              >
+                <X size={18} strokeWidth={2.5} />
+              </button>
+
+              <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-5 border ${darkMode ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50 border-emerald-100"}`}>
+                <NeonLockIcon className={`w-7 h-7 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`} />
+              </div>
+
+              <h3 className="text-lg font-black italic uppercase tracking-tight mb-3">
+                Un profil à la fois, pour l'instant
+              </h3>
+              <p className={`text-sm font-medium leading-relaxed mb-8 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                Durant cette version bêta, tu as accès à un seul profil à la fois pour bien découvrir AutoCompt et profiter pleinement de ses avantages. Si tu deviens utilisateur d'AutoCompt, tu obtiendras un rabais spécial sur l'option multi-profil / multi-entreprise.
+              </p>
+
+              <div className="flex flex-col space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = "mailto:support@autocompt.ca?subject=Acc%C3%A8s%20multi-profil%20%2F%20multi-entreprise%20(B%C3%AAta)";
+                  }}
+                  className="w-full py-3.5 px-4 rounded-xl text-[11px] font-black uppercase text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg shadow-emerald-500/20 transition-all border-none tracking-widest active:scale-[0.98]"
+                >
+                  Nous écrire
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBetaProfileLockMessage(false)}
+                  className={`w-full py-3 px-4 rounded-xl text-[10px] font-black uppercase transition-all border-none tracking-widest ${darkMode ? "text-zinc-500 hover:text-zinc-300 bg-zinc-900 hover:bg-zinc-800" : "text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100"}`}
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
