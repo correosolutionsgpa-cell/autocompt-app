@@ -1319,7 +1319,14 @@ const App = () => {
   // the only company every seeded account actually intends as its Syndic.
   useEffect(() => {
     const company = listaEmpresas.find((e) => e.id === activeCompanyId);
-    const mode = company?.dashboardMode ?? (activeCompanyId === "1" ? "Syndic" : "Plex");
+    // No company loaded yet for this id (brand-new account still mid-onboarding,
+    // or Firestore just hasn't resolved) — don't override the mode already
+    // derived from selectedProfile/localStorage. Previously this fell back to
+    // "Syndic" whenever `company` was undefined, which stomped a freshly
+    // chosen Plex profile (e.g. Gestionnaire) back to Syndic on every reload
+    // until the user's first company existed.
+    if (!company) return;
+    const mode = company.dashboardMode ?? (activeCompanyId === "1" ? "Syndic" : "Plex");
     setDashboardMode(mode);
   }, [activeCompanyId, listaEmpresas]);
 
@@ -10267,7 +10274,12 @@ const App = () => {
               <div className="flex items-center space-x-1">
                 <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
                 <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                  Usager: {activeUser}
+                  {/* activeUser defaults to "Fabiola" (her own demo company's
+                      partner slot) until a real company with a `partners`
+                      array loads and corrects it — for a brand-new account
+                      with no company yet, fall back to the logged-in admin's
+                      own name instead of leaking that default. */}
+                  Usager: {currentCompany ? activeUser : (adminName || activeUser)}
                 </p>
               </div>
               <div className="mt-1">
