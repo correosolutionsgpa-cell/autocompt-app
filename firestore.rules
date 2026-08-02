@@ -163,6 +163,14 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Generic multi-client bookkeeping (comptable profile) — clients doc,
+    // separate from fideicommisClients above (real-estate/trust-account only).
+    match /bookkeepingClients/{clientId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /condoUnits/{unitId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
