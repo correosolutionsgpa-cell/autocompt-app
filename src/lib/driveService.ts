@@ -90,6 +90,23 @@ export async function connectCompanyDrive(
     const google = (window as any).google;
     const redirectUri = window.location.origin;
 
+    // The Google Identity Services popup callback can simply never fire —
+    // e.g. the popup gets closed mid-flow, or an extra re-auth/security step
+    // inside it breaks the postMessage back to this window. Without a
+    // timeout, the caller's "connecting..." UI spins forever with no way to
+    // know it failed. Guard with `settled` so whichever resolves first (the
+    // real callback or this timeout) wins, and the other becomes a no-op.
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      fn();
+    };
+    const timeoutId = setTimeout(() => {
+      settle(() => onError?.('La connexion à Google Drive a expiré (aucune réponse reçue). Réessayez — si la fenêtre Google s\'est fermée ou bloquée en cours de route, vérifiez qu\'aucun bloqueur de popup ne l\'a coupée.'));
+    }, 90_000);
+
     const codeClient = google.accounts.oauth2.initCodeClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
@@ -97,7 +114,7 @@ export async function connectCompanyDrive(
       login_hint: hintEmail || undefined,
       callback: async (response: any) => {
         if (response.error) {
-          onError?.(response.error_description || response.error);
+          settle(() => onError?.(response.error_description || response.error));
           return;
         }
         try {
@@ -109,18 +126,18 @@ export async function connectCompanyDrive(
           });
           const data = await resp.json();
           if (!resp.ok || !data.success) {
-            onError?.(data.error || `Échec de connexion (${resp.status})`);
+            settle(() => onError?.(data.error || `Échec de connexion (${resp.status})`));
             return;
           }
-          onSuccess?.({
+          settle(() => onSuccess?.({
             folderId: data.folderId,
             folderName: data.folderName,
             connectedEmail: data.connectedEmail,
             connectedAt: data.connectedAt,
             connected: true,
-          });
+          }));
         } catch (err: any) {
-          onError?.(err.message || 'Échec de connexion au serveur AutoCompt');
+          settle(() => onError?.(err.message || 'Échec de connexion au serveur AutoCompt'));
         }
       },
     });

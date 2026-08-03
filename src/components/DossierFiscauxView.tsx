@@ -475,6 +475,23 @@ export default function DossierFiscauxView({
             </div>
           )}
         </div>
+
+        {/* Entrée vers "Mes relevés de gestion" — pour un Investisseur dont la
+            gestion est déléguée à un gestionnaire (modèle relevé bancaire,
+            voir MesRelevesGestion.tsx). Bouton discret, pas un module RBAC à
+            part — la plupart des comptes n'en auront jamais besoin. */}
+        <button
+          onClick={() => setVista('releves_gestion')}
+          className={`mt-4 w-full p-4 rounded-2xl border flex items-center gap-3 text-left transition-all ${darkMode ? 'bg-zinc-950/60 border-zinc-900 hover:border-zinc-700' : 'bg-white border-slate-200/60 hover:border-slate-300'}`}
+        >
+          <div className={`p-2.5 rounded-xl ${darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+            <FileDown size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-black uppercase italic tracking-tight">Mes relevés de gestion</p>
+            <p className={`text-[9px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Si votre gestion est déléguée à une gestora</p>
+          </div>
+        </button>
       </div>
 
       {/* METRICS HEADER BANNER */}

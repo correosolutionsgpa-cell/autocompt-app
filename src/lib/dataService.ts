@@ -727,7 +727,59 @@ export interface FideicommisConciliationDoc {
   createdAt: string;
 }
 
+/**
+ * StatementLinkDoc — `statementLinks` collection
+ * Narrow cross-company channel: connects a gestionnaire's FideicommisClientDoc
+ * to the actual Firebase account of the delegated-management owner, so that
+ * account can later read sealed statements addressed to it. Deliberately NOT
+ * the companyInvites/collaboratorUIDs flow — that grants full access to a
+ * whole company; this only ever unlocks the two collections below.
+ * Document ID: `{gestionnaireCompanyId}_link_{fideicommisClientId}`
+ */
+export interface StatementLinkDoc {
+  id: string;
+  gestionnaireCompanyId: string;
+  gestionnaireOwnerId: string;
+  /** FK → FideicommisClientDoc.id */
+  fideicommisClientId: string;
+  /** Email the invite was sent to — matched against the accepting user's auth token email. */
+  invitedEmail: string;
+  status: 'pending' | 'accepted';
+  /** Set only once accepted. */
+  linkedOwnerUid?: string;
+  /** Which of the owner's own companies this channel is tied to — chosen by
+   *  them at accept time (they may run more than one company/workspace). */
+  linkedOwnerCompanyId?: string;
+  createdAt: string;
+}
 
+/**
+ * SealedStatementDoc — `sealedStatements` collection
+ * A "bank statement"-style periodic summary: once created, immutable
+ * (enforced in firestore.rules — no update/delete allowed). Stores only the
+ * computed totals, never the underlying FideicommisDepotDoc/RetraitDoc rows
+ * — the owner never gets read access to the manager's raw trust-account
+ * records, only this sealed summary.
+ * Document ID: `{gestionnaireCompanyId}_stmt_{fideicommisClientId}_{period}`
+ */
+export interface SealedStatementDoc {
+  id: string;
+  gestionnaireCompanyId: string;
+  fideicommisClientId: string;
+  linkedOwnerUid: string;
+  /** YYYY-MM */
+  period: string;
+  totalLoyers: number;
+  totalDepenses: number;
+  totalHonoraires: number;
+  netRemis: number;
+  /** Denormalised for display — which properties this period covers. */
+  propertyAddresses: string[];
+  gestionnaireName: string;
+  companyName: string;
+  sealedAt: string;
+  sealedByUid: string;
+}
 
 // ── AiReportDoc — Firestore `aiReports` collection (SyndicAI generated reports) ──
 
@@ -2508,6 +2560,124 @@ export const dataService = {
       return snap.docs.map((d) => d.data() as FideicommisClientDoc);
     } catch (e) {
       console.error('fetchFideicommisClients failed:', e);
+      return [];
+    }
+  },
+
+  // ── Relevé de Gestion — narrow statement channel between a gestionnaire
+  //    and a delegated-management owner's OWN account (potentially a
+  //    different Firebase user entirely). See StatementLinkDoc/
+  //    SealedStatementDoc above and firestore.rules for the access model. ──
+
+  /** Deterministic id lookup — no query needed to check if a client is already linked. */
+  async fetchStatementLinkForClient(gestionnaireCompanyId: string, fideicommisClientId: string): Promise<StatementLinkDoc | null> {
+    try {
+      const docId = `${gestionnaireCompanyId}_link_${fideicommisClientId}`;
+      const snap = await getDoc(doc(db, 'statementLinks', docId));
+      return snap.exists() ? (snap.data() as StatementLinkDoc) : null;
+    } catch (e) {
+      console.error('fetchStatementLinkForClient failed:', e);
+      return null;
+    }
+  },
+
+  async createStatementLink(
+    gestionnaireOwnerId: string,
+    gestionnaireCompanyId: string,
+    fideicommisClient: FideicommisClientDoc
+  ): Promise<StatementLinkDoc> {
+    assertCanWrite();
+    const docId = `${gestionnaireCompanyId}_link_${fideicommisClient.id}`;
+    const data: StatementLinkDoc = {
+      id: docId,
+      gestionnaireCompanyId,
+      gestionnaireOwnerId,
+      fideicommisClientId: fideicommisClient.id,
+      invitedEmail: fideicommisClient.email.trim().toLowerCase(),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'statementLinks', docId), data);
+    return data;
+  },
+
+  /** Invitations waiting for the currently signed-in user's email — checked once at login, same pattern as fetchPendingInvitesForEmail. */
+  async fetchPendingStatementLinksForEmail(email: string): Promise<StatementLinkDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'statementLinks'),
+        where('invitedEmail', '==', email.trim().toLowerCase()),
+        where('status', '==', 'pending')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as StatementLinkDoc);
+    } catch (e) {
+      console.error('fetchPendingStatementLinksForEmail failed:', e);
+      return [];
+    }
+  },
+
+  /** Owner accepts: picks which of THEIR OWN companies this channel is for. */
+  async acceptStatementLink(uid: string, link: StatementLinkDoc, ownerCompanyId: string): Promise<void> {
+    await updateDoc(doc(db, 'statementLinks', link.id), {
+      status: 'accepted',
+      linkedOwnerUid: uid,
+      linkedOwnerCompanyId: ownerCompanyId,
+    });
+  },
+
+  async fetchAcceptedStatementLinks(uid: string): Promise<StatementLinkDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'statementLinks'),
+        where('linkedOwnerUid', '==', uid),
+        where('status', '==', 'accepted')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as StatementLinkDoc);
+    } catch (e) {
+      console.error('fetchAcceptedStatementLinks failed:', e);
+      return [];
+    }
+  },
+
+  /** Seals a period's already-computed totals — immutable once written (enforced in firestore.rules). */
+  async sealStatement(
+    sealedByUid: string,
+    data: Omit<SealedStatementDoc, 'id' | 'sealedAt' | 'sealedByUid'>
+  ): Promise<SealedStatementDoc> {
+    assertCanWrite();
+    const docId = `${data.gestionnaireCompanyId}_stmt_${data.fideicommisClientId}_${data.period}`;
+    const full: SealedStatementDoc = {
+      ...data,
+      id: docId,
+      sealedAt: new Date().toISOString(),
+      sealedByUid,
+    };
+    await setDoc(doc(db, 'sealedStatements', docId), full);
+    return full;
+  },
+
+  /** Deterministic id lookup — lets the gestionnaire's UI know a period is already sealed (and thus immutable) before attempting to re-seal it. */
+  async fetchSealedStatementForPeriod(gestionnaireCompanyId: string, fideicommisClientId: string, period: string): Promise<SealedStatementDoc | null> {
+    try {
+      const docId = `${gestionnaireCompanyId}_stmt_${fideicommisClientId}_${period}`;
+      const snap = await getDoc(doc(db, 'sealedStatements', docId));
+      return snap.exists() ? (snap.data() as SealedStatementDoc) : null;
+    } catch (e) {
+      console.error('fetchSealedStatementForPeriod failed:', e);
+      return null;
+    }
+  },
+
+  /** All statements sealed for this owner, across every linked gestionnaire — newest period first. */
+  async fetchSealedStatements(uid: string): Promise<SealedStatementDoc[]> {
+    try {
+      const q = query(collection(db, 'sealedStatements'), where('linkedOwnerUid', '==', uid));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SealedStatementDoc).sort((a, b) => b.period.localeCompare(a.period));
+    } catch (e) {
+      console.error('fetchSealedStatements failed:', e);
       return [];
     }
   },

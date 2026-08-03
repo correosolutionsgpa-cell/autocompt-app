@@ -231,6 +231,42 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Relevé de Gestion — narrow cross-company channel between a gestionnaire
+    // and a delegated-management investisseur (potentially a DIFFERENT
+    // Firebase account entirely). Deliberately NOT the companyInvites/
+    // collaboratorUIDs pattern — that grants full read/write on the whole
+    // company. Each doc here only exposes itself to the two specific parties
+    // named on it, nothing else of either side's books.
+    match /statementLinks/{linkId} {
+      allow read: if isSignedIn() && (
+        resource.data.gestionnaireOwnerId == request.auth.uid ||
+        resource.data.invitedEmail == request.auth.token.email ||
+        resource.data.linkedOwnerUid == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.gestionnaireOwnerId == request.auth.uid;
+      // Accepting: only the invited email may flip pending->accepted, and only
+      // by setting linkedOwnerUid/linkedOwnerCompanyId — nothing else on the doc.
+      allow update: if isSignedIn() &&
+        resource.data.invitedEmail == request.auth.token.email &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'accepted' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'linkedOwnerUid', 'linkedOwnerCompanyId']);
+      allow delete: if isSignedIn() && resource.data.gestionnaireOwnerId == request.auth.uid;
+    }
+
+    // Sealed statements — bank-statement style: once created, immutable
+    // (mirrors aiUsageEvents' "Events are immutable" pattern below). Stores
+    // only the computed totals, never the manager's raw depots/retraits —
+    // the owner never gets read access to those.
+    match /sealedStatements/{stmtId} {
+      allow read: if isSignedIn() && (
+        resource.data.sealedByUid == request.auth.uid ||
+        resource.data.linkedOwnerUid == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.sealedByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // AI usage events — cost-tracking log (one doc per Gemini/Claude call).
     // Any signed-in user can log their own events; only SuperAdmin can read
     // the log (aggregated in the "Usage IA" tab). Events are immutable.

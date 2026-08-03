@@ -22,7 +22,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2,
@@ -40,9 +40,12 @@ import {
   CheckCircle2,
   Home,
   BookOpen,
+  Send,
+  Lock,
+  Loader2,
 } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
 import type {
   PropertyDoc,
@@ -50,11 +53,130 @@ import type {
   FideicommisDepotDoc,
   FideicommisRetraitDoc,
   UnitDoc,
+  StatementLinkDoc,
 } from "../../lib/dataService";
 import ClientPortfolioShell, {
   fmtCAD,
   type ClientPortfolioAggregate,
 } from "../shared/ClientPortfolioShell";
+
+// ── Relevé de Gestion: invite + seal panel ──────────────────────────────────────
+// Narrow cross-company channel (see StatementLinkDoc/SealedStatementDoc in
+// dataService.ts) — NOT the full-access collaborator system. A real component
+// (not inline in renderDetailBody, which is a plain callback, not a
+// component) so it can own its own fetch/loading state per selected client.
+interface StatementLinkPanelProps {
+  darkMode: boolean;
+  client: FideicommisClientDoc;
+  gestionnaireCompanyId: string;
+  gestionnaireOwnerId: string;
+  gestionnaireName: string;
+  companyName: string;
+  period: string;
+  totals: { totalLoyers: number; totalDepenses: number; totalHonoraires: number; netRemis: number };
+  propertyAddresses: string[];
+}
+
+const StatementLinkPanel: React.FC<StatementLinkPanelProps> = ({
+  darkMode, client, gestionnaireCompanyId, gestionnaireOwnerId, gestionnaireName, companyName, period, totals, propertyAddresses,
+}) => {
+  const [link, setLink] = useState<StatementLinkDoc | null | undefined>(undefined); // undefined = loading
+  const [alreadySealed, setAlreadySealed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLink(undefined);
+    setAlreadySealed(false);
+    dataService.fetchStatementLinkForClient(gestionnaireCompanyId, client.id).then((l) => {
+      if (!cancelled) setLink(l);
+    });
+    dataService.fetchSealedStatementForPeriod(gestionnaireCompanyId, client.id, period).then((s) => {
+      if (!cancelled) setAlreadySealed(!!s);
+    });
+    return () => { cancelled = true; };
+  }, [gestionnaireCompanyId, client.id, period]);
+
+  const handleInvite = async () => {
+    setBusy(true);
+    try {
+      const created = await dataService.createStatementLink(gestionnaireOwnerId, gestionnaireCompanyId, client);
+      setLink(created);
+    } catch (e) {
+      console.error("[StatementLinkPanel] createStatementLink error:", e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSeal = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !link?.linkedOwnerUid) return;
+    setBusy(true);
+    try {
+      await dataService.sealStatement(uid, {
+        gestionnaireCompanyId,
+        fideicommisClientId: client.id,
+        linkedOwnerUid: link.linkedOwnerUid,
+        period,
+        propertyAddresses,
+        gestionnaireName,
+        companyName,
+        ...totals,
+      });
+      setAlreadySealed(true);
+    } catch (e) {
+      console.error("[StatementLinkPanel] sealStatement error:", e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const box = darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200";
+
+  return (
+    <div className={`p-4 rounded-[24px] border ${box}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Send size={14} className="text-indigo-500" />
+        <h3 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Relevé de Gestion</h3>
+      </div>
+
+      {link === undefined ? (
+        <div className="flex items-center gap-2 py-2 text-slate-400"><Loader2 size={14} className="animate-spin" /><span className="text-[10px] font-bold uppercase">Chargement…</span></div>
+      ) : !link ? (
+        <div className="space-y-2">
+          <p className={`text-[11px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+            Invitez {client.nom} à consulter ses relevés de gestion depuis son propre compte AutoCompt — comme un relevé bancaire, il ira les chercher lui-même, sans accès à vos autres données.
+          </p>
+          <button
+            onClick={handleInvite}
+            disabled={busy}
+            className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition-all"
+          >
+            {busy ? "Envoi…" : "Inviter ce client à consulter ses relevés"}
+          </button>
+        </div>
+      ) : link.status === "pending" ? (
+        <p className={`text-[11px] font-bold flex items-center gap-2 ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
+          <Lock size={12} />Invitation envoyée à {link.invitedEmail} — en attente d'acceptation.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className={`text-[11px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+            Client lié — peut consulter ses relevés scellés depuis son compte.
+          </p>
+          <button
+            onClick={handleSeal}
+            disabled={busy || alreadySealed}
+            className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${alreadySealed ? "bg-emerald-500/10 text-emerald-600 cursor-default" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+          >
+            {alreadySealed ? "✓ Relevé déjà scellé pour cette période" : busy ? "Scellement…" : `Sceller le relevé de ${period}`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 export interface PortefeuilleClientViewProps {
@@ -89,16 +211,23 @@ interface GestionnaireExtra {
   netRemis: number;
   nbUnites: number;
   nbUniteActives: number;
+  /** The period these totals were computed for — carried alongside since
+   *  renderDetailBody only receives the aggregate, not the shell's internal
+   *  selectedPeriod state, and StatementLinkPanel needs it to seal the
+   *  correct period. */
+  period: string;
 }
 
 const emptyExtra: GestionnaireExtra = {
-  buildings: [], totalLoyers: 0, totalDepenses: 0, totalHonoraires: 0, netRemis: 0, nbUnites: 0, nbUniteActives: 0,
+  buildings: [], totalLoyers: 0, totalDepenses: 0, totalHonoraires: 0, netRemis: 0, nbUnites: 0, nbUniteActives: 0, period: "",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
   darkMode,
   activeCompanyId,
+  currentCompany,
+  adminName,
   preSelectedClientId,
   setSelectedLedgerBuildingId,
   setVista,
@@ -174,6 +303,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
         netRemis,
         nbUnites: allUnits.length,
         nbUniteActives: allUnits.filter((u) => u.isActive).length,
+        period,
       };
     }
     return result;
@@ -222,6 +352,18 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
       ]}
       renderDetailBody={(a: Agg) => (
         <>
+          <StatementLinkPanel
+            darkMode={darkMode}
+            client={a}
+            gestionnaireCompanyId={activeCompanyId}
+            gestionnaireOwnerId={auth.currentUser?.uid || ""}
+            gestionnaireName={adminName}
+            companyName={currentCompany?.nombre || ""}
+            period={a.extra.period}
+            totals={{ totalLoyers: a.extra.totalLoyers, totalDepenses: a.extra.totalDepenses, totalHonoraires: a.extra.totalHonoraires, netRemis: a.extra.netRemis }}
+            propertyAddresses={a.extra.buildings.map((b) => b.adresse)}
+          />
+
           {/* Occupation rate */}
           {a.extra.nbUnites > 0 && (
             <div className={`p-4 rounded-[24px] border flex items-center gap-4 ${glass}`}>

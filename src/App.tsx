@@ -97,6 +97,7 @@ import {
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
 import DossierFiscauxView, { FileItem } from "./components/DossierFiscauxView";
+import MesRelevesGestion from "./components/MesRelevesGestion";
 import { HeuresPaieView } from "./components/HeuresPaieView";
 import SyndicatDashboard from "./components/SyndicatDashboard";
 import SyndicatCotisations from "./components/SyndicatCotisations";
@@ -19391,6 +19392,22 @@ const App = () => {
           }
         />
       </div>
+    );
+  }
+
+  // MesRelevesGestion → src/components/MesRelevesGestion.tsx
+  // Owner-side (Investisseur à gestion déléguée) counterpart to the invite/
+  // seal panel in PortefeuilleClientView.tsx — bank-statement pull model.
+  if (vista === "releves_gestion") {
+    return (
+      <MesRelevesGestion
+        darkMode={darkMode}
+        setVista={setVista}
+        playNotificationSound={playNotificationSound}
+        WorkspaceSidebar={WorkspaceSidebar}
+        adminName={adminName}
+        listaEmpresas={visibleEmpresas}
+      />
     );
   }
 
