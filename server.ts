@@ -762,6 +762,56 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── Relevé de Gestion: notify the owner that something is waiting for them ──
+  // Deliberately NOT the document itself — the pull model (statementLinks/
+  // sealedStatements) means the owner always fetches the real data from their
+  // own AutoCompt account; this is just a "you have mail" nudge, same as a
+  // bank's "your statement is ready" email.
+  app.post("/api/send-releve-gestion-notification", async (req, res) => {
+    try {
+      const {
+        to, type, clientName, gestionnaireName, companyName, period, adminEmail,
+      } = req.body;
+      if (!to || !type) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const isInvitation = type === "invitation";
+      const subject = isInvitation
+        ? `${gestionnaireName} vous invite à consulter vos relevés sur AutoCompt`
+        : `Nouveau relevé de gestion disponible — ${period}`;
+      const introText = isInvitation
+        ? `<strong>${gestionnaireName}</strong>${companyName ? ` (${companyName})` : ""} vous invite à consulter vos relevés de gestion immobilière directement depuis votre propre compte AutoCompt.`
+        : `Un nouveau relevé de gestion pour la période <strong>${period}</strong> est maintenant disponible dans votre compte AutoCompt.`;
+      const stepText = isInvitation
+        ? `Connectez-vous (ou créez un compte gratuit) avec cette adresse courriel, puis rendez-vous dans <strong>« Mes relevés de gestion »</strong> pour accepter l'invitation.`
+        : `Connectez-vous à votre compte, puis rendez-vous dans <strong>« Mes relevés de gestion »</strong> pour le consulter et le télécharger.`;
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">Relevé de gestion immobilière</h1></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour${clientName ? ` <strong>${clientName}</strong>` : ""},</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">${introText}</p><div style="background:#eff6ff;border-radius:12px;padding:16px 20px;margin:20px 0;border-left:4px solid #6366f1;"><p style="margin:0;color:#4338ca;font-size:13px;font-weight:600;">${stepText}</p></div><p style="color:#9ca3af;font-size:11px;">En cas de questions, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">Propulsé par AutoCompt</p></div></div></body></html>`;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to: [to],
+          subject,
+          html,
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-releve-gestion-notification]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── DocuLegal: Send signature invitation email to signer ─────────────────────
   // Creates the legal audit chain: email delivery → link click → consent → signature
 

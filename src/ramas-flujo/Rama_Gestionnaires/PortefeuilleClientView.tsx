@@ -72,13 +72,33 @@ interface StatementLinkPanelProps {
   gestionnaireOwnerId: string;
   gestionnaireName: string;
   companyName: string;
+  adminEmail: string;
   period: string;
   totals: { totalLoyers: number; totalDepenses: number; totalHonoraires: number; netRemis: number };
   propertyAddresses: string[];
 }
 
+/** Fire-and-forget notification — the pull model never depends on this
+ *  succeeding (the owner can always find their data by checking "Mes
+ *  relevés de gestion" directly), so a delivery failure here is logged,
+ *  never surfaced as a blocking error to the gestionnaire. */
+const notifyReleveGestion = async (payload: {
+  to: string; type: "invitation" | "nouveau_releve"; clientName?: string;
+  gestionnaireName: string; companyName?: string; period?: string; adminEmail?: string;
+}) => {
+  try {
+    await fetch("/api/send-releve-gestion-notification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.error("[StatementLinkPanel] notification email failed:", e);
+  }
+};
+
 const StatementLinkPanel: React.FC<StatementLinkPanelProps> = ({
-  darkMode, client, gestionnaireCompanyId, gestionnaireOwnerId, gestionnaireName, companyName, period, totals, propertyAddresses,
+  darkMode, client, gestionnaireCompanyId, gestionnaireOwnerId, gestionnaireName, companyName, adminEmail, period, totals, propertyAddresses,
 }) => {
   const [link, setLink] = useState<StatementLinkDoc | null | undefined>(undefined); // undefined = loading
   const [alreadySealed, setAlreadySealed] = useState(false);
@@ -102,6 +122,10 @@ const StatementLinkPanel: React.FC<StatementLinkPanelProps> = ({
     try {
       const created = await dataService.createStatementLink(gestionnaireOwnerId, gestionnaireCompanyId, client);
       setLink(created);
+      notifyReleveGestion({
+        to: created.invitedEmail, type: "invitation", clientName: client.nom,
+        gestionnaireName, companyName, adminEmail,
+      });
     } catch (e) {
       console.error("[StatementLinkPanel] createStatementLink error:", e);
     } finally {
@@ -125,6 +149,10 @@ const StatementLinkPanel: React.FC<StatementLinkPanelProps> = ({
         ...totals,
       });
       setAlreadySealed(true);
+      notifyReleveGestion({
+        to: link.invitedEmail, type: "nouveau_releve", clientName: client.nom,
+        gestionnaireName, companyName, period, adminEmail,
+      });
     } catch (e) {
       console.error("[StatementLinkPanel] sealStatement error:", e);
     } finally {
@@ -228,6 +256,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
   activeCompanyId,
   currentCompany,
   adminName,
+  adminEmail,
   preSelectedClientId,
   setSelectedLedgerBuildingId,
   setVista,
@@ -359,6 +388,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
             gestionnaireOwnerId={auth.currentUser?.uid || ""}
             gestionnaireName={adminName}
             companyName={currentCompany?.nombre || ""}
+            adminEmail={adminEmail}
             period={a.extra.period}
             totals={{ totalLoyers: a.extra.totalLoyers, totalDepenses: a.extra.totalDepenses, totalHonoraires: a.extra.totalHonoraires, netRemis: a.extra.netRemis }}
             propertyAddresses={a.extra.buildings.map((b) => b.adresse)}
