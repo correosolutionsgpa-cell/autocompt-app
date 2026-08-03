@@ -19379,6 +19379,8 @@ const App = () => {
           depenses={depenses}
           setDepenses={setDepenses}
           setArchivesAnnuelles={setArchivesAnnuelles}
+          activeCompanyId={activeCompanyId}
+          currentCompany={currentCompany}
           sidebarToggle={
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -19958,6 +19960,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         currentCompany={currentCompany}
         adminName={adminName}
         adminEmail={adminEmail}
+        setSelectedLedgerBuildingId={setSelectedLedgerBuildingId}
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}

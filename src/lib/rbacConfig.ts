@@ -328,6 +328,7 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "dossiers_fiscaux",    // Universal
     "conciliation",
     "taxes_assurances",
+    "tps_tvq",              // Déclarations TPS/TVQ pour le compte des clients
     "doculegal",
     "portefeuille_clients", // Portefeuille multi-client — coeur du profil
     "assistant_ia",         // Universal

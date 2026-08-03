@@ -426,6 +426,9 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
       titleFR: "Combien de clients gérez-vous actuellement ?",
       titleEN: "How many clients do you currently manage?",
       titleES: "¿Cuántos clientes gestionas actualmente?",
+      subtitleFR: "Si un de vos clients possède plusieurs propriétés, chacune pourra avoir son propre livre comptable indépendant à l'intérieur de son dossier.",
+      subtitleEN: "If a client owns several properties, each one can have its own independent bookkeeping ledger inside their file.",
+      subtitleES: "Si alguno de tus clientes tiene varias propiedades, cada una podrá tener su propio libro contable independiente dentro de su expediente.",
       options: [
         { value: "small",  labelFR: "1 à 5 clients",      labelEN: "1 to 5 clients",  labelES: "1 a 5 clientes"     },
         { value: "medium", labelFR: "6 à 20 clients",     labelEN: "6 to 20 clients", labelES: "6 a 20 clientes"    },

@@ -12,20 +12,29 @@
  * layout) vient de ../shared/ClientPortfolioShell, partagé avec le
  * portefeuille du Gestionnaire (Rama_Gestionnaires/PortefeuilleClientView).
  * Ce fichier n'ajoute que ce qui est propre au comptable : le formulaire
- * "Nouveau client" et le lien vers la Tenue de Livres.
+ * "Nouveau client", les propriétés d'un client (chacune avec son propre
+ * livre indépendant — même principe que pour le Gestionnaire) et le lien
+ * générique vers la Tenue de Livres pour les clients sans propriété.
  *
- * MVP: le lien "Tenue de Livres" ouvre la vue générale (vista "reportes")
- * sans filtrer par client — le filtrage par client dépend de l'étiquetage
- * des dépenses/factures avec `clientId`, qui n'est pas encore branché dans
- * les formulaires de dépenses/factures (tâche de suivi séparée).
+ * Propriétés: réutilise intégralement PropertyDoc/UnitDoc et
+ * TenueLivresImmeubleView (le même système que Gestion Immobilière) via une
+ * nouvelle FK `bookkeepingClientId` — PAS le module `gestion_immo` complet:
+ * le comptable a seulement besoin d'un "bucket" de livre par propriété, pas
+ * de gérer les locataires/loyers.
+ *
+ * MVP restant: le lien "Tenue de Livres" générique (pour un client SANS
+ * propriété) ouvre la vue générale (vista "reportes") sans filtrer par
+ * client — le filtrage dépend de l'étiquetage `clientId` sur les
+ * dépenses/factures, pas encore branché dans leurs formulaires (tâche de
+ * suivi séparée).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useState } from "react";
-import { Briefcase, BookOpen, X } from "lucide-react";
+import { Briefcase, BookOpen, X, Home, Plus } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
-import type { BookkeepingClientDoc } from "../../lib/dataService";
+import type { BookkeepingClientDoc, BookkeepingClientTypeEntite, PropertyDoc } from "../../lib/dataService";
 import ClientPortfolioShell, { type ClientPortfolioAggregate } from "../shared/ClientPortfolioShell";
 
 export interface PortefeuilleClientsComptableViewProps {
@@ -34,16 +43,32 @@ export interface PortefeuilleClientsComptableViewProps {
   currentCompany: any;
   adminName: string;
   adminEmail: string;
+  setSelectedLedgerBuildingId: (id: string) => void;
   setVista: (v: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
 }
 
-type Agg = ClientPortfolioAggregate<BookkeepingClientDoc, {}>;
+/** Lightweight — no units/tenants/rent tracking, just an address list, since
+ *  the comptable only needs a ledger bucket per property, not to manage it. */
+interface ComptableExtra {
+  properties: PropertyDoc[];
+}
+
+const emptyExtra: ComptableExtra = { properties: [] };
+
+const TYPE_ENTITE_LABELS: Record<BookkeepingClientTypeEntite, string> = {
+  autonome: "Propriétaire autogéré",
+  inc: "Société (INC)",
+  gestion_tierce: "Sous gestion d'un gestionnaire",
+};
+
+type Agg = ClientPortfolioAggregate<BookkeepingClientDoc, ComptableExtra>;
 
 const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableViewProps> = ({
   darkMode,
   activeCompanyId,
+  setSelectedLedgerBuildingId,
   setVista,
   setIsSidebarOpen,
   WorkspaceSidebar,
@@ -51,7 +76,11 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   const [reloadKey, setReloadKey] = useState(0);
   const [showClientForm, setShowClientForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [clientForm, setClientForm] = useState({ nom: "", email: "", telephone: "", secteurActivite: "" });
+  const [clientForm, setClientForm] = useState<{ nom: string; email: string; telephone: string; typeEntite: BookkeepingClientTypeEntite | "" }>({ nom: "", email: "", telephone: "", typeEntite: "" });
+
+  // Which client's "Ajouter une propriété" mini-form is open (client id, or "" = closed).
+  const [propertyFormClientId, setPropertyFormClientId] = useState("");
+  const [propertyForm, setPropertyForm] = useState({ adresse: "", typeLocation: "Logement entier" });
 
   const handleSaveClient = async () => {
     const uid = auth.currentUser?.uid;
@@ -63,10 +92,10 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         nom: clientForm.nom.trim(),
         email: clientForm.email.trim(),
         telephone: clientForm.telephone.trim() || undefined,
-        secteurActivite: clientForm.secteurActivite.trim() || undefined,
+        typeEntite: clientForm.typeEntite || undefined,
       });
       setShowClientForm(false);
-      setClientForm({ nom: "", email: "", telephone: "", secteurActivite: "" });
+      setClientForm({ nom: "", email: "", telephone: "", typeEntite: "" });
       // ClientPortfolioShell fetches on mount/activeCompanyId change — bump a
       // key to force it to re-fetch after adding a client, same effect as a
       // route change without actually navigating away.
@@ -78,9 +107,66 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
     }
   };
 
+  const handleSaveProperty = async (client: Agg) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !propertyForm.adresse.trim() || !activeCompanyId) return;
+    setIsSaving(true);
+    try {
+      const saved = await dataService.saveProperty(uid, {
+        id: `prop_${Date.now()}`,
+        companyId: activeCompanyId,
+        typeLocation: propertyForm.typeLocation,
+        adresse: propertyForm.adresse.trim(),
+        status: "Actif",
+        bookkeepingClientId: client.id,
+        bookkeepingClientName: client.nom,
+      });
+      // Same "always create a placeholder unit" convention GestionPlex.tsx
+      // uses when a property is created — TenueLivresImmeubleView expects a
+      // units array to exist, even if empty of real tenant data for now.
+      await dataService.saveUnit(uid, {
+        id: `unit_${Date.now()}`,
+        companyId: activeCompanyId,
+        buildingId: saved.id,
+        unitName: "Unité principale",
+        tenantName: "",
+        monthlyRent: 0,
+        isActive: false,
+      });
+      setPropertyFormClientId("");
+      setPropertyForm({ adresse: "", typeLocation: "Logement entier" });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      console.error("[PortefeuilleClientsComptableView] save property error:", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const fetchExtra = async ({
+    uid,
+    activeCompanyId: companyId,
+    clients,
+  }: {
+    uid: string;
+    activeCompanyId: string;
+    clients: BookkeepingClientDoc[];
+    period: string;
+  }): Promise<Record<string, ComptableExtra>> => {
+    const props = await dataService.fetchProperties(uid);
+    const companyProps = props.filter((p) => p.companyId === companyId);
+    const result: Record<string, ComptableExtra> = {};
+    for (const client of clients) {
+      result[client.id] = {
+        properties: companyProps.filter((p) => p.bookkeepingClientId === client.id),
+      };
+    }
+    return result;
+  };
+
   return (
     <>
-      <ClientPortfolioShell<BookkeepingClientDoc, {}>
+      <ClientPortfolioShell<BookkeepingClientDoc, ComptableExtra>
         key={reloadKey}
         darkMode={darkMode}
         activeCompanyId={activeCompanyId}
@@ -93,20 +179,102 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         backVista="dashboard"
         accentColor="blue"
         fetchClients={dataService.fetchClients}
-        emptyExtra={{}}
+        fetchExtra={fetchExtra}
+        emptyExtra={emptyExtra}
         onAddClient={() => setShowClientForm(true)}
-        renderListBadges={(a: Agg) => (
-          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-slate-100 text-slate-500"}`}>
-            {a.nbTransactions} transaction(s)
+        renderHeaderBadge={(a: Agg) => a.typeEntite ? (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
+            {TYPE_ENTITE_LABELS[a.typeEntite]}
           </span>
+        ) : null}
+        renderListBadges={(a: Agg) => (
+          <>
+            {a.extra.properties.length > 0 && (
+              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-slate-100 text-slate-500"}`}>
+                {a.extra.properties.length} propriété(s)
+              </span>
+            )}
+            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-slate-100 text-slate-500"}`}>
+              {a.nbTransactions} transaction(s)
+            </span>
+          </>
         )}
         renderDetailBody={(a: Agg) => (
-          <button
-            onClick={() => setVista("reportes")}
-            className={`w-full sm:w-auto flex items-center gap-2 px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${darkMode ? "border-blue-700/40 text-blue-400 hover:bg-blue-900/20" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}
-          >
-            <BookOpen size={14} />Aller à la Tenue de Livres de {a.nom}
-          </button>
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                  Propriétés ({a.extra.properties.length})
+                </h3>
+                <button
+                  onClick={() => setPropertyFormClientId(propertyFormClientId === a.id ? "" : a.id)}
+                  className="text-[9px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-400 flex items-center gap-1"
+                >
+                  <Plus size={10} />Ajouter une propriété
+                </button>
+              </div>
+
+              {a.extra.properties.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {a.extra.properties.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`flex items-center gap-3 p-3 rounded-2xl border ${darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200"}`}
+                    >
+                      <div className={`p-2 rounded-xl ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>
+                        <Home size={14} />
+                      </div>
+                      <p className="flex-1 min-w-0 text-[12px] font-bold truncate">{p.adresse}</p>
+                      <button
+                        onClick={() => { setSelectedLedgerBuildingId(p.id); setVista("tenue_livres_immeuble"); }}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${darkMode ? "border-blue-700/40 text-blue-400 hover:bg-blue-900/20" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}
+                      >
+                        <BookOpen size={10} />Ouvrir le livre
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {propertyFormClientId === a.id && (
+                <div className={`p-4 rounded-2xl border space-y-2.5 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                  <input
+                    type="text"
+                    value={propertyForm.adresse}
+                    onChange={(e) => setPropertyForm({ ...propertyForm, adresse: e.target.value })}
+                    placeholder="Adresse de la propriété *"
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                  />
+                  <select
+                    value={propertyForm.typeLocation}
+                    onChange={(e) => setPropertyForm({ ...propertyForm, typeLocation: e.target.value })}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                  >
+                    <option value="Logement entier">Logement entier</option>
+                    <option value="Immeuble à revenus">Immeuble à revenus</option>
+                    <option value="Chalet">Chalet</option>
+                    <option value="Commercial">Commercial</option>
+                  </select>
+                  <button
+                    disabled={!propertyForm.adresse.trim() || isSaving}
+                    onClick={() => handleSaveProperty(a)}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {isSaving ? "Enregistrement..." : "Ajouter la propriété"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {a.extra.properties.length === 0 && (
+              <button
+                onClick={() => setVista("reportes")}
+                className={`w-full sm:w-auto flex items-center gap-2 px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${darkMode ? "border-blue-700/40 text-blue-400 hover:bg-blue-900/20" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}
+              >
+                <BookOpen size={14} />Aller à la Tenue de Livres de {a.nom}
+              </button>
+            )}
+          </>
         )}
       />
 
@@ -151,13 +319,16 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                 placeholder="Téléphone"
                 className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
               />
-              <input
-                type="text"
-                value={clientForm.secteurActivite}
-                onChange={(e) => setClientForm({ ...clientForm, secteurActivite: e.target.value })}
-                placeholder="Secteur d'activité (ex: Restaurant)"
+              <select
+                value={clientForm.typeEntite}
+                onChange={(e) => setClientForm({ ...clientForm, typeEntite: e.target.value as BookkeepingClientTypeEntite | "" })}
                 className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
-              />
+              >
+                <option value="">Type de client (optionnel)</option>
+                <option value="autonome">Propriétaire autogéré</option>
+                <option value="inc">Société (INC)</option>
+                <option value="gestion_tierce">Déjà sous gestion d'un gestionnaire immobilier</option>
+              </select>
             </div>
 
             <button

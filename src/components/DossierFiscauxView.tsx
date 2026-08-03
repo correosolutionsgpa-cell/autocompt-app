@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, PlusCircle, Trash2, X, FileText, Download, Search,
-  Folder, FolderOpen, ChevronRight, Zap, ShieldCheck, Eye, Upload, Plus, FileSearch, FileQuestion, Home, Bell
+  Folder, FolderOpen, ChevronRight, Zap, ShieldCheck, Eye, Upload, Plus, FileSearch, FileQuestion, Home, Bell,
+  FileDown, Loader2, AlertTriangle
 } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import { dataService } from '../lib/dataService';
+import type { PropertyDoc, UnitDoc } from '../lib/dataService';
+import { generateReleve31PDF } from '../lib/releve31Pdf';
 
 export interface FileItem {
   id: string;
@@ -29,6 +34,9 @@ interface DossierFiscauxViewProps {
   depenses: any[];
   setDepenses: React.Dispatch<React.SetStateAction<any[]>>;
   setArchivesAnnuelles: React.Dispatch<React.SetStateAction<any[]>>;
+  /** Needed to look up this company's rented units for the Relevé 31 assistant below. */
+  activeCompanyId: string;
+  currentCompany?: any;
 }
 
 export default function DossierFiscauxView({ 
@@ -40,7 +48,9 @@ export default function DossierFiscauxView({
   setDossierFiles,
   depenses,
   setDepenses,
-  setArchivesAnnuelles
+  setArchivesAnnuelles,
+  activeCompanyId,
+  currentCompany
 }: DossierFiscauxViewProps) {
   // Folder Navigation State
   const [currentYearFolder, setCurrentYearFolder] = useState<number | null>(null);
@@ -67,6 +77,62 @@ export default function DossierFiscauxView({
   // Clôture Année State
   const [showClotureModal, setShowClotureModal] = useState(false);
   const [clotureToast, setClotureToast] = useState(false);
+
+  // ── Relevé 31 preparation assistant state ──────────────────────────────────
+  const [releve31Year, setReleve31Year] = useState(() => new Date().getFullYear());
+  const [releve31Rows, setReleve31Rows] = useState<{ unit: UnitDoc; property: PropertyDoc }[]>([]);
+  const [releve31Loading, setReleve31Loading] = useState(false);
+
+  const loadReleve31Rows = useCallback(async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) { setReleve31Rows([]); return; }
+    setReleve31Loading(true);
+    try {
+      const allProps = await dataService.fetchProperties(uid);
+      const companyProps = allProps.filter((p) => p.companyId === activeCompanyId);
+      const rows: { unit: UnitDoc; property: PropertyDoc }[] = [];
+      for (const property of companyProps) {
+        const units = await dataService.fetchUnitsByBuilding(uid, property.id);
+        for (const unit of units) {
+          if (!unit.tenantName) continue; // no tenant on record yet — nothing to report
+          const inYear = !unit.moveInDate || new Date(unit.moveInDate).getFullYear() <= releve31Year;
+          const outYear = !unit.moveOutDate || new Date(unit.moveOutDate).getFullYear() >= releve31Year;
+          if (inYear && outYear) rows.push({ unit, property });
+        }
+      }
+      setReleve31Rows(rows);
+    } catch (e) {
+      console.error('[DossierFiscauxView] loadReleve31Rows error:', e);
+    } finally {
+      setReleve31Loading(false);
+    }
+  }, [activeCompanyId, releve31Year]);
+
+  useEffect(() => { loadReleve31Rows(); }, [loadReleve31Rows]);
+
+  const handleUpdateReleve31Field = async (unit: UnitDoc, patch: Partial<UnitDoc>) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const updated = { ...unit, ...patch };
+    setReleve31Rows((prev) => prev.map((r) => (r.unit.id === unit.id ? { ...r, unit: updated } : r)));
+    try {
+      await dataService.saveUnit(uid, updated);
+    } catch (e) {
+      console.error('[DossierFiscauxView] saveUnit (Relevé 31 field) error:', e);
+    }
+  };
+
+  const handleGenerateReleve31 = (unit: UnitDoc, property: PropertyDoc) => {
+    const profile = currentCompany?.userProfile || {};
+    const pdf = generateReleve31PDF(
+      unit,
+      property,
+      { nom: profile.nom || currentCompany?.nombre || '', neq: profile.neq, adresse: profile.adresse, tel: profile.tel },
+      String(releve31Year)
+    );
+    pdf.save(`Releve31_${releve31Year}_${unit.unitName.replace(/\s+/g, '_')}.pdf`);
+    playNotificationSound();
+  };
 
   const handleCloturerAnnee = () => {
     // 1. Génération du CSV
@@ -316,6 +382,98 @@ export default function DossierFiscauxView({
           >
             Produire sur Revenu Québec
           </a>
+        </div>
+
+        {/* Assistant de préparation Relevé 31 — regroupe les données de chaque
+            unité louée pour l'année choisie ; ne transmet rien à Revenu
+            Québec (voir releve31Pdf.ts), sert juste à préparer les données. */}
+        <div className={`mt-4 p-5 rounded-[24px] border shadow-sm ${darkMode ? "bg-zinc-950/60 border-zinc-900" : "bg-white border-slate-200/60"}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${darkMode ? "bg-slate-500/15 text-slate-300" : "bg-slate-100 text-slate-600"}`}>
+                <FileDown size={18} />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase italic tracking-widest">Assistant Relevé 31</h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none mt-1">Prépare les données par unité louée — pas une transmission officielle</p>
+              </div>
+            </div>
+            <select
+              value={releve31Year}
+              onChange={(e) => setReleve31Year(parseInt(e.target.value, 10))}
+              className={`text-[11px] font-bold rounded-xl px-3 py-2 border outline-none ${darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-200" : "bg-white border-slate-200"}`}
+            >
+              {[0, 1, 2].map((offset) => {
+                const y = new Date().getFullYear() - offset;
+                return <option key={y} value={y}>{y}</option>;
+              })}
+            </select>
+          </div>
+
+          {releve31Loading ? (
+            <div className="flex items-center justify-center py-8 text-slate-400">
+              <Loader2 size={18} className="animate-spin mr-2" /><span className="text-[10px] font-bold uppercase tracking-widest">Chargement des unités…</span>
+            </div>
+          ) : releve31Rows.length === 0 ? (
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide py-4 text-center">
+              Aucune unité avec un locataire enregistré pour {releve31Year}.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {releve31Rows.map(({ unit, property }) => {
+                const missing = !unit.moveInDate || unit.residencePrincipale === undefined;
+                return (
+                  <div key={unit.id} className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-black truncate">{unit.tenantName} — {unit.unitName}</p>
+                        <p className={`text-[9px] font-medium truncate ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{property.adresse}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {missing && (
+                          <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full flex items-center gap-1 ${darkMode ? "bg-amber-500/15 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                            <AlertTriangle size={10} />Données incomplètes
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleGenerateReleve31(unit, property)}
+                          className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${darkMode ? "bg-zinc-800 text-white hover:bg-zinc-700" : "bg-zinc-900 text-white hover:bg-zinc-800"}`}
+                        >
+                          <FileDown size={11} />PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    {missing && (
+                      <div className="mt-3 pt-3 border-t border-dashed grid grid-cols-1 sm:grid-cols-2 gap-3 dark:border-zinc-800">
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black uppercase text-slate-400">Date d'entrée</label>
+                          <input
+                            type="date"
+                            value={unit.moveInDate || ""}
+                            onChange={(e) => handleUpdateReleve31Field(unit, { moveInDate: e.target.value })}
+                            className={`w-full px-3 py-2 rounded-lg text-[11px] border outline-none ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black uppercase text-slate-400">Résidence principale au 31 déc.</label>
+                          <select
+                            value={unit.residencePrincipale === undefined ? "" : unit.residencePrincipale ? "oui" : "non"}
+                            onChange={(e) => handleUpdateReleve31Field(unit, { residencePrincipale: e.target.value === "oui" })}
+                            className={`w-full px-3 py-2 rounded-lg text-[11px] border outline-none ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                          >
+                            <option value="">À confirmer</option>
+                            <option value="oui">Oui</option>
+                            <option value="non">Non</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

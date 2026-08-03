@@ -121,6 +121,15 @@ export interface PropertyDoc {
   fideicommisClientId?: string;
   /** Denormalised display name for fast render without a join. */
   fideicommisClientName?: string;
+  // ── Comptable ──
+  /** FK → BookkeepingClientDoc.id
+   *  Present only when this property belongs to a client managed by a
+   *  comptable (generic multi-client bookkeeping), as opposed to a
+   *  propriétaire-client managed by the gestionnaire (fideicommisClientId
+   *  above) — the two are mutually exclusive per property. */
+  bookkeepingClientId?: string;
+  /** Denormalised display name for fast render without a join. */
+  bookkeepingClientName?: string;
 }
 
 // ── UnitDoc — Firestore `units` collection ────────────────────────────────────
@@ -150,6 +159,20 @@ export interface UnitDoc {
   /** Durée MINIMALE de location de cette unité, en jours/nuits — saisie par
    *  l'utilisateur, détermine courteDuree (< 31 → touristique, ≥ 31 → résidentiel). */
   dureeMinimaleJours?: number;
+  // ── Relevé 31 (Revenu Québec) ──────────────────────────────────────────────
+  /** Date d'entrée du locataire principal (YYYY-MM-DD) — requis pour produire
+   *  le Relevé 31. Toujours saisi/confirmé par l'utilisateur, jamais présumé. */
+  moveInDate?: string;
+  /** Date de départ du locataire, si l'unité n'est plus occupée par lui. */
+  moveOutDate?: string;
+  /** Ce logement était-il la résidence principale du locataire au 31 décembre
+   *  de l'année visée ? Condition d'admissibilité au crédit de solidarité —
+   *  toujours confirmé par l'utilisateur, jamais présumé silencieusement. */
+  residencePrincipale?: boolean;
+  /** Occupants additionnels du logement, au-delà de `tenantName` (locataire
+   *  principal) — le Relevé 31 exige de lister TOUS les occupants, pas
+   *  seulement le signataire du bail. */
+  occupantsSupplementaires?: string[];
   ownerId: string;
   createdAt: string;
 }
@@ -576,25 +599,36 @@ export interface FideicommisClientDoc {
 
 /**
  * BookkeepingClientDoc — `bookkeepingClients` collection
- * One document per end-client whose books are kept from a single AutoCompt
- * account/company (comptable profile — any small business, not necessarily
- * real estate; also usable by gestionnaire for non-property clients).
- * Deliberately generic and separate from FideicommisClientDoc above: no
- * buildings, no management-fee %, no trust-account (fidéicommis) fields —
- * those stay exclusive to the real-estate/OACIQ trust-account model.
+ * One document per property-owning end-client whose books a comptable keeps
+ * from a single AutoCompt account/company. AutoCompt is real-estate
+ * accounting only (no generic/non-property business modules exist yet) —
+ * every client here is ultimately a property owner; `typeEntite` captures
+ * HOW they hold/manage that property, not an unrelated business sector.
+ * Deliberately separate from FideicommisClientDoc above: no management-fee
+ * %, no trust-account (fidéicommis) fields — those stay exclusive to the
+ * gestionnaire's OACIQ trust-account model, since a comptable's client
+ * manages their own trust relationship (or has none) rather than the
+ * comptable holding funds on their behalf.
  * `companyId` is the RAW (unprefixed) activeCompanyId, same convention as
  * FideicommisClientDoc — NOT the `{userId}_company_` prefixed form used by
  * properties/units/expenses/invoices.
  * Document ID: `{userId}_bkclient_{id}`
  */
+export type BookkeepingClientTypeEntite = 'autonome' | 'inc' | 'gestion_tierce';
+
 export interface BookkeepingClientDoc {
   id: string;
   companyId: string;
   nom: string;
   email: string;
   telephone?: string;
-  /** Free-text business type, e.g. "Restaurant", "Salon de coiffure" */
-  secteurActivite?: string;
+  /** How this client holds/manages their property(-ies):
+   *  'autonome' = propriétaire autogéré (self-managed individual owner)
+   *  'inc' = société (INC) — property held through a corporation
+   *  'gestion_tierce' = déjà sous l'administration d'un gestionnaire
+   *  immobilier (comptable does the books for a property a Gestionnaire
+   *  already manages day-to-day). */
+  typeEntite?: BookkeepingClientTypeEntite;
   notes?: string;
   ownerId: string;
   createdAt: string;
