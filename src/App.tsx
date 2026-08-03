@@ -1266,6 +1266,14 @@ const App = () => {
       .then(setFideicommisClients)
       .catch(console.error);
   }, [activeCompanyId]);
+  // Remember the last-viewed company across reloads. Only non-empty values
+  // are persisted — the transient "" used while entering the "add a company"
+  // setup wizard must never overwrite the last real selection.
+  useEffect(() => {
+    if (activeCompanyId) {
+      localStorage.setItem("autocompt_active_company_id", activeCompanyId);
+    }
+  }, [activeCompanyId]);
   // Which building's ledger to open when vista === "tenue_livres_immeuble"
   const [selectedLedgerBuildingId, setSelectedLedgerBuildingId] = useState("");
   const [darkMode, setDarkMode] = useState(false);
@@ -7895,7 +7903,14 @@ const App = () => {
 
           setListaEmpresas(workspaces);
           if (workspaces.length > 0) {
-            setActiveCompanyId(workspaces[0].id);
+            // fetchWorkspaces merges two unordered Firestore queries — the
+            // array order isn't stable across reloads. Restore whichever
+            // company the user was last viewing (if it still exists) instead
+            // of silently jumping to workspaces[0], which was hiding data
+            // saved under a different company after a hard refresh.
+            const savedCompanyId = localStorage.getItem("autocompt_active_company_id");
+            const stillExists = savedCompanyId && workspaces.some((w: any) => w.id === savedCompanyId);
+            setActiveCompanyId(stillExists ? savedCompanyId! : workspaces[0].id);
           }
 
           // Companies shared with this user by a partner (not owned by them) —

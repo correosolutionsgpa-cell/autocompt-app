@@ -340,26 +340,35 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     const uid = auth.currentUser?.uid;
     if (!uid || !activeCompanyId) { setIsLoading(false); return; }
     setIsLoading(true);
-    try {
-      const [cSnap, dSnap, rSnap, conSnap, props, uSnap] = await Promise.all([
-        getDocs(query(collection(db, "fideicommisClients"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
-        getDocs(query(collection(db, "fideicommisDepots"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
-        getDocs(query(collection(db, "fideicommisRetraits"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
-        getDocs(query(collection(db, "fideicommisConciliations"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
-        // Buildings live in Gestion Immobilière's `properties` collection
-        // (PropertyDoc), not the legacy `buildings`/BuildingLedger collection —
-        // see fetchProperties for the id/companyId unprefixing it handles.
-        dataService.fetchProperties(uid),
-        getDocs(query(collection(db, "units"), where("ownerId", "==", uid))),
-      ]);
-      setClients(cSnap.docs.map(d => d.data() as FideicommisClientDoc));
-      setDepots(dSnap.docs.map(d => d.data() as FideicommisDepotDoc));
-      setRetraits(rSnap.docs.map(d => d.data() as FideicommisRetraitDoc));
-      setConciliations(conSnap.docs.map(d => d.data() as FideicommisConciliationDoc));
-      setBuildings(props.filter(p => p.companyId === activeCompanyId));
-      setUnits(uSnap.docs.map(d => d.data() as UnitDoc));
-    } catch (e) { console.error("[Fidéicommis] load error:", e); }
-    finally { setIsLoading(false); }
+    // Each collection is fetched independently (not Promise.all) so that one
+    // failing query — e.g. a missing Firestore composite index on
+    // fideicommisDepots/Retraits — doesn't blank out data (like the client
+    // list) that loaded fine. Previously a single Promise.all meant any one
+    // rejection silently wiped the whole screen with no visible error.
+    const [cRes, dRes, rRes, conRes, propsRes, uRes] = await Promise.allSettled([
+      getDocs(query(collection(db, "fideicommisClients"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
+      getDocs(query(collection(db, "fideicommisDepots"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
+      getDocs(query(collection(db, "fideicommisRetraits"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid), orderBy("date", "desc"))),
+      getDocs(query(collection(db, "fideicommisConciliations"), where("companyId", "==", activeCompanyId), where("ownerId", "==", uid))),
+      // Buildings live in Gestion Immobilière's `properties` collection
+      // (PropertyDoc), not the legacy `buildings`/BuildingLedger collection —
+      // see fetchProperties for the id/companyId unprefixing it handles.
+      dataService.fetchProperties(uid),
+      getDocs(query(collection(db, "units"), where("ownerId", "==", uid))),
+    ]);
+    if (cRes.status === "fulfilled") setClients(cRes.value.docs.map(d => d.data() as FideicommisClientDoc));
+    else console.error("[Fidéicommis] clients load error:", cRes.reason);
+    if (dRes.status === "fulfilled") setDepots(dRes.value.docs.map(d => d.data() as FideicommisDepotDoc));
+    else console.error("[Fidéicommis] dépôts load error:", dRes.reason);
+    if (rRes.status === "fulfilled") setRetraits(rRes.value.docs.map(d => d.data() as FideicommisRetraitDoc));
+    else console.error("[Fidéicommis] retraits load error:", rRes.reason);
+    if (conRes.status === "fulfilled") setConciliations(conRes.value.docs.map(d => d.data() as FideicommisConciliationDoc));
+    else console.error("[Fidéicommis] conciliations load error:", conRes.reason);
+    if (propsRes.status === "fulfilled") setBuildings(propsRes.value.filter(p => p.companyId === activeCompanyId));
+    else console.error("[Fidéicommis] properties load error:", propsRes.reason);
+    if (uRes.status === "fulfilled") setUnits(uRes.value.docs.map(d => d.data() as UnitDoc));
+    else console.error("[Fidéicommis] units load error:", uRes.reason);
+    setIsLoading(false);
   }, [activeCompanyId]);
 
   useEffect(() => { load(); }, [load]);
