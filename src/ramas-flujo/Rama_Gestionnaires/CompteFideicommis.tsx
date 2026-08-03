@@ -416,13 +416,19 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
         montant: parseFloat(depotForm.montant),
         modePaiement: depotForm.modePaiement,
         clientId: depotForm.clientId, clientName: client?.nom || "",
-        buildingId: depotForm.buildingId || undefined,
-        buildingAddress: selectedBuilding?.adresse || undefined,
-        unitId: depotForm.unitId || undefined,
-        unitName: selectedUnit?.unitName || undefined,
+        ...(depotForm.buildingId ? { buildingId: depotForm.buildingId } : {}),
+        ...(selectedBuilding?.adresse ? { buildingAddress: selectedBuilding.adresse } : {}),
+        ...(depotForm.unitId ? { unitId: depotForm.unitId } : {}),
+        ...(selectedUnit?.unitName ? { unitName: selectedUnit.unitName } : {}),
         notes: depotForm.notes, ownerId: uid,
         createdAt: new Date().toISOString(),
       };
+      // Firestore's setDoc rejects any field whose value is explicitly
+      // `undefined` — no building/unit selected (the common case, since that
+      // selector only appears once a linked immeuble exists) used to set
+      // these keys to literal `undefined` instead of omitting them, so every
+      // dépôt without a linked building failed silently save-side while the
+      // form still looked filled in.
       await setDoc(doc(db, "fideicommisDepots", id), newDepot);
       setDepots(prev => [newDepot, ...prev]);
       setShowDepotForm(false);

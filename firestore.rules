@@ -162,6 +162,16 @@ service cloud.firestore {
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }
+    match /fideicommisConciliations/{conciliationId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+    match /paieRecords/{recordId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
 
     // Generic multi-client bookkeeping (comptable profile) — clients doc,
     // separate from fideicommisClients above (real-estate/trust-account only).
