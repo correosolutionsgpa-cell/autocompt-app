@@ -30,6 +30,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
+import { useToast } from "../../lib/ToastContext";
 import type {
   FideicommisClientDoc,
   FideicommisDepotDoc,
@@ -305,6 +306,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const [showClientForm, setShowClientForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
+  const { setDispatcherSuccessToast } = useToast();
 
   // Depot form
   const emptyDepot = () => ({
@@ -395,7 +397,10 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   // ── Save Dépôt ────────────────────────────────────────────────────────────
   const handleSaveDepot = async () => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !depotForm.clientId || !depotForm.montant || !depotForm.locataireName) return;
+    if (!uid || !depotForm.clientId || !depotForm.montant || !depotForm.locataireName) {
+      alert("Veuillez remplir le propriétaire-client, le locataire et le montant avant d'enregistrer.");
+      return;
+    }
     setIsSaving(true);
     try {
       const id = `${uid}_fiddepot_${Date.now()}`;
@@ -423,14 +428,21 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       setShowDepotForm(false);
       setDepotForm(emptyDepot());
       playNotificationSound?.();
-    } catch (e) { console.error(e); }
+      setDispatcherSuccessToast({ text: `Dépôt de ${newDepot.montant.toLocaleString("fr-CA")} $ enregistré — reçu #${newDepot.numeroRecu}`, channel: "Fidéicommis" });
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'enregistrement du dépôt. Veuillez réessayer.");
+    }
     finally { setIsSaving(false); }
   };
 
   // ── Save Retrait ──────────────────────────────────────────────────────────
   const handleSaveRetrait = async () => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !retraitForm.clientId || !retraitForm.montant || !retraitForm.beneficiaire) return;
+    if (!uid || !retraitForm.clientId || !retraitForm.montant || !retraitForm.beneficiaire) {
+      alert("Veuillez remplir le propriétaire-client, le bénéficiaire et le montant avant d'enregistrer.");
+      return;
+    }
     setIsSaving(true);
     try {
       const id = `${uid}_fidretrait_${Date.now()}`;
@@ -450,14 +462,21 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       setShowRetraitForm(false);
       setRetraitForm(emptyRetrait());
       playNotificationSound?.();
-    } catch (e) { console.error(e); }
+      setDispatcherSuccessToast({ text: `Retrait de ${newRetrait.montant.toLocaleString("fr-CA")} $ enregistré`, channel: "Fidéicommis" });
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'enregistrement du retrait. Veuillez réessayer.");
+    }
     finally { setIsSaving(false); }
   };
 
   // ── Save Client ───────────────────────────────────────────────────────────
   const handleSaveClient = async () => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !clientForm.nom) return;
+    if (!uid || !clientForm.nom) {
+      alert("Veuillez remplir le nom du client avant d'enregistrer.");
+      return;
+    }
     setIsSaving(true);
     try {
       const id = `${uid}_fidclient_${Date.now()}`;
@@ -473,7 +492,11 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       setShowClientForm(false);
       setClientForm({ nom: "", email: "", telephone: "", tauxHonoraires: "8", proprietes: "" });
       playNotificationSound?.();
-    } catch (e) { console.error(e); }
+      setDispatcherSuccessToast({ text: `Client "${newClient.nom}" enregistré`, channel: "Fidéicommis" });
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'enregistrement du client. Veuillez réessayer.");
+    }
     finally { setIsSaving(false); }
   };
 
