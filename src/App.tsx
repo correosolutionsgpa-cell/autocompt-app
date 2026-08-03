@@ -839,12 +839,12 @@ const App = () => {
   // ── RBAC: typed profile derived from selectedProfile ──────────────────────────
   // Defined here at App scope so it is available in both the sidebar inner
   // component (which captures it via closure) and in every vista renderer.
+  // The `activeProfile` const itself is declared further below, right after
+  // `currentCompany` — it needs that value to apply the per-company
+  // gestion-déléguée override (see comment there).
   const _RBAC_VALID_PROFILES: ProfileId[] = [
     "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable",
   ];
-  const activeProfile: ProfileId = _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
-    ? (selectedProfile as ProfileId)
-    : "investisseur"; // safe default: broadest Plex access
   const [rentalBusinessModel, setRentalBusinessModel] = useState("Fixe");
   const [isShortTerm, setIsShortTerm] = useState(false);
   const [showWelcomeNewClientModal, setShowWelcomeNewClientModal] =
@@ -1421,6 +1421,32 @@ const App = () => {
   const currentCompany =
     listaEmpresas.find((e) => e.id === activeCompanyId) || visibleEmpresas[0];
   const empresa = currentCompany;
+
+  // RBAC "profile" is normally one setting for the whole account — but a
+  // company can independently be flagged gestion déléguée (this account
+  // owns/is invested in it, but day-to-day operations are handled by a
+  // manager — e.g. Fabiola's own Triplex, managed by her own Solutions GPA).
+  // When that flag is set on the active company, the Investisseur module set
+  // is shown for THIS company regardless of the account's real profile —
+  // operational tools (Heures & Paie, tenant/lease management, etc.) don't
+  // apply to a company whose management is delegated. Set via Paramètres →
+  // "Type de gestion" (SettingsView.tsx), reusing the same copy as the
+  // onboarding question mode_gestion_investisseur.
+  const activeProfile: ProfileId = currentCompany?.modeGestion === "gestion_deleguee"
+    ? "investisseur"
+    : _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
+      ? (selectedProfile as ProfileId)
+      : "investisseur"; // safe default: broadest Plex access
+
+  const handleUpdateModeGestion = async (mode: "autogestion" | "gestion_deleguee") => {
+    if (!currentCompany?._companyDocId) return;
+    setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, modeGestion: mode } : w)));
+    try {
+      await setDoc(doc(db, "companies", currentCompany._companyDocId), { modeGestion: mode }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save modeGestion:", err);
+    }
+  };
 
   useEffect(() => {
     if (vista === "splash") {
@@ -19909,6 +19935,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         selectedProfile={selectedProfile}
         updateSelectedProfile={updateSelectedProfile}
         unlockedProfiles={unlockedProfiles}
+        modeGestion={currentCompany?.modeGestion}
+        onUpdateModeGestion={handleUpdateModeGestion}
       />
     );
   }

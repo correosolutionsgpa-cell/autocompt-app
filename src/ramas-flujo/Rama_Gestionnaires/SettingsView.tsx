@@ -115,6 +115,17 @@ export interface SettingsViewProps {
   // "multi-profil" payant. Absent/vide = seul selectedProfile compte comme
   // débloqué (compte legacy d'avant ce champ, ou onboarding tout juste fini).
   unlockedProfiles?: string[] | null;
+
+  // Type de gestion DE CETTE ENTREPRISE (pas du compte) — reprend la même
+  // question/copie que l'onboarding (mode_gestion_investisseur), mais
+  // éditable par entreprise: un même compte peut gérer une entreprise en
+  // gestionnaire (ex: Solutions GPA) et posséder, ailleurs, un immeuble dont
+  // la gestion est déléguée à un tiers (ex: son propre Triplex, géré par sa
+  // propre société de gestion). Quand "gestion_deleguee" est actif sur
+  // l'entreprise courante, App.tsx affiche l'expérience Investisseur pour
+  // cette entreprise, peu importe le profil du compte.
+  modeGestion?: "autogestion" | "gestion_deleguee" | null;
+  onUpdateModeGestion?: (mode: "autogestion" | "gestion_deleguee") => void;
 }
 
 // Custom neon padlock — hand-drawn SVG instead of Fabiola's raster
@@ -241,6 +252,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   selectedProfile,
   updateSelectedProfile,
   unlockedProfiles,
+  modeGestion,
+  onUpdateModeGestion,
 }) => {
   const { toastDurationMs, setToastDurationMs } = useToast();
   // Version bêta : un seul profil actif par compte — le clic sur un profil
@@ -478,6 +491,54 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 });
               })()}
             </div>
+          </div>
+        )}
+
+        {/* Type de gestion DE CETTE ENTREPRISE — indépendant du "Profil actif"
+            ci-dessus, qui s'applique à tout le compte. Permet à une même
+            personne de gérer une entreprise en tant que gestionnaire tout en
+            ayant, ailleurs, un immeuble dont elle a délégué la gestion. */}
+        {dashboardMode !== "Syndic" && onUpdateModeGestion && (
+          <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`p-2 rounded-xl ${darkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
+                <Building2 size={16} />
+              </span>
+              <div>
+                <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+                  Type de gestion — {companyName || "cette entreprise"}
+                </h3>
+                <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                  Détermine les modules affichés pour cette entreprise précisément
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {([
+                { id: "autogestion" as const, label: "Autogestion complète (Baux & Locataires)" },
+                { id: "gestion_deleguee" as const, label: "Gestion déléguée (Via gestionnaire externe)" },
+              ]).map((opt) => {
+                const isActive = (modeGestion || "autogestion") === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => onUpdateModeGestion(opt.id)}
+                    className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
+                      isActive
+                        ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")
+                        : (darkMode ? "border-zinc-800 text-zinc-400 hover:border-zinc-700" : "border-slate-200 text-slate-600 hover:border-slate-300")
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {(modeGestion || "autogestion") === "gestion_deleguee" && (
+              <p className={`text-[10px] font-medium mt-3 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Cette entreprise affichera l'expérience Investisseur (sans Heures & Paie ni gestion opérationnelle des baux), peu importe votre profil de compte.
+              </p>
+            )}
           </div>
         )}
 
