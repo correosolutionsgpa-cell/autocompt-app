@@ -86,6 +86,15 @@ export interface BanqueSyncViewProps {
 
   // Composant App
   WorkspaceSidebar: React.ComponentType;
+
+  // Correspondance optionnelle avec le Compte Fidéicommis — désactivée par
+  // défaut (certaines gestionnaires préfèrent garder ce grand livre séparé
+  // du rapprochement bancaire automatique). Les dépôts fidéicommis sont déjà
+  // inclus dans validateDeposit() côté App quand ce flag est actif; seuls
+  // les retraits (dépenses payées via le fidéicommis) sont matchés ici.
+  matchFideicommisInConciliation: boolean;
+  onToggleMatchFideicommis: () => void;
+  fideicommisRetraitsForReco: any[];
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -119,6 +128,9 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   setVista,
   setIsSidebarOpen,
   WorkspaceSidebar,
+  matchFideicommisInConciliation,
+  onToggleMatchFideicommis,
+  fideicommisRetraitsForReco,
 }) => {
     return (
       <div
@@ -235,6 +247,24 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
             </p>
           </div>
 
+          {/* Correspondance optionnelle avec le Compte Fidéicommis — désactivée
+              par défaut, certaines gestionnaires préfèrent garder ce grand
+              livre entièrement séparé du rapprochement bancaire automatique. */}
+          <div className={`p-4 rounded-[24px] border flex items-center justify-between gap-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200"}`}>
+            <div>
+              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-200" : "text-slate-900"}`}>Faire correspondre avec le Compte Fidéicommis</p>
+              <p className={`text-[8px] font-bold uppercase tracking-wider mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Inclut les dépôts et retraits du fidéicommis dans la recherche de correspondances bancaires
+              </p>
+            </div>
+            <button
+              onClick={onToggleMatchFideicommis}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-colors ${matchFideicommisInConciliation ? "bg-emerald-500" : (darkMode ? "bg-zinc-700" : "bg-slate-300")}`}
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${matchFideicommisInConciliation ? "left-6" : "left-1"}`} />
+            </button>
+          </div>
+
           {/* Banque Section */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-2">
@@ -346,9 +376,16 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                     matchedInvoice = filteredHistorique.find(
                       (h) => Math.abs(parseFloat(h.total || 0) - Math.abs(txn.amt)) < 0.01,
                     );
+                    // Opt-in (toggle above) — a retrait already recorded in
+                    // Compte Fidéicommis (expense/honoraires/remise paid on
+                    // behalf of an owner-client) counts as fully conciliated
+                    // on its own, same as an expense with a receipt attached.
+                    const matchedFideicommisRetrait = matchFideicommisInConciliation
+                      ? fideicommisRetraitsForReco.find((r) => Math.abs(r.montant - Math.abs(txn.amt)) < 0.01)
+                      : null;
 
-                    const entryFound = matchedExpense || matchedInvoice;
-                    const hasLien = (matchedExpense && matchedExpense.lien) || matchedInvoice;
+                    const entryFound = matchedExpense || matchedInvoice || matchedFideicommisRetrait;
+                    const hasLien = (matchedExpense && matchedExpense.lien) || matchedInvoice || matchedFideicommisRetrait;
                     const isManual = matchedExpense && matchedExpense.isManual;
                     if (entryFound && (hasLien || isManual)) recoState = "conciliated";
                     else if (entryFound && !hasLien) recoState = "need_receipt";
