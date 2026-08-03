@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Info,
   Menu,
+  Check,
 } from "lucide-react";
 import { db, auth } from "../../lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
@@ -98,6 +99,10 @@ interface MandatFormData {
   montantMaxReparation: string;
   pouvoirPoursuivre: boolean;
   pouvoirEngagerPersonnel: boolean;
+  /** Gérer la location de courte durée (Airbnb, etc.) — distinct des baux
+   *  résidentiels standards ci-dessus : implique l'inscription CITQ, la taxe
+   *  d'hébergement, et le suivi via le module Meublé/Airbnb. */
+  pouvoirCourteDuree: boolean;
 
   // Obligations
   releve_mensuel: boolean;
@@ -150,6 +155,7 @@ const defaultForm = (gestionnaireName: string, gestionnaireEmail: string): Manda
   montantMaxReparation: "500",
   pouvoirPoursuivre: false,
   pouvoirEngagerPersonnel: true,
+  pouvoirCourteDuree: false,
   releve_mensuel: true,
   conciliation_mensuelle: true,
   assurance_gestionnaire: true,
@@ -370,6 +376,7 @@ function generateMandatPDF(form: MandatFormData): jsPDF {
   );
   checkbox("Intenter des procédures judiciaires pour non-paiement de loyer ou reprise de logement", form.pouvoirPoursuivre);
   checkbox("Engager et congédier le personnel d'entretien de l'immeuble", form.pouvoirEngagerPersonnel);
+  checkbox("Gérer la location de courte durée (Airbnb, etc.) et les plateformes associées", form.pouvoirCourteDuree);
 
   // ── OBLIGATIONS DU GESTIONNAIRE ────────────────────────────────────────────
   sectionHeader("Article 7 — Obligations du Gestionnaire");
@@ -652,6 +659,28 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
     </button>
   );
 
+  // Modern pill-style toggle for a single boolean power/obligation — replaces
+  // the plain native checkbox+label row previously used here. Whole row is
+  // clickable, filled/colored when active, muted outline when not.
+  const PowerPill = ({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
+        active
+          ? (darkMode ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-emerald-500/40 bg-emerald-50 text-emerald-700")
+          : (darkMode ? "border-zinc-800 text-zinc-500 hover:border-zinc-700" : "border-slate-200 text-slate-400 hover:border-slate-300")
+      }`}
+    >
+      <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all ${
+        active ? "bg-emerald-500" : (darkMode ? "bg-zinc-800 border border-zinc-700" : "bg-white border border-slate-300")
+      }`}>
+        {active && <Check size={10} className="text-white" strokeWidth={3.5} />}
+      </span>
+      <span className="text-[12px] font-medium leading-snug">{label}</span>
+    </button>
+  );
+
   return (
     <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72`}>
       <WorkspaceSidebar />
@@ -839,13 +868,14 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                     ["pouvoirRepairationsUrgentes", "Autoriser les réparations urgentes"],
                     ["pouvoirPoursuivre", "Intenter des procédures judiciaires (non-paiement / reprise)"],
                     ["pouvoirEngagerPersonnel", "Engager et congédier le personnel d'entretien"],
+                    ["pouvoirCourteDuree", "Gérer la location de courte durée (Airbnb, etc.)"],
                   ].map(([key, label]) => (
-                    <label key={key} className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" checked={form[key as keyof MandatFormData] as boolean}
-                        onChange={e => f(key as keyof MandatFormData, e.target.checked as any)}
-                        className="w-4 h-4 rounded mt-0.5 shrink-0" />
-                      <span className="text-[12px] font-medium leading-snug">{label}</span>
-                    </label>
+                    <PowerPill
+                      key={key}
+                      active={form[key as keyof MandatFormData] as boolean}
+                      label={label}
+                      onClick={() => f(key as keyof MandatFormData, !form[key as keyof MandatFormData] as any)}
+                    />
                   ))}
                   {form.pouvoirRepairationsUrgentes && (
                     <div className="ml-7"><label className={labelCls}>Montant max par réparation sans autorisation ($)</label><input type="number" className={inputCls} value={form.montantMaxReparation} onChange={e => f("montantMaxReparation", e.target.value)} /></div>
@@ -862,12 +892,12 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                     ["conciliation_mensuelle", "Effectuer la conciliation bancaire mensuelle du fidéicommis"],
                     ["assurance_gestionnaire", "Maintenir une assurance responsabilité professionnelle"],
                   ].map(([key, label]) => (
-                    <label key={key} className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" checked={form[key as keyof MandatFormData] as boolean}
-                        onChange={e => f(key as keyof MandatFormData, e.target.checked as any)}
-                        className="w-4 h-4 rounded mt-0.5" />
-                      <span className="text-[12px] font-medium">{label}</span>
-                    </label>
+                    <PowerPill
+                      key={key}
+                      active={form[key as keyof MandatFormData] as boolean}
+                      label={label}
+                      onClick={() => f(key as keyof MandatFormData, !form[key as keyof MandatFormData] as any)}
+                    />
                   ))}
                   {form.assurance_gestionnaire && (
                     <div><label className={labelCls}>Numéro de police d'assurance</label><input className={inputCls} value={form.numPoliceAssurance} onChange={e => f("numPoliceAssurance", e.target.value)} placeholder="PRO-2024-XXXXXX" /></div>
