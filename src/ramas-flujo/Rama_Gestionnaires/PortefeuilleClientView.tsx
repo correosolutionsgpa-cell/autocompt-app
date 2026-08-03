@@ -425,7 +425,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
                 Immeubles ({a.extra.buildings.length})
               </h3>
               <button
-                onClick={() => setVista("gestion_immo")}
+                onClick={() => setVista("plex")}
                 className="text-[9px] font-black uppercase tracking-widest text-indigo-500 hover:text-indigo-400 flex items-center gap-1"
               >
                 <Plus size={10} />Ajouter un immeuble
@@ -444,7 +444,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
                   </p>
                 </div>
                 <button
-                  onClick={() => setVista("gestion_immo")}
+                  onClick={() => setVista("plex")}
                   className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2"
                 >
                   <Building2 size={11} />Aller à Gestion Immobilière
@@ -563,7 +563,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
               <p className="text-[11px] font-medium">
                 <strong>Aucun immeuble lié à ce client.</strong> Pour créer un lien, allez dans{" "}
-                <button onClick={() => setVista("gestion_immo")} className="underline font-bold">Gestion Immobilière</button>,
+                <button onClick={() => setVista("plex")} className="underline font-bold">Gestion Immobilière</button>,
                 ajoutez ou éditez un immeuble, et sélectionnez <em>{a.nom}</em> dans le champ "Propriétaire-client".
               </p>
             </div>
