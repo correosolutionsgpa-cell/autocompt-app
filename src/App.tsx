@@ -1448,6 +1448,35 @@ const App = () => {
     }
   };
 
+  // ── Conciliation Bancaire ↔ Compte Fidéicommis matching — opt-in per
+  //    company. Off by default: some gestionnaires won't want the trust-
+  //    account ledger cross-referenced automatically against imported bank
+  //    data, and prefer to keep that step fully manual. Toggle lives on the
+  //    Conciliation Bancaire screen itself; persisted like modeGestion.
+  const matchFideicommisInConciliation = !!currentCompany?.matchFideicommisInConciliation;
+  const handleToggleMatchFideicommis = async () => {
+    if (!currentCompany?._companyDocId) return;
+    const next = !matchFideicommisInConciliation;
+    setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, matchFideicommisInConciliation: next } : w)));
+    try {
+      await setDoc(doc(db, "companies", currentCompany._companyDocId), { matchFideicommisInConciliation: next }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save matchFideicommisInConciliation:", err);
+    }
+  };
+  const [fideicommisDepotsForReco, setFideicommisDepotsForReco] = useState<any[]>([]);
+  const [fideicommisRetraitsForReco, setFideicommisRetraitsForReco] = useState<any[]>([]);
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !activeCompanyId || !matchFideicommisInConciliation) {
+      setFideicommisDepotsForReco([]);
+      setFideicommisRetraitsForReco([]);
+      return;
+    }
+    dataService.fetchFideicommisDepots(userId, activeCompanyId).then(setFideicommisDepotsForReco).catch(console.error);
+    dataService.fetchFideicommisRetraits(userId, activeCompanyId).then(setFideicommisRetraitsForReco).catch(console.error);
+  }, [activeCompanyId, matchFideicommisInConciliation]);
+
   useEffect(() => {
     if (vista === "splash") {
       const timer = setTimeout(() => {
@@ -16625,6 +16654,25 @@ const App = () => {
                 </button>
               </div>
 
+              {/* Opt-in: also match bank transactions against Compte
+                  Fidéicommis dépôts/retraits, not just expenses/invoices.
+                  Off by default — some gestionnaires prefer to keep the trust
+                  account reconciliation fully manual/separate. */}
+              <div className={`w-full p-4 rounded-2xl border flex items-center justify-between gap-4 ${darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-200 bg-white"}`}>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest">Faire correspondre avec le Compte Fidéicommis</p>
+                  <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                    Inclut les dépôts et retraits du fidéicommis dans la recherche de correspondances bancaires
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleMatchFideicommis}
+                  className={`shrink-0 w-12 h-7 rounded-full relative transition-colors ${matchFideicommisInConciliation ? "bg-emerald-500" : (darkMode ? "bg-zinc-700" : "bg-slate-300")}`}
+                >
+                  <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${matchFideicommisInConciliation ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+
               <div className={`w-full overflow-hidden border rounded-[32px] ${darkMode ? "border-zinc-800 bg-zinc-900/40" : "border-slate-100 bg-white/80 backdrop-blur-xl shadow-xl shadow-emerald-900/5"}`}>
                 <div className="overflow-x-auto font-sans">
                   <table className="w-full min-w-[1000px] text-left border-collapse">
@@ -16657,10 +16705,22 @@ const App = () => {
                         const matchedInvoice = filteredHistorique.find(
                           (h) => Math.abs(h.total - txn.amt) < 0.01,
                         );
-                        const entryFound = matchedExpense || matchedInvoice;
+                        // Opt-in (see toggle above) — dépôts/retraits are
+                        // already a formal trust-account record on their own,
+                        // so a match here counts as fully "Concilié" without
+                        // needing a separate receipt (`lien`).
+                        const matchedFideicommisDepot = matchFideicommisInConciliation
+                          ? fideicommisDepotsForReco.find((d) => Math.abs(d.montant - txn.amt) < 0.01)
+                          : undefined;
+                        const matchedFideicommisRetrait = matchFideicommisInConciliation
+                          ? fideicommisRetraitsForReco.find((r) => Math.abs(r.montant - txn.amt) < 0.01)
+                          : undefined;
+                        const entryFound = matchedExpense || matchedInvoice || matchedFideicommisDepot || matchedFideicommisRetrait;
                         const hasLien =
                           (matchedExpense && (matchedExpense as any).lien) ||
-                          matchedInvoice;
+                          matchedInvoice ||
+                          matchedFideicommisDepot ||
+                          matchedFideicommisRetrait;
                         let recoState =
                           entryFound && hasLien
                             ? "Concilié"

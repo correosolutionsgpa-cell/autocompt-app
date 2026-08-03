@@ -2564,6 +2564,39 @@ export const dataService = {
     }
   },
 
+  /** Same shape/scope as fetchFideicommisClients — used by the general Conciliation
+   *  Bancaire screen (App.tsx) to optionally match bank transactions against
+   *  trust-account movements, opt-in per company via matchFideicommisInConciliation. */
+  async fetchFideicommisDepots(userId: string, companyId: string): Promise<FideicommisDepotDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'fideicommisDepots'),
+        where('companyId', '==', companyId),
+        where('ownerId', '==', userId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as FideicommisDepotDoc);
+    } catch (e) {
+      console.error('fetchFideicommisDepots failed:', e);
+      return [];
+    }
+  },
+
+  async fetchFideicommisRetraits(userId: string, companyId: string): Promise<FideicommisRetraitDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'fideicommisRetraits'),
+        where('companyId', '==', companyId),
+        where('ownerId', '==', userId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as FideicommisRetraitDoc);
+    } catch (e) {
+      console.error('fetchFideicommisRetraits failed:', e);
+      return [];
+    }
+  },
+
   // ── Relevé de Gestion — narrow statement channel between a gestionnaire
   //    and a delegated-management owner's OWN account (potentially a
   //    different Firebase user entirely). See StatementLinkDoc/
