@@ -1391,7 +1391,13 @@ const App = () => {
         "plex", "meuble", "incident", "taxes_assurances", "accepter-invitation",
         "preview-email", "setup", "login", "welcome", "benefits",
         "level_selection", "rental_model", "pricing", "portal", "sofi-onboarding",
-        "phone-verify", "superadmin_panel"
+        "phone-verify", "superadmin_panel",
+        // Gestionnaire — fidéicommis / portefeuille client (manquaient ici,
+        // donc bloqués pour tout compte superadmin — trouvé 2026-08-03 en
+        // testant le nouveau canal Relevé de Gestion)
+        "fideicommis", "portefeuille_client", "tenue_livres_immeuble", "mandat_gestion",
+        // Comptable + Relevé de Gestion (nouveaux aujourd'hui)
+        "portefeuille_clients_comptable", "releves_gestion"
       ];
       if (!internalViews.includes(vista) && vista !== "splash") {
         setActiveUser("SuperAdmin");
