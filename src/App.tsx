@@ -4331,16 +4331,19 @@ const App = () => {
         const driveStatus = activeCompanyId && driveOwnerId
           ? await getCompanyDriveConfig(activeCompanyId, driveOwnerId)
           : null;
-        console.log("[Invoice Drive Archive] activeCompanyId:", activeCompanyId, "| driveOwnerId:", driveOwnerId, "| driveStatus:", driveStatus);
+        // console.error (not .log/.warn) so this is impossible to miss
+        // behind a "hide Info/Verbose" DevTools console filter — this is
+        // diagnostic-only, not a real error.
+        console.error("[Invoice Drive Archive] STEP 1 — activeCompanyId:", activeCompanyId, "| driveOwnerId:", driveOwnerId, "| driveStatus:", driveStatus);
         if (driveStatus?.connected) {
           const driveResult = await uploadDocumentToDrive(
             activeCompanyId, driveOwnerId, pdfBase64,
             `${(fac.tipoDoc || "Facture").replace(/[^a-z0-9]/gi, "_")}-${fac.id}.pdf`,
             "application/pdf", currentCompany?.nombre || "Entreprise", "Entrées",
           );
-          console.log("[Invoice Drive Archive] upload result:", driveResult);
+          console.error("[Invoice Drive Archive] STEP 2 — upload result:", driveResult);
         } else {
-          console.warn("[Invoice Drive Archive] Skipped — Drive not marked as connected for this company/owner.");
+          console.error("[Invoice Drive Archive] STEP 2 — Skipped, Drive not marked as connected for this company/owner.");
         }
       } catch (driveErr) {
         console.error("[Invoice Drive Archive] Invoice sent OK, but Drive archive threw:", driveErr);
