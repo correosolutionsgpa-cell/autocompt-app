@@ -4220,45 +4220,189 @@ const App = () => {
   // manuelle, pour que le succès/échec soit impossible à manquer.
   const [sendInvoiceResult, setSendInvoiceResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Genere le PDF de la facture en capturant #invoice-content. Utilisait
-  // html2pdf.js (qui embarque sa propre copie interne, ancienne, de
-  // html2canvas) — cette version ne sait pas lire les fonctions de couleur
-  // modernes (oklch/oklab/lab/lch/color-mix) qu'utilise la palette par
-  // defaut de Tailwind CSS v4, et echoue avec "Attempting to parse an
-  // unsupported color function" des qu'un seul element de la page (meme un
-  // ancetre du modal) utilise une classe de couleur Tailwind standard.
-  // html2canvas-pro est un fork qui ajoute ce support — remplace html2pdf.js
-  // par un appel manuel html2canvas-pro + jsPDF (jsPDF est deja une
-  // dependance npm du projet, deja utilisee telle quelle dans
-  // SuperAdminPanel.tsx). La version recente d'html2canvas-pro ne publie
-  // plus de bundle UMD pret pour <script src>, seulement des modules ESM —
-  // import() dynamique direct de l'URL CDN au lieu d'un tag <script> +
-  // variable globale window.html2canvas.
+  // Genere le PDF de la facture avec du texte reel dessine directement
+  // (jsPDF), comme tous les autres documents d'AutoCompt (recus, releves,
+  // mandats) — remplace l'ancienne approche par capture d'ecran de
+  // #invoice-content (html2canvas-pro -> image JPEG collee dans le PDF), qui
+  // produisait un rendu flou/mal proportionne et un PDF "juste une image"
+  // que les filtres antispam (Outlook a bloque la piece jointe de Fabiola)
+  // traitent avec plus de mefiance qu'un vrai PDF texte.
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const clean = (hex || "#059669").replace("#", "");
+    const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+    const n = parseInt(full, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+
   const generateInvoicePdfDoc = async (): Promise<jsPDF> => {
-    // Passe par une variable (pas un litteral inline) pour que TypeScript ne
-    // tente pas de resoudre cette URL comme un module local a la compilation.
-    const html2canvasProUrl = "https://cdn.jsdelivr.net/npm/html2canvas-pro@2.3.2/dist/html2canvas-pro.esm.js";
-    const html2canvasMod: any = await import(/* @vite-ignore */ html2canvasProUrl);
-    const html2canvas = html2canvasMod.default;
-    const element = document.getElementById("invoice-content");
-    if (!element) throw new Error("Invoice content not found");
-    // scale 4 + PNG (tente pour corriger le flou signale par Fabiola) a
-    // produit un PDF trop volumineux sur mobile, depassant la limite dure de
-    // 4.5 Mo par requete des fonctions serverless Vercel (non configurable
-    // via express.json({limit}) — c'est une limite de plateforme, pas de
-    // l'appli) — echec silencieux avec un message d'erreur illisible
-    // ("Unexpected token 'R', is not valid JSON", en realite une reponse
-    // "Request Entity Too Large" non-JSON de Vercel). scale 3 + JPEG qualite
-    // 0.95 reste nettement plus net que l'original (scale 2, qualite 0.98)
-    // tout en gardant une marge de securite confortable sous cette limite.
-    const canvas = await html2canvas(element, { scale: 3 });
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const pdf = new jsPDF({ unit: "in", format: "letter", orientation: "portrait" });
-    const margin = 0.5;
-    const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-    const maxContentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-    const imgHeight = Math.min((canvas.height * contentWidth) / canvas.width, maxContentHeight);
-    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight);
+    const fac: any = selectedFac;
+    if (!fac) throw new Error("Invoice content not found");
+    const clientInfo = clientes.find((c: any) => c.nom === fac.cliente) || fac;
+    const [ar, ag, ab] = hexToRgb(userProfile.color || "#059669");
+    const isBandeau = (userProfile.invoiceTemplate || "epure") === "bandeau";
+    const [hr, hg, hb] = isBandeau ? [255, 255, 255] : [15, 23, 42]; // header text: white on bandeau, slate-900 on epure
+    const [mr, mg, mb] = isBandeau ? [255, 255, 255] : [100, 116, 139]; // muted text: white/80 on bandeau, slate-500 on epure
+
+    const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const marginX = 18;
+    const rightX = pageWidth - marginX;
+
+    // -- Header --------------------------------------------------------------
+    const headerHeight = isBandeau ? 44 : 40;
+    if (isBandeau) {
+      pdf.setFillColor(ar, ag, ab);
+      pdf.rect(0, 0, pageWidth, headerHeight, "F");
+    }
+    let logoBottom = 0;
+    if (userProfile.logo) {
+      try {
+        const fmt = userProfile.logo.startsWith("data:image/png") ? "PNG" : userProfile.logo.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+        pdf.addImage(userProfile.logo, fmt, marginX, 9, 18, 18);
+        logoBottom = 18;
+      } catch { /* unsupported logo format (e.g. SVG data URL) -- skip silently, name still prints below */ }
+    }
+    let hy = logoBottom ? 33 : 16;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(hr, hg, hb);
+    pdf.text((userProfile.nom || "Votre entreprise").toUpperCase(), marginX, hy);
+    hy += 5;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(mr, mg, mb);
+    for (const line of [userProfile.adresse, userProfile.tel ? `Tel : ${userProfile.tel}` : "", userProfile.site].filter(Boolean)) {
+      pdf.text(String(line), marginX, hy);
+      hy += 4;
+    }
+    const idLines = [
+      userProfile.neq ? `NEQ : ${userProfile.neq}` : "",
+      userProfile.tps ? `TPS : ${userProfile.tps}` : "",
+      userProfile.tvq ? `TVQ : ${userProfile.tvq}` : "",
+    ].filter(Boolean);
+    if (idLines.length) {
+      pdf.setFontSize(7);
+      for (const line of idLines) { pdf.text(line, marginX, hy); hy += 3.5; }
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(20);
+    pdf.setTextColor(isBandeau ? 255 : ar, isBandeau ? 255 : ag, isBandeau ? 255 : ab);
+    pdf.text((fac.tipoDoc || "Facture").toUpperCase(), rightX, 16, { align: "right" });
+    pdf.setFontSize(11);
+    pdf.setTextColor(hr, hg, hb);
+    pdf.text(String(fac.id || ""), rightX, 23, { align: "right" });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(mr, mg, mb);
+    pdf.text(`Emise le : ${fac.fecha || ""}`, rightX, 28, { align: "right" });
+    if (fac.status) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7);
+      pdf.text(String(fac.status).toUpperCase(), rightX, 33, { align: "right" });
+    }
+
+    let y = Math.max(headerHeight, hy) + (isBandeau ? 8 : 6);
+    if (!isBandeau) {
+      pdf.setDrawColor(ar, ag, ab);
+      pdf.setLineWidth(0.6);
+      pdf.line(marginX, y - 4, rightX, y - 4);
+    }
+
+    // -- Facture a -------------------------------------------------------------
+    const clientLines = [clientInfo.adresse, clientInfo.email || fac.email, clientInfo.neq ? `NEQ (Client) : ${clientInfo.neq}` : ""].filter(Boolean);
+    const boxHeight = 12 + clientLines.length * 4;
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(marginX, y, rightX - marginX, boxHeight, 2, 2, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7);
+    pdf.setTextColor(148, 163, 184);
+    pdf.text("FACTURE A", marginX + 5, y + 6);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(String(clientInfo.nom || clientInfo.cliente || "Client"), marginX + 5, y + 12);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    let cy = y + 17;
+    for (const line of clientLines) { pdf.text(String(line), marginX + 5, cy); cy += 4; }
+    y += boxHeight + 8;
+
+    // -- Table des lignes --------------------------------------------------
+    const items = fac.items && fac.items.length ? fac.items : [{ descripcion: "Services Professionnels", cantidad: 1, precioUnitario: fac.subtotal }];
+    const colDescX = marginX + 3;
+    const colQteX = rightX - 42;
+    const colTotalX = rightX - 3;
+    pdf.setFillColor(ar, ag, ab);
+    pdf.roundedRect(marginX, y, rightX - marginX, 8, 1.5, 1.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DESCRIPTION", colDescX, y + 5.5);
+    pdf.text("QTE", colQteX, y + 5.5, { align: "center" });
+    pdf.text("TOTAL", colTotalX, y + 5.5, { align: "right" });
+    y += 12;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    for (const item of items) {
+      const descLines = pdf.splitTextToSize(String(item.descripcion || ""), colQteX - colDescX - 30);
+      const rowHeight = Math.max(6, descLines.length * 4.2 + 2);
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(descLines, colDescX, y);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(51, 65, 85);
+      pdf.text(String(item.cantidad ?? 1), colQteX, y, { align: "center" });
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`${(Number(item.cantidad || 0) * Number(item.precioUnitario || 0)).toFixed(2)}$`, colTotalX, y, { align: "right" });
+      y += rowHeight;
+      pdf.setDrawColor(241, 245, 249);
+      pdf.setLineWidth(0.2);
+      pdf.line(marginX, y - 2, rightX, y - 2);
+    }
+    y += 4;
+
+    // -- Totaux --------------------------------------------------------------
+    const totalsRow = (label: string, value: string) => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(label, rightX - 45, y);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(value, rightX, y, { align: "right" });
+      y += 5.5;
+    };
+    totalsRow("Sous-total", `${Number(fac.subtotal || 0).toFixed(2)}$`);
+    totalsRow(`TPS (${userProfile.tpsRate}%)`, `${Number(fac.tps || 0).toFixed(2)}$`);
+    totalsRow(`TVQ (${userProfile.tvqRate}%)`, `${Number(fac.tvq || 0).toFixed(2)}$`);
+    y += 2;
+    pdf.setFillColor(ar, ag, ab);
+    pdf.roundedRect(rightX - 70, y - 5, 70, 11, 2, 2, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("TOTAL", rightX - 65, y + 1.5);
+    pdf.setFontSize(13);
+    pdf.text(`${Number(fac.total || 0).toFixed(2)}$`, rightX - 4, y + 2, { align: "right" });
+    y += 16;
+
+    // -- Pied de page ----------------------------------------------------------
+    if (userProfile.pago) {
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 116, 139);
+      const pagoLines = pdf.splitTextToSize(String(userProfile.pago), rightX - marginX);
+      pdf.text(pagoLines, marginX, y);
+      y += pagoLines.length * 4 + 4;
+    }
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8);
+    pdf.setTextColor(ar, ag, ab);
+    pdf.text("Merci de votre confiance !", pageWidth / 2, y, { align: "center" });
+
     return pdf;
   };
 
