@@ -868,6 +868,111 @@ const App = () => {
   // shared-element (layoutId) morph from the small teaser card, not a plain modal.
   const [showExpenseCategoriesModal, setShowExpenseCategoriesModal] = useState(false);
 
+  // Relevé annuel de financement (hypothèque, marge de crédit, prêt de second
+  // rang...) — scans ONE document and, on confirm, writes TWO separate
+  // expense entries: the interest (deductible) and the principal repaid
+  // (not deductible, tracked only for cash-flow visibility — see
+  // "Capital remboursé (non déductible)" category and its fiscalRate=0
+  // override in processedDepenses above).
+  const [showFinancingScanModal, setShowFinancingScanModal] = useState(false);
+  const [isScanningFinancing, setIsScanningFinancing] = useState(false);
+  const [isSavingFinancing, setIsSavingFinancing] = useState(false);
+  const [financingScanForm, setFinancingScanForm] = useState({
+    typeFinancement: "", preteur: "", adresseProperty: "", anneeFiscale: "",
+    interetsPayes: "", capitalRembourse: "", soldeRestant: "",
+  });
+  const financingScanInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFinancingFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setIsScanningFinancing(true);
+    try {
+      const base64Data: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const resp = await fetch("/api/scan-financing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64Data, mimeType: file.type, filename: file.name }),
+      });
+      const data = await resp.json();
+      setFinancingScanForm({
+        typeFinancement: data.typeFinancement || "",
+        preteur: data.preteur || "",
+        adresseProperty: data.adresseProperty || "",
+        anneeFiscale: data.anneeFiscale || new Date().getFullYear().toString(),
+        interetsPayes: data.interetsPayes != null ? String(data.interetsPayes) : "",
+        capitalRembourse: data.capitalRembourse != null ? String(data.capitalRembourse) : "",
+        soldeRestant: data.soldeRestant != null ? String(data.soldeRestant) : "",
+      });
+    } catch (err) {
+      console.error("Financing scan failed:", err);
+      alert("La lecture du document a échoué. Vous pouvez quand même remplir les champs manuellement.");
+      setFinancingScanForm((prev) => ({ ...prev, anneeFiscale: prev.anneeFiscale || new Date().getFullYear().toString() }));
+    } finally {
+      setIsScanningFinancing(false);
+    }
+  };
+
+  const handleSaveFinancingScan = () => {
+    const interets = parseFloat(financingScanForm.interetsPayes);
+    const capital = parseFloat(financingScanForm.capitalRembourse);
+    if ((!interets || interets <= 0) && (!capital || capital <= 0)) {
+      alert("Veuillez indiquer au moins le montant des intérêts ou du capital.");
+      return;
+    }
+    setIsSavingFinancing(true);
+    const dateStamp = financingScanForm.anneeFiscale
+      ? `${financingScanForm.anneeFiscale}-12-31`
+      : new Date().toISOString().split("T")[0];
+    const fournisseur = [financingScanForm.typeFinancement, financingScanForm.preteur].filter(Boolean).join(" — ") || "Financement";
+    const newEntries: any[] = [];
+    if (interets > 0) {
+      newEntries.push({
+        id: Date.now(),
+        companyId: activeCompanyId,
+        fecha: dateStamp,
+        fournisseur,
+        cat: "Intérêts de financement",
+        subtotal: interets,
+        tps: 0,
+        tvq: 0,
+        total: interets,
+        lien: null,
+        partnerTag: activeUser,
+        isManual: true,
+        propertyAddress: financingScanForm.adresseProperty || undefined,
+      });
+    }
+    if (capital > 0) {
+      newEntries.push({
+        id: Date.now() + 1,
+        companyId: activeCompanyId,
+        fecha: dateStamp,
+        fournisseur,
+        cat: "Capital remboursé (non déductible)",
+        subtotal: capital,
+        tps: 0,
+        tvq: 0,
+        total: capital,
+        lien: null,
+        partnerTag: activeUser,
+        isManual: true,
+        propertyAddress: financingScanForm.adresseProperty || undefined,
+      });
+    }
+    setDepenses((prev) => [...newEntries, ...prev]);
+    setShowFinancingScanModal(false);
+    setFinancingScanForm({ typeFinancement: "", preteur: "", adresseProperty: "", anneeFiscale: "", interetsPayes: "", capitalRembourse: "", soldeRestant: "" });
+    setIsSavingFinancing(false);
+    playNotificationSound();
+  };
+
   const [loyerEditingId, setLoyerEditingId] = useState<number | null>(null);
   const [plexExpenseEditingId, setPlexExpenseEditingId] = useState<number | null>(null);
 
@@ -5918,7 +6023,14 @@ const App = () => {
     // Base deduction factor
     let fiscalRate = 1.0;
 
-    if (isPlex) {
+    // Principal/capital repaid on a mortgage/margin/loan is a debt repayment,
+    // not a fiscal expense — never deductible, regardless of any other rule
+    // below (Plex building-wide split, home office, mileage, etc.). Only the
+    // interest portion (its own category, "Intérêts de financement") is
+    // deductible; this one exists purely for cash-flow visibility.
+    if (d.cat === "Capital remboursé (non déductible)") {
+      fiscalRate = 0;
+    } else if (isPlex) {
       // Logic for Plex (ID '3')
       const isBuildingWide = buildingWideCats.includes(d.cat);
       const propType = currentCompany?.propertyType || "Triplex";
@@ -11197,6 +11309,121 @@ const App = () => {
             )}
           </div>
 
+          {/* Relevé annuel de financement (hypothèque, marge de crédit, prêt de
+              second rang) — un document distinct d'une facture, avec sa propre
+              lecture IA (intérêts déductibles vs capital non déductible). */}
+          <button
+            type="button"
+            onClick={() => setShowFinancingScanModal(true)}
+            className={`w-full p-4 rounded-[24px] border flex items-center gap-3 transition-all active:scale-[0.98] ${darkMode ? "bg-zinc-900/50 border-zinc-800 hover:border-indigo-500/40" : "bg-white border-slate-200 hover:border-indigo-300"}`}
+          >
+            <span className={`p-2.5 rounded-xl ${darkMode ? "bg-indigo-500/10 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
+              <FileText size={16} />
+            </span>
+            <div className="text-left flex-1">
+              <p className="text-[10px] font-black uppercase italic tracking-tight">Scanner un relevé de financement</p>
+              <p className={`text-[8.5px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Hypothèque, marge de crédit, prêt de second rang — sépare intérêts et capital
+              </p>
+            </div>
+          </button>
+
+          <input
+            type="file"
+            ref={financingScanInputRef}
+            onChange={handleFinancingFileSelect}
+            className="hidden"
+            accept="application/pdf, image/jpeg, image/png, image/webp"
+          />
+
+          <AnimatePresence>
+            {showFinancingScanModal && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                  className={`w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-[36px] border shadow-2xl ${darkMode ? "bg-slate-900/95 border-white/[0.08]" : "bg-white border-slate-100"} text-left`}
+                >
+                  <div className={`p-6 border-b flex items-center justify-between ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
+                    <div>
+                      <h3 className={`text-base font-black italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Relevé de financement</h3>
+                      <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Hypothèque · Marge de crédit · Prêt de second rang</p>
+                    </div>
+                    <button onClick={() => setShowFinancingScanModal(false)} className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-slate-100 text-slate-500"}`}>
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className={`p-6 space-y-4 ${darkMode ? "bg-zinc-950/50" : "bg-slate-50/50"}`}>
+                    <button
+                      type="button"
+                      onClick={() => financingScanInputRef.current?.click()}
+                      disabled={isScanningFinancing}
+                      className={`w-full py-4 rounded-2xl border border-dashed flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 ${darkMode ? "border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/5" : "border-indigo-300 text-indigo-600 hover:bg-indigo-50"}`}
+                    >
+                      {isScanningFinancing ? <><Loader2 size={14} className="animate-spin" /><span>Lecture en cours...</span></> : <><Upload size={14} /><span>Importer le relevé (Photo, Galerie ou PDF)</span></>}
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 text-left col-span-2">
+                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Type de financement</label>
+                        <select
+                          value={financingScanForm.typeFinancement}
+                          onChange={(e) => setFinancingScanForm({ ...financingScanForm, typeFinancement: e.target.value })}
+                          className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                        >
+                          <option value="">— Sélectionner —</option>
+                          <option value="Hypothèque">Hypothèque</option>
+                          <option value="Marge de crédit">Marge de crédit</option>
+                          <option value="Prêt de second rang">Prêt de second rang</option>
+                          <option value="Autre">Autre</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1 text-left col-span-2">
+                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Prêteur</label>
+                        <input type="text" placeholder="Ex : Banque Nationale" value={financingScanForm.preteur} onChange={(e) => setFinancingScanForm({ ...financingScanForm, preteur: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                      </div>
+                      <div className="space-y-1 text-left col-span-2">
+                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
+                        <input type="text" placeholder="Optionnel" value={financingScanForm.adresseProperty} onChange={(e) => setFinancingScanForm({ ...financingScanForm, adresseProperty: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Année</label>
+                        <input type="text" placeholder="2025" value={financingScanForm.anneeFiscale} onChange={(e) => setFinancingScanForm({ ...financingScanForm, anneeFiscale: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Solde restant</label>
+                        <input type="number" placeholder="0.00" value={financingScanForm.soldeRestant} onChange={(e) => setFinancingScanForm({ ...financingScanForm, soldeRestant: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[9px] font-black uppercase tracking-widest text-emerald-600`}>Intérêts payés (déductible)</label>
+                        <input type="number" placeholder="0.00" value={financingScanForm.interetsPayes} onChange={(e) => setFinancingScanForm({ ...financingScanForm, interetsPayes: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-emerald-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[9px] font-black uppercase tracking-widest text-amber-600`}>Capital remboursé (non déductible)</label>
+                        <input type="number" placeholder="0.00" value={financingScanForm.capitalRembourse} onChange={(e) => setFinancingScanForm({ ...financingScanForm, capitalRembourse: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-amber-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
+                      </div>
+                    </div>
+
+                    <p className={`text-[8.5px] leading-relaxed ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                      Vérifiez ces montants avant d'enregistrer — l'IA peut se tromper. Les intérêts iront dans vos dépenses déductibles ; le capital sera visible dans Tenue de Livres mais exclu de vos calculs fiscaux.
+                    </p>
+                  </div>
+
+                  <div className={`p-6 border-t ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
+                    <button
+                      onClick={handleSaveFinancingScan}
+                      disabled={isSavingFinancing}
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all active:scale-95"
+                    >
+                      {isSavingFinancing ? "Enregistrement..." : "Enregistrer dans Tenue de Livres"}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           {/* WIDGET : RÉPARTITION DES DÉPENSES PAR CATÉGORIE (DONUT CHART) */}
           <div
@@ -17351,6 +17578,8 @@ const App = () => {
                             <option value="Réparations et entretien">Réparations et entretien</option>
                             <option value="Assurances">Assurances</option>
                             <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
+                            <option value="Intérêts de financement">Intérêts de financement (Hypothèque/Marge/Prêt)</option>
+                            <option value="Capital remboursé (non déductible)">Capital remboursé (non déductible)</option>
                             <option value="Électricité / Chauffage">Électricité / Chauffage</option>
                             <option value="Taxes foncières et scolaires">Taxes foncières et scolaires</option>
                             <option value="Honoraires professionnels">Honoraires professionnels</option>
@@ -17770,6 +17999,8 @@ const App = () => {
                             <option value="Réparations et entretien">Réparations et entretien</option>
                             <option value="Assurances">Assurances</option>
                             <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
+                            <option value="Intérêts de financement">Intérêts de financement (Hypothèque/Marge/Prêt)</option>
+                            <option value="Capital remboursé (non déductible)">Capital remboursé (non déductible)</option>
                             <option value="Électricité / Chauffage">Électricité / Chauffage</option>
                             <option value="Taxes foncières et scolaires">Taxes foncières et scolaires</option>
                             <option value="Honoraires professionnels">Honoraires professionnels</option>

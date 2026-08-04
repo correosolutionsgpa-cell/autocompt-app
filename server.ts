@@ -620,6 +620,74 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     }
   });
 
+  // ── S.O.F.I. Financing Scanner: annual mortgage / line-of-credit / second-rank
+  //    loan statement. Deliberately generic — covers hypothèque, marge de crédit,
+  //    prêt de second rang, or any other debt instrument secured on a property,
+  //    since they're all fiscally identical (interest deductible, principal not).
+  app.post("/api/scan-financing", async (req, res) => {
+    try {
+      const { base64Data, mimeType, filename } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY ?? "";
+      const emptyResult = () => ({
+        typeFinancement: null, preteur: null, adresseProperty: null,
+        anneeFiscale: null, interetsPayes: null, capitalRembourse: null, soldeRestant: null,
+      });
+      if (!apiKey || !base64Data) {
+        return res.status(200).json(emptyResult());
+      }
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
+      console.log(`[S.O.F.I. Financing] Scanning: "${filename}", type: ${mimeType}`);
+
+      const prompt = `Analyse ce document qui est un relevé annuel de financement immobilier au Québec/Canada
+(peut être : hypothèque, marge de crédit hypothécaire, prêt de second rang, ou tout autre prêt garanti par une propriété).
+Extrais les informations suivantes et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans explication).
+ZERO HALLUCINATION: n'invente jamais un montant ou un nom absent du document — retourne null si introuvable.
+Le JSON doit utiliser exactement ces clés :
+- "typeFinancement": Type de financement — un de ["Hypothèque", "Marge de crédit", "Prêt de second rang", "Autre"].
+- "preteur": Nom de l'institution prêteuse (banque, caisse, prêteur privé).
+- "adresseProperty": L'adresse civique de la propriété concernée, si indiquée sur le document.
+- "anneeFiscale": L'année couverte par ce relevé (ex: "2025").
+- "interetsPayes": Total des INTÉRÊTS payés durant l'année (valeur numérique seulement, sans symbole $). C'est la portion déductible fiscalement.
+- "capitalRembourse": Total du CAPITAL/PRINCIPAL remboursé durant l'année (valeur numérique seulement). C'est la portion NON déductible — un remboursement de dette, pas une dépense.
+- "soldeRestant": Solde restant dû à la fin de la période (valeur numérique seulement).
+Format strict : { "typeFinancement": string|null, "preteur": string|null, "adresseProperty": string|null, "anneeFiscale": string|null, "interetsPayes": number|null, "capitalRembourse": number|null, "soldeRestant": number|null }`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{
+          parts: [
+            { inlineData: { mimeType: mimeType || "application/pdf", data: base64Data } },
+            { text: prompt },
+          ]
+        }],
+      });
+
+      const rawText = response.text ?? "";
+      console.log("[S.O.F.I. Financing] 📤 RAW response (" + rawText.length + " chars):", JSON.stringify(rawText.slice(0, 400)));
+
+      let cleanText = rawText.trim();
+      if (cleanText.startsWith("```")) {
+        cleanText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      }
+      if (!cleanText) return res.json(emptyResult());
+
+      try {
+        const parsed = JSON.parse(cleanText);
+        console.log("[S.O.F.I. Financing] ✅ Parsed:", parsed);
+        return res.json({ ...emptyResult(), ...parsed });
+      } catch (parseErr: any) {
+        console.error("[S.O.F.I. Financing] Parse error:", parseErr?.message);
+        return res.json(emptyResult());
+      }
+    } catch (e: any) {
+      console.error("[S.O.F.I. Financing] ❌ FULL ERROR:", e?.message || e);
+      res.status(200).json({
+        typeFinancement: null, preteur: null, adresseProperty: null,
+        anneeFiscale: null, interetsPayes: null, capitalRembourse: null, soldeRestant: null,
+      });
+    }
+  });
+
   // ── Fidéicommis: Send reçu de loyer officiel to tenant ──────────────
   app.post("/api/send-recu-loyer", async (req, res) => {
     try {
