@@ -735,8 +735,17 @@ const ADDRESS_NOISE_WORDS = new Set([
 
 function checkAddressAgainstProperties(
   scannedAddress: string,
-  properties: Array<{ adresse?: string }>,
-): { matched: boolean; suggestion?: string } {
+  activeProperties: Array<{ adresse?: string }>,
+  // Every property across every company/client this account can see — lets
+  // the check tell "single-digit OCR typo on the property I'm working on"
+  // apart from "this document actually belongs to a different client/
+  // workspace entirely" (a gestionnaire or comptable juggling several
+  // dossiers uploading the wrong one by mistake), instead of collapsing
+  // both into the same generic "no match" message.
+  allProperties: Array<{ adresse?: string; companyId?: string }> = [],
+  activeCompanyId: string = "",
+  companyNameById: (companyId: string) => string = () => "",
+): { matched: boolean; suggestion?: string; otherCompanyName?: string } {
   if (!scannedAddress || !scannedAddress.trim()) return { matched: true };
   const normalize = (s: string) =>
     (s || "")
@@ -764,7 +773,7 @@ function checkAddressAgainstProperties(
   const scannedCore = coreWords(scannedAddress);
   if (scannedCore.length === 0) return { matched: true }; // nothing distinctive to compare
 
-  for (const p of properties) {
+  for (const p of activeProperties) {
     if (!p.adresse) continue;
     if (normalize(p.adresse) === normalize(scannedAddress)) return { matched: true };
     const knownNum = civicNumber(p.adresse);
@@ -776,6 +785,20 @@ function checkAddressAgainstProperties(
       return { matched: false, suggestion: p.adresse };
     }
   }
+
+  // Not found (or only near-matched) in the active workspace — check whether
+  // it belongs to a DIFFERENT company/client on this same account instead.
+  const activeIds = new Set(activeProperties.map((p: any) => p.id).filter(Boolean));
+  for (const p of allProperties) {
+    if (!p.adresse || !p.companyId || p.companyId === activeCompanyId) continue;
+    if ((p as any).id && activeIds.has((p as any).id)) continue;
+    const knownCore = coreWords(p.adresse);
+    const overlap = scannedCore.filter((w) => knownCore.includes(w));
+    if (overlap.length > 0) {
+      return { matched: false, suggestion: p.adresse, otherCompanyName: companyNameById(p.companyId) || undefined };
+    }
+  }
+
   return { matched: false };
 }
 
@@ -16797,15 +16820,23 @@ const App = () => {
                               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
                               <input type="text" placeholder="Optionnel" value={financingScanForm.adresseProperty} onChange={(e) => setFinancingScanForm({ ...financingScanForm, adresseProperty: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
                               {(() => {
-                                const addressCheck = checkAddressAgainstProperties(financingScanForm.adresseProperty, visiblePlexManagementProperties);
+                                const addressCheck = checkAddressAgainstProperties(
+                                  financingScanForm.adresseProperty,
+                                  visiblePlexManagementProperties,
+                                  plexManagementProperties,
+                                  activeCompanyId,
+                                  (cid) => listaEmpresas.find((w: any) => w.id === cid)?.nombre || "",
+                                );
                                 if (addressCheck.matched || !financingScanForm.adresseProperty) return null;
                                 return (
                                   <div className={`mt-1.5 p-2.5 rounded-xl border flex items-start gap-2 ${darkMode ? "bg-amber-900/20 border-amber-800" : "bg-amber-50 border-amber-200"}`}>
                                     <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
                                     <p className={`text-[9.5px] font-bold leading-tight ${darkMode ? "text-amber-400" : "text-amber-700"}`}>
-                                      {addressCheck.suggestion
-                                        ? <>Ne correspond à aucune de vos propriétés — vouliez-vous dire <button type="button" onClick={() => setFinancingScanForm({ ...financingScanForm, adresseProperty: addressCheck.suggestion! })} className="underline">« {addressCheck.suggestion} »</button> ?</>
-                                        : "Cette adresse ne correspond à aucune de vos propriétés enregistrées — vérifiez-la."}
+                                      {addressCheck.otherCompanyName
+                                        ? <>Cette adresse appartient à <strong>{addressCheck.otherCompanyName}</strong>, pas à l'espace de travail actif — vérifiez que vous êtes dans le bon dossier avant d'enregistrer.</>
+                                        : addressCheck.suggestion
+                                          ? <>Ne correspond à aucune de vos propriétés — vouliez-vous dire <button type="button" onClick={() => setFinancingScanForm({ ...financingScanForm, adresseProperty: addressCheck.suggestion! })} className="underline">« {addressCheck.suggestion} »</button> ?</>
+                                          : "Cette adresse ne correspond à aucune de vos propriétés enregistrées — vérifiez-la."}
                                     </p>
                                   </div>
                                 );
