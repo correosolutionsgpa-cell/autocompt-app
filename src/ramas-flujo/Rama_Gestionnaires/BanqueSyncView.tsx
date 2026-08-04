@@ -95,6 +95,17 @@ export interface BanqueSyncViewProps {
   matchFideicommisInConciliation: boolean;
   onToggleMatchFideicommis: () => void;
   fideicommisRetraitsForReco: any[];
+  // Past dépôts (same company) — used to detect a recurring tenant paying
+  // again (same amount, name found in the bank description) and suggest
+  // auto-creating the next dépôt instead of re-typing the "Nouveau dépôt"
+  // form by hand. fideicommisClients lets the very first payment from a
+  // brand-new tenant still be suggested when there's exactly one client.
+  fideicommisDepotsForReco: any[];
+  fideicommisClients: Array<{ id: string; nom: string }>;
+  onCreateFideicommisDepot: (payload: {
+    clientId: string; clientName: string; locataireName: string;
+    propertyAddress: string; montant: number; date: string;
+  }) => void;
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -131,7 +142,41 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   matchFideicommisInConciliation,
   onToggleMatchFideicommis,
   fideicommisRetraitsForReco,
+  fideicommisDepotsForReco,
+  fideicommisClients,
+  onCreateFideicommisDepot,
 }) => {
+  // Best-guess suggestion for auto-creating a fideicommisDepots doc from a
+  // bank deposit — prefers a past dépôt from the same recurring tenant
+  // (name in the bank description + same amount); falls back to amount-only
+  // history, then (only when unambiguous — a single fideicommis client) a
+  // cold-start guess for a brand-new tenant's very first payment.
+  const guessFideicommisDeposit = (txn: any) => {
+    if (!matchFideicommisInConciliation || txn.amt <= 0) return null;
+    const alreadyExists = fideicommisDepotsForReco.some(
+      (d: any) => d.date === txn.date && Math.abs(d.montant - txn.amt) < 0.01,
+    );
+    if (alreadyExists) return null;
+
+    const cleanStr = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const desc = cleanStr(txn.desc);
+
+    const nameAndAmount = fideicommisDepotsForReco.find((d: any) => {
+      const name = cleanStr(d.locataireName);
+      return name && desc.includes(name) && Math.abs(d.montant - txn.amt) < 0.01;
+    });
+    if (nameAndAmount) {
+      return { clientId: nameAndAmount.clientId, clientName: nameAndAmount.clientName, locataireName: nameAndAmount.locataireName, propertyAddress: nameAndAmount.propertyAddress };
+    }
+    const amountOnly = fideicommisDepotsForReco.find((d: any) => Math.abs(d.montant - txn.amt) < 0.01);
+    if (amountOnly) {
+      return { clientId: amountOnly.clientId, clientName: amountOnly.clientName, locataireName: amountOnly.locataireName, propertyAddress: amountOnly.propertyAddress };
+    }
+    if (fideicommisClients.length === 1) {
+      return { clientId: fideicommisClients[0].id, clientName: fideicommisClients[0].nom, locataireName: txn.desc, propertyAddress: "" };
+    }
+    return null;
+  };
     return (
       <div
         className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans animate-in slide-in-from-bottom text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
@@ -773,6 +818,35 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                         </div>
                       )}
+
+                      {/* Opt-in (toggle above) — detected a likely dépôt
+                          fidéicommis (recurring tenant, or the only client on
+                          this company if there's no history yet). One click
+                          creates the real record instead of re-typing it in
+                          the "Nouveau dépôt" form. */}
+                      {(() => {
+                        const suggestion = guessFideicommisDeposit(txn);
+                        if (!suggestion) return null;
+                        return (
+                          <div className={`flex items-center justify-between gap-3 p-4 rounded-2xl border border-dashed ${darkMode ? "bg-indigo-950/10 border-indigo-900 text-indigo-300" : "bg-indigo-50/50 border-indigo-200 text-indigo-700"}`}>
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black uppercase italic tracking-tighter">Dépôt Fidéicommis détecté</p>
+                              <p className={`text-[8px] font-bold uppercase tracking-tight mt-0.5 ${darkMode ? "text-indigo-400/70" : "text-indigo-600/70"}`}>
+                                {suggestion.locataireName} · {suggestion.clientName}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                onCreateFideicommisDepot({ ...suggestion, montant: txn.amt, date: txn.date });
+                                playNotificationSound();
+                              }}
+                              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all shrink-0"
+                            >
+                              Créer le dépôt
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

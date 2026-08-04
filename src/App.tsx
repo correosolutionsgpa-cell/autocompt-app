@@ -1477,6 +1477,48 @@ const App = () => {
     dataService.fetchFideicommisRetraits(userId, activeCompanyId).then(setFideicommisRetraitsForReco).catch(console.error);
   }, [activeCompanyId, matchFideicommisInConciliation]);
 
+  // Creates a real fideicommisDepots doc straight from a bank transaction —
+  // the actual "auto-detect" step: BanqueSyncView suggests the client/
+  // locataire/adresse from the closest-matching past dépôt (same tenant,
+  // usually recurring rent), the user confirms, this writes it for real
+  // instead of requiring the whole "Nouveau dépôt" form to be re-typed by hand.
+  const handleCreateFideicommisDepotFromBank = async (payload: {
+    clientId: string; clientName: string; locataireName: string;
+    propertyAddress: string; montant: number; date: string;
+  }) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    try {
+      const id = `${uid}_fiddepot_${Date.now()}`;
+      const ym = payload.date.slice(0, 7).replace("-", "");
+      const thisMonth = fideicommisDepotsForReco.filter((d: any) => d.numeroRecu?.startsWith(ym));
+      const numeroRecu = `${ym}-${String(thisMonth.length + 1).padStart(4, "0")}`;
+      const [year, month] = payload.date.split("-");
+      const lastDay = new Date(Number(year), Number(month), 0).getDate();
+      const newDepot = {
+        id, companyId: activeCompanyId, numeroRecu,
+        date: payload.date,
+        locataireName: payload.locataireName,
+        propertyAddress: payload.propertyAddress,
+        periodeDebut: `${year}-${month}-01`,
+        periodeFin: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
+        montant: payload.montant,
+        modePaiement: "virement",
+        clientId: payload.clientId,
+        clientName: payload.clientName,
+        notes: "Créé automatiquement depuis la Conciliation Bancaire",
+        ownerId: uid,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, "fideicommisDepots", id), newDepot);
+      setFideicommisDepotsForReco((prev) => [newDepot, ...prev]);
+      playNotificationSound?.();
+    } catch (err) {
+      console.error("Failed to create fideicommis depot from bank transaction:", err);
+      alert("Erreur lors de la création du dépôt. Veuillez réessayer.");
+    }
+  };
+
   useEffect(() => {
     if (vista === "splash") {
       const timer = setTimeout(() => {
@@ -19883,6 +19925,9 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         matchFideicommisInConciliation={matchFideicommisInConciliation}
         onToggleMatchFideicommis={handleToggleMatchFideicommis}
         fideicommisRetraitsForReco={fideicommisRetraitsForReco}
+        fideicommisDepotsForReco={fideicommisDepotsForReco}
+        fideicommisClients={fideicommisClients}
+        onCreateFideicommisDepot={handleCreateFideicommisDepotFromBank}
       />
     );
 
