@@ -861,6 +861,12 @@ const App = () => {
   const [showAutonomeExpenseModal, setShowAutonomeExpenseModal] = useState(false);
   const [showManualExpenseModal, setShowManualExpenseModal] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState({ montant: "", description: "", date: new Date().toISOString().split("T")[0], confirmed: false });
+  // Mobile-only: the "Répartition par catégorie" donut's full category list
+  // made the dashboard very long on phones (desktop shows it side-by-side
+  // with the donut, no issue there). On mobile we show the donut + top 2
+  // categories, then this expands the rest into a full-screen sheet — a
+  // shared-element (layoutId) morph from the small teaser card, not a plain modal.
+  const [showExpenseCategoriesModal, setShowExpenseCategoriesModal] = useState(false);
 
   const [loyerEditingId, setLoyerEditingId] = useState<number | null>(null);
   const [plexExpenseEditingId, setPlexExpenseEditingId] = useState<number | null>(null);
@@ -11355,8 +11361,8 @@ const App = () => {
                   </div>
 
                   {/* Légende interactive et personnalisée */}
-                  <div className="w-full lg:w-1/2 space-y-2 text-left">
-                    {expensesByCategory.map((category) => {
+                  {(() => {
+                    const renderCategoryRow = (category: (typeof expensesByCategory)[number]) => {
                       const categoryPercent =
                         totalExpensesSum > 0
                           ? (category.total / totalExpensesSum) * 100
@@ -11401,8 +11407,70 @@ const App = () => {
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
+                    };
+                    const hiddenCount = expensesByCategory.length - 2;
+                    return (
+                      <>
+                        {/* Desktop: full list side-by-side with the donut — unchanged, no length problem there. */}
+                        <div className="hidden lg:block w-full lg:w-1/2 space-y-2 text-left">
+                          {expensesByCategory.map(renderCategoryRow)}
+                        </div>
+
+                        {/* Mobile: donut + top 2 categories, rest tucked behind a
+                            floating teaser card that morphs into a full-screen
+                            sheet on tap (shared layoutId — same effect as a Bible
+                            app's verse card expanding to fill the screen). */}
+                        <div className="w-full lg:hidden space-y-2 text-left">
+                          {expensesByCategory.slice(0, 2).map(renderCategoryRow)}
+                          {hiddenCount > 0 && (
+                            <motion.button
+                              layoutId="expense-categories-card"
+                              onClick={() => setShowExpenseCategoriesModal(true)}
+                              className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all active:scale-[0.98] ${darkMode ? "bg-zinc-900/50 border-zinc-800 text-zinc-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
+                            >
+                              <span className="text-[9px] font-black uppercase tracking-widest">
+                                Voir {hiddenCount} autre{hiddenCount > 1 ? "s" : ""} catégorie{hiddenCount > 1 ? "s" : ""}
+                              </span>
+                              <ChevronDown size={14} className={darkMode ? "text-zinc-500" : "text-slate-400"} />
+                            </motion.button>
+                          )}
+                        </div>
+
+                        <AnimatePresence>
+                          {showExpenseCategoriesModal && (
+                            <motion.div
+                              className="fixed inset-0 z-[200] lg:hidden bg-black/60 backdrop-blur-sm flex items-end"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              onClick={() => setShowExpenseCategoriesModal(false)}
+                            >
+                              <motion.div
+                                layoutId="expense-categories-card"
+                                onClick={(e) => e.stopPropagation()}
+                                className={`w-full max-h-[85vh] rounded-t-[32px] p-6 pb-8 overflow-y-auto ${darkMode ? "bg-zinc-950 border-t border-zinc-800" : "bg-white"}`}
+                              >
+                                <div className="flex items-center justify-between mb-5">
+                                  <h3 className={`text-[11px] font-black uppercase italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                                    Toutes les catégories
+                                  </h3>
+                                  <button
+                                    onClick={() => setShowExpenseCategoriesModal(false)}
+                                    className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-slate-100 text-slate-500"}`}
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </div>
+                                <div className="space-y-2">
+                                  {expensesByCategory.map(renderCategoryRow)}
+                                </div>
+                              </motion.div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })()}
