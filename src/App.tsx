@@ -4320,6 +4320,27 @@ const App = () => {
         type: "success",
         message: `${fac.tipoDoc || "Facture"} ${fac.id} envoyée à ${clientEmail}.`,
       });
+
+      // Best-effort archive to the company's connected Drive, under its own
+      // "Entrées" folder (kept separate from "Recibos", which is expenses —
+      // this groups every invoice/facture sent to a client, the revenue
+      // side). Never lets a Drive hiccup turn a successfully-sent invoice
+      // into a reported failure — the email already went out, that's what matters.
+      try {
+        const driveOwnerId = currentCompany?.ownerId || auth.currentUser?.uid || "";
+        const driveStatus = activeCompanyId && driveOwnerId
+          ? await getCompanyDriveConfig(activeCompanyId, driveOwnerId)
+          : null;
+        if (driveStatus?.connected) {
+          await uploadDocumentToDrive(
+            activeCompanyId, driveOwnerId, pdfBase64,
+            `${(fac.tipoDoc || "Facture").replace(/[^a-z0-9]/gi, "_")}-${fac.id}.pdf`,
+            "application/pdf", currentCompany?.nombre || "Entreprise", "Entrées",
+          );
+        }
+      } catch (driveErr) {
+        console.error("Invoice sent OK, but Drive archive failed:", driveErr);
+      }
     } catch (err: any) {
       console.error("send invoice email failed:", err);
       setSendInvoiceResult({
