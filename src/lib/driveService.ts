@@ -41,7 +41,7 @@ export interface DriveUploadResult {
 
 let gisLoaded = false;
 
-function loadGIS(): Promise<void> {
+export function loadGIS(): Promise<void> {
   if (gisLoaded || (window as any).google?.accounts?.oauth2) {
     gisLoaded = true;
     return Promise.resolve();

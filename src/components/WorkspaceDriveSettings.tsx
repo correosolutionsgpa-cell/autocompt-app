@@ -16,6 +16,7 @@ import {
   connectCompanyDrive,
   disconnectCompanyDrive,
   getCompanyDriveConfig,
+  loadGIS,
   DriveConfig,
 } from '../lib/driveService';
 
@@ -49,6 +50,17 @@ export default function WorkspaceDriveSettings({
   useEffect(() => {
     loadDriveStatus();
   }, [companyId, ownerId]);
+
+  // Preload the Google Identity Services script as soon as this panel mounts,
+  // not inside the click handler. requestCode()'s popup only survives most
+  // browsers' popup blockers when it fires synchronously within the user's
+  // click — awaiting the script's first-ever load (a real network fetch,
+  // slower on a workspace visited for the first time) breaks that window,
+  // so the popup gets silently blocked with no error and the button just
+  // spins forever. By the time the user clicks, the script is already cached.
+  useEffect(() => {
+    loadGIS().catch(() => { /* surfaced for real on the actual connect attempt */ });
+  }, []);
 
   const loadDriveStatus = async () => {
     setLoading(true);
