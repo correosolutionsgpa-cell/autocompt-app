@@ -718,6 +718,67 @@ const PolitiqueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   );
 };
 
+/**
+ * Cross-checks an AI-extracted property address (e.g. from the financing
+ * statement scanner) against the user's own registered properties. Catches
+ * exactly the class of error seen in practice: Gemini misreading a single
+ * civic-number digit (e.g. "1841" read as "1641") — the street name still
+ * matches a known property, but the number doesn't, which a plain "does it
+ * match anything" check would silently accept as "no match, whatever."
+ * Never blocks saving — this only decides whether a warning is shown; the
+ * human always has final say (see .cursorrules "user confirms official data").
+ */
+const ADDRESS_NOISE_WORDS = new Set([
+  "RUE", "AVENUE", "AVE", "BOULEVARD", "BLVD", "CHEMIN", "CH", "ROUTE",
+  "MONTREAL", "LAVAL", "QUEBEC", "QC", "CANADA", "CAN", "ON", "ONTARIO",
+]);
+
+function checkAddressAgainstProperties(
+  scannedAddress: string,
+  properties: Array<{ adresse?: string }>,
+): { matched: boolean; suggestion?: string } {
+  if (!scannedAddress || !scannedAddress.trim()) return { matched: true };
+  const normalize = (s: string) =>
+    (s || "")
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^A-Z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  // Postal codes (e.g. "H7M2S4" / "H7M 2S4") and pure-noise words carry no
+  // signal for "is this the same street" — strip them so formatting
+  // differences (province abbreviation present or not, "rue" prefix present
+  // or not, postal code spaced or not) don't cause a false mismatch.
+  const coreWords = (s: string) =>
+    normalize(s)
+      .replace(/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/g, "")
+      .split(" ")
+      // Drop noise words, pure numbers, and short connectors ("LE", "DE",
+      // "DU"...) — those are common enough across unrelated streets that
+      // matching on them alone would cause false-positive suggestions.
+      .filter((w) => w.length >= 3 && !ADDRESS_NOISE_WORDS.has(w) && !/^\d+$/.test(w));
+  const civicNumber = (s: string) => (normalize(s).match(/^(\d+)/) || [])[1] || "";
+
+  const scannedNum = civicNumber(scannedAddress);
+  const scannedCore = coreWords(scannedAddress);
+  if (scannedCore.length === 0) return { matched: true }; // nothing distinctive to compare
+
+  for (const p of properties) {
+    if (!p.adresse) continue;
+    if (normalize(p.adresse) === normalize(scannedAddress)) return { matched: true };
+    const knownNum = civicNumber(p.adresse);
+    const knownCore = coreWords(p.adresse);
+    const overlap = scannedCore.filter((w) => knownCore.includes(w));
+    // Street name matches (shares its distinctive words) but the civic
+    // number differs — the likely-OCR-digit-error case this feature exists for.
+    if (overlap.length > 0 && knownNum !== scannedNum) {
+      return { matched: false, suggestion: p.adresse };
+    }
+  }
+  return { matched: false };
+}
+
 const App = () => {
   // ── Public Signature Page detection (no auth required) ──
   const signToken = new URLSearchParams(window.location.search).get('sign');
@@ -16735,6 +16796,20 @@ const App = () => {
                             <div className="space-y-1 text-left col-span-2">
                               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
                               <input type="text" placeholder="Optionnel" value={financingScanForm.adresseProperty} onChange={(e) => setFinancingScanForm({ ...financingScanForm, adresseProperty: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                              {(() => {
+                                const addressCheck = checkAddressAgainstProperties(financingScanForm.adresseProperty, visiblePlexManagementProperties);
+                                if (addressCheck.matched || !financingScanForm.adresseProperty) return null;
+                                return (
+                                  <div className={`mt-1.5 p-2.5 rounded-xl border flex items-start gap-2 ${darkMode ? "bg-amber-900/20 border-amber-800" : "bg-amber-50 border-amber-200"}`}>
+                                    <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                                    <p className={`text-[9.5px] font-bold leading-tight ${darkMode ? "text-amber-400" : "text-amber-700"}`}>
+                                      {addressCheck.suggestion
+                                        ? <>Ne correspond à aucune de vos propriétés — vouliez-vous dire <button type="button" onClick={() => setFinancingScanForm({ ...financingScanForm, adresseProperty: addressCheck.suggestion! })} className="underline">« {addressCheck.suggestion} »</button> ?</>
+                                        : "Cette adresse ne correspond à aucune de vos propriétés enregistrées — vérifiez-la."}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div className="space-y-1 text-left">
                               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Année</label>
