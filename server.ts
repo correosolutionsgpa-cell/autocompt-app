@@ -140,8 +140,14 @@ export async function buildApp() {
         return res.json({ reply });
       }
 
-      // Real Gemini API call using @google/genai SDK
-      const ai = new GoogleGenAI({ apiKey: apiKey, httpOptions: { apiVersion: "v1" } });
+      // Real Gemini API call using @google/genai SDK — v1beta, not v1: this
+      // endpoint is the only Gemini caller in the app that sets
+      // systemInstruction (Sofi's persona/rules), and v1 rejects any request
+      // containing it with "Developer instruction is not enabled for api
+      // version v1" — every single chat message failed on this, 100% of the
+      // time, regardless of content. The scan-* endpoints don't use
+      // systemInstruction and stay on v1 (unchanged, already working).
+      const ai = new GoogleGenAI({ apiKey: apiKey, httpOptions: { apiVersion: "v1beta" } });
 
       // Hard topic scope-lock — Sofi must stay on AutoCompt / bookkeeping /
       // Quebec real estate tax organization. Prepended to every system prompt
