@@ -4331,15 +4331,19 @@ const App = () => {
         const driveStatus = activeCompanyId && driveOwnerId
           ? await getCompanyDriveConfig(activeCompanyId, driveOwnerId)
           : null;
+        console.log("[Invoice Drive Archive] activeCompanyId:", activeCompanyId, "| driveOwnerId:", driveOwnerId, "| driveStatus:", driveStatus);
         if (driveStatus?.connected) {
-          await uploadDocumentToDrive(
+          const driveResult = await uploadDocumentToDrive(
             activeCompanyId, driveOwnerId, pdfBase64,
             `${(fac.tipoDoc || "Facture").replace(/[^a-z0-9]/gi, "_")}-${fac.id}.pdf`,
             "application/pdf", currentCompany?.nombre || "Entreprise", "Entrées",
           );
+          console.log("[Invoice Drive Archive] upload result:", driveResult);
+        } else {
+          console.warn("[Invoice Drive Archive] Skipped — Drive not marked as connected for this company/owner.");
         }
       } catch (driveErr) {
-        console.error("Invoice sent OK, but Drive archive failed:", driveErr);
+        console.error("[Invoice Drive Archive] Invoice sent OK, but Drive archive threw:", driveErr);
       }
     } catch (err: any) {
       console.error("send invoice email failed:", err);
