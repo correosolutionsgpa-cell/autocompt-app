@@ -11309,122 +11309,6 @@ const App = () => {
             )}
           </div>
 
-          {/* Relevé annuel de financement (hypothèque, marge de crédit, prêt de
-              second rang) — un document distinct d'une facture, avec sa propre
-              lecture IA (intérêts déductibles vs capital non déductible). */}
-          <button
-            type="button"
-            onClick={() => setShowFinancingScanModal(true)}
-            className={`w-full p-4 rounded-[24px] border flex items-center gap-3 transition-all active:scale-[0.98] ${darkMode ? "bg-zinc-900/50 border-zinc-800 hover:border-indigo-500/40" : "bg-white border-slate-200 hover:border-indigo-300"}`}
-          >
-            <span className={`p-2.5 rounded-xl ${darkMode ? "bg-indigo-500/10 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
-              <FileText size={16} />
-            </span>
-            <div className="text-left flex-1">
-              <p className="text-[10px] font-black uppercase italic tracking-tight">Scanner un relevé de financement</p>
-              <p className={`text-[8.5px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                Hypothèque, marge de crédit, prêt de second rang — sépare intérêts et capital
-              </p>
-            </div>
-          </button>
-
-          <input
-            type="file"
-            ref={financingScanInputRef}
-            onChange={handleFinancingFileSelect}
-            className="hidden"
-            accept="application/pdf, image/jpeg, image/png, image/webp"
-          />
-
-          <AnimatePresence>
-            {showFinancingScanModal && (
-              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                  className={`w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-[36px] border shadow-2xl ${darkMode ? "bg-slate-900/95 border-white/[0.08]" : "bg-white border-slate-100"} text-left`}
-                >
-                  <div className={`p-6 border-b flex items-center justify-between ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
-                    <div>
-                      <h3 className={`text-base font-black italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Relevé de financement</h3>
-                      <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Hypothèque · Marge de crédit · Prêt de second rang</p>
-                    </div>
-                    <button onClick={() => setShowFinancingScanModal(false)} className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-slate-100 text-slate-500"}`}>
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  <div className={`p-6 space-y-4 ${darkMode ? "bg-zinc-950/50" : "bg-slate-50/50"}`}>
-                    <button
-                      type="button"
-                      onClick={() => financingScanInputRef.current?.click()}
-                      disabled={isScanningFinancing}
-                      className={`w-full py-4 rounded-2xl border border-dashed flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 ${darkMode ? "border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/5" : "border-indigo-300 text-indigo-600 hover:bg-indigo-50"}`}
-                    >
-                      {isScanningFinancing ? <><Loader2 size={14} className="animate-spin" /><span>Lecture en cours...</span></> : <><Upload size={14} /><span>Importer le relevé (Photo, Galerie ou PDF)</span></>}
-                    </button>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1 text-left col-span-2">
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Type de financement</label>
-                        <select
-                          value={financingScanForm.typeFinancement}
-                          onChange={(e) => setFinancingScanForm({ ...financingScanForm, typeFinancement: e.target.value })}
-                          className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                        >
-                          <option value="">— Sélectionner —</option>
-                          <option value="Hypothèque">Hypothèque</option>
-                          <option value="Marge de crédit">Marge de crédit</option>
-                          <option value="Prêt de second rang">Prêt de second rang</option>
-                          <option value="Autre">Autre</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1 text-left col-span-2">
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Prêteur</label>
-                        <input type="text" placeholder="Ex : Banque Nationale" value={financingScanForm.preteur} onChange={(e) => setFinancingScanForm({ ...financingScanForm, preteur: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
-                      </div>
-                      <div className="space-y-1 text-left col-span-2">
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
-                        <input type="text" placeholder="Optionnel" value={financingScanForm.adresseProperty} onChange={(e) => setFinancingScanForm({ ...financingScanForm, adresseProperty: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
-                      </div>
-                      <div className="space-y-1 text-left">
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Année</label>
-                        <input type="text" placeholder="2025" value={financingScanForm.anneeFiscale} onChange={(e) => setFinancingScanForm({ ...financingScanForm, anneeFiscale: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
-                      </div>
-                      <div className="space-y-1 text-left">
-                        <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Solde restant</label>
-                        <input type="number" placeholder="0.00" value={financingScanForm.soldeRestant} onChange={(e) => setFinancingScanForm({ ...financingScanForm, soldeRestant: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
-                      </div>
-                      <div className="space-y-1 text-left">
-                        <label className={`text-[9px] font-black uppercase tracking-widest text-emerald-600`}>Intérêts payés (déductible)</label>
-                        <input type="number" placeholder="0.00" value={financingScanForm.interetsPayes} onChange={(e) => setFinancingScanForm({ ...financingScanForm, interetsPayes: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-emerald-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
-                      </div>
-                      <div className="space-y-1 text-left">
-                        <label className={`text-[9px] font-black uppercase tracking-widest text-amber-600`}>Capital remboursé (non déductible)</label>
-                        <input type="number" placeholder="0.00" value={financingScanForm.capitalRembourse} onChange={(e) => setFinancingScanForm({ ...financingScanForm, capitalRembourse: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-amber-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
-                      </div>
-                    </div>
-
-                    <p className={`text-[8.5px] leading-relaxed ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
-                      Vérifiez ces montants avant d'enregistrer — l'IA peut se tromper. Les intérêts iront dans vos dépenses déductibles ; le capital sera visible dans Tenue de Livres mais exclu de vos calculs fiscaux.
-                    </p>
-                  </div>
-
-                  <div className={`p-6 border-t ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
-                    <button
-                      onClick={handleSaveFinancingScan}
-                      disabled={isSavingFinancing}
-                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all active:scale-95"
-                    >
-                      {isSavingFinancing ? "Enregistrement..." : "Enregistrer dans Tenue de Livres"}
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
           {/* WIDGET : RÉPARTITION DES DÉPENSES PAR CATÉGORIE (DONUT CHART) */}
           <div
             className={`p-6 rounded-[32px] border card-glow-spin ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"} shadow-sm text-left relative transition-all duration-300`}
@@ -16782,8 +16666,113 @@ const App = () => {
                       <Plus size={14} />
                       <span>Ajouter une dépense</span>
                     </button>
+                    <button
+                      onClick={() => setShowFinancingScanModal(true)}
+                      className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm flex items-center space-x-2 ${darkMode ? "bg-indigo-950/30 border-indigo-900 text-indigo-400 hover:bg-indigo-900/50" : "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"}`}
+                    >
+                      <FileText size={14} />
+                      <span>Relevé de financement</span>
+                    </button>
                   </div>
                 </div>
+
+                <input
+                  type="file"
+                  ref={financingScanInputRef}
+                  onChange={handleFinancingFileSelect}
+                  className="hidden"
+                  accept="application/pdf, image/jpeg, image/png, image/webp"
+                />
+
+                <AnimatePresence>
+                  {showFinancingScanModal && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                        className={`w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-[36px] border shadow-2xl ${darkMode ? "bg-slate-900/95 border-white/[0.08]" : "bg-white border-slate-100"} text-left`}
+                      >
+                        <div className={`p-6 border-b flex items-center justify-between ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
+                          <div>
+                            <h3 className={`text-base font-black italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>Relevé de financement</h3>
+                            <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Hypothèque · Marge de crédit · Prêt de second rang</p>
+                          </div>
+                          <button onClick={() => setShowFinancingScanModal(false)} className={`p-2 rounded-full transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-slate-100 text-slate-500"}`}>
+                            <X size={18} />
+                          </button>
+                        </div>
+
+                        <div className={`p-6 space-y-4 ${darkMode ? "bg-zinc-950/50" : "bg-slate-50/50"}`}>
+                          <button
+                            type="button"
+                            onClick={() => financingScanInputRef.current?.click()}
+                            disabled={isScanningFinancing}
+                            className={`w-full py-4 rounded-2xl border border-dashed flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 ${darkMode ? "border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/5" : "border-indigo-300 text-indigo-600 hover:bg-indigo-50"}`}
+                          >
+                            {isScanningFinancing ? <><Loader2 size={14} className="animate-spin" /><span>Lecture en cours...</span></> : <><Upload size={14} /><span>Importer le relevé (Photo, Galerie ou PDF)</span></>}
+                          </button>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1 text-left col-span-2">
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Type de financement</label>
+                              <select
+                                value={financingScanForm.typeFinancement}
+                                onChange={(e) => setFinancingScanForm({ ...financingScanForm, typeFinancement: e.target.value })}
+                                className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                              >
+                                <option value="">— Sélectionner —</option>
+                                <option value="Hypothèque">Hypothèque</option>
+                                <option value="Marge de crédit">Marge de crédit</option>
+                                <option value="Prêt de second rang">Prêt de second rang</option>
+                                <option value="Autre">Autre</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1 text-left col-span-2">
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Prêteur</label>
+                              <input type="text" placeholder="Ex : Banque Nationale" value={financingScanForm.preteur} onChange={(e) => setFinancingScanForm({ ...financingScanForm, preteur: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                            </div>
+                            <div className="space-y-1 text-left col-span-2">
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse de la propriété</label>
+                              <input type="text" placeholder="Optionnel" value={financingScanForm.adresseProperty} onChange={(e) => setFinancingScanForm({ ...financingScanForm, adresseProperty: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                            </div>
+                            <div className="space-y-1 text-left">
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Année</label>
+                              <input type="text" placeholder="2025" value={financingScanForm.anneeFiscale} onChange={(e) => setFinancingScanForm({ ...financingScanForm, anneeFiscale: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                            </div>
+                            <div className="space-y-1 text-left">
+                              <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Solde restant</label>
+                              <input type="number" placeholder="0.00" value={financingScanForm.soldeRestant} onChange={(e) => setFinancingScanForm({ ...financingScanForm, soldeRestant: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`} />
+                            </div>
+                            <div className="space-y-1 text-left">
+                              <label className={`text-[9px] font-black uppercase tracking-widest text-emerald-600`}>Intérêts payés (déductible)</label>
+                              <input type="number" placeholder="0.00" value={financingScanForm.interetsPayes} onChange={(e) => setFinancingScanForm({ ...financingScanForm, interetsPayes: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-emerald-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
+                            </div>
+                            <div className="space-y-1 text-left">
+                              <label className={`text-[9px] font-black uppercase tracking-widest text-amber-600`}>Capital remboursé (non déductible)</label>
+                              <input type="number" placeholder="0.00" value={financingScanForm.capitalRembourse} onChange={(e) => setFinancingScanForm({ ...financingScanForm, capitalRembourse: e.target.value })} className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none border-amber-500/30 ${darkMode ? "bg-zinc-900 text-white" : "bg-white"}`} />
+                            </div>
+                          </div>
+
+                          <p className={`text-[8.5px] leading-relaxed ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                            Vérifiez ces montants avant d'enregistrer — l'IA peut se tromper. Les intérêts iront dans vos dépenses déductibles ; le capital sera visible dans Tenue de Livres mais exclu de vos calculs fiscaux.
+                          </p>
+                        </div>
+
+                        <div className={`p-6 border-t ${darkMode ? "border-zinc-900" : "border-slate-100"}`}>
+                          <button
+                            onClick={handleSaveFinancingScan}
+                            disabled={isSavingFinancing}
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-all active:scale-95"
+                          >
+                            {isSavingFinancing ? "Enregistrement..." : "Enregistrer dans Tenue de Livres"}
+                          </button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+
                 {filteredDepensesByMonth.length === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
                     <div className={`p-5 rounded-full ${darkMode ? "bg-zinc-900/50 text-zinc-600" : "bg-slate-50 text-slate-400"}`}>
