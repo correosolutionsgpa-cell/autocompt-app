@@ -635,6 +635,55 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                               $
                             </span>
                           </div>
+                          {(() => {
+                            // Loi 31 (2024, Clause G) : tout nouveau bail doit divulguer
+                            // le loyer le plus bas payé pour ce logement dans les 12
+                            // derniers mois. Calculé depuis l'historique réel — jamais deviné.
+                            const oneYearAgo = new Date();
+                            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                            const recent = (unit.rentHistory || []).filter(
+                              (h: any) => h.amount > 0 && new Date(h.date) >= oneYearAgo,
+                            );
+                            const amounts = [...recent.map((h: any) => h.amount)];
+                            if (unit.monthlyRent > 0) amounts.push(unit.monthlyRent);
+                            const lowest = amounts.length ? Math.min(...amounts) : null;
+                            return (
+                              <div className={`mt-2 p-2.5 rounded-xl border text-[9px] leading-relaxed ${darkMode ? "bg-amber-500/5 border-amber-500/20 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                                <p className="font-black uppercase tracking-wide">
+                                  Loyer le plus bas (12 mois) : {lowest !== null ? `${lowest} $` : "aucun historique"}
+                                </p>
+                                <p className="opacity-80 mt-0.5">
+                                  Obligatoire à divulguer au nouveau bail (Loi 31, Clause G).
+                                </p>
+                                {(unit.rentHistory || []).length > 0 && (
+                                  <ul className="mt-1 space-y-0.5 font-mono opacity-70">
+                                    {(unit.rentHistory || []).map((h: any, i: number) => (
+                                      <li key={i}>{h.date} — {h.amount} $</li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const dateStr = window.prompt("Date de ce loyer antérieur (AAAA-MM-JJ) :", new Date().toISOString().slice(0, 10));
+                                    if (!dateStr) return;
+                                    const amountStr = window.prompt("Montant de ce loyer antérieur ($) :");
+                                    const amount = parseFloat(amountStr || "");
+                                    if (!amountStr || isNaN(amount) || amount <= 0) return;
+                                    const updated = (plexManagementForm.units || []).map((u: any) =>
+                                      u.id === unit.id
+                                        ? { ...u, rentHistory: [...(u.rentHistory || []), { date: dateStr, amount }] }
+                                        : u
+                                    );
+                                    setPlexManagementForm({ ...plexManagementForm, units: updated });
+                                  }}
+                                  className="mt-1.5 underline font-bold"
+                                >
+                                  + Ajouter un loyer antérieur connu
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="pt-1">
                           <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
@@ -807,19 +856,34 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                 }
 
                 const propId = editingPropertyId || `prop_${Date.now()}`;
+                // Loi 31 (2024, Clause G) : divulguer le loyer le plus bas des
+                // 12 derniers mois exige un historique. On le construit ici,
+                // au moment réel du changement — jamais deviné rétroactivement.
+                const oldPropertyForRentLog = editingPropertyId
+                  ? plexManagementProperties.find((x) => x.id === editingPropertyId)
+                  : null;
+                const withRentHistory = (u: any) => {
+                  const oldUnit = oldPropertyForRentLog?.units?.find((ou: any) => ou.id === u.id);
+                  if (oldUnit && oldUnit.monthlyRent > 0 && oldUnit.monthlyRent !== u.monthlyRent) {
+                    const entry = { date: new Date().toISOString().slice(0, 10), amount: oldUnit.monthlyRent };
+                    return { ...u, rentHistory: [...(u.rentHistory || oldUnit.rentHistory || []), entry] };
+                  }
+                  return u;
+                };
                 // Build units from the form (single unit for Logement entier, or multiple for Colocation)
                 const formUnits: any[] =
                   plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" ||
                   plexManagementForm.typeLocation === "Habitation/Chambre"
-                    ? (plexManagementForm.units || []).map((u: any) => ({ ...u, buildingId: propId }))
-                    : [{
+                    ? (plexManagementForm.units || []).map((u: any) => withRentHistory({ ...u, buildingId: propId }))
+                    : [withRentHistory({
                         id: (plexManagementForm.units || [])[0]?.id || `unit_${Date.now()}`,
                         buildingId: propId,
                         unitName: plexManagementForm.nombrePieces || "Unité principale",
                         tenantName: plexManagementForm.locataire || "",
                         monthlyRent: parseFloat(plexManagementForm.montant) || 0,
                         isActive: plexManagementForm.status !== "Vacant",
-                      }];
+                        rentHistory: (plexManagementForm.units || [])[0]?.rentHistory,
+                      })];
 
                 const savedProperty = {
                   ...plexManagementForm,

@@ -2104,6 +2104,7 @@ const App = () => {
   const [subfSubtotal, setSubfSubtotal] = useState("");
   const [subfIsTaxable, setSubfIsTaxable] = useState(true);
   const [subfNeq, setSubfNeq] = useState("");
+  const [subfIdType, setSubfIdType] = useState<"NEQ" | "NAS">("NEQ");
   const [subfTypePaiement, setSubfTypePaiement] =
     useState("Facture Officielle");
   const [subfAttachmentName, setSubfAttachmentName] = useState("");
@@ -16520,11 +16521,20 @@ const App = () => {
 
                 {/* Pasarela de Comunicación (Dispatcher Buttons) */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Envoyer par Email */}
+                  {/* Envoyer par Email — redirige vers l'envoi RÉEL (Export
+                      Comptable, pièce jointe attachée via Resend) au lieu
+                      d'ouvrir showRapportDispatcherModal, qui ne rend rien du
+                      tout sur cet écran (son JSX n'existe que dans
+                      RapportComptable.tsx, un écran différent) — ce bouton
+                      était donc entièrement mort ici, pas seulement simulé. */}
                   <button
                     onClick={() => {
                       playNotificationSound();
-                      setShowRapportDispatcherModal(true);
+                      setTabReporte("export_comptable");
+                      setDispatcherSuccessToast({
+                        text: `Choisissez le rapport à envoyer, puis cliquez sur "Envoyer par courriel".`,
+                        channel: "Par Email",
+                      });
                     }}
                     className="px-4.5 py-3 rounded-[18px] text-[9.5px] font-black uppercase italic tracking-wider bg-gradient-to-r from-sky-400 via-emerald-400 to-teal-400 text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30 hover:scale-[1.01] active:scale-95 transition-all flex items-center space-x-2 border-0 cursor-pointer"
                   >
@@ -17511,6 +17521,7 @@ const App = () => {
                 darkMode={darkMode}
                 companyId={activeCompanyId || 'default'}
                 companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+                comptableEmail={comptableEmail}
                 userProfile={{
                   nom: userProfile.nom,
                   neq: userProfile.neq,
@@ -20512,6 +20523,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setSubfFournisseur={setSubfFournisseur}
         subfNeq={subfNeq}
         setSubfNeq={setSubfNeq}
+        subfIdType={subfIdType}
+        setSubfIdType={setSubfIdType}
         subfDesc={subfDesc}
         setSubfDesc={setSubfDesc}
         subfSubtotal={subfSubtotal}

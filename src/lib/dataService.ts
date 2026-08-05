@@ -173,6 +173,14 @@ export interface UnitDoc {
    *  principal) — le Relevé 31 exige de lister TOUS les occupants, pas
    *  seulement le signataire du bail. */
   occupantsSupplementaires?: string[];
+  /** Historique des loyers antérieurs de ce logement — requis par la Loi 31
+   *  (2024, Clause G) : tout nouveau bail doit divulguer le loyer le plus bas
+   *  payé pour ce logement au cours des 12 derniers mois. AutoCompt journalise
+   *  automatiquement l'ancien montant chaque fois que `monthlyRent` change à
+   *  la sauvegarde (voir GestionPlex.tsx) ; les loyers antérieurs à la
+   *  première utilisation de cette fonctionnalité doivent être ajoutés
+   *  manuellement — jamais présumés. */
+  rentHistory?: Array<{ date: string; amount: number }>;
   ownerId: string;
   createdAt: string;
 }

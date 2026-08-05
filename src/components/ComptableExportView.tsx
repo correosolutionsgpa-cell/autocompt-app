@@ -20,10 +20,11 @@ import jsPDF from 'jspdf';
 import {
   BookOpen, BarChart2, Scale, Receipt, Download, Loader2,
   ChevronLeft, ChevronRight, CheckCircle2, AlertCircle,
-  Calendar, Filter, RefreshCw, FileText, Percent,
+  Calendar, Filter, RefreshCw, FileText, Percent, Hash, Mail,
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // §1 — Types
@@ -56,6 +57,9 @@ export interface ComptableExportViewProps {
   companyId: string;
   companyName?: string;
   userProfile?: { nom?: string; neq?: string; tps?: string; tvq?: string; adresse?: string };
+  /** Pré-remplit le destinataire du bouton "Envoyer par courriel" — optionnel,
+   *  l'utilisateur peut toujours saisir/corriger l'adresse au moment d'envoyer. */
+  comptableEmail?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +123,7 @@ function chkPg(pdf: jsPDF, y: number, need=12): number {
 // §5 — Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'journal'|'grandlivre'|'balance'|'tvq';
+type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi';
 const PER = 25;
 
 const TABS = [
@@ -127,10 +131,11 @@ const TABS = [
   { id:'grandlivre' as TabId, label:'Grand Livre',             short:'G. Livre', icon:<BarChart2 size={14}/>, ac:'border-emerald-500 text-emerald-600' },
   { id:'balance'    as TabId, label:'Balance de Vérification', short:'Balance',  icon:<Scale size={14}/>,     ac:'border-amber-500 text-amber-600'     },
   { id:'tvq'        as TabId, label:'Rapport TPS / TVQ',       short:'TPS/TVQ',  icon:<Percent size={14}/>,   ac:'border-rose-500 text-rose-600'       },
+  { id:'gifi'       as TabId, label:'Export GIFI',             short:'GIFI',     icon:<Hash size={14}/>,      ac:'border-slate-500 text-slate-600'     },
 ];
 
 export default function ComptableExportView({
-  darkMode, companyId, companyName='Mon Entreprise', userProfile,
+  darkMode, companyId, companyName='Mon Entreprise', userProfile, comptableEmail,
 }: ComptableExportViewProps) {
   const D = darkMode;
   const [entries, setEntries]   = useState<JournalEntry[]>([]);
@@ -142,6 +147,36 @@ export default function ComptableExportView({
   const [facc,    setFacc]      = useState('');
   const [jp,      setJp]        = useState(1);
   const [glp,     setGlp]       = useState(1);
+  const [gifiCodes, setGifiCodes]     = useState<Record<string,string>>({});
+  const [gifiSaving, setGifiSaving]   = useState(false);
+  const [gifiSavedMsg, setGifiSavedMsg] = useState<string|null>(null);
+
+  // ── Load GIFI mapping ────────────────────────────────────────────────────
+  // Codes are never machine-guessed — the accountant assigns them once here
+  // and they persist per company, same "AI suggests nothing, human confirms
+  // everything" rule this app follows for every fiscally-sensitive value.
+  useEffect(() => {
+    if (!companyId) return;
+    getDoc(doc(db, 'gifiMappings', companyId))
+      .then(snap => { if (snap.exists()) setGifiCodes((snap.data().codes as Record<string,string>) || {}); })
+      .catch(() => {});
+  }, [companyId]);
+
+  const saveGifiCodes = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setGifiSaving(true);
+    try {
+      await setDoc(doc(db, 'gifiMappings', companyId), {
+        ownerId: uid, companyId, codes: gifiCodes, updatedAt: new Date().toISOString(),
+      });
+      setGifiSavedMsg('Codes enregistrés.');
+      setTimeout(() => setGifiSavedMsg(null), 3000);
+    } catch (e: any) {
+      alert(e.message ?? 'Erreur lors de l\'enregistrement des codes GIFI.');
+    }
+    setGifiSaving(false);
+  };
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = () => {
@@ -203,9 +238,12 @@ export default function ComptableExportView({
   const glTot  = Math.max(1,Math.ceil(allLns.length/PER));
 
   // ── PDF exports ───────────────────────────────────────────────────────────
+  // Each `buildXPdf`/`buildXCsv` only constructs the file — `expX` downloads
+  // it, `sendCurrentTabByEmail` (below) attaches the same content to a real
+  // email instead. One source of truth for what the file actually contains.
   const co = userProfile?.nom ?? companyName;
 
-  const expJournal = () => {
+  const buildJournalPdf = (): jsPDF => {
     const pdf=new jsPDF({unit:'mm',format:'a4'}); const M=14,W=210;
     let y=pdfHdr(pdf,'Journal Général',`${dfrom} au ${dto}`,co,[79,70,229]);
     filt.forEach(e=>{
@@ -227,10 +265,38 @@ export default function ComptableExportView({
       });
       pdf.setDrawColor(226,232,240);pdf.line(M,y,W-M,y);y+=5;
     });
-    pdf.save(`Journal_General_${dfrom}_${dto}.pdf`);
+    return pdf;
   };
+  const journalPdfFilename = () => `Journal_General_${dfrom}_${dto}.pdf`;
+  const expJournal = () => buildJournalPdf().save(journalPdfFilename());
 
-  const expGrandLivre = () => {
+  // Format "journal universel" — colonnes reconnues par l'import générique
+  // d'écritures de la plupart des logiciels de tenue de livres (QuickBooks,
+  // Xero, Acomba...) : une ligne par mouvement, pas de mise en forme PDF.
+  // Contrairement à l'export GIFI, aucune donnée saisie par l'utilisateur
+  // n'est nécessaire ici — c'est déjà le journal réel, prêt à importer.
+  const buildJournalCsv = (): string => {
+    const rows = [['Date', 'Code Compte', 'Nom du Compte', 'Description', 'Référence', 'Débit ($)', 'Crédit ($)']];
+    filt.forEach(e => (e.lines ?? []).forEach(l => {
+      rows.push([
+        fmtDate(e.date), aCode(l.accountId), aLabel(l.accountId), e.description, e.documentReference || '',
+        l.type === 'Debit' ? l.amount.toFixed(2) : '', l.type === 'Credit' ? l.amount.toFixed(2) : '',
+      ]);
+    }));
+    return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  };
+  const journalCsvFilename = () => `Journal_General_${dfrom}_${dto}.csv`;
+  const downloadCsv = (csv: string, filename: string) => {
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  const expJournalCSV = () => downloadCsv(buildJournalCsv(), journalCsvFilename());
+
+  const buildGrandLivrePdf = (): jsPDF => {
     const pdf=new jsPDF({unit:'mm',format:'a4'});const M=14,W=210;
     let y=pdfHdr(pdf,'Grand Livre',`${dfrom} au ${dto}`,co,[5,150,105]);
     filtGl.forEach(acct=>{
@@ -253,10 +319,12 @@ export default function ComptableExportView({
       pdf.setTextColor(37,99,235);pdf.text(fmtAmt(acct.td),W-M-28,y,{align:'right'});
       pdf.setTextColor(5,150,105);pdf.text(fmtAmt(acct.tc),W-M,y,{align:'right'});pdf.setTextColor(30,41,59);y+=10;
     });
-    pdf.save(`Grand_Livre_${dfrom}_${dto}.pdf`);
+    return pdf;
   };
+  const grandLivrePdfFilename = () => `Grand_Livre_${dfrom}_${dto}.pdf`;
+  const expGrandLivre = () => buildGrandLivrePdf().save(grandLivrePdfFilename());
 
-  const expBalance = () => {
+  const buildBalancePdf = (): jsPDF => {
     const pdf=new jsPDF({unit:'mm',format:'a4'});const M=14,W=210;
     let y=pdfHdr(pdf,'Balance de Vérification',`au ${dto}`,co,[217,119,6]);
     y=pdfSec(pdf,'Comptes',y,M);
@@ -279,10 +347,12 @@ export default function ComptableExportView({
     pdf.setFontSize(8.5);pdf.setFont('Helvetica','bold');
     if(bTot.ok){pdf.setTextColor(5,150,105);pdf.text('✓ Balance équilibrée — débits = crédits',M+2,y);}
     else{pdf.setTextColor(220,38,38);pdf.text(`⚠ Écart: ${fmtAmt(Math.abs(bTot.td-bTot.tc))} $`,M+2,y);}
-    pdf.save(`Balance_Verification_${dto}.pdf`);
+    return pdf;
   };
+  const balancePdfFilename = () => `Balance_Verification_${dto}.pdf`;
+  const expBalance = () => buildBalancePdf().save(balancePdfFilename());
 
-  const expTVQ = () => {
+  const buildTVQPdf = (): jsPDF => {
     const pdf=new jsPDF({unit:'mm',format:'a4'});const M=14,W=210;
     let y=pdfHdr(pdf,'Rapport TPS / TVQ',`${dfrom} au ${dto}`,co,[225,29,72]);
     if(userProfile?.tps||userProfile?.tvq){
@@ -300,7 +370,69 @@ export default function ComptableExportView({
     y+=3;pdf.setDrawColor(30,41,59);pdf.setLineWidth(0.4);pdf.line(M,y,W-M,y);y+=5;
     pdf.setFont('Helvetica','bold');pdf.setFontSize(11);pdf.text('TOTAL À REMETTRE',M+2,y);
     pdf.setTextColor(220,38,38);pdf.text(`${fmtAmt(tvqD.tot)} $`,W-M,y,{align:'right'});
-    pdf.save(`Rapport_TPS_TVQ_${dfrom}_${dto}.pdf`);
+    return pdf;
+  };
+  const tvqPdfFilename = () => `Rapport_TPS_TVQ_${dfrom}_${dto}.pdf`;
+  const expTVQ = () => buildTVQPdf().save(tvqPdfFilename());
+
+  // Returns null (with an alert) when a used account is still missing its
+  // code — same guard whether the file is being downloaded or emailed.
+  const buildGifiCsv = (): string | null => {
+    const missing = bal.filter(b => !(gifiCodes[b.accountId] || '').trim());
+    if (missing.length > 0) {
+      alert(`Codes GIFI manquants pour: ${missing.map(m => aLabel(m.accountId)).join(', ')}.\nAssignez-les dans l'onglet Export GIFI avant d'exporter.`);
+      return null;
+    }
+    const rows = [['Code GIFI', 'Compte AutoCompt', 'Type', 'Débits ($)', 'Crédits ($)', 'Solde ($)']];
+    bal.forEach(b => rows.push([
+      gifiCodes[b.accountId], aLabel(b.accountId), PLAN[b.accountId]?.type ?? '',
+      b.td.toFixed(2), b.tc.toFixed(2), b.solde.toFixed(2),
+    ]));
+    return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  };
+  const gifiCsvFilename = () => `Export_GIFI_${dfrom}_${dto}.csv`;
+  const expGIFI = () => {
+    const csv = buildGifiCsv();
+    if (csv) downloadCsv(csv, gifiCsvFilename());
+  };
+
+  // ── Envoyer par courriel ─────────────────────────────────────────────────
+  // Même contenu que le téléchargement, mais expédié directement via Resend
+  // au lieu d'être remis à l'utilisateur pour qu'il le transfère lui-même.
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const utf8ToBase64 = (str: string): string => btoa(unescape(encodeURIComponent(str)));
+  const sendCurrentTabByEmail = async () => {
+    let attachment: { filename: string; content: string } | null = null;
+    if (tab === 'journal') attachment = { filename: journalPdfFilename(), content: buildJournalPdf().output('datauristring').split(',')[1] };
+    else if (tab === 'grandlivre') attachment = { filename: grandLivrePdfFilename(), content: buildGrandLivrePdf().output('datauristring').split(',')[1] };
+    else if (tab === 'balance') attachment = { filename: balancePdfFilename(), content: buildBalancePdf().output('datauristring').split(',')[1] };
+    else if (tab === 'tvq') attachment = { filename: tvqPdfFilename(), content: buildTVQPdf().output('datauristring').split(',')[1] };
+    else if (tab === 'gifi') { const csv = buildGifiCsv(); if (csv) attachment = { filename: gifiCsvFilename(), content: utf8ToBase64(csv) }; }
+    if (!attachment) return;
+
+    const recipient = window.prompt('Envoyer ce rapport à quel courriel ?', comptableEmail || '');
+    if (!recipient) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+
+    setSendingEmail(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/send-report-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+          recipientEmail: recipient, companyName: co, reportLabel: expLbl[tab],
+          replyToEmail: auth.currentUser?.email, attachments: [attachment],
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || "Échec de l'envoi.");
+      alert(`Courriel envoyé à ${recipient}.`);
+    } catch (e: any) {
+      alert(e.message ?? "Erreur lors de l'envoi du courriel.");
+    }
+    setSendingEmail(false);
   };
 
   // ── Style tokens ──────────────────────────────────────────────────────────
@@ -536,9 +668,69 @@ export default function ComptableExportView({
     );
   };
 
+  // ── TAB: GIFI ─────────────────────────────────────────────────────────────
+  const GifiTab = () => {
+    const missingCount = bal.filter(b => !(gifiCodes[b.accountId] || '').trim()).length;
+    return (
+      <div className="space-y-4">
+        <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-amber-500/5':'bg-amber-50/50'}`}>
+          <AlertCircle size={16} className="text-amber-500 mt-0.5 shrink-0"/>
+          <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+            AutoCompt ne devine jamais un code GIFI — assignez-les vous-même (idéalement avec votre comptable) une seule fois ci-dessous. Ils sont enregistrés pour ce dossier et réutilisés à chaque export futur. Référence: index des codes GIFI/IGCF de l'ARC.
+          </p>
+        </div>
+        {missingCount > 0 && (
+          <div className={`p-3 rounded-xl border text-[10px] font-bold ${D?'bg-rose-500/10 border-rose-500/30 text-rose-400':'bg-rose-50 border-rose-200 text-rose-700'}`}>
+            ⚠ {missingCount} compte(s) utilisé(s) cette période n'ont pas encore de code GIFI assigné — l'export sera bloqué tant qu'ils ne le sont pas.
+          </div>
+        )}
+        <div className={`${card} overflow-hidden`}>
+          <table className="w-full text-[10px]">
+            <thead><tr className={D?'bg-zinc-800/60':'bg-slate-50'}>
+              {['Compte AutoCompt','Type','Code GIFI'].map(h=>(
+                <th key={h} className={`px-4 py-2.5 text-[8px] font-black uppercase text-left ${D?'text-zinc-400':'text-slate-400'}`}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {Object.keys(PLAN).map(id => {
+                const meta = PLAN[id];
+                return (
+                  <tr key={id} className={`border-t ${D?'border-zinc-800':'border-slate-100'}`}>
+                    <td className={`px-4 py-2 font-semibold ${D?'text-zinc-200':'text-slate-700'}`}>
+                      <span className={`text-[8px] font-black mr-1.5 ${D?'text-zinc-600':'text-slate-400'}`}>{meta.code}</span>{meta.label}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={bk(meta.type==='actif'?'indigo':meta.type==='passif'?'amber':meta.type==='revenu'?'emerald':'rose')}>{meta.type}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        value={gifiCodes[id] || ''}
+                        onChange={e => setGifiCodes(prev => ({ ...prev, [id]: e.target.value }))}
+                        placeholder="Ex: 1001"
+                        className={`${inp} w-28 font-mono`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveGifiCodes} disabled={gifiSaving}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-800 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
+            {gifiSaving ? <Loader2 size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>}
+            <span>Enregistrer les codes</span>
+          </button>
+          {gifiSavedMsg && <span className="text-[10px] font-bold text-emerald-600">{gifiSavedMsg}</span>}
+        </div>
+      </div>
+    );
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
-  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ};
-  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF'};
+  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI};
+  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)'};
 
   return (
     <div className="space-y-5">
@@ -555,6 +747,17 @@ export default function ComptableExportView({
           </button>
           <button onClick={expFn[tab]} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
             <Download size={13}/>{expLbl[tab]}
+          </button>
+          {/* Format universel prêt à importer dans QuickBooks/Xero/Acomba —
+              distinct du PDF (lecture humaine) et du GIFI (déclaration fiscale). */}
+          {tab==='journal' && (
+            <button onClick={expJournalCSV} title="Format universel pour import dans un logiciel de tenue de livres (QuickBooks, Xero, Acomba...)" className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-300':'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+              <Download size={13}/>Journal .csv (comptabilité)
+            </button>
+          )}
+          <button onClick={sendCurrentTabByEmail} disabled={sendingEmail} title="Envoyer ce rapport par courriel — vraiment expédié, pas simulé" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60">
+            {sendingEmail ? <Loader2 size={13} className="animate-spin"/> : <Mail size={13}/>}
+            Envoyer par courriel
           </button>
         </div>
       </div>
@@ -595,6 +798,7 @@ export default function ComptableExportView({
               {tab==='grandlivre' &&<GrandLivreTab/>}
               {tab==='balance'    &&<BalanceTab/>}
               {tab==='tvq'        &&<TVQTab/>}
+              {tab==='gifi'       &&<GifiTab/>}
             </motion.div>
           </AnimatePresence>
         </>

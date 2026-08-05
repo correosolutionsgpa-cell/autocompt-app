@@ -1424,6 +1424,121 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // ── Send an accounting report (GIFI/CSV/PDF export) to the client's accountant ──
+  // Generic multi-attachment version of send-client-invoice-email above — used
+  // by "Export Comptable" (Journal/Grand Livre/Balance/TPS-TVQ/GIFI) so the
+  // accountant receives the real file directly instead of the user manually
+  // forwarding a downloaded file, or the old fake "Envoyer par Email" simulator.
+  app.post("/api/send-report-email", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) {
+        console.error("[send-report-email] 401: no/invalid auth token");
+        return res.status(401).json({ success: false, error: "Non authentifié" });
+      }
+
+      const {
+        recipientEmail, recipientName, companyName, companyColor,
+        reportLabel, replyToEmail, attachments,
+      } = req.body;
+
+      console.log(`[send-report-email] request from uid=${auth.uid} -> recipientEmail=${recipientEmail} reportLabel=${reportLabel} attachments=${Array.isArray(attachments) ? attachments.length : 0}`);
+
+      if (!recipientEmail || !Array.isArray(attachments) || attachments.length === 0) {
+        console.error(`[send-report-email] 400: missing required field(s) — recipientEmail=${!!recipientEmail} attachments=${Array.isArray(attachments) ? attachments.length : "not-array"}`);
+        return res.status(400).json({ success: false, error: "recipientEmail et au moins une pièce jointe sont requis" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        console.error(`[send-report-email] 400: invalid recipientEmail format: ${recipientEmail}`);
+        return res.status(400).json({ success: false, error: "Courriel du destinataire invalide" });
+      }
+      if (attachments.some((a: any) => !a || !a.filename || !a.content)) {
+        console.error("[send-report-email] 400: an attachment is missing filename/content");
+        return res.status(400).json({ success: false, error: "Chaque pièce jointe doit avoir un nom et un contenu" });
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        console.error("[send-report-email] 500: RESEND_API_KEY not configured");
+        return res.status(500).json({ success: false, error: "RESEND_API_KEY not configured" });
+      }
+
+      const esc = (v: any) => String(v ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+      const headerSafe = (v: any) => String(v ?? "").replace(/[\r\n<>"]/g, "").trim();
+      const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || "");
+
+      const safeCompany = esc(companyName || "Votre entreprise");
+      const safeRecipient = esc(recipientName || "");
+      const safeReportLabel = esc(reportLabel || "Rapport comptable");
+      const fromName = headerSafe(companyName || "Votre entreprise") || "Votre entreprise";
+      const subjectLabel = headerSafe(reportLabel || "Rapport comptable");
+      const accent = /^#[0-9a-fA-F]{6}$/.test(companyColor || "") ? companyColor : "#059669";
+      const fileList = attachments.map((a: any) => `<li style="margin:4px 0">${esc(a.filename)}</li>`).join("");
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+          <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:${accent};padding:32px 40px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">${safeCompany}</div>
+              <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">${safeReportLabel}</div>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                Bonjour ${safeRecipient || ""}, veuillez trouver ci-joint le rapport comptable généré depuis AutoCompt.
+              </p>
+              <ul style="color:#374151;font-size:13px;padding-left:20px;margin:0 0 16px">${fileList}</ul>
+              <p style="color:#6b7280;font-size:13px;margin:0">
+                Si vous avez des questions, répondez simplement à ce courriel.
+              </p>
+            </div>
+            <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+              <p style="color:#9ca3af;font-size:10px;margin:0">
+                Envoyé via AutoCompt · <a href="https://www.autocompt.ca" style="color:${accent}">www.autocompt.ca</a>
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `${fromName} via AutoCompt <factures@autocompt.ca>`,
+          to: [recipientEmail],
+          reply_to: isValidEmail(replyToEmail) ? [replyToEmail] : undefined,
+          subject: `${subjectLabel} — ${fromName}`,
+          html: emailHtml,
+          attachments: attachments.map((a: any) => ({
+            filename: headerSafe(a.filename) || "rapport",
+            content: a.content,
+          })),
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error(`[send-report-email] Resend rejected (status ${resp.status}):`, JSON.stringify(errBody));
+        return res.status(502).json({ success: false, error: "Resend a refusé l'envoi du courriel" });
+      }
+
+      const resendData = await resp.json().catch(() => ({}));
+      console.log(`[send-report-email] sent OK — resend id=${resendData?.id} to=${recipientEmail}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[send-report-email] uncaught exception:", error?.message || error, error?.stack);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // ── Google Drive: connect a company's Drive permanently (authorization-code flow) ──
   // The client sends the one-time `code` from google.accounts.oauth2.initCodeClient.
   // We exchange it for a refresh token here (needs the Client Secret, server-only) and

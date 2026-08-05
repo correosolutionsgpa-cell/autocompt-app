@@ -229,6 +229,18 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // GIFI code mapping override, per company — the accountant assigns real
+    // GIFI/IGCF codes to AutoCompt's internal chart-of-accounts once, and it's
+    // remembered for every future "Export GIFI (.csv)". Never machine-guessed
+    // (see the comment in ComptableExportView.tsx): codes start blank and are
+    // filled in by a human, exactly like every other AI/estimated value in
+    // this app that must be confirmed before it's trusted.
+    match /gifiMappings/{mappingId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /journalEntries/{entryId} {
       allow read: if isOwnerDoc();
       allow create: if isOwnerWrite();

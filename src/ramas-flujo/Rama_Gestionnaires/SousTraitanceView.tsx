@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  Download,
   Menu,
   Trash2,
   Users,
@@ -48,6 +49,11 @@ export interface SousTraitanceViewProps {
   setSubfFournisseur: (val: string) => void;
   subfNeq: string;
   setSubfNeq: (val: string) => void;
+  // TP-1086 (Revenu Québec) exige de distinguer une entreprise (NEQ) d'un
+  // travailleur individuel (NAS) — le même champ texte servait avant les deux
+  // sans le préciser nulle part dans l'export.
+  subfIdType: "NEQ" | "NAS";
+  setSubfIdType: (val: "NEQ" | "NAS") => void;
   subfDesc: string;
   setSubfDesc: (val: string) => void;
   subfSubtotal: string;
@@ -87,6 +93,8 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
   setSubfFournisseur,
   subfNeq,
   setSubfNeq,
+  subfIdType,
+  setSubfIdType,
   subfDesc,
   setSubfDesc,
   subfSubtotal,
@@ -214,19 +222,40 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                   />
                 </div>
 
-                {/* IDENTIFIANT / NEQ / ID */}
+                {/* IDENTIFIANT / NEQ / NAS */}
                 <div className="space-y-1.5 text-left">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-450 dark:text-zinc-500">
-                    Identifiant / NEQ / ID{" "}
-                    <span className="text-emerald-500">*</span>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-450 dark:text-zinc-500 flex items-center justify-between">
+                    <span>
+                      {subfIdType === "NEQ" ? "NEQ de l'entreprise" : "NAS du travailleur"}{" "}
+                      <span className="text-emerald-500">*</span>
+                    </span>
+                    <div className="flex rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800">
+                      {(["NEQ", "NAS"] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setSubfIdType(t)}
+                          className={`px-2 py-0.5 text-[8.5px] font-black uppercase tracking-wider transition-all ${
+                            subfIdType === t
+                              ? "bg-[#059669] text-white"
+                              : "bg-transparent text-slate-400 dark:text-zinc-500 hover:bg-slate-500/10"
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </label>
                   <input
                     type="text"
                     value={subfNeq}
                     onChange={(e) => setSubfNeq(e.target.value)}
-                    placeholder="ex: NEQ 1178239401 / ID 48293"
+                    placeholder={subfIdType === "NEQ" ? "ex: 1178239401" : "ex: 123 456 789"}
                     className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-1 focus:ring-[#059669] ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-inner" : "bg-slate-50 border-slate-205"}`}
                   />
+                  <p className="text-[8.5px] text-slate-400 dark:text-zinc-500 leading-snug">
+                    Requis par Revenu Québec (TP-1086.R.23.12) pour tout paiement à un sous-traitant du secteur de la construction — entreprise (NEQ) ou individu (NAS).
+                  </p>
                 </div>
 
                 {/* DESCRIPTION */}
@@ -570,6 +599,7 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                           refacturableTriplex: false,
                           // Custom trace fields
                           neq: subfNeq.trim(),
+                          idType: subfIdType,
                           typePaiement: subfTypePaiement,
                           desc: subfDesc.trim(),
                         };
@@ -692,17 +722,72 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
               <div
                 className={`p-6 rounded-[36px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} text-left`}
               >
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <p className="text-[8.5px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400">
                     Historique des paiements de main-d'œuvre
                   </p>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 font-extrabold text-[8px] uppercase tracking-wider">
-                    {
-                      filteredDepenses.filter((d) => d.cat === "Sous-traitance")
-                        .length
-                    }{" "}
-                    Enregistrés
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        // TP-1086.R.23.12 (Revenu Québec) : résumé annuel des
+                        // sous-traitants payés, cumulé par NEQ/NAS — même seuil
+                        // 500$ que la règle de déductibilité déjà appliquée
+                        // au formulaire, ne pas dupliquer une autre logique.
+                        const soustraitances = filteredDepenses.filter(
+                          (d) => d.cat === "Sous-traitance",
+                        );
+                        const byWorker = new Map<
+                          string,
+                          { nom: string; id: string; idType: string; total: number; nb: number }
+                        >();
+                        soustraitances.forEach((d) => {
+                          const key = (d.neq || "").trim().toLowerCase() || `__${d.fournisseur}`;
+                          const cur = byWorker.get(key) || {
+                            nom: d.fournisseur,
+                            id: d.neq || "",
+                            idType: d.idType || "NEQ",
+                            total: 0,
+                            nb: 0,
+                          };
+                          cur.total += d.total || 0;
+                          cur.nb += 1;
+                          byWorker.set(key, cur);
+                        });
+                        const rows = [["Sous-traitant", "Type", "NEQ / NAS", "Nb paiements", "Total payé ($)"]];
+                        Array.from(byWorker.values())
+                          .filter((w) => w.total > 500)
+                          .forEach((w) => rows.push([w.nom, w.idType, w.id || "N/A", String(w.nb), w.total.toFixed(2)]));
+                        if (rows.length === 1) {
+                          alert("Aucun sous-traitant ne dépasse le seuil de 500$ cumulé sur la période affichée.");
+                          return;
+                        }
+                        const csv = rows
+                          .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+                          .join("\r\n");
+                        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `Resume_TP-1086_${currentCompany?.nombre || "AutoCompt"}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-700 hover:bg-slate-800 text-white font-extrabold text-[8px] uppercase tracking-wider transition-all active:scale-95"
+                      title="Résumé des sous-traitants payés plus de 500$/an, avec NEQ/NAS — pour le TP-1086.R.23.12 de votre comptable"
+                    >
+                      <Download size={10} />
+                      Résumé TP-1086
+                    </button>
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 font-extrabold text-[8px] uppercase tracking-wider">
+                      {
+                        filteredDepenses.filter((d) => d.cat === "Sous-traitance")
+                          .length
+                      }{" "}
+                      Enregistrés
+                    </span>
+                  </div>
                 </div>
 
                 {filteredDepenses.filter((d) => d.cat === "Sous-traitance")
@@ -728,7 +813,7 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                           <th className="py-2.5 pb-2">
                             Sous-traitant / Travaux
                           </th>
-                          <th className="py-2.5 pb-2">Identifiant / NEQ</th>
+                          <th className="py-2.5 pb-2">NEQ / NAS</th>
                           <th className="py-2.5 pb-2">Type / Reçu</th>
                           <th className="py-2.5 pb-2">Sous-total</th>
                           <th className="py-2.5 pb-2">TPS / TVQ</th>
@@ -757,6 +842,9 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                                 </p>
                               </td>
                               <td className="py-2.5 font-mono font-medium text-slate-600 dark:text-zinc-400">
+                                <span className="text-[7px] font-black uppercase mr-1 text-slate-400 dark:text-zinc-600">
+                                  {exInstance.idType || "NEQ"}
+                                </span>
                                 {exInstance.neq || "N/A"}
                               </td>
                               <td className="py-2.5">

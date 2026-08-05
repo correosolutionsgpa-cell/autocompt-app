@@ -1714,20 +1714,21 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                   ) : (
                     /* CHOICES PANEL */
                     <div className="space-y-3">
-                      {/* 1. Par Email */}
+                      {/* 1. Par Email — redirige vers l'envoi RÉEL (Export Comptable),
+                          ne simule plus un envoi qui n'avait jamais lieu. Aucun
+                          PDF n'est généré à cet endroit de l'écran, donc au lieu
+                          de fabriquer une pièce jointe factice, on amène
+                          l'utilisateur là où le vrai bouton "Envoyer par
+                          courriel" (Resend, avec pièce jointe réelle) existe. */}
                       <button
                         onClick={() => {
                           playNotificationSound();
-                          setIsTransmittingChannel("Par Email");
-                          setTimeout(() => {
-                            setIsTransmittingChannel(null);
-                            setShowRapportDispatcherModal(false);
-                            setDispatcherSuccessToast({
-                              text: `Reporte del periodo ${selectedRapportPeriod} enviado exitosamente a través de Par Email`,
-                              channel: "Par Email",
-                            });
-                            playNotificationSound();
-                          }, 1400);
+                          setShowRapportDispatcherModal(false);
+                          setVista("reportes");
+                          setDispatcherSuccessToast({
+                            text: `Choisissez le rapport à envoyer, puis cliquez sur "Envoyer par courriel" dans Export Comptable.`,
+                            channel: "Par Email",
+                          });
                         }}
                         className={`w-full p-4.5 rounded-[22px] border text-left flex items-center justify-between transition-all group ${darkMode
                             ? "bg-zinc-900/50 border-zinc-850 hover:border-emerald-500/40 hover:bg-zinc-900 text-zinc-100"

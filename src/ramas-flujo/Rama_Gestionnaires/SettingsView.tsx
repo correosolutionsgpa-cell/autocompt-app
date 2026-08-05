@@ -20,6 +20,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicleRateService";
 import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
 import { INVOICE_COLOR_PALETTE, INVOICE_FONT_STACKS, INVOICE_TEMPLATES } from "../../lib/invoiceTemplates";
+import { auth, db } from "../../lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   ArrowLeft,
   Bell,
@@ -27,10 +29,12 @@ import {
   Car,
   CheckCircle2,
   ChevronDown,
+  Download,
   Gauge,
   Globe,
   Hash,
   Home,
+  Loader2,
   Mail,
   MapPin,
   MessageSquare,
@@ -39,6 +43,7 @@ import {
   Percent,
   Phone,
   Plus,
+  ShieldCheck,
   Sparkles,
   Sun,
   Trash2,
@@ -260,6 +265,57 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   // verrouillé ouvre ce message plutôt que la grille de tarifs (le prix
   // multi-profil n'est pas encore fixé).
   const [showBetaProfileLockMessage, setShowBetaProfileLockMessage] = useState(false);
+
+  // ── Loi 25 (Québec) — portabilité des données ──────────────────────────────
+  // Depuis sept. 2024, tout utilisateur a le droit d'obtenir une copie
+  // structurée et lisible par machine de ses renseignements personnels.
+  // Exporte TOUT ce qui appartient à ce compte (ownerId), peu importe
+  // l'entreprise active — c'est la définition correcte de "mes données",
+  // pas seulement celles de l'espace de travail affiché en ce moment.
+  const [exportingData, setExportingData] = useState(false);
+  const handleExportMyData = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setExportingData(true);
+    try {
+      const collections = [
+        "companies", "expenses", "invoices", "properties", "units",
+        "journalEntries", "fideicommisClients", "fideicommisDepots",
+        "fideicommisRetraits", "bookkeepingClients", "docuLegalDocs", "loyers",
+      ];
+      const results = await Promise.all(
+        collections.map(async (col) => {
+          try {
+            const q = query(collection(db, col), where("ownerId", "==", uid));
+            const snap = await getDocs(q);
+            return [col, snap.docs.map((d) => d.data())] as const;
+          } catch {
+            return [col, [] as any[]] as const;
+          }
+        })
+      );
+      const bundle: Record<string, any> = {
+        exportedAt: new Date().toISOString(),
+        userId: uid,
+        userEmail: auth.currentUser?.email || null,
+        profilEntreprise: userProfile,
+      };
+      results.forEach(([col, data]) => { bundle[col] = data; });
+      const json = JSON.stringify(bundle, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AutoCompt_Mes_Donnees_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message ?? "Erreur lors de l'export de vos données.");
+    }
+    setExportingData(false);
+  };
 
   // ── Registre Véhicules — persisté dans Firestore via partnerData ──────────
   // (Migré depuis localStorage: la clé VEHICLES_STORAGE_KEY reste définie ci-dessus
@@ -554,6 +610,36 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             ownerId={ownerId}
           />
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+              Confidentialité & mes données (Loi 25 — portabilité)
+          ══════════════════════════════════════════════════════════════════ */}
+        <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}>
+          <div className="flex items-center gap-3 mb-4">
+            <span className={`p-2 rounded-xl ${darkMode ? "bg-emerald-950/40 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+              <ShieldCheck size={16} />
+            </span>
+            <div>
+              <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+                Confidentialité & mes données
+              </h3>
+              <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Droit à la portabilité (Loi 25)
+              </p>
+            </div>
+          </div>
+          <p className={`text-[10.5px] leading-relaxed mb-4 ${darkMode ? "text-zinc-400" : "text-slate-600"}`}>
+            Obtenez une copie complète et structurée de vos renseignements personnels stockés dans AutoCompt (profil, dépenses, factures, propriétés, clients, écritures comptables) — toutes vos entreprises confondues, au format JSON.
+          </p>
+          <button
+            onClick={handleExportMyData}
+            disabled={exportingData}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+          >
+            {exportingData ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            <span>Exporter mes données (.json)</span>
+          </button>
+        </div>
 
         {/* ══════════════════════════════════════════════════════════════════
               Phase 4: Section — Profil d'Entreprise Québec
