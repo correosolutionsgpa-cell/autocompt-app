@@ -1058,7 +1058,7 @@ export default function SofiOnboarding({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className={`min-h-screen relative flex items-center justify-center p-4 md:p-8 overflow-hidden font-sans antialiased transition-colors duration-500 ${
+    <div className={`min-h-screen relative flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden font-sans antialiased transition-colors duration-500 ${
       darkMode ? "bg-black text-zinc-100" : "bg-white text-slate-800"
     }`}>
       {/* Background glows */}

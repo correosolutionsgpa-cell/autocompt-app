@@ -1199,8 +1199,10 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
         </div>
       </header>
 
-      {/* Tab navigation */}
-      <div className={`${D ? 'bg-zinc-950 border-zinc-900' : 'bg-white border-slate-100'} border-b px-6`}>
+      {/* Tab navigation — on narrow screens most tabs (Codes Bêta included) sit
+          past the visible width; the right-edge fade is the only hint that
+          the bar scrolls horizontally, so it's not silently missed. */}
+      <div className={`relative ${D ? 'bg-zinc-950 border-zinc-900' : 'bg-white border-slate-100'} border-b px-6`}>
         <div className="flex gap-1 overflow-x-auto">
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -1213,6 +1215,7 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
             </button>
           ))}
         </div>
+        <div className={`pointer-events-none absolute top-0 right-0 h-full w-10 sm:hidden bg-gradient-to-l ${D ? 'from-zinc-950' : 'from-white'} to-transparent`} />
       </div>
 
       {/* Content */}
