@@ -302,6 +302,26 @@ export interface MeubleExpenseDoc {
   createdAt: string;
 }
 
+// ── LoanIssuedDoc — Firestore `loansIssued` collection ────────────────────────
+/**
+ * Un prêt privé consenti PAR l'utilisateur (pas contracté) — ex: Fabiola qui
+ * prête à Achat Direct Inc. pour un projet de flip. Remplace le `useState`
+ * local `pretAchatDirect` d'App.tsx qui n'était jamais persisté (données de
+ * démo codées en dur, perdues à chaque rechargement — trouvé 2026-08-01).
+ * Document ID: `{userId}_loan_{id}`
+ */
+export interface LoanIssuedDoc {
+  id: string;
+  companyId: string;
+  montantInitial: number;
+  emprunteur: string;
+  projet: string;
+  dateEmission: string;
+  remboursements: Array<{ id: string; fecha: string; montant: number; note: string }>;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
 /**
  * Configuration fiscale et opérationnelle d'une unité meublée.
@@ -2558,6 +2578,58 @@ export const dataService = {
   async deleteMeubleExpense(userId: string, expId: string): Promise<void> {
     const docId = `${userId}_meubleexp_${expId}`;
     await deleteDoc(doc(db, 'meubleExpenses', docId));
+  },
+
+  // ── Loans Issued — Firestore `loansIssued` collection ───────────────────────
+
+  async saveLoanIssued(
+    userId: string,
+    loan: Omit<LoanIssuedDoc, 'ownerId' | 'createdAt'>
+  ): Promise<LoanIssuedDoc> {
+    assertCanWrite();
+    const originalId = loan.id || `loan_${Date.now()}`;
+    const docId = `${userId}_loan_${originalId}`;
+    const docCompanyId = `${userId}_company_${loan.companyId}`;
+    const data: any = {
+      ...loan,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+    await setDoc(doc(db, 'loansIssued', docId), data);
+    return { ...data, id: originalId, companyId: loan.companyId };
+  },
+
+  async fetchLoansIssued(
+    userId: string,
+    companyId: string
+  ): Promise<LoanIssuedDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'loansIssued'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_loan_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as LoanIssuedDoc;
+      });
+    } catch (e) {
+      console.error('fetchLoansIssued failed:', e);
+      return [];
+    }
+  },
+
+  async deleteLoanIssued(userId: string, loanId: string): Promise<void> {
+    const docId = `${userId}_loan_${loanId}`;
+    await deleteDoc(doc(db, 'loansIssued', docId));
   },
 
   /**

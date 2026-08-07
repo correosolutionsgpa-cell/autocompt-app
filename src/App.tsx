@@ -151,7 +151,7 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc } from "./lib/dataService";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
@@ -4845,35 +4845,50 @@ const App = () => {
     activeCompanyId === "1" ||
     currentCompany?.nombre?.toLowerCase().includes("solutions gpa");
 
-  const [pretAchatDirect, setPretAchatDirect] = useState<{
+  // Real Firestore-backed loans this account has issued (e.g. Fabiola's loan
+  // to Achat Direct Inc.) — replaces a `useState` that used to hold hardcoded
+  // demo numbers ($150,000, fake remboursements) never written to Firestore,
+  // lost on every reload. `pretAchatDirect`/`setPretAchatDirect` below are
+  // kept as a compatibility shim over `loansIssued[0]` so the ~300 lines of
+  // existing UI in renderPretsActifsPanel don't need to change — only ONE
+  // loan is surfaced today (matches current real usage), but the data layer
+  // already supports a list for whenever a second one is needed.
+  const [loansIssued, setLoansIssued] = useState<LoanIssuedDoc[]>([]);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!isSolutionsGPA || !uid || !activeCompanyId) { setLoansIssued([]); return; }
+    dataService.fetchLoansIssued(uid, activeCompanyId).then(setLoansIssued).catch(console.error);
+  }, [isSolutionsGPA, activeCompanyId]);
+
+  type PretAchatDirectShape = {
+    id?: string;
     montantInitial: number;
     projet: string;
     emprunteur: string;
-    remboursements: Array<{
-      id: string;
-      fecha: string;
-      montant: number;
-      note: string;
-    }>;
-  }>({
+    remboursements: Array<{ id: string; fecha: string; montant: number; note: string }>;
+  };
+  const pretAchatDirect: PretAchatDirectShape = loansIssued[0] || {
     montantInitial: 150000,
     projet: "Projet Flip",
     emprunteur: "Achat Direct Inc.",
-    remboursements: [
-      {
-        id: "remb-1",
-        fecha: "2026-04-10",
-        montant: 25000,
-        note: "Remboursement partiel - Étape 1 démolition",
-      },
-      {
-        id: "remb-2",
-        fecha: "2026-05-05",
-        montant: 45000,
-        note: "Acompte vente de lot",
-      },
-    ],
-  });
+    remboursements: [],
+  };
+  const setPretAchatDirect = (
+    updater: PretAchatDirectShape | ((prev: PretAchatDirectShape) => PretAchatDirectShape),
+  ) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const updated = typeof updater === "function" ? updater(pretAchatDirect) : updater;
+    const withId = { ...updated, id: pretAchatDirect.id || `loan_${Date.now()}` };
+    setLoansIssued((prev) => (prev.length > 0 ? [{ ...prev[0], ...withId } as LoanIssuedDoc, ...prev.slice(1)] : [withId as LoanIssuedDoc]));
+    dataService
+      .saveLoanIssued(uid, {
+        ...withId,
+        companyId: activeCompanyId,
+        dateEmission: (loansIssued[0] as any)?.dateEmission || new Date().toISOString().split("T")[0],
+      })
+      .catch((err) => console.error("Failed to save loan:", err));
+  };
 
   const [newRembMontant, setNewRembMontant] = useState("");
   const [newRembDate, setNewRembDate] = useState("2026-05-23");

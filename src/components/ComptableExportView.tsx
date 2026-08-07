@@ -22,7 +22,7 @@ import {
   ChevronLeft, ChevronRight, CheckCircle2, AlertCircle,
   Calendar, Filter, RefreshCw, FileText, Percent, Hash, Mail,
 } from 'lucide-react';
-import { dataService } from '../lib/dataService';
+import { dataService, type InvoiceDoc, type ExpenseDoc } from '../lib/dataService';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -123,8 +123,9 @@ function chkPg(pdf: jsPDF, y: number, need=12): number {
 // §5 — Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi';
+type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi'|'sources';
 const PER = 25;
+const SOURCE_NON_CLASSE = 'Non classé';
 
 const TABS = [
   { id:'journal'    as TabId, label:'Journal Général',         short:'Journal',  icon:<BookOpen size={14}/>,  ac:'border-indigo-500 text-indigo-600'  },
@@ -132,6 +133,7 @@ const TABS = [
   { id:'balance'    as TabId, label:'Balance de Vérification', short:'Balance',  icon:<Scale size={14}/>,     ac:'border-amber-500 text-amber-600'     },
   { id:'tvq'        as TabId, label:'Rapport TPS / TVQ',       short:'TPS/TVQ',  icon:<Percent size={14}/>,   ac:'border-rose-500 text-rose-600'       },
   { id:'gifi'       as TabId, label:'Export GIFI',             short:'GIFI',     icon:<Hash size={14}/>,      ac:'border-slate-500 text-slate-600'     },
+  { id:'sources'    as TabId, label:'Sources d\'Activité',     short:'Sources',  icon:<Filter size={14}/>,    ac:'border-teal-500 text-teal-600'       },
 ];
 
 export default function ComptableExportView({
@@ -195,6 +197,22 @@ export default function ComptableExportView({
   };
   useEffect(load, [companyId]);
 
+  // ── Load — Sources d'Activité (indépendant de journalEntries) ──────────────
+  // historique/depenses ne sont jamais passés en props à ce composant — il
+  // faut les lire directement, comme App.tsx le fait à la connexion.
+  const [invoicesData, setInvoicesData] = useState<InvoiceDoc[]>([]);
+  const [expensesData, setExpensesData] = useState<ExpenseDoc[]>([]);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId) return;
+    Promise.all([dataService.fetchInvoices(uid), dataService.fetchExpenses(uid)])
+      .then(([inv, exp]) => {
+        setInvoicesData(inv.filter((h) => h.companyId === companyId));
+        setExpensesData(exp.filter((d) => d.companyId === companyId));
+      })
+      .catch((e) => console.error('Sources tab load failed:', e));
+  }, [companyId]);
+
   // ── Derived data ───────────────────────────────────────────────────────────
   const filt = useMemo(() =>
     entries.filter(e => { const d=e.date?.slice(0,10)??''; return d>=dfrom && d<=dto; }),
@@ -232,6 +250,30 @@ export default function ComptableExportView({
     }));
     return {tps,tvq,ts,tot:tps+tvq+ts};
   }, [filt]);
+
+  // ── Sources d'Activité — regroupe revenus/dépenses par sourceRevenu ────────
+  // Exclut ce qui a un buildingId : appartient au livre d'un client/édifice
+  // géré (voir TenueLivresImmeubleView), pas à l'activité propre du compte —
+  // même principe que le filtre appliqué au Tenue de Livres général.
+  interface SourceGroup { source: string; revenus: InvoiceDoc[]; depenses: ExpenseDoc[]; totalRevenus: number; totalDepenses: number; net: number }
+  const sourcesGrouped = useMemo<SourceGroup[]>(() => {
+    const inRange = (fecha?: string) => { const d = (fecha || '').slice(0, 10); return d >= dfrom && d <= dto; };
+    const m = new Map<string, SourceGroup>();
+    const ensure = (source: string) => {
+      if (!m.has(source)) m.set(source, { source, revenus: [], depenses: [], totalRevenus: 0, totalDepenses: 0, net: 0 });
+      return m.get(source)!;
+    };
+    invoicesData.filter((h) => !h.buildingId && inRange(h.fecha)).forEach((h) => {
+      const g = ensure(h.sourceRevenu || SOURCE_NON_CLASSE);
+      g.revenus.push(h); g.totalRevenus += h.total || 0;
+    });
+    expensesData.filter((d) => !d.buildingId && inRange(d.fecha)).forEach((d) => {
+      const g = ensure(d.sourceRevenu || SOURCE_NON_CLASSE);
+      g.depenses.push(d); g.totalDepenses += d.total || 0;
+    });
+    m.forEach((g) => { g.net = g.totalRevenus - g.totalDepenses; });
+    return Array.from(m.values()).sort((a, b) => a.source === SOURCE_NON_CLASSE ? 1 : b.source === SOURCE_NON_CLASSE ? -1 : a.source.localeCompare(b.source));
+  }, [invoicesData, expensesData, dfrom, dto]);
 
   const jTot = Math.max(1,Math.ceil(filt.length/PER));
   const jPaged = filt.slice((jp-1)*PER, jp*PER);
@@ -396,6 +438,38 @@ export default function ComptableExportView({
     if (csv) downloadCsv(csv, gifiCsvFilename());
   };
 
+  const buildSourcesPdf = (): jsPDF => {
+    const pdf=new jsPDF({unit:'mm',format:'a4'});const M=14,W=210;
+    let y=pdfHdr(pdf,"Sources d'Activité",`${dfrom} au ${dto}`,co,[13,148,136]);
+    sourcesGrouped.forEach(g=>{
+      y=chkPg(pdf,y,24);
+      pdf.setFillColor(240,253,250);pdf.rect(M,y,182,8,'F');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(8.5);pdf.setTextColor(13,148,136);
+      pdf.text(g.source,M+2,y+5.5);pdf.setTextColor(30,41,59);y+=11;
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(7.5);
+      pdf.text('Total revenus',M+2,y);pdf.setTextColor(5,150,105);pdf.text(fmtAmt(g.totalRevenus),M+70,y,{align:'right'});pdf.setTextColor(30,41,59);y+=5.5;
+      pdf.text('Total dépenses',M+2,y);pdf.setTextColor(220,38,38);pdf.text(fmtAmt(g.totalDepenses),M+70,y,{align:'right'});pdf.setTextColor(30,41,59);y+=5.5;
+      pdf.setDrawColor(226,232,240);pdf.line(M,y,M+70,y);y+=4.5;
+      pdf.setFont('Helvetica','bold');pdf.text('Résultat net',M+2,y);
+      pdf.setTextColor(...(g.net>=0?[5,150,105]:[220,38,38]) as [number,number,number]);
+      pdf.text(fmtAmt(g.net),M+70,y,{align:'right'});pdf.setTextColor(30,41,59);y+=10;
+    });
+    return pdf;
+  };
+  const sourcesPdfFilename = () => `Sources_Activite_${dfrom}_${dto}.pdf`;
+  const expSources = () => buildSourcesPdf().save(sourcesPdfFilename());
+
+  const buildSourcesCsv = (): string => {
+    const rows = [['Source', 'Date', 'Type', 'Tiers', 'Montant ($)']];
+    sourcesGrouped.forEach(g => {
+      g.revenus.forEach(h => rows.push([g.source, fmtDate(h.fecha), 'Revenu', h.cliente || '', (h.total || 0).toFixed(2)]));
+      g.depenses.forEach(d => rows.push([g.source, fmtDate(d.fecha), 'Dépense', d.fournisseur || '', (d.total || 0).toFixed(2)]));
+    });
+    return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  };
+  const sourcesCsvFilename = () => `Sources_Activite_${dfrom}_${dto}.csv`;
+  const expSourcesCSV = () => downloadCsv(buildSourcesCsv(), sourcesCsvFilename());
+
   // ── Envoyer par courriel ─────────────────────────────────────────────────
   // Même contenu que le téléchargement, mais expédié directement via Resend
   // au lieu d'être remis à l'utilisateur pour qu'il le transfère lui-même.
@@ -408,6 +482,7 @@ export default function ComptableExportView({
     else if (tab === 'balance') attachment = { filename: balancePdfFilename(), content: buildBalancePdf().output('datauristring').split(',')[1] };
     else if (tab === 'tvq') attachment = { filename: tvqPdfFilename(), content: buildTVQPdf().output('datauristring').split(',')[1] };
     else if (tab === 'gifi') { const csv = buildGifiCsv(); if (csv) attachment = { filename: gifiCsvFilename(), content: utf8ToBase64(csv) }; }
+    else if (tab === 'sources') attachment = { filename: sourcesPdfFilename(), content: buildSourcesPdf().output('datauristring').split(',')[1] };
     if (!attachment) return;
 
     const recipient = window.prompt('Envoyer ce rapport à quel courriel ?', comptableEmail || '');
@@ -728,9 +803,48 @@ export default function ComptableExportView({
     );
   };
 
+  // ── TAB: Sources d'Activité ─────────────────────────────────────────────────
+  const SourcesTab = () => (
+    <div className="space-y-4">
+      <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-teal-500/5':'bg-teal-50/50'}`}>
+        <Filter size={16} className="text-teal-500 mt-0.5 shrink-0"/>
+        <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+          Regroupe les revenus et dépenses par activité (Gestion immobilière, Dividendes, AutoCompt, Prêts privés...) — exclut tout ce qui appartient au livre d'un client/édifice géré séparément. Toute entrée sans source assignée apparaît sous « {SOURCE_NON_CLASSE} », jamais cachée.
+        </p>
+      </div>
+      {sourcesGrouped.length===0 ? (
+        <div className={`${card} p-8 text-center`}>
+          <Filter size={32} className={`mx-auto mb-3 ${D?'text-zinc-600':'text-slate-300'}`}/>
+          <p className={`text-[12px] font-bold ${D?'text-zinc-500':'text-slate-400'}`}>Aucun revenu/dépense propre à ce compte pour cette période.</p>
+        </div>
+      ) : sourcesGrouped.map(g => (
+        <div key={g.source} className={`${card} p-4`}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h4 className={`text-[12px] font-black ${D?'text-zinc-200':'text-slate-800'}`}>{g.source}</h4>
+            <span className={bk(g.net>=0?'emerald':'rose')}>{g.net>=0?'Net positif':'Net négatif'}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className={`text-[8px] font-black uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Revenus ({g.revenus.length})</p>
+              <p className="text-[13px] font-black text-emerald-600">{fmtAmt(g.totalRevenus)} $</p>
+            </div>
+            <div>
+              <p className={`text-[8px] font-black uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Dépenses ({g.depenses.length})</p>
+              <p className="text-[13px] font-black text-rose-600">{fmtAmt(g.totalDepenses)} $</p>
+            </div>
+            <div>
+              <p className={`text-[8px] font-black uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Résultat net</p>
+              <p className={`text-[13px] font-black ${g.net>=0?'text-emerald-600':'text-rose-600'}`}>{fmtAmt(g.net)} $</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
-  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI};
-  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)'};
+  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI, sources:expSources};
+  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)', sources:'Sources PDF'};
 
   return (
     <div className="space-y-5">
@@ -753,6 +867,11 @@ export default function ComptableExportView({
           {tab==='journal' && (
             <button onClick={expJournalCSV} title="Format universel pour import dans un logiciel de tenue de livres (QuickBooks, Xero, Acomba...)" className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-300':'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
               <Download size={13}/>Journal .csv (comptabilité)
+            </button>
+          )}
+          {tab==='sources' && (
+            <button onClick={expSourcesCSV} title="Détail ligne par ligne, format .csv" className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-300':'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+              <Download size={13}/>Sources .csv (détail)
             </button>
           )}
           <button onClick={sendCurrentTabByEmail} disabled={sendingEmail} title="Envoyer ce rapport par courriel — vraiment expédié, pas simulé" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60">
@@ -799,6 +918,7 @@ export default function ComptableExportView({
               {tab==='balance'    &&<BalanceTab/>}
               {tab==='tvq'        &&<TVQTab/>}
               {tab==='gifi'       &&<GifiTab/>}
+              {tab==='sources'    &&<SourcesTab/>}
             </motion.div>
           </AnimatePresence>
         </>
