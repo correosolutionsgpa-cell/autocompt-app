@@ -110,6 +110,13 @@ export interface ClientPortfolioShellProps<
    *  data source than the generic expenses/invoices this shell aggregates,
    *  so it supplies its own KPIs via `extraKpis` instead and hides these. */
   hideGenericKpis?: boolean;
+  /** Same idea as `hideGenericKpis`, but decided per-client instead of for
+   *  the whole shell — e.g. a comptable's LINKED client's real numbers live
+   *  under a different companyId entirely (never tagged with `clientId`),
+   *  so the generic aggregate is always $0 and actively misleading for that
+   *  one client, while an unlinked client's generic totals stay correct and
+   *  should keep showing normally. */
+  hideGenericKpisFor?: (agg: ClientPortfolioAggregate<TClient, TExtra>) => boolean;
 
   extraKpis?: (agg: ClientPortfolioAggregate<TClient, TExtra>) => Array<{
     label: string;
@@ -145,6 +152,7 @@ function ClientPortfolioShellInner<
   fetchExtra,
   emptyExtra,
   hideGenericKpis,
+  hideGenericKpisFor,
   extraKpis,
   renderListBadges,
   renderHeaderBadge,
@@ -374,9 +382,11 @@ function ClientPortfolioShellInner<
                 </div>
 
                 {/* KPI row */}
-                {(!hideGenericKpis || extraKpis) && (
+                {(() => {
+                  const genericHidden = hideGenericKpis || !!hideGenericKpisFor?.(selected);
+                  return (!genericHidden || extraKpis) && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {(!hideGenericKpis ? [
+                    {(!genericHidden ? [
                       { label: "Revenus", value: fmtCAD(selected.totalRevenue), icon: <TrendingUp size={16} /> as React.ReactNode, color: "emerald" },
                       { label: "Dépenses", value: fmtCAD(selected.totalExpenses), icon: <TrendingDown size={16} /> as React.ReactNode, color: "rose" },
                       { label: "Solde net", value: fmtCAD(selected.balance), icon: <Scale size={16} /> as React.ReactNode, color: accentColor },
@@ -388,7 +398,8 @@ function ClientPortfolioShellInner<
                       </div>
                     ))}
                   </div>
-                )}
+                  );
+                })()}
 
                 {renderDetailBody?.(selected)}
               </motion.div>

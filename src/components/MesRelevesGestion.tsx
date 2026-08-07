@@ -13,11 +13,13 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FileDown, Loader2, Mail, CheckCircle2, Menu, Inbox } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2, Mail, CheckCircle2, Menu, Inbox, Send, Clock, XCircle, Plus } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { dataService } from "../lib/dataService";
-import type { StatementLinkDoc, SealedStatementDoc } from "../lib/dataService";
+import type { StatementLinkDoc, SealedStatementDoc, SharedLedgerEntryDoc, SharedLedgerPendingItemDoc } from "../lib/dataService";
 import { generateSealedStatementPDF } from "../lib/releveGestionPdf";
+
+const fmtCAD = (n: number) => new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(n);
 
 export interface MesRelevesGestionProps {
   darkMode: boolean;
@@ -39,23 +41,42 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
   const [acceptingLinkId, setAcceptingLinkId] = useState<string | null>(null);
   const [chosenCompanyId, setChosenCompanyId] = useState<string>(listaEmpresas[0]?.id || "");
 
+  // ── Registre partagé en direct — extension au-delà des relevés scellés
+  //    périodiques (voir SharedLedgerReviewPanel côté gestionnaire pour le
+  //    même canal, vu de l'autre côté). ──────────────────────────────────────
+  const [acceptedLinks, setAcceptedLinks] = useState<StatementLinkDoc[]>([]);
+  const [sharedEntries, setSharedEntries] = useState<SharedLedgerEntryDoc[]>([]);
+  const [myPendingItems, setMyPendingItems] = useState<SharedLedgerPendingItemDoc[]>([]);
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [submitLinkId, setSubmitLinkId] = useState("");
+  const [submitForm, setSubmitForm] = useState({ date: new Date().toISOString().slice(0, 10), description: "", amount: "" });
+  const [submitting, setSubmitting] = useState(false);
+
   const load = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     const email = auth.currentUser?.email;
     if (!uid) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [pending, sealed] = await Promise.all([
+      const [pending, sealed, accepted, entries, myItems] = await Promise.all([
         email ? dataService.fetchPendingStatementLinksForEmail(email) : Promise.resolve([]),
         dataService.fetchSealedStatements(uid),
+        dataService.fetchAcceptedStatementLinksForOwner(uid),
+        dataService.fetchSharedLedgerEntriesForOwner(uid),
+        dataService.fetchPendingItemsForOwner(uid),
       ]);
       setPendingLinks(pending);
       setStatements(sealed);
+      setAcceptedLinks(accepted);
+      setSharedEntries(entries);
+      setMyPendingItems(myItems);
+      if (!submitLinkId && accepted.length > 0) setSubmitLinkId(accepted[0].id);
     } catch (e) {
       console.error("[MesRelevesGestion] load error:", e);
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -72,6 +93,33 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
       console.error("[MesRelevesGestion] acceptStatementLink error:", e);
     } finally {
       setAcceptingLinkId(null);
+    }
+  };
+
+  const handleSubmitDocument = async () => {
+    const uid = auth.currentUser?.uid;
+    const link = acceptedLinks.find((l) => l.id === submitLinkId);
+    if (!uid || !link || !link.linkedOwnerUid || !submitForm.description.trim() || !submitForm.amount) return;
+    setSubmitting(true);
+    try {
+      await dataService.submitSharedLedgerPendingItem(uid, {
+        statementLinkId: link.id,
+        gestionnaireCompanyId: link.gestionnaireCompanyId,
+        gestionnaireOwnerId: link.gestionnaireOwnerId,
+        fideicommisClientId: link.fideicommisClientId,
+        linkedOwnerUid: link.linkedOwnerUid,
+        date: submitForm.date,
+        description: submitForm.description.trim(),
+        amount: parseFloat(submitForm.amount),
+      });
+      setShowSubmitForm(false);
+      setSubmitForm({ date: new Date().toISOString().slice(0, 10), description: "", amount: "" });
+      playNotificationSound?.();
+      await load();
+    } catch (e) {
+      console.error("[MesRelevesGestion] submitSharedLedgerPendingItem error:", e);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -145,6 +193,93 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                 )}
               </div>
             ))}
+
+            {acceptedLinks.length > 0 && (
+              <div className={`p-5 rounded-[24px] border space-y-3 ${glass}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Inbox size={16} className="text-indigo-500" />
+                    <h2 className="text-[11px] font-black uppercase tracking-widest">Registre partagé en direct</h2>
+                  </div>
+                  <button
+                    onClick={() => setShowSubmitForm((v) => !v)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white transition-all"
+                  >
+                    <Plus size={11} />Soumettre un document
+                  </button>
+                </div>
+
+                {showSubmitForm && (
+                  <div className={`p-4 rounded-2xl border space-y-2.5 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    {acceptedLinks.length > 1 && (
+                      <select
+                        value={submitLinkId}
+                        onChange={(e) => setSubmitLinkId(e.target.value)}
+                        className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                      >
+                        {acceptedLinks.map((l) => <option key={l.id} value={l.id}>{l.gestionnaireCompanyId}</option>)}
+                      </select>
+                    )}
+                    <input
+                      type="date"
+                      value={submitForm.date}
+                      onChange={(e) => setSubmitForm({ ...submitForm, date: e.target.value })}
+                      className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                    />
+                    <input
+                      type="text"
+                      value={submitForm.description}
+                      onChange={(e) => setSubmitForm({ ...submitForm, description: e.target.value })}
+                      placeholder="Description *"
+                      className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                    />
+                    <input
+                      type="number"
+                      value={submitForm.amount}
+                      onChange={(e) => setSubmitForm({ ...submitForm, amount: e.target.value })}
+                      placeholder="Montant ($) *"
+                      className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+                    />
+                    <button
+                      disabled={!submitForm.description.trim() || !submitForm.amount || submitting}
+                      onClick={handleSubmitDocument}
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Send size={11} />{submitting ? "Envoi…" : "Envoyer à mon gestionnaire"}
+                    </button>
+                  </div>
+                )}
+
+                {myPendingItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Mes envois</p>
+                    {myPendingItems.slice(0, 6).map((item) => (
+                      <div key={item.id} className={`flex items-center justify-between gap-2 text-[10px] px-3 py-2 rounded-xl ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
+                        <span className="truncate">{item.date} · {item.description} · {fmtCAD(item.amount)}</span>
+                        {item.status === "pending" && <span className="flex items-center gap-1 text-amber-500 shrink-0"><Clock size={10} />En attente</span>}
+                        {item.status === "approved" && <span className="flex items-center gap-1 text-emerald-500 shrink-0"><CheckCircle2 size={10} />Approuvé</span>}
+                        {item.status === "rejected" && <span className="flex items-center gap-1 text-rose-500 shrink-0"><XCircle size={10} />Rejeté</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {sharedEntries.length === 0 ? (
+                  <p className={`text-[11px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                    Aucun mouvement partagé par votre gestionnaire pour l'instant.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {sharedEntries.slice(0, 8).map((e) => (
+                      <div key={e.id} className={`flex items-center justify-between gap-2 text-[10px] px-3 py-2 rounded-xl ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
+                        <span className="truncate">{e.date} · {e.description}{e.buildingAddress ? ` · ${e.buildingAddress}` : ""}</span>
+                        <span className={`font-bold shrink-0 ${e.direction === "revenue" ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(e.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {statements.length === 0 && pendingLinks.length === 0 ? (
               <div className={`p-12 rounded-[28px] border flex flex-col items-center gap-3 text-center ${glass}`}>

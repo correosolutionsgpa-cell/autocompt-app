@@ -4585,6 +4585,38 @@ const App = () => {
         if (saved.id && saved.id !== item.id) {
           _setHistorique(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
         }
+        // Live shared ledger mirror — mirrors the identical hook in
+        // reconcileExpenses below; see the comment there for why this one
+        // spot reliably catches every invoice, cheap no-op when unrelated.
+        if (saved.buildingId) {
+          const prop = plexManagementProperties.find(
+            (p: any) => (p.buildingId || p.id) === saved.buildingId
+          );
+          if (prop?.fideicommisClientId) {
+            dataService.fetchStatementLinkForClient(activeCompanyId, prop.fideicommisClientId)
+              .then((link) => {
+                if (link?.status === "accepted" && link.linkedOwnerUid) {
+                  dataService.mirrorToSharedLedger({
+                    statementLinkId: link.id,
+                    gestionnaireCompanyId: link.gestionnaireCompanyId,
+                    gestionnaireOwnerId: link.gestionnaireOwnerId,
+                    fideicommisClientId: link.fideicommisClientId,
+                    linkedOwnerUid: link.linkedOwnerUid,
+                    buildingId: saved.buildingId,
+                    buildingAddress: prop.adresse,
+                    sourceCollection: "invoices",
+                    sourceDocId: saved.id,
+                    direction: "revenue",
+                    date: saved.fecha,
+                    description: saved.cliente,
+                    category: saved.cat,
+                    amount: saved.total,
+                  });
+                }
+              })
+              .catch((e) => console.error("[sharedLedger] mirror lookup failed (non-blocking):", e));
+          }
+        }
       } catch (err: any) {
         console.error("Failed to save invoice:", err);
         const wasNew = !prev.some(p => p.id === item.id);
@@ -4642,6 +4674,43 @@ const App = () => {
         const saved = await dataService.saveExpense(userId, item);
         if (saved.id && saved.id !== item.id) {
           _setDepenses(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
+        }
+        // Live shared ledger mirror — every expense save funnels through this
+        // one place (dataService.saveExpense has a single call site in the
+        // whole app), so this is the one spot that reliably catches every
+        // gestionnaire expense tied to a linked client's property, without
+        // needing to instrument each individual expense-entry screen. Cheap
+        // no-op for the vast majority of expenses (no buildingId at all) —
+        // only does real work once a property AND an accepted link both
+        // exist. Never blocks/rolls back the real save above.
+        if (saved.buildingId) {
+          const prop = plexManagementProperties.find(
+            (p: any) => (p.buildingId || p.id) === saved.buildingId
+          );
+          if (prop?.fideicommisClientId) {
+            dataService.fetchStatementLinkForClient(activeCompanyId, prop.fideicommisClientId)
+              .then((link) => {
+                if (link?.status === "accepted" && link.linkedOwnerUid) {
+                  dataService.mirrorToSharedLedger({
+                    statementLinkId: link.id,
+                    gestionnaireCompanyId: link.gestionnaireCompanyId,
+                    gestionnaireOwnerId: link.gestionnaireOwnerId,
+                    fideicommisClientId: link.fideicommisClientId,
+                    linkedOwnerUid: link.linkedOwnerUid,
+                    buildingId: saved.buildingId,
+                    buildingAddress: prop.adresse,
+                    sourceCollection: "expenses",
+                    sourceDocId: saved.id,
+                    direction: "expense",
+                    date: saved.fecha,
+                    description: saved.fournisseur,
+                    category: saved.cat,
+                    amount: saved.total,
+                  });
+                }
+              })
+              .catch((e) => console.error("[sharedLedger] mirror lookup failed (non-blocking):", e));
+          }
         }
       } catch (err: any) {
         console.error("Failed to save expense:", err);

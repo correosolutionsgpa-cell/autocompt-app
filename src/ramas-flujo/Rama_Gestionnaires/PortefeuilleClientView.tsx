@@ -43,6 +43,10 @@ import {
   Send,
   Lock,
   Loader2,
+  Inbox,
+  Check,
+  X,
+  Receipt,
 } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
@@ -54,6 +58,8 @@ import type {
   FideicommisRetraitDoc,
   UnitDoc,
   StatementLinkDoc,
+  SharedLedgerEntryDoc,
+  SharedLedgerPendingItemDoc,
 } from "../../lib/dataService";
 import ClientPortfolioShell, {
   fmtCAD,
@@ -200,6 +206,205 @@ const StatementLinkPanel: React.FC<StatementLinkPanelProps> = ({
           >
             {alreadySealed ? "✓ Relevé déjà scellé pour cette période" : busy ? "Scellement…" : `Sceller le relevé de ${period}`}
           </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Registre partagé en direct — extension d'un StatementLink accepté ──────────
+// Contrairement à StatementLinkPanel (relevés scellés périodiques), ceci montre
+// le flux en direct + la file d'attente des documents soumis par le
+// propriétaire. Ne s'affiche qu'une fois le lien accepté — l'invitation
+// elle-même reste gérée par StatementLinkPanel ci-dessus, un seul système
+// d'invitation, pas deux. Composant autonome avec son propre fetch, même
+// principe que StatementLinkPanel.
+interface SharedLedgerReviewPanelProps {
+  darkMode: boolean;
+  client: FideicommisClientDoc;
+  gestionnaireCompanyId: string;
+}
+
+const SharedLedgerReviewPanel: React.FC<SharedLedgerReviewPanelProps> = ({ darkMode, client, gestionnaireCompanyId }) => {
+  const [link, setLink] = useState<StatementLinkDoc | null | undefined>(undefined);
+  const [entries, setEntries] = useState<SharedLedgerEntryDoc[]>([]);
+  const [pending, setPending] = useState<SharedLedgerPendingItemDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [reviewingItem, setReviewingItem] = useState<SharedLedgerPendingItemDoc | null>(null);
+  const [reviewForm, setReviewForm] = useState({ category: "", amount: "" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    dataService.fetchStatementLinkForClient(gestionnaireCompanyId, client.id).then(async (l) => {
+      if (cancelled) return;
+      setLink(l);
+      if (l?.status === "accepted") {
+        const [e, p] = await Promise.all([
+          dataService.fetchSharedLedgerEntries(l.id),
+          dataService.fetchPendingItemsForLink(l.id),
+        ]);
+        if (!cancelled) { setEntries(e); setPending(p.filter((x) => x.status === "pending")); }
+      }
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [gestionnaireCompanyId, client.id]);
+
+  const box = darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200";
+
+  // Only relevant once linked — the invite step itself lives in StatementLinkPanel.
+  if (loading || link?.status !== "accepted") return null;
+
+  const openReview = (item: SharedLedgerPendingItemDoc) => {
+    setReviewingItem(item);
+    setReviewForm({ category: item.category || "", amount: String(item.amount) });
+  };
+
+  const handleApprove = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !reviewingItem || !link) return;
+    setBusyItemId(reviewingItem.id);
+    try {
+      const amount = parseFloat(reviewForm.amount) || reviewingItem.amount;
+      const category = reviewForm.category.trim() || "Autre";
+      const savedExpense = await dataService.saveExpense(uid, {
+        companyId: gestionnaireCompanyId,
+        fecha: reviewingItem.date,
+        fournisseur: reviewingItem.description,
+        cat: category,
+        subtotal: amount,
+        tps: 0,
+        tvq: 0,
+        total: amount,
+        lien: reviewingItem.receiptUrl || null,
+        partnerTag: "",
+        buildingId: reviewingItem.buildingId,
+        clientId: client.id,
+      });
+      await dataService.approveSharedLedgerPendingItem(reviewingItem, uid, savedExpense.id, {
+        buildingId: reviewingItem.buildingId,
+        sourceCollection: "expenses",
+        sourceDocId: savedExpense.id,
+        direction: "expense",
+        date: reviewingItem.date,
+        description: reviewingItem.description,
+        category,
+        amount,
+      });
+      setPending((prev) => prev.filter((p) => p.id !== reviewingItem.id));
+      setEntries((prev) => [{
+        id: `local_${savedExpense.id}`, statementLinkId: link.id, gestionnaireCompanyId,
+        gestionnaireOwnerId: link.gestionnaireOwnerId, fideicommisClientId: client.id,
+        linkedOwnerUid: link.linkedOwnerUid || "", buildingId: reviewingItem.buildingId,
+        sourceCollection: "expenses", sourceDocId: savedExpense.id, direction: "expense",
+        date: reviewingItem.date, description: reviewingItem.description, category, amount,
+        mirroredAt: new Date().toISOString(),
+      }, ...prev]);
+      setReviewingItem(null);
+    } catch (e) {
+      console.error("[SharedLedgerReviewPanel] approve error:", e);
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  const handleReject = async (item: SharedLedgerPendingItemDoc) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setBusyItemId(item.id);
+    try {
+      await dataService.rejectSharedLedgerPendingItem(item, uid, "Non retenu par le gestionnaire");
+      setPending((prev) => prev.filter((p) => p.id !== item.id));
+    } catch (e) {
+      console.error("[SharedLedgerReviewPanel] reject error:", e);
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  return (
+    <div className={`p-4 rounded-[24px] border space-y-3 ${box}`}>
+      <div className="flex items-center gap-2">
+        <Inbox size={14} className="text-indigo-500" />
+        <h3 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Registre partagé en direct</h3>
+      </div>
+
+      {pending.length > 0 && (
+        <div className="space-y-2">
+          <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
+            {pending.length} document(s) soumis par le propriétaire — à réviser
+          </p>
+          {pending.map((item) => (
+            <div key={item.id} className={`p-3 rounded-2xl border flex items-center gap-3 ${darkMode ? "bg-amber-900/10 border-amber-500/20" : "bg-amber-50/50 border-amber-200"}`}>
+              <Receipt size={14} className="text-amber-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold truncate">{item.description}</p>
+                <p className={`text-[9px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{item.date} · {fmtCAD(item.amount)}</p>
+              </div>
+              <button
+                onClick={() => openReview(item)}
+                disabled={busyItemId === item.id}
+                className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition-all flex items-center gap-1"
+              >
+                <Check size={10} />Réviser
+              </button>
+              <button
+                onClick={() => handleReject(item)}
+                disabled={busyItemId === item.id}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${darkMode ? "text-zinc-500 hover:text-rose-400" : "text-slate-400 hover:text-rose-600"}`}
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {entries.length === 0 && pending.length === 0 ? (
+        <p className={`text-[11px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+          Aucun mouvement partagé pour l'instant — apparaîtra ici dès qu'une dépense/facture liée à une propriété de ce client sera enregistrée.
+        </p>
+      ) : entries.length > 0 && (
+        <div className="space-y-1.5">
+          {entries.slice(0, 8).map((e) => (
+            <div key={e.id} className={`flex items-center justify-between gap-2 text-[10px] px-2 py-1.5 rounded-lg ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
+              <span className={`truncate ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{e.date} · {e.description}</span>
+              <span className={`font-bold shrink-0 ${e.direction === "revenue" ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(e.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {reviewingItem && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/60" onClick={() => !busyItemId && setReviewingItem(null)}>
+          <div onClick={(ev) => ev.stopPropagation()} className={`w-full max-w-sm p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}>
+            <h4 className="text-sm font-black uppercase tracking-widest mb-3">Confirmer avant d'enregistrer</h4>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={reviewForm.category}
+                onChange={(ev) => setReviewForm({ ...reviewForm, category: ev.target.value })}
+                placeholder="Catégorie"
+                className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
+              />
+              <input
+                type="number"
+                value={reviewForm.amount}
+                onChange={(ev) => setReviewForm({ ...reviewForm, amount: ev.target.value })}
+                placeholder="Montant"
+                className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
+              />
+            </div>
+            <button
+              onClick={handleApprove}
+              disabled={busyItemId === reviewingItem.id}
+              className="w-full mt-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              {busyItemId === reviewingItem.id ? "Enregistrement..." : "Approuver et enregistrer"}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -392,6 +597,12 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
             period={a.extra.period}
             totals={{ totalLoyers: a.extra.totalLoyers, totalDepenses: a.extra.totalDepenses, totalHonoraires: a.extra.totalHonoraires, netRemis: a.extra.netRemis }}
             propertyAddresses={a.extra.buildings.map((b) => b.adresse)}
+          />
+
+          <SharedLedgerReviewPanel
+            darkMode={darkMode}
+            client={a}
+            gestionnaireCompanyId={activeCompanyId}
           />
 
           {/* Occupation rate */}

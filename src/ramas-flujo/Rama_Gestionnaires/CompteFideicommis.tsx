@@ -493,6 +493,36 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
         }
       }
 
+      // Live shared ledger mirror — only for retraits that represent money
+      // actually spent/deducted on this client's behalf ("dépense" and
+      // "honoraires"); "remise_nette" is a payout TO the owner, already
+      // covered by the periodic sealed statement's netRemis figure, not
+      // something that belongs in an expense-style live feed. Non-blocking,
+      // silent no-op when this client has no accepted link.
+      if (newRetrait.type === "dépense" || newRetrait.type === "honoraires") {
+        dataService.fetchStatementLinkForClient(activeCompanyId, newRetrait.clientId)
+          .then((link) => {
+            if (link?.status === "accepted" && link.linkedOwnerUid) {
+              dataService.mirrorToSharedLedger({
+                statementLinkId: link.id,
+                gestionnaireCompanyId: link.gestionnaireCompanyId,
+                gestionnaireOwnerId: link.gestionnaireOwnerId,
+                fideicommisClientId: link.fideicommisClientId,
+                linkedOwnerUid: link.linkedOwnerUid,
+                buildingAddress: newRetrait.propertyAddress,
+                sourceCollection: "fideicommisRetraits",
+                sourceDocId: newRetrait.id,
+                direction: "expense",
+                date: newRetrait.date,
+                description: newRetrait.type === "honoraires" ? `Honoraires de gestion — ${newRetrait.beneficiaire}` : newRetrait.description,
+                category: newRetrait.type === "honoraires" ? "Honoraires de gestion" : "Dépense",
+                amount: newRetrait.montant,
+              });
+            }
+          })
+          .catch((e) => console.error("[sharedLedger] mirror lookup failed (non-blocking):", e));
+      }
+
       setShowRetraitForm(false);
       setRetraitForm(emptyRetrait());
       playNotificationSound?.();

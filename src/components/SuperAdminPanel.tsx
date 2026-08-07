@@ -37,6 +37,10 @@ interface AdminUser {
   createdAt?: string;
   trialStartDate?: string;
   trialValidDays?: number;
+  /** Narrow delegated access to BetaCodeAdminView (generate/list beta codes
+   *  only) — granted per-account here, never self-service. Does NOT imply
+   *  any of SuperAdmin's other access. */
+  canGenerateBetaCodes?: boolean;
 }
 
 interface SuperAdminPanelProps {
@@ -328,6 +332,22 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       await updateDoc(doc(db, 'users', u.id), { trialValidDays: newValidDays });
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, trialValidDays: newValidDays } : x));
       toast(`Mois gratuit additionnel accordé à ${u.email}.`);
+    } catch (err: any) {
+      toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
+  /**
+   * Grants or revokes the narrow "generate beta codes" delegated role for a
+   * QA tester's account — the only thing it unlocks is BetaCodeAdminView.
+   * Toggle off any time to revoke, no other side effect.
+   */
+  const handleToggleBetaCodeAccess = async (u: AdminUser) => {
+    const next = !u.canGenerateBetaCodes;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { canGenerateBetaCodes: next });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, canGenerateBetaCodes: next } : x));
+      toast(next ? `Accès Codes Bêta accordé à ${u.email}.` : `Accès Codes Bêta retiré de ${u.email}.`);
     } catch (err: any) {
       toast(`Échec : ${err.message}`, 'error');
     }
@@ -662,6 +682,13 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                           title="Générer facture"
                           className={`p-1.5 rounded-lg transition-colors ${D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'}`}>
                           <Receipt size={13} />
+                        </button>
+                        <button onClick={() => handleToggleBetaCodeAccess(u)}
+                          title={u.canGenerateBetaCodes ? "Retirer l'accès Codes Bêta (testeur)" : "Donner l'accès Codes Bêta (testeur) — génération de codes uniquement"}
+                          className={`p-1.5 rounded-lg transition-colors ${u.canGenerateBetaCodes
+                            ? (D ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-600')
+                            : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
+                          <Sparkles size={13} />
                         </button>
                         <button
                           title="Envoyer le courriel de prolongation (mois gratuit)"

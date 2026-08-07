@@ -31,11 +31,11 @@
  */
 
 import React, { useState } from "react";
-import { Briefcase, BookOpen, X, Home, Plus } from "lucide-react";
+import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
 import type { BookkeepingClientDoc, BookkeepingClientTypeEntite, PropertyDoc } from "../../lib/dataService";
-import ClientPortfolioShell, { type ClientPortfolioAggregate } from "../shared/ClientPortfolioShell";
+import ClientPortfolioShell, { type ClientPortfolioAggregate, fmtCAD } from "../shared/ClientPortfolioShell";
 
 export interface PortefeuilleClientsComptableViewProps {
   darkMode: boolean;
@@ -53,6 +53,16 @@ export interface PortefeuilleClientsComptableViewProps {
  *  the comptable only needs a ledger bucket per property, not to manage it. */
 interface ComptableExtra {
   properties: PropertyDoc[];
+  /** Present only once this client has been linked to their OWN real
+   *  AutoCompt company (see BookkeepingClientDoc.linkedCompanyDocId) — real
+   *  numbers read as a collaborator, not the comptable's internal records. */
+  linked?: {
+    companyDocId: string;
+    revenue: number;
+    expenses: number;
+    balance: number;
+    properties: PropertyDoc[];
+  };
 }
 
 const emptyExtra: ComptableExtra = { properties: [] };
@@ -81,6 +91,74 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   // Which client's "Ajouter une propriété" mini-form is open (client id, or "" = closed).
   const [propertyFormClientId, setPropertyFormClientId] = useState("");
   const [propertyForm, setPropertyForm] = useState({ adresse: "", typeLocation: "Logement entier" });
+
+  // Which client's "Lier à un compte client existant" modal is open (client, or null = closed).
+  const [linkingClient, setLinkingClient] = useState<Agg | null>(null);
+  const [collaboratorCompanies, setCollaboratorCompanies] = useState<any[]>([]);
+  const [loadingCollab, setLoadingCollab] = useState(false);
+  const [selectedLinkDocId, setSelectedLinkDocId] = useState("");
+
+  const handleOpenLinkModal = async (client: Agg) => {
+    setLinkingClient(client);
+    setSelectedLinkDocId(client.linkedCompanyDocId || "");
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setLoadingCollab(true);
+    try {
+      setCollaboratorCompanies(await dataService.fetchCollaboratorCompanies(uid));
+    } catch (e) {
+      console.error("[PortefeuilleClientsComptableView] fetchCollaboratorCompanies error:", e);
+    } finally {
+      setLoadingCollab(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !linkingClient || !selectedLinkDocId) return;
+    const company = collaboratorCompanies.find((c) => c._companyDocId === selectedLinkDocId);
+    setIsSaving(true);
+    try {
+      await dataService.saveClient(uid, {
+        id: linkingClient.id,
+        companyId: linkingClient.companyId,
+        nom: linkingClient.nom,
+        linkedCompanyDocId: selectedLinkDocId,
+        linkedCompanyName: company?.nombre || company?.nom || "",
+      });
+      setLinkingClient(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      console.error("[PortefeuilleClientsComptableView] link client error:", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUnlink = async (client: Agg) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setIsSaving(true);
+    try {
+      // setDoc({merge:true}) never removes a field that's merely absent from
+      // the payload — saveClient strips `undefined` keys before writing, so
+      // sending undefined here would silently leave the old link in place.
+      // Empty strings write through normally and every check in this file
+      // already treats an empty linkedCompanyDocId as "not linked".
+      await dataService.saveClient(uid, {
+        id: client.id,
+        companyId: client.companyId,
+        nom: client.nom,
+        linkedCompanyDocId: "",
+        linkedCompanyName: "",
+      });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      console.error("[PortefeuilleClientsComptableView] unlink client error:", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSaveClient = async () => {
     const uid = auth.currentUser?.uid;
@@ -161,6 +239,35 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         properties: companyProps.filter((p) => p.bookkeepingClientId === client.id),
       };
     }
+
+    // Linked clients — real data read as a collaborator on their OWN
+    // company, via the exact same collaboratorCompanyDocIds plumbing
+    // fetchProperties/fetchExpenses/fetchInvoices already support for
+    // shared workspaces. Fetched one linked client at a time (not batched
+    // together) because fetchExpenses/fetchInvoices UNPREFIX companyId back
+    // to the short per-account id (e.g. "1") in their return value — two
+    // different linked accounts can both use "1", so attributing a batched
+    // result back to the right client afterward would be ambiguous. Each
+    // per-client Firestore query is still precisely scoped by the real
+    // doc id, so this is correct, just not merged into one round trip.
+    const linkedClients = clients.filter((c) => !!c.linkedCompanyDocId);
+    if (linkedClients.length > 0) {
+      await Promise.all(linkedClients.map(async (client) => {
+        const docId = client.linkedCompanyDocId!;
+        const [lProps, lExp, lInv] = await Promise.all([
+          dataService.fetchProperties(uid, [docId]),
+          dataService.fetchExpenses(uid, [docId]),
+          dataService.fetchInvoices(uid, [docId]),
+        ]);
+        const revenue = lInv.reduce((s, i) => s + (i.total || 0), 0);
+        const expenses = lExp.reduce((s, e) => s + (e.total || 0), 0);
+        result[client.id] = {
+          ...result[client.id],
+          linked: { companyDocId: docId, revenue, expenses, balance: revenue - expenses, properties: lProps },
+        };
+      }));
+    }
+
     return result;
   };
 
@@ -182,13 +289,40 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         fetchExtra={fetchExtra}
         emptyExtra={emptyExtra}
         onAddClient={() => setShowClientForm(true)}
-        renderHeaderBadge={(a: Agg) => a.typeEntite ? (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
-            {TYPE_ENTITE_LABELS[a.typeEntite]}
-          </span>
-        ) : null}
+        hideGenericKpisFor={(a: Agg) => !!a.extra.linked}
+        extraKpis={(a: Agg) => a.extra.linked ? [
+          { label: "Revenus (compte lié)", value: fmtCAD(a.extra.linked.revenue), icon: <TrendingUp size={16} />, color: "emerald" },
+          { label: "Dépenses (compte lié)", value: fmtCAD(a.extra.linked.expenses), icon: <TrendingDown size={16} />, color: "rose" },
+          { label: "Solde net (compte lié)", value: fmtCAD(a.extra.linked.balance), icon: <Scale size={16} />, color: "blue" },
+        ] : []}
+        renderHeaderBadge={(a: Agg) => (
+          <>
+            {a.typeEntite && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
+                {TYPE_ENTITE_LABELS[a.typeEntite]}
+              </span>
+            )}
+            {a.extra.linked ? (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+                <ShieldCheck size={10} />Compte lié — données réelles
+              </span>
+            ) : (
+              <button
+                onClick={() => handleOpenLinkModal(a)}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+              >
+                <Link2 size={10} />Lier à un compte client existant
+              </button>
+            )}
+          </>
+        )}
         renderListBadges={(a: Agg) => (
           <>
+            {a.extra.linked && (
+              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 ${darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+                <ShieldCheck size={8} />Compte lié
+              </span>
+            )}
             {a.extra.properties.length > 0 && (
               <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-slate-100 text-slate-500"}`}>
                 {a.extra.properties.length} propriété(s)
@@ -201,10 +335,36 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         )}
         renderDetailBody={(a: Agg) => (
           <>
+            {a.extra.linked && (
+              <div className={`p-4 rounded-2xl border space-y-2 ${darkMode ? "bg-emerald-900/10 border-emerald-800/30" : "bg-emerald-50/50 border-emerald-200"}`}>
+                <div className="flex items-center justify-between">
+                  <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
+                    <ShieldCheck size={11} />Compte client lié — {a.linkedCompanyName || "compte réel"}
+                  </p>
+                  <button
+                    onClick={() => handleUnlink(a)}
+                    className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500 hover:text-rose-400" : "text-slate-400 hover:text-rose-600"}`}
+                  >
+                    Délier
+                  </button>
+                </div>
+                {a.extra.linked.properties.length > 0 && (
+                  <div className="space-y-1.5">
+                    {a.extra.linked.properties.map((p) => (
+                      <div key={p.id} className={`flex items-center gap-2 text-[11px] ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                        <Home size={11} className={darkMode ? "text-zinc-500" : "text-slate-400"} />
+                        <span className="truncate">{p.adresse}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                  Propriétés ({a.extra.properties.length})
+                  Propriétés internes ({a.extra.properties.length})
                 </h3>
                 <button
                   onClick={() => setPropertyFormClientId(propertyFormClientId === a.id ? "" : a.id)}
@@ -277,6 +437,61 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
           </>
         )}
       />
+
+      {linkingClient && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60"
+          onClick={() => !isSaving && setLinkingClient(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                <Link2 size={16} className="text-blue-500" />
+                Lier {linkingClient.nom}
+              </h3>
+              <button onClick={() => setLinkingClient(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className={`text-[11px] leading-relaxed mb-4 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+              Demandez à votre client, depuis sa propre entreprise, d'aller dans son menu d'espace de travail → <strong>« Inviter un associé »</strong> → et d'entrer votre courriel de compte AutoCompt. Une fois qu'il a accepté (à sa prochaine connexion), son entreprise apparaîtra ci-dessous.
+            </p>
+
+            {loadingCollab ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-blue-500" />
+              </div>
+            ) : collaboratorCompanies.length === 0 ? (
+              <p className={`text-[11px] text-center py-6 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Aucune entreprise partagée avec vous pour l'instant.
+              </p>
+            ) : (
+              <select
+                value={selectedLinkDocId}
+                onChange={(e) => setSelectedLinkDocId(e.target.value)}
+                className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
+              >
+                <option value="">— Sélectionner l'entreprise du client —</option>
+                {collaboratorCompanies.map((c) => (
+                  <option key={c._companyDocId} value={c._companyDocId}>{c.nombre || c.nom || c._companyDocId}</option>
+                ))}
+              </select>
+            )}
+
+            <button
+              disabled={!selectedLinkDocId || isSaving}
+              onClick={handleConfirmLink}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              {isSaving ? "Enregistrement..." : "Lier ce compte"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showClientForm && (
         <div

@@ -19,10 +19,24 @@ service cloud.firestore {
       );
     }
 
+    // Narrow delegated role — a QA tester's own users/{uid} doc gets this
+    // flag flipped by SuperAdmin (never self-service). It only unlocks
+    // BetaCodeAdminView / the betaCodes rules below, nothing else.
+    function isBetaCodeAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('canGenerateBetaCodes', false) == true;
+    }
+
     // User profile document rules
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      // A user always owns their own doc. SuperAdmin may ALSO write another
+      // user's doc, but only to flip canGenerateBetaCodes — never anything
+      // else on someone else's profile.
+      allow write: if isSignedIn() && (
+        request.auth.uid == userId ||
+        (isSuperAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canGenerateBetaCodes']))
+      );
     }
 
     // General collection rules with multi-tenant isolation by ownerId.
@@ -289,6 +303,56 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Live shared ledger — extends an ACCEPTED statementLink into a running,
+    // redacted, property-scoped feed. Deliberately a NEW narrow collection,
+    // not a loosening of expenses/invoices/fideicommisRetraits: those
+    // collections' rules stay untouched, every read path on them keeps its
+    // existing, already-audited scope. Only what the gestora explicitly
+    // mirrors here is ever visible to the linked owner.
+    match /sharedLedgerEntries/{entryId} {
+      allow read: if isSignedIn() && (
+        resource.data.gestionnaireOwnerId == request.auth.uid ||
+        resource.data.linkedOwnerUid == request.auth.uid
+      );
+      // Only the gestora ever writes a mirror — a read-only projection of
+      // their own real books for this one linked property, never a two-way
+      // sync target. The owner never writes here directly (see
+      // sharedLedgerPendingItems below for how their submissions get in).
+      allow create, update: if isSignedIn() && request.resource.data.gestionnaireOwnerId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.gestionnaireOwnerId == request.auth.uid;
+    }
+
+    // Documents/expenses the OWNER submits for a linked property — NEVER
+    // become a real record directly (same house rule as every other
+    // AI/external-origin data in this app: a human must review before it's
+    // trusted). The gestora reviews and, on approval, creates the real
+    // fideicommisRetraits/expense record client-side and mirrors it into
+    // sharedLedgerEntries above.
+    match /sharedLedgerPendingItems/{itemId} {
+      allow read: if isSignedIn() && (
+        resource.data.gestionnaireOwnerId == request.auth.uid ||
+        resource.data.linkedOwnerUid == request.auth.uid
+      );
+      // The owner may only submit against a link that is actually accepted
+      // and actually theirs — same exists()+status guard shape as
+      // isAcceptingOwnInvite() above, applied to statementLinks instead of
+      // companyInvites.
+      allow create: if isSignedIn() &&
+        request.resource.data.linkedOwnerUid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        exists(/databases/$(database)/documents/statementLinks/$(request.resource.data.statementLinkId)) &&
+        get(/databases/$(database)/documents/statementLinks/$(request.resource.data.statementLinkId)).data.status == 'accepted' &&
+        get(/databases/$(database)/documents/statementLinks/$(request.resource.data.statementLinkId)).data.linkedOwnerUid == request.auth.uid;
+      // Only the gestora reviews — flips status pending->approved/rejected
+      // and stamps who/when/which real record resulted, nothing else.
+      allow update: if isSignedIn() &&
+        resource.data.gestionnaireOwnerId == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['approved', 'rejected'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'approvedRecordId', 'rejectionReason']);
+      allow delete: if false; // trazabilité — on rejette, on ne supprime jamais
+    }
+
     // AI usage events — cost-tracking log (one doc per Gemini/Claude call).
     // Any signed-in user can log their own events; only SuperAdmin can read
     // the log (aggregated in the "Usage IA" tab). Events are immutable.
@@ -315,8 +379,11 @@ service cloud.firestore {
     // used by the admin "Codes Beta" tab.
     match /betaCodes/{code} {
       allow get: if true;
-      allow list: if isSuperAdmin();
-      allow create: if isSuperAdmin();
+      // isBetaCodeAdmin can list too — a tester needs to see which emails/
+      // codes already exist to avoid duplicates. Codes reveal only an email
+      // + status, nothing sensitive.
+      allow list: if isSuperAdmin() || isBetaCodeAdmin();
+      allow create: if isSuperAdmin() || isBetaCodeAdmin();
       allow update: if isSignedIn()
         && resource.data.status == 'unused'
         && resource.data.email == request.auth.token.email

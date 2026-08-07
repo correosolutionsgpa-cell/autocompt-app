@@ -670,6 +670,18 @@ export interface BookkeepingClientDoc {
    *  already manages day-to-day). */
   typeEntite?: BookkeepingClientTypeEntite;
   notes?: string;
+  /** Set once this client's OWN real AutoCompt company has been linked via
+   *  the existing collaborator/invite mechanism (companyInvites/
+   *  collaboratorUIDs) — the client invites the comptable's email from
+   *  their own account (same "Inviter un associé" flow used for business
+   *  partners), and the comptable then picks which shared company this is
+   *  from fetchCollaboratorCompanies(). This is a pointer into data the
+   *  comptable can already read as a collaborator — not a new permission
+   *  primitive. Absent = this client stays an internal-only record the
+   *  comptable manages directly (no real linked account required). */
+  linkedCompanyDocId?: string;
+  /** Denormalised for display without an extra lookup. */
+  linkedCompanyName?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -819,6 +831,75 @@ export interface SealedStatementDoc {
   companyName: string;
   sealedAt: string;
   sealedByUid: string;
+}
+
+/**
+ * SharedLedgerEntryDoc — `sharedLedgerEntries` collection
+ * Redacted, read-only mirror of ONE gestora-side expense/invoice tagged with
+ * a building belonging to a linked FideicommisClientDoc — extends an
+ * accepted StatementLinkDoc into a live feed, instead of only the periodic
+ * SealedStatementDoc totals. Never the receipt/document image itself, only
+ * structured fields — same minimal-exposure principle as SealedStatementDoc.
+ * Document ID: `{statementLinkId}_mirror_{sourceCollection}_{sourceDocId}`
+ * (deterministic so editing the source expense safely upserts the mirror
+ * instead of duplicating it).
+ */
+export interface SharedLedgerEntryDoc {
+  id: string;
+  statementLinkId: string;
+  gestionnaireCompanyId: string;
+  gestionnaireOwnerId: string;
+  fideicommisClientId: string;
+  linkedOwnerUid: string;
+  /** Absent for fideicommisRetraits mirrors — that collection identifies the
+   *  property by `propertyAddress` text, not a buildingId FK. */
+  buildingId?: string;
+  buildingAddress?: string;
+  sourceCollection: 'expenses' | 'invoices' | 'fideicommisRetraits';
+  sourceDocId: string;
+  direction: 'expense' | 'revenue';
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  mirroredAt: string;
+}
+
+/**
+ * SharedLedgerPendingItemDoc — `sharedLedgerPendingItems` collection
+ * A document/expense the linked OWNER submits for a property the gestora
+ * manages for them — never becomes a real record directly (house rule: no
+ * external-origin data is trusted without human review). The gestora
+ * reviews and approves/rejects; on approval a real expense/retrait is
+ * created and mirrored into SharedLedgerEntryDoc above.
+ * Document ID: `{statementLinkId}_pend_{Date.now()}`
+ */
+export interface SharedLedgerPendingItemDoc {
+  id: string;
+  statementLinkId: string;
+  gestionnaireCompanyId: string;
+  gestionnaireOwnerId: string;
+  fideicommisClientId: string;
+  linkedOwnerUid: string;
+  /** Optional — the owner submits against a CLIENT-level link (see
+   *  StatementLinkDoc), not a specific building id on the gestora's side.
+   *  The gestora can fill this in at approval time if the client has more
+   *  than one property, to route the resulting record correctly. */
+  buildingId?: string;
+  submittedByUid: string;
+  date: string;
+  description: string;
+  category?: string;
+  amount: number;
+  /** Firebase Storage / Drive URL — same convention as ExpenseDoc.lien. */
+  receiptUrl?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedByUid?: string;
+  reviewedAt?: string;
+  /** FK → the real expense/fideicommisRetraits doc created once approved. */
+  approvedRecordId?: string;
+  rejectionReason?: string;
+  createdAt: string;
 }
 
 // ── AiReportDoc — Firestore `aiReports` collection (SyndicAI generated reports) ──
@@ -1215,6 +1296,16 @@ export const dataService = {
       console.error('fetchWorkspaces failed:', e);
       return [];
     }
+  },
+
+  /** Companies the user sees only as a collaborator (not their own) — a
+   *  thin filter over fetchWorkspaces, used to let a comptable pick which
+   *  shared company corresponds to a given BookkeepingClientDoc once that
+   *  client has invited them (see BookkeepingClientDoc.linkedCompanyDocId).
+   *  No new permission logic — just narrowing an existing read. */
+  async fetchCollaboratorCompanies(userId: string): Promise<any[]> {
+    const all = await this.fetchWorkspaces(userId);
+    return all.filter((w) => w.ownerId && w.ownerId !== userId);
   },
 
   async saveWorkspace(userId: string, workspaceData: any): Promise<any> {
@@ -2742,6 +2833,20 @@ export const dataService = {
     }
   },
 
+  /** Owner side — every link this account has already accepted, across every
+   *  gestionnaire, so the UI knows which gestionnaire(s) to submit shared-
+   *  ledger documents against. */
+  async fetchAcceptedStatementLinksForOwner(uid: string): Promise<StatementLinkDoc[]> {
+    try {
+      const q = query(collection(db, 'statementLinks'), where('linkedOwnerUid', '==', uid));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as StatementLinkDoc);
+    } catch (e) {
+      console.error('fetchAcceptedStatementLinksForOwner failed:', e);
+      return [];
+    }
+  },
+
   /** Owner accepts: picks which of THEIR OWN companies this channel is for. */
   async acceptStatementLink(uid: string, link: StatementLinkDoc, ownerCompanyId: string): Promise<void> {
     await updateDoc(doc(db, 'statementLinks', link.id), {
@@ -2805,6 +2910,131 @@ export const dataService = {
       console.error('fetchSealedStatements failed:', e);
       return [];
     }
+  },
+
+  // ── Shared Ledger — live gestionnaire↔owner property feed, extending an
+  //    accepted StatementLinkDoc. See SharedLedgerEntryDoc/
+  //    SharedLedgerPendingItemDoc above and firestore.rules for the access
+  //    model. Never touches expenses/invoices/fideicommisRetraits' own
+  //    rules — this only mirrors what the gestora explicitly shares. ──
+
+  /** Best-effort mirror — a failure here must NEVER block the real save it's
+   *  attached to. Deterministic id so re-mirroring an edited source record
+   *  upserts instead of duplicating. */
+  async mirrorToSharedLedger(entry: Omit<SharedLedgerEntryDoc, 'id' | 'mirroredAt'>): Promise<void> {
+    try {
+      const id = `${entry.statementLinkId}_mirror_${entry.sourceCollection}_${entry.sourceDocId}`;
+      const full: SharedLedgerEntryDoc = { ...entry, id, mirroredAt: new Date().toISOString() };
+      await setDoc(doc(db, 'sharedLedgerEntries', id), full);
+    } catch (e) {
+      console.error('mirrorToSharedLedger failed (non-blocking):', e);
+    }
+  },
+
+  /** Gestora side — every mirror for one link. */
+  async fetchSharedLedgerEntries(statementLinkId: string): Promise<SharedLedgerEntryDoc[]> {
+    try {
+      const q = query(collection(db, 'sharedLedgerEntries'), where('statementLinkId', '==', statementLinkId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SharedLedgerEntryDoc).sort((a, b) => b.date.localeCompare(a.date));
+    } catch (e) {
+      console.error('fetchSharedLedgerEntries failed:', e);
+      return [];
+    }
+  },
+
+  /** Owner side — every mirror addressed to this uid, across every linked gestionnaire. */
+  async fetchSharedLedgerEntriesForOwner(uid: string): Promise<SharedLedgerEntryDoc[]> {
+    try {
+      const q = query(collection(db, 'sharedLedgerEntries'), where('linkedOwnerUid', '==', uid));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SharedLedgerEntryDoc).sort((a, b) => b.date.localeCompare(a.date));
+    } catch (e) {
+      console.error('fetchSharedLedgerEntriesForOwner failed:', e);
+      return [];
+    }
+  },
+
+  /** Owner submits a document/expense for a linked property — lands as
+   *  'pending', never becomes a real record until the gestora approves it. */
+  async submitSharedLedgerPendingItem(
+    uid: string,
+    item: Omit<SharedLedgerPendingItemDoc, 'id' | 'status' | 'submittedByUid' | 'createdAt'>
+  ): Promise<SharedLedgerPendingItemDoc> {
+    assertCanWrite();
+    const id = `${item.statementLinkId}_pend_${Date.now()}`;
+    const data: any = {
+      ...item,
+      id,
+      submittedByUid: uid,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    Object.keys(data).forEach((k) => { if (data[k] === undefined) delete data[k]; });
+    await setDoc(doc(db, 'sharedLedgerPendingItems', id), data);
+    return data as SharedLedgerPendingItemDoc;
+  },
+
+  /** Gestora side — pending items for one link, newest first. */
+  async fetchPendingItemsForLink(statementLinkId: string): Promise<SharedLedgerPendingItemDoc[]> {
+    try {
+      const q = query(collection(db, 'sharedLedgerPendingItems'), where('statementLinkId', '==', statementLinkId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SharedLedgerPendingItemDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } catch (e) {
+      console.error('fetchPendingItemsForLink failed:', e);
+      return [];
+    }
+  },
+
+  /** Owner side — their own submission history + status, across every linked gestionnaire. */
+  async fetchPendingItemsForOwner(uid: string): Promise<SharedLedgerPendingItemDoc[]> {
+    try {
+      const q = query(collection(db, 'sharedLedgerPendingItems'), where('linkedOwnerUid', '==', uid));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SharedLedgerPendingItemDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } catch (e) {
+      console.error('fetchPendingItemsForOwner failed:', e);
+      return [];
+    }
+  },
+
+  /** Gestora approves a pending item: caller supplies the already-created
+   *  real record's id (an expense or fideicommisRetrait, created by the
+   *  caller via the normal saveExpense/CompteFideicommis save path first),
+   *  this just stamps the pending item as approved and re-mirrors it as a
+   *  real entry so it becomes visible to the owner. */
+  async approveSharedLedgerPendingItem(
+    item: SharedLedgerPendingItemDoc,
+    reviewerUid: string,
+    approvedRecordId: string,
+    mirrorEntry: Omit<SharedLedgerEntryDoc, 'id' | 'mirroredAt' | 'statementLinkId' | 'gestionnaireCompanyId' | 'gestionnaireOwnerId' | 'fideicommisClientId' | 'linkedOwnerUid'>
+  ): Promise<void> {
+    assertCanWrite();
+    await this.mirrorToSharedLedger({
+      ...mirrorEntry,
+      statementLinkId: item.statementLinkId,
+      gestionnaireCompanyId: item.gestionnaireCompanyId,
+      gestionnaireOwnerId: item.gestionnaireOwnerId,
+      fideicommisClientId: item.fideicommisClientId,
+      linkedOwnerUid: item.linkedOwnerUid,
+    });
+    await setDoc(doc(db, 'sharedLedgerPendingItems', item.id), {
+      status: 'approved',
+      reviewedByUid: reviewerUid,
+      reviewedAt: new Date().toISOString(),
+      approvedRecordId,
+    }, { merge: true });
+  },
+
+  async rejectSharedLedgerPendingItem(item: SharedLedgerPendingItemDoc, reviewerUid: string, reason: string): Promise<void> {
+    assertCanWrite();
+    await setDoc(doc(db, 'sharedLedgerPendingItems', item.id), {
+      status: 'rejected',
+      reviewedByUid: reviewerUid,
+      reviewedAt: new Date().toISOString(),
+      rejectionReason: reason,
+    }, { merge: true });
   },
 
   // ── Generic multi-client bookkeeping (comptable, and any profile with
