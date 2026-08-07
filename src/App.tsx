@@ -109,6 +109,7 @@ import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
 import SuperAdminPanel from "./components/SuperAdminPanel";
+import BetaCodeAdminView from "./components/BetaCodeAdminView";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
 import { PolitiqueConfidentialite } from "./components/PolitiqueConfidentialite";
 import { ConditionsUtilisation } from "./components/ConditionsUtilisation";
@@ -869,6 +870,11 @@ const App = () => {
   // ── Mandatory phone verification (Loi 25 — explicit consent + SMS proof) ──
   // null = not yet known (auth still resolving), true/false = confirmed from Firestore.
   const [isPhoneVerified, setIsPhoneVerified] = useState<boolean | null>(null);
+  // Narrow delegated role — granted per-account by SuperAdmin (SuperAdminPanel
+  // → Utilisateurs) so a QA tester can generate beta codes for account
+  // creation without getting any of SuperAdmin's other access (billing,
+  // DocuLegal documents, other users' data). Never self-service.
+  const [canGenerateBetaCodes, setCanGenerateBetaCodes] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneOtpInput, setPhoneOtpInput] = useState("");
   const [phoneConsentChecked, setPhoneConsentChecked] = useState(false);
@@ -1983,6 +1989,12 @@ const App = () => {
   }, [vista, isSuperAdmin]);
 
   useEffect(() => {
+    if (vista === "beta-code-admin" && !canGenerateBetaCodes && !isSuperAdmin) {
+      setVista("dashboard");
+    }
+  }, [vista, canGenerateBetaCodes, isSuperAdmin]);
+
+  useEffect(() => {
     if (vista === "doculegal") {
       const currentTier = getEffectiveTier();
       if (currentTier === "gratuit" || currentTier === "basique") {
@@ -2253,6 +2265,12 @@ const App = () => {
     localStorage.removeItem("autocompt_admin_photo");
     localStorage.removeItem("autocompt_admin_phone");
     localStorage.removeItem("autocompt_admin_email");
+    // `vista` isn't reset by signOut — if the user happened to be on a screen
+    // that doesn't itself gate on auth state (e.g. the legacy "rental_model"
+    // onboarding step), they'd stay stranded there post-logout instead of
+    // landing back on login. "splash" re-runs the normal bootstrap redirect,
+    // which now correctly sees the just-cleared localStorage and no user.
+    setVista("splash");
     await signOut(auth);
   };
   const [hasEmployment, setHasEmployment] = useState(false);
@@ -3100,6 +3118,22 @@ const App = () => {
                     >
                       <Shield size={12} />
                       <span>Panneau d'administration</span>
+                    </button>
+                  )}
+                  {/* Accès délégué étroit — testeur QA sans le reste de SuperAdmin.
+                      Caché pour SuperAdmin lui-même : "Panneau d'administration"
+                      ci-dessus couvre déjà tout ce que cet écran fait, en plus large. */}
+                  {canGenerateBetaCodes && !isSuperAdmin && (
+                    <button
+                      onClick={() => {
+                        setVista("beta-code-admin");
+                        if (typeof playNotificationSound === "function") playNotificationSound();
+                        setIsSidebarOpen(false);
+                      }}
+                      className={`w-full py-2 border border-transparent rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
+                    >
+                      <Sparkles size={12} />
+                      <span>Codes Bêta (testeur)</span>
                     </button>
                   )}
                   {isSuperAdmin && (
@@ -4640,11 +4674,17 @@ const App = () => {
   };
   const [archivesAnnuelles, setArchivesAnnuelles] = useState<any[]>([]);
 
+  // Excludes anything tagged with a buildingId — those belong to a specific
+  // client/édifice's OWN book (see TenueLivresImmeubleView) and must never
+  // also show up in the gestionnaire's own general ledger, or the two get
+  // mixed together with no way to tell which revenue/expense is actually
+  // GPA's own vs. a managed client's. Found 2026-08-01: this filter used to
+  // only check companyId, so a triplex expense appeared in BOTH books.
   const filteredHistorique = historique.filter(
-    (h) => h.companyId === activeCompanyId,
+    (h) => h.companyId === activeCompanyId && !h.buildingId,
   );
   const filteredDepenses = depenses.filter(
-    (d) => d.companyId === activeCompanyId,
+    (d) => d.companyId === activeCompanyId && !d.buildingId,
   );
   // Untagged (`companyId` missing) properties predate this scoping feature —
   // keep showing them everywhere until they're next saved, instead of hiding real data.
@@ -8270,6 +8310,7 @@ const App = () => {
             setUserLevel(userData.level || "Gestion Immobilière");
             phoneAlreadyVerified = !!userData.phoneVerified;
             setIsPhoneVerified(phoneAlreadyVerified);
+            setCanGenerateBetaCodes(!!userData.canGenerateBetaCodes);
             hasSelectedProfile = !!userData.selectedProfile;
             setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 
@@ -10163,6 +10204,19 @@ const App = () => {
         onBack={() => setVista("dashboard")}
         adminName="Fabiola Beatriz"
         adminEmail={currentUserEmail ?? ""}
+      />
+    );
+  }
+  // Narrow delegated screen — a QA tester with canGenerateBetaCodes but no
+  // other admin access lands here. SuperAdmin can also reach it (useful to
+  // sanity-check what the tester sees) since isSuperAdmin implies strictly
+  // more access than this role, never less.
+  if (vista === "beta-code-admin" && (canGenerateBetaCodes || isSuperAdmin)) {
+    return (
+      <BetaCodeAdminView
+        darkMode={darkMode}
+        onBack={() => setVista("dashboard")}
+        onLogout={handleLogout}
       />
     );
   }
@@ -17903,6 +17957,30 @@ const App = () => {
                         </div>
                       )}
 
+                      {/* ── Source d'activité — permet de reclassifier a posteriori
+                          n'importe quelle dépense (scan reçu, kilométrage, etc.) sans
+                          instrumenter chaque point de création individuellement. ── */}
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Source d'activité
+                        </label>
+                        <select
+                          value={editingExpense.sourceRevenu || "Gestion immobilière"}
+                          onChange={e => setEditingExpense({ ...editingExpense, sourceRevenu: e.target.value })}
+                          className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                        >
+                          <option value="Gestion immobilière">Gestion immobilière</option>
+                          {isSolutionsGPA && (
+                            <>
+                              <option value="Dividendes / Investissements">Dividendes / Investissements</option>
+                              <option value="Revenus AutoCompt (plateforme)">Revenus AutoCompt (plateforme)</option>
+                              <option value="Intérêts de prêts privés">Intérêts de prêts privés</option>
+                            </>
+                          )}
+                          <option value="Autre">Autre</option>
+                        </select>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-zinc-900/50">
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Sous-total Net ($)</label>
@@ -18343,6 +18421,30 @@ const App = () => {
                       );
                     })()}
 
+                    {/* ── Source d'activité — sépare les revenus/dépenses propres à
+                        chaque "chapeau" du compte (gestion, dividendes, plateforme,
+                        prêts). Liste standard pour tous, étendue pour isSolutionsGPA. ── */}
+                    <div className="space-y-1">
+                      <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                        Source d'activité
+                      </label>
+                      <select
+                        value={newTxData.sourceRevenu || "Gestion immobilière"}
+                        onChange={(e) => setNewTxData({ ...newTxData, sourceRevenu: e.target.value })}
+                        className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                      >
+                        <option value="Gestion immobilière">Gestion immobilière</option>
+                        {isSolutionsGPA && (
+                          <>
+                            <option value="Dividendes / Investissements">Dividendes / Investissements</option>
+                            <option value="Revenus AutoCompt (plateforme)">Revenus AutoCompt (plateforme)</option>
+                            <option value="Intérêts de prêts privés">Intérêts de prêts privés</option>
+                          </>
+                        )}
+                        <option value="Autre">Autre</option>
+                      </select>
+                    </div>
+
                     <div className="space-y-1">
                       <label
                         className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -18483,6 +18585,7 @@ const App = () => {
                             status: "Payée",
                             cat: newTxData.cat || "Ventes",
                             noteComptable: newTxData.noteComptable || "",
+                            sourceRevenu: newTxData.sourceRevenu || "Gestion immobilière",
                             ...(newTxData.unitId ? { unitId: newTxData.unitId, buildingId: newTxData.buildingId } : {}),
                           };
                           setHistorique((prev) => [newTx, ...prev]);
@@ -18505,6 +18608,7 @@ const App = () => {
                             refacturableTriplex: false,
                             noteComptable: newTxData.noteComptable || "",
                             noReceiptConfirmed: !!(newTxData.noReceiptConfirmed),
+                            sourceRevenu: newTxData.sourceRevenu || "Gestion immobilière",
                             ...(newTxData.unitId ? { unitId: newTxData.unitId, buildingId: newTxData.buildingId } : {}),
                             ...(activeCompanyId === "1" ? { concilied: newTxData.concilied || false } : {}),
                           };
@@ -19834,6 +19938,14 @@ const App = () => {
                                     tipoDoc === "Reçu" ? "Payée" : "En attente",
                                   tipoDoc,
                                   items: JSON.parse(JSON.stringify(items)), // Clone items
+                                  // No picker here — a formal client invoice/reçu is
+                                  // almost always "Gestion immobilière" business; the
+                                  // rarer cases (AutoCompt/dividendes/prêts) go through
+                                  // "Ajouter Transaction" instead, which has the full
+                                  // source picker.
+                                  sourceRevenu: editingInvoiceId
+                                    ? (historique.find((f: any) => f.id === editingInvoiceId)?.sourceRevenu || "Gestion immobilière")
+                                    : "Gestion immobilière",
                                 };
 
                                 if (editingInvoiceId) {

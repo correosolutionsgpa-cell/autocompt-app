@@ -465,6 +465,34 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       };
       await setDoc(doc(db, "fideicommisRetraits", id), newRetrait);
       setRetraits(prev => [newRetrait, ...prev]);
+
+      // A management-fee withdrawal used to only ever show up as an outflow
+      // on the CLIENT's trust books — the gestionnaire's own company never
+      // saw it as revenue, so its own tenue de livre (and tax return) was
+      // missing its actual main income. Mirror it as a real invoice in the
+      // gestionnaire's own book, untagged by buildingId (it's not that
+      // client's building's money — it's the fee GPA charged for managing
+      // it), tagged "Gestion immobilière" so it groups correctly.
+      if (newRetrait.type === "honoraires") {
+        try {
+          await dataService.saveInvoice(uid, {
+            companyId: activeCompanyId,
+            cliente: client?.nom || "Client",
+            fecha: newRetrait.date,
+            cat: "Honoraires de gestion",
+            subtotal: newRetrait.montant,
+            tps: 0,
+            tvq: 0,
+            total: newRetrait.montant,
+            status: "Payée",
+            noteComptable: `Honoraires de gestion — ${client?.nom || "client"}${newRetrait.propertyAddress ? ` (${newRetrait.propertyAddress})` : ""}`,
+            sourceRevenu: "Gestion immobilière",
+          });
+        } catch (e) {
+          console.error("Failed to mirror honoraires as GPA revenue:", e);
+        }
+      }
+
       setShowRetraitForm(false);
       setRetraitForm(emptyRetrait());
       playNotificationSound?.();

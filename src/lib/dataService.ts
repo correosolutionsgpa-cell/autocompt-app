@@ -219,6 +219,11 @@ export interface ExpenseDoc {
   /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
    *  gestionnaire profiles), distinct from fideicommisClientId. */
   clientId?: string;
+  /** Same field/values as InvoiceDoc.sourceRevenu — which business activity
+   *  this expense belongs to. Symmetric on purpose: a "Gestion immobilière"
+   *  revenue-only view is incomplete without also knowing which expenses
+   *  are that same activity's own operating costs vs. some other one. */
+  sourceRevenu?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -491,6 +496,13 @@ export interface InvoiceDoc {
   /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
    *  gestionnaire profiles), distinct from fideicommisClientId. */
   clientId?: string;
+  /** Which business activity this revenue belongs to — "Gestion immobilière"
+   *  / "Autre" for every account, plus a founder-only extended list
+   *  ("Dividendes / Investissements", "Revenus AutoCompt (plateforme)",
+   *  "Intérêts de prêts privés") for accounts juggling several activities
+   *  under one company. Absent on older records — treat as "Non classé"
+   *  when grouping, never hide. */
+  sourceRevenu?: string;
   ownerId: string;
   createdAt: string;
 }
