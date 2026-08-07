@@ -6,11 +6,11 @@ import {
   CheckCircle2, XCircle, Clock, AlertTriangle, Zap, Star,
   BarChart2, PieChart as PieIcon, RefreshCw, Mail, Phone,
   Building2, Calendar, Plus, Eye, Ban, Edit3, Receipt,
-  Sparkles, Globe, LogOut, Bell, Settings,
+  Sparkles, Globe, LogOut, Bell, Settings, Trash2, Loader2, AlertOctagon,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { db } from '../lib/firebase';
-import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
 import { dataService, type BetaCodeDoc, type PlatformInvoiceDoc } from '../lib/dataService';
 import { autocomptLogoWhiteBase64 } from '../assets/brand/autocomptLogoWhiteBase64';
 import { TRIAL_EXTENSION_FORM_URL } from './modals/TrialExpiredModal';
@@ -217,7 +217,7 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola Beatriz', adminEmail = '' }: SuperAdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'ia' | 'codes' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'doculegal' | 'ia' | 'codes' | 'maintenance'>('overview');
   const [betaCodes, setBetaCodes] = useState<BetaCodeDoc[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [newCodeEmail, setNewCodeEmail] = useState('');
@@ -1103,6 +1103,118 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
     </div>
   );
 
+  // ── Maintenance — Grand Livre ghost cleanup ─────────────────────────────────
+  // saveExpense/saveInvoice mirror every save into journalEntries/journalLines
+  // (double-entry ledger), but deleteExpense/deleteInvoiceDoc used to only
+  // delete the source doc — the mirror was left behind forever. Fixed going
+  // forward (see dataService.ts), but everything deleted BEFORE that fix
+  // stayed orphaned with no delete button anywhere in the app. This scans
+  // (read-only) and deletes (only on explicit click + confirm) — scoped to
+  // whichever account is currently signed in, same isOwnerDoc() rule as
+  // every other delete in the app; SuperAdmin gets no special bypass here.
+  const [orphanScan, setOrphanScan] = useState<null | { total: number; orphans: Array<{ id: string; description: string; date: string }> }>(null);
+  const [scanningOrphans, setScanningOrphans] = useState(false);
+  const [deletingOrphans, setDeletingOrphans] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState(0);
+
+  const handleScanOrphans = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setScanningOrphans(true);
+    setOrphanScan(null);
+    try {
+      const [entriesSnap, expensesSnap, invoicesSnap] = await Promise.all([
+        getDocs(query(collection(db, 'journalEntries'), where('ownerId', '==', uid))),
+        getDocs(query(collection(db, 'expenses'), where('ownerId', '==', uid))),
+        getDocs(query(collection(db, 'invoices'), where('ownerId', '==', uid))),
+      ]);
+      const expenseIds = new Set(expensesSnap.docs.map((d) => d.id));
+      const invoiceIds = new Set(invoicesSnap.docs.map((d) => d.id));
+      const orphans = entriesSnap.docs
+        .filter((d) => !expenseIds.has(d.id) && !invoiceIds.has(d.id))
+        .map((d) => ({ id: d.id, description: (d.data().description as string) || '', date: (d.data().date as string) || '' }));
+      setOrphanScan({ total: entriesSnap.size, orphans });
+    } catch (e) {
+      console.error('[MaintenanceTab] scan error:', e);
+      toast("Échec de l'analyse.", 'error');
+    } finally {
+      setScanningOrphans(false);
+    }
+  };
+
+  const handleDeleteOrphans = async () => {
+    if (!orphanScan || orphanScan.orphans.length === 0) return;
+    if (!confirm(`Supprimer définitivement ${orphanScan.orphans.length} entrées fantômes du Grand Livre ? Cette action est irréversible.`)) return;
+    setDeletingOrphans(true);
+    setDeleteProgress(0);
+    const items = orphanScan.orphans;
+    const chunkSize = 25;
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const chunk = items.slice(i, i + chunkSize);
+      await Promise.all(chunk.flatMap((o) => [
+        deleteDoc(doc(db, 'journalEntries', o.id)).catch(() => {}),
+        deleteDoc(doc(db, 'journalLines', `${o.id}-debit`)).catch(() => {}),
+        deleteDoc(doc(db, 'journalLines', `${o.id}-credit`)).catch(() => {}),
+      ]));
+      setDeleteProgress((p) => p + chunk.length);
+    }
+    setDeletingOrphans(false);
+    toast(`${items.length} entrées fantômes supprimées.`);
+    setOrphanScan(null);
+  };
+
+  const MaintenanceTab = () => (
+    <div className="space-y-6">
+      <div className={card}>
+        <div className="flex items-center gap-2 mb-2">
+          <AlertOctagon size={16} className="text-amber-500" />
+          <h3 className={`text-[10px] font-black uppercase tracking-widest ${D ? 'text-zinc-400' : 'text-slate-400'}`}>Grand Livre — Nettoyage des fantômes</h3>
+        </div>
+        <p className={`text-[10.5px] leading-relaxed mb-4 ${D ? 'text-zinc-500' : 'text-slate-500'}`}>
+          Détecte les entrées du Grand Livre dont la facture/dépense d'origine a déjà été supprimée — sans ce nettoyage, elles restent visibles pour toujours. Analyse en lecture seule ; rien n'est supprimé sans confirmation explicite. Portée : uniquement les données du compte avec lequel vous êtes connectée en ce moment.
+        </p>
+        <button
+          onClick={handleScanOrphans}
+          disabled={scanningOrphans}
+          className="flex items-center gap-2 px-4 py-2.5 bg-zinc-700 hover:bg-zinc-800 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+        >
+          {scanningOrphans ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+          Analyser (lecture seule)
+        </button>
+
+        {orphanScan && (
+          <div className="mt-4 space-y-3">
+            <div className={`p-3 rounded-xl border text-[11px] ${D ? 'bg-zinc-900/40 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
+              {orphanScan.total} entrée(s) au total · <strong>{orphanScan.orphans.length} fantôme(s)</strong> détecté(s).
+            </div>
+            {orphanScan.orphans.length > 0 && (
+              <>
+                <div className={`max-h-56 overflow-y-auto space-y-1 rounded-xl border p-2 ${D ? 'border-zinc-800' : 'border-slate-200'}`}>
+                  {orphanScan.orphans.slice(0, 50).map((o) => (
+                    <div key={o.id} className={`text-[10px] px-2 py-1 rounded-lg truncate ${D ? 'bg-zinc-900/40 text-zinc-400' : 'bg-slate-50 text-slate-500'}`}>
+                      {o.date} · {o.description}
+                    </div>
+                  ))}
+                  {orphanScan.orphans.length > 50 && (
+                    <p className="text-[9px] text-center text-slate-400 pt-1">+ {orphanScan.orphans.length - 50} autre(s)…</p>
+                  )}
+                </div>
+                <button
+                  onClick={handleDeleteOrphans}
+                  disabled={deletingOrphans}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                >
+                  {deletingOrphans ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {deletingOrphans ? `Suppression… ${deleteProgress}/${orphanScan.orphans.length}` : `Supprimer les ${orphanScan.orphans.length} fantômes`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // ── User detail modal ───────────────────────────────────────────────────────
   const UserModal = () => {
     if (!selectedUser) return null;
@@ -1175,6 +1287,7 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
     { id: 'doculegal', label: 'DocuLegal',        icon: <FileText size={14} /> },
     { id: 'ia',        label: 'Usage IA',         icon: <Zap size={14} /> },
     { id: 'codes',     label: 'Codes Bêta',       icon: <Sparkles size={14} /> },
+    { id: 'maintenance', label: 'Maintenance',    icon: <Trash2 size={14} /> },
   ] as const;
 
   return (
@@ -1261,6 +1374,7 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
             {activeTab === 'doculegal' && DocuLegalTab()}
             {activeTab === 'ia'        && IaUsageTab()}
             {activeTab === 'codes'     && CodesTab()}
+            {activeTab === 'maintenance' && MaintenanceTab()}
           </motion.div>
         </AnimatePresence>
       </main>

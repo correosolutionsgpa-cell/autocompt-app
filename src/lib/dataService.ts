@@ -1967,7 +1967,24 @@ export const dataService = {
   },
 
   async deleteExpense(expenseId: string): Promise<boolean> {
-    await deleteDoc(doc(db, 'expenses', String(expenseId)));
+    const id = String(expenseId);
+    await deleteDoc(doc(db, 'expenses', id));
+    // saveExpense mirrors every expense into journalEntries/journalLines
+    // (double-entry ledger) using this SAME id for the entry and
+    // `${id}-debit`/`${id}-credit` for its two lines — deleting only the
+    // expense left those mirrors behind as permanent ghosts in the Grand
+    // Livre. Best-effort: a mirror that was never created (legacy expense
+    // predating the journal feature) just no-ops here, never blocks the
+    // real delete above.
+    try {
+      await Promise.all([
+        deleteDoc(doc(db, 'journalEntries', id)),
+        deleteDoc(doc(db, 'journalLines', `${id}-debit`)),
+        deleteDoc(doc(db, 'journalLines', `${id}-credit`)),
+      ]);
+    } catch (e) {
+      console.error('deleteExpense: journal mirror cleanup failed (non-blocking):', e);
+    }
     return true;
   },
 
@@ -2035,7 +2052,19 @@ export const dataService = {
   },
 
   async deleteInvoiceDoc(invoiceId: string): Promise<boolean> {
-    await deleteDoc(doc(db, 'invoices', String(invoiceId)));
+    const id = String(invoiceId);
+    await deleteDoc(doc(db, 'invoices', id));
+    // Same journal-mirror cleanup as deleteExpense above — saveInvoice
+    // writes the matching journalEntries/journalLines under this same id.
+    try {
+      await Promise.all([
+        deleteDoc(doc(db, 'journalEntries', id)),
+        deleteDoc(doc(db, 'journalLines', `${id}-debit`)),
+        deleteDoc(doc(db, 'journalLines', `${id}-credit`)),
+      ]);
+    } catch (e) {
+      console.error('deleteInvoiceDoc: journal mirror cleanup failed (non-blocking):', e);
+    }
     return true;
   },
 
