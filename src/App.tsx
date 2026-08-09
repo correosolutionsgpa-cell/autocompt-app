@@ -1974,12 +1974,17 @@ const App = () => {
   >(null);
 
   useEffect(() => {
-    // Bug 3 fix: ne scroller qu'au changement de vue, pas sur les interactions de formulaire
-    if (vista === "dashboard" || vista === "welcome") {
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'auto' });
-      }, 50);
-    }
+    // Scroll to top on every full screen ("vista") change — not on
+    // in-screen interactions, since the dependency array only tracks
+    // `vista`, not sub-tab state. Previously only fired for
+    // "dashboard"/"welcome", so switching into any other vista (e.g.
+    // "plex") kept whatever scroll offset the PREVIOUS screen had, which
+    // could land the user mid-page or at the bottom of the new one. Found
+    // 2026-08-09 via a report that opening Gestion Immobilière jumped
+    // straight to the bottom of the page.
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }, 50);
   }, [vista]);
 
   useEffect(() => {
