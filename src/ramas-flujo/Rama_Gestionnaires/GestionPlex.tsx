@@ -220,8 +220,34 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             </button>
           )}
 
-          {/* ── S.O.F.I. Tax Scanner ──────────────────────────────────────── */}
-          <div className="ml-auto flex-shrink-0">
+          {/* ── Propriétaire-client + S.O.F.I. Tax Scanner ──────────────────
+              Moved here (top-right of the form header) from the bottom of
+              the field list — deciding which client this building belongs
+              to is contextually a first-thing-you-pick decision, not an
+              afterthought right before saving. Found 2026-08-09. */}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {fideicommisClients.length > 0 && (
+              <select
+                value={plexManagementForm.fideicommisClientId || ""}
+                onChange={e => {
+                  const client = fideicommisClients.find(c => c.id === e.target.value);
+                  setPlexManagementForm({
+                    ...plexManagementForm,
+                    fideicommisClientId: e.target.value || undefined,
+                    fideicommisClientName: client?.nom || undefined,
+                  });
+                }}
+                title="Propriétaire-client (optionnel) — lier cet immeuble à un client de votre Compte en fidéicommis"
+                className={`px-4 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${
+                  darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"
+                }`}
+              >
+                <option value="">— Immeuble géré en propre —</option>
+                {fideicommisClients.map(c => (
+                  <option key={c.id} value={c.id}>{c.nom}</option>
+                ))}
+              </select>
+            )}
             <input
               ref={taxScanInputRef}
               type="file"
@@ -249,6 +275,11 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             </button>
           </div>
         </div>
+        {fideicommisClients.length > 0 && plexManagementForm.fideicommisClientId && (
+          <p className={`text-[9px] -mt-4 mb-4 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+            Lié à <strong>{plexManagementForm.fideicommisClientName}</strong> — visible dans son portefeuille complet au Compte en fidéicommis.
+          </p>
+        )}
 
         {/* ── S.O.F.I. Pre-fill confirmation toast ──────────────────────── */}
         {sofiPrefillMessage && (
@@ -768,35 +799,6 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Propriétaire-client (Gestionnaire Immobilier) */}
-          {fideicommisClients.length > 0 && (
-            <div>
-              <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
-                Propriétaire-client (optionnel)
-              </label>
-              <select
-                value={plexManagementForm.fideicommisClientId || ""}
-                onChange={e => {
-                  const client = fideicommisClients.find(c => c.id === e.target.value);
-                  setPlexManagementForm({
-                    ...plexManagementForm,
-                    fideicommisClientId: e.target.value || undefined,
-                    fideicommisClientName: client?.nom || undefined,
-                  });
-                }}
-                className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-indigo-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
-              >
-                <option value="">— Immeuble géré en propre —</option>
-                {fideicommisClients.map(c => (
-                  <option key={c.id} value={c.id}>{c.nom}</option>
-                ))}
-              </select>
-              <p className={`text-[9px] mt-1 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
-                Lier cet immeuble à un propriétaire-client vous permettra de voir son portefeuille complet dans le Compte en fidéicommis.
-              </p>
-            </div>
-          )}
 
           {/* Bouton Enregistrer */}
           <div className="mt-6 flex justify-end">
