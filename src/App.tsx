@@ -6551,9 +6551,18 @@ const App = () => {
   const filterBySelectedMonth = (items: any[]) =>
     items.filter((item) => {
       if (!item.fecha && !item.date) return true;
-      const dateStr = item.fecha || item.date;
-      const d = new Date(dateStr);
-      return d.getMonth() === selectedMonth;
+      const dateStr = String(item.fecha || item.date);
+      // "YYYY-MM-DD" parsed via `new Date(dateStr)` is UTC midnight, but
+      // `.getMonth()` reads it back in the browser's LOCAL timezone — for
+      // any timezone behind UTC (all of Quebec, year-round), day-01 dates
+      // silently shift back into the previous month (e.g. "2026-08-01"
+      // becomes July 31 evening local), so a receipt dated the 1st never
+      // matched the current-month filter. Parsing the digits directly
+      // sidesteps the UTC/local mismatch entirely. Found 2026-08-09 — an
+      // expense saved the same day as the bug's own root cause.
+      const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const month = isoMatch ? Number(isoMatch[2]) - 1 : new Date(dateStr).getMonth();
+      return month === selectedMonth;
     });
 
   const filteredHistoriqueByMonth = filterBySelectedMonth(filteredHistorique);
