@@ -7499,7 +7499,21 @@ const App = () => {
                     d.status === "Traitement de la facture en cours..."
                   ) {
                     updated = true;
-                    resultingItem = { ...d, ...updatedNewItemObj, id: tempId };
+                    // Keep the row's CURRENT id (`d.id`) instead of forcing
+                    // it back to `tempId`. The row lands here precisely
+                    // because its id already changed — reconcileExpenses
+                    // (App.tsx ~4854) swaps a just-created expense's id from
+                    // `tempId` to the real Firestore-prefixed id as soon as
+                    // the stub save resolves, which can finish before OCR
+                    // does. Forcing `id: tempId` here discarded that real id,
+                    // making the next reconcileExpenses pass see the
+                    // Firestore doc as "gone" (delete it) and this row as
+                    // "new" (recreate it) — a delete→recreate race that could
+                    // permanently lose the expense if the tab closed mid-way,
+                    // and separately broke "Approuver & Sauvegarder" (which
+                    // matches by id) whenever it fired first. Found 2026-08-09
+                    // after a real receipt scan disappeared post-save.
+                    resultingItem = { ...d, ...updatedNewItemObj };
                     return resultingItem;
                   }
                   return d;
