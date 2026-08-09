@@ -3390,6 +3390,185 @@ const App = () => {
       setIsChatLoading(false);
     }
   };
+
+  // Opens the Sofi chat pre-filled with a question about a specific record —
+  // used by "Demander à Sofi" buttons inside validation/confirmation cards
+  // (e.g. expense category unclear) so the user doesn't have to abandon what
+  // they're doing and navigate back to the dashboard just to ask. Found
+  // 2026-08-09: the chat modal previously only rendered inside the
+  // "dashboard" vista block, unreachable from "reportes" where those cards
+  // live — renderFiscalChatModal() below is now also called from "reportes".
+  const askSofiAbout = (question: string) => {
+    setChatInput(question);
+    setShowFiscalChat(true);
+  };
+
+  // Extracted so it can be rendered from more than one vista block (this
+  // file early-returns a separate JSX tree per `vista`) without duplicating
+  // ~160 lines of markup — see askSofiAbout's note above.
+  const renderFiscalChatModal = () => (
+    <AnimatePresence>
+      {showFiscalChat && (
+        <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className={`w-full max-w-lg ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} rounded-t-[40px] sm:rounded-[48px] border shadow-2xl flex flex-col overflow-hidden h-[85vh] sm:h-[700px]`}
+          >
+            <div
+              className={`p-6 border-b flex items-center justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
+            >
+              <div className="flex items-center space-x-3">
+                {dashboardMode === "Syndic" ? (
+                  <div className="w-10 h-10 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950">
+                    <img
+                      src="/sofi/sofimediocuerpoblanco.png"
+                      alt="Sofi"
+                      className="w-full h-full object-cover"
+                      style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-emerald-600 p-2 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
+                    <Sparkles size={20} />
+                  </div>
+                )}
+                <div>
+                  <h3
+                    className={`text-xs font-black uppercase italic tracking-tighter leading-none ${darkMode ? "text-white" : "text-slate-900"}`}
+                  >
+                    {dashboardMode === "Syndic" ? "Assistante IA Sofi" : "Assistant IA Expert"}
+                  </h3>
+                  <p className={`text-[7px] font-black uppercase tracking-widest mt-1 ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"}`}>
+                    {dashboardMode === "Syndic" ? "Conseils Copropriété en Direct" : "Soutien Fiscal en Direct"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFiscalChat(false)}
+                className={`p-3 rounded-2xl transition-all ${darkMode ? "bg-zinc-800 text-zinc-500 hover:text-white" : "bg-white text-slate-300 hover:text-slate-900 border border-slate-100 shadow-sm"}`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto space-y-6 no-scrollbar text-left">
+              {chatMessages.map((msg) => {
+                const isUser = msg.role === "user";
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex ${isUser ? "justify-end pr-2" : "justify-start pl-2"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${isUser
+                        ? `${dashboardMode === "Syndic" ? "bg-purple-600 border-purple-600" : "bg-[#059669] border-[#059669]"} text-white rounded-tr-none`
+                        : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
+                        }`}
+                    >
+                      <div className="flex items-center space-x-2 mb-2 opacity-80">
+                        {!isUser && (
+                          dashboardMode === "Syndic" ? (
+                            <div className="w-5.5 h-5.5 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 mr-1">
+                              <img
+                                src="/sofi/sofimediocuerpoblanco.png"
+                                alt="Sofi"
+                                className="w-full h-full object-cover"
+                                style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+                              />
+                            </div>
+                          ) : (
+                            <Sparkles
+                              size={14}
+                              className="text-emerald-500 animate-pulse"
+                            />
+                          )
+                        )}
+                        <p className="text-[10px] font-black uppercase italic tracking-tighter">
+                          {isUser
+                            ? msg.author || "Utilisateur"
+                            : "Assistante Sofi"}
+                        </p>
+                      </div>
+                      <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap">
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isChatLoading && (
+                <div className="flex justify-start pl-2 animate-pulse">
+                  <div
+                    className={`max-w-[85%] ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-450" : "bg-slate-100 border-slate-250 text-slate-500"} p-4 rounded-[32px] rounded-tl-none border shadow-sm flex items-center space-x-2`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
+                      style={{ animationDelay: "0ms" }}
+                    ></span>
+                    <span
+                      className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
+                      style={{ animationDelay: "150ms" }}
+                    ></span>
+                    <span
+                      className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
+                      style={{ animationDelay: "300ms" }}
+                    ></span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider italic ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"} ml-1`}>
+                      Sofi analyse...
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div
+              className={`p-6 border-t ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
+            >
+              {/* Basique tier message limits counter */}
+              {selectedTier === "basique" && (
+                <div className="mb-3 text-center flex items-center justify-center space-x-1.5 p-1.5 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/10 animate-pulse">
+                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                  <span className="text-[9px] font-black uppercase tracking-wider">
+                    Plan Basique • Messages restants :{" "}
+                    {Math.max(0, 3 - aiQueryCount)}/3
+                  </span>
+                </div>
+              )}
+              <div
+                className={`flex items-center space-x-3 p-3 rounded-3xl border transition-all ${darkMode ? `bg-zinc-950 border-zinc-800 ${dashboardMode === "Syndic" ? "focus-within:border-purple-500" : "focus-within:border-emerald-500"}` : `bg-white border-slate-200 shadow-inner ${dashboardMode === "Syndic" ? "focus-within:border-purple-600" : "focus-within:border-[#059669]"}`}`}
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSendChatMessage();
+                    }
+                  }}
+                  disabled={isChatLoading}
+                  placeholder={dashboardMode === "Syndic" ? "Posez votre question sur la copropriété..." : "Tapez votre question fiscale..."}
+                  className="flex-1 bg-transparent border-none outline-none text-xs font-bold px-2 text-gray-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500"
+                />
+                <button
+                  onClick={handleSendChatMessage}
+                  disabled={isChatLoading || !chatInput.trim()}
+                  className={`text-white p-3 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50 cursor-pointer ${dashboardMode === "Syndic" ? "bg-purple-600 shadow-purple-900/20" : "bg-[#059669] shadow-emerald-900/20"}`}
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
   const [subVistaDocu, setSubVistaDocu] = useState("liste");
   const [docActiveVue, setDocActiveVue] = useState<'contrats' | 'resolutions'>('contrats');
   const [docuSignInProgress, setDocuSignInProgress] = useState<any>(null);
@@ -12101,167 +12280,7 @@ const App = () => {
           )}
 
         </main>
-        {/* MODAL ASSISTANT IA */}
-        <AnimatePresence>
-          {showFiscalChat && (
-            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className={`w-full max-w-lg ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100"} rounded-t-[40px] sm:rounded-[48px] border shadow-2xl flex flex-col overflow-hidden h-[85vh] sm:h-[700px]`}
-              >
-                <div
-                  className={`p-6 border-b flex items-center justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
-                >
-                  <div className="flex items-center space-x-3">
-                    {dashboardMode === "Syndic" ? (
-                      <div className="w-10 h-10 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950">
-                        <img
-                          src="/sofi/sofimediocuerpoblanco.png"
-                          alt="Sofi"
-                          className="w-full h-full object-cover"
-                          style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="bg-emerald-600 p-2 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
-                        <Sparkles size={20} />
-                      </div>
-                    )}
-                    <div>
-                      <h3
-                        className={`text-xs font-black uppercase italic tracking-tighter leading-none ${darkMode ? "text-white" : "text-slate-900"}`}
-                      >
-                        {dashboardMode === "Syndic" ? "Assistante IA Sofi" : "Assistant IA Expert"}
-                      </h3>
-                      <p className={`text-[7px] font-black uppercase tracking-widest mt-1 ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"}`}>
-                        {dashboardMode === "Syndic" ? "Conseils Copropriété en Direct" : "Soutien Fiscal en Direct"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowFiscalChat(false)}
-                    className={`p-3 rounded-2xl transition-all ${darkMode ? "bg-zinc-800 text-zinc-500 hover:text-white" : "bg-white text-slate-300 hover:text-slate-900 border border-slate-100 shadow-sm"}`}
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="flex-1 p-6 overflow-y-auto space-y-6 no-scrollbar text-left">
-                  {chatMessages.map((msg) => {
-                    const isUser = msg.role === "user";
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isUser ? "justify-end pr-2" : "justify-start pl-2"}`}
-                      >
-                        <div
-                          className={`max-w-[85%] p-5 rounded-[32px] border shadow-sm ${isUser
-                            ? `${dashboardMode === "Syndic" ? "bg-purple-600 border-purple-600" : "bg-[#059669] border-[#059669]"} text-white rounded-tr-none`
-                            : `${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-slate-100 border-slate-200 text-slate-900"} rounded-tl-none`
-                            }`}
-                        >
-                          <div className="flex items-center space-x-2 mb-2 opacity-80">
-                            {!isUser && (
-                              dashboardMode === "Syndic" ? (
-                                <div className="w-5.5 h-5.5 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 mr-1">
-                                  <img
-                                    src="/sofi/sofimediocuerpoblanco.png"
-                                    alt="Sofi"
-                                    className="w-full h-full object-cover"
-                                    style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
-                                  />
-                                </div>
-                              ) : (
-                                <Sparkles
-                                  size={14}
-                                  className="text-emerald-500 animate-pulse"
-                                />
-                              )
-                            )}
-                            <p className="text-[10px] font-black uppercase italic tracking-tighter">
-                              {isUser
-                                ? msg.author || "Utilisateur"
-                                : "Assistante Sofi"}
-                            </p>
-                          </div>
-                          <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap">
-                            {msg.content}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {isChatLoading && (
-                    <div className="flex justify-start pl-2 animate-pulse">
-                      <div
-                        className={`max-w-[85%] ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-450" : "bg-slate-100 border-slate-250 text-slate-500"} p-4 rounded-[32px] rounded-tl-none border shadow-sm flex items-center space-x-2`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
-                          style={{ animationDelay: "0ms" }}
-                        ></span>
-                        <span
-                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
-                          style={{ animationDelay: "150ms" }}
-                        ></span>
-                        <span
-                          className={`w-1.5 h-1.5 ${dashboardMode === "Syndic" ? "bg-purple-500" : "bg-emerald-500"} rounded-full animate-bounce`}
-                          style={{ animationDelay: "300ms" }}
-                        ></span>
-                        <span className={`text-[9px] font-black uppercase tracking-wider italic ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"} ml-1`}>
-                          Sofi analyse...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div
-                  className={`p-6 border-t ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
-                >
-                  {/* Basique tier message limits counter */}
-                  {selectedTier === "basique" && (
-                    <div className="mb-3 text-center flex items-center justify-center space-x-1.5 p-1.5 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/10 animate-pulse">
-                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                      <span className="text-[9px] font-black uppercase tracking-wider">
-                        Plan Basique • Messages restants :{" "}
-                        {Math.max(0, 3 - aiQueryCount)}/3
-                      </span>
-                    </div>
-                  )}
-                  <div
-                    className={`flex items-center space-x-3 p-3 rounded-3xl border transition-all ${darkMode ? `bg-zinc-950 border-zinc-800 ${dashboardMode === "Syndic" ? "focus-within:border-purple-500" : "focus-within:border-emerald-500"}` : `bg-white border-slate-200 shadow-inner ${dashboardMode === "Syndic" ? "focus-within:border-purple-600" : "focus-within:border-[#059669]"}`}`}
-                  >
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleSendChatMessage();
-                        }
-                      }}
-                      disabled={isChatLoading}
-                      placeholder={dashboardMode === "Syndic" ? "Posez votre question sur la copropriété..." : "Tapez votre question fiscale..."}
-                      className="flex-1 bg-transparent border-none outline-none text-xs font-bold px-2 text-gray-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500"
-                    />
-                    <button
-                      onClick={handleSendChatMessage}
-                      disabled={isChatLoading || !chatInput.trim()}
-                      className={`text-white p-3 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50 cursor-pointer ${dashboardMode === "Syndic" ? "bg-purple-600 shadow-purple-900/20" : "bg-[#059669] shadow-emerald-900/20"}`}
-                    >
-                      <Send size={18} />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+        {renderFiscalChatModal()}
 
         {/* POPUP PAYWALL / UPGRADE SUBSCRIPTION MODAL */}
         <AnimatePresence>
@@ -17901,9 +17920,23 @@ const App = () => {
                     ✓ Voir dans le registre
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => askSofiAbout(
+                    `Dans quelle catégorie devrait aller cette dépense chez ${sofiDraft.fournisseur} de ${sofiDraft.total.toFixed(2)}$ ? J'ai mis "${sofiDraft.cat}" mais je n'en suis pas certain(e).`
+                  )}
+                  className={`mt-3 w-full text-[8.5px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 ${darkMode ? "text-emerald-400 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-700"}`}
+                >
+                  <Sparkles size={10} /> Pas sûr(e) de la catégorie ? Demander à Sofi
+                </button>
               </div>
             </div>
           )}
+
+          {/* Sofi chat — also rendered here (not just in the "dashboard"
+              vista) so "Demander à Sofi" above can open it without forcing
+              the user out of this validation card first. See askSofiAbout. */}
+          {renderFiscalChatModal()}
 
           {/* DYNAMIC EXPENSE EDITOR MODAL (SPLIT VIEW) */}
           <AnimatePresence>
@@ -18015,6 +18048,15 @@ const App = () => {
                             </optgroup>
                             <option value="Autre">Autre</option>
                           </select>
+                          <button
+                            type="button"
+                            onClick={() => askSofiAbout(
+                              `Dans quelle catégorie devrait aller cette dépense chez ${editingExpense.fournisseur || editingExpense.tiers || editingExpense.proveedor || "ce fournisseur"} de ${(Number(editingExpense.total) || 0).toFixed(2)}$ ?`
+                            )}
+                            className={`mt-1.5 text-[8.5px] font-bold uppercase tracking-wider pl-1 flex items-center gap-1 ${darkMode ? "text-emerald-400 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-700"}`}
+                          >
+                            <Sparkles size={10} /> Pas sûr(e) ? Demander à Sofi
+                          </button>
                         </div>
                       </div>
 
