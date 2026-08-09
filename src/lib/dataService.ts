@@ -224,6 +224,12 @@ export interface ExpenseDoc {
    *  revenue-only view is incomplete without also knowing which expenses
    *  are that same activity's own operating costs vs. some other one. */
   sourceRevenu?: string;
+  /** Set when this record was created by the OWNER accepting a mirrored
+   *  SharedLedgerEntryDoc into their own book (see
+   *  acceptSharedLedgerEntryIntoOwnBook) — used to grey out/hide the
+   *  "Accepter" button for entries already accepted, and to never
+   *  double-create the same record on a repeat click. */
+  mirroredFromSharedLedgerEntryId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -523,6 +529,12 @@ export interface InvoiceDoc {
    *  under one company. Absent on older records — treat as "Non classé"
    *  when grouping, never hide. */
   sourceRevenu?: string;
+  /** Set when this record was created by the OWNER accepting a mirrored
+   *  SharedLedgerEntryDoc into their own book (see
+   *  acceptSharedLedgerEntryIntoOwnBook) — used to grey out/hide the
+   *  "Accepter" button for entries already accepted, and to never
+   *  double-create the same record on a repeat click. */
+  mirroredFromSharedLedgerEntryId?: string;
   ownerId: string;
   createdAt: string;
 }
@@ -2998,6 +3010,63 @@ export const dataService = {
       console.error('fetchSharedLedgerEntriesForOwner failed:', e);
       return [];
     }
+  },
+
+  /**
+   * Owner turns a mirrored (read-only) SharedLedgerEntryDoc into a real
+   * expense/invoice in THEIR OWN book — avoids re-typing what the
+   * gestionnaire already reported. Reuses saveExpense/saveInvoice as-is, so
+   * it inherits the SAME access gate every other write in the app already
+   * goes through (assertCanWrite → blocked once the owner's own trial/
+   * access has expired) — no separate paywall needed for this feature.
+   * Never touches Drive: mirrored entries carry no receipt image by design.
+   */
+  async acceptSharedLedgerEntryIntoOwnBook(
+    uid: string,
+    entry: SharedLedgerEntryDoc,
+    targetCompanyId: string
+  ): Promise<void> {
+    const shared = {
+      companyId: targetCompanyId,
+      fecha: entry.date,
+      cat: entry.category,
+      subtotal: entry.amount,
+      tps: 0,
+      tvq: 0,
+      total: entry.amount,
+      buildingId: entry.buildingId,
+      mirroredFromSharedLedgerEntryId: entry.id,
+    };
+    if (entry.direction === 'expense') {
+      await this.saveExpense(uid, { ...shared, fournisseur: entry.description });
+    } else {
+      await this.saveInvoice(uid, { ...shared, cliente: entry.description });
+    }
+  },
+
+  /** Which mirrored entries the owner has already accepted into their own
+   *  book, for a given company — so the "Accepter" button can grey out
+   *  instead of risking a duplicate record on a second click. */
+  async fetchMirroredEntryIds(uid: string, targetCompanyId: string): Promise<Set<string>> {
+    const docCompanyId = `${uid}_company_${targetCompanyId}`;
+    const ids = new Set<string>();
+    for (const coll of ['expenses', 'invoices']) {
+      try {
+        const q = query(
+          collection(db, coll),
+          where('ownerId', '==', uid),
+          where('companyId', '==', docCompanyId)
+        );
+        const snap = await getDocs(q);
+        snap.docs.forEach((d) => {
+          const v = d.data().mirroredFromSharedLedgerEntryId;
+          if (v) ids.add(v);
+        });
+      } catch (e) {
+        console.error(`fetchMirroredEntryIds(${coll}) failed:`, e);
+      }
+    }
+    return ids;
   },
 
   /** Owner submits a document/expense for a linked property — lands as

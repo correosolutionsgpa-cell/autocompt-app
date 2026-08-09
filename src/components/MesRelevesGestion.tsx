@@ -51,6 +51,9 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
   const [submitLinkId, setSubmitLinkId] = useState("");
   const [submitForm, setSubmitForm] = useState({ date: new Date().toISOString().slice(0, 10), description: "", amount: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [mirroredEntryIds, setMirroredEntryIds] = useState<Set<string>>(new Set());
+  const [acceptingEntryId, setAcceptingEntryId] = useState<string | null>(null);
+  const [acceptEntryError, setAcceptEntryError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const uid = auth.currentUser?.uid;
@@ -71,6 +74,15 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
       setSharedEntries(entries);
       setMyPendingItems(myItems);
       if (!submitLinkId && accepted.length > 0) setSubmitLinkId(accepted[0].id);
+
+      // Which mirrored entries already exist as real records in the owner's
+      // own book(s) — a link can be tied to more than one of the owner's
+      // companies, so this checks every distinct linkedOwnerCompanyId once.
+      const companyIds = Array.from(new Set(accepted.map((l) => l.linkedOwnerCompanyId).filter((c): c is string => !!c)));
+      if (companyIds.length > 0) {
+        const sets = await Promise.all(companyIds.map((cid) => dataService.fetchMirroredEntryIds(uid, cid)));
+        setMirroredEntryIds(new Set(sets.flatMap((s) => Array.from(s))));
+      }
     } catch (e) {
       console.error("[MesRelevesGestion] load error:", e);
     } finally {
@@ -120,6 +132,30 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
       console.error("[MesRelevesGestion] submitSharedLedgerPendingItem error:", e);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAcceptEntry = async (entry: SharedLedgerEntryDoc) => {
+    const uid = auth.currentUser?.uid;
+    const link = acceptedLinks.find((l) => l.id === entry.statementLinkId);
+    if (!uid || !link?.linkedOwnerCompanyId) return;
+    setAcceptingEntryId(entry.id);
+    setAcceptEntryError(null);
+    try {
+      await dataService.acceptSharedLedgerEntryIntoOwnBook(uid, entry, link.linkedOwnerCompanyId);
+      setMirroredEntryIds((prev) => new Set(prev).add(entry.id));
+      playNotificationSound?.();
+    } catch (e: any) {
+      // Reusing saveExpense/saveInvoice means this inherits the SAME access
+      // gate as every other write in the app (assertCanWrite) — an expired
+      // trial surfaces here as this exact error, same as everywhere else.
+      setAcceptEntryError(
+        e?.message === "TRIAL_EXPIRED"
+          ? "Votre accès AutoCompt est expiré — vous pouvez toujours consulter ce registre, mais l'enregistrer dans votre propre comptabilité nécessite un accès actif."
+          : "Échec de l'enregistrement. Réessayez."
+      );
+    } finally {
+      setAcceptingEntryId(null);
     }
   };
 
@@ -264,18 +300,43 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                   </div>
                 )}
 
+                {acceptEntryError && (
+                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 px-1">{acceptEntryError}</p>
+                )}
                 {sharedEntries.length === 0 ? (
                   <p className={`text-[11px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                     Aucun mouvement partagé par votre gestionnaire pour l'instant.
                   </p>
                 ) : (
                   <div className="space-y-1.5">
-                    {sharedEntries.slice(0, 8).map((e) => (
-                      <div key={e.id} className={`flex items-center justify-between gap-2 text-[10px] px-3 py-2 rounded-xl ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
-                        <span className="truncate">{e.date} · {e.description}{e.buildingAddress ? ` · ${e.buildingAddress}` : ""}</span>
-                        <span className={`font-bold shrink-0 ${e.direction === "revenue" ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(e.amount)}</span>
-                      </div>
-                    ))}
+                    {sharedEntries.slice(0, 8).map((e) => {
+                      const link = acceptedLinks.find((l) => l.id === e.statementLinkId);
+                      const alreadyAccepted = mirroredEntryIds.has(e.id);
+                      return (
+                        <div key={e.id} className={`flex items-center justify-between gap-2 text-[10px] px-3 py-2 rounded-xl ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
+                          <span className="truncate">{e.date} · {e.description}{e.buildingAddress ? ` · ${e.buildingAddress}` : ""}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`font-bold ${e.direction === "revenue" ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(e.amount)}</span>
+                            {link?.linkedOwnerCompanyId && (
+                              alreadyAccepted ? (
+                                <span className="flex items-center gap-1 text-emerald-500" title="Déjà dans votre comptabilité">
+                                  <CheckCircle2 size={11} />
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleAcceptEntry(e)}
+                                  disabled={acceptingEntryId === e.id}
+                                  title="Enregistrer ce mouvement dans ma propre comptabilité — évite de le retaper"
+                                  className="px-2 py-1 rounded-lg text-[8.5px] font-black uppercase tracking-widest bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 transition-all"
+                                >
+                                  {acceptingEntryId === e.id ? "…" : "Accepter"}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
