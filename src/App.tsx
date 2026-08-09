@@ -10350,6 +10350,7 @@ const App = () => {
         } else if (err?.code === "auth/provider-already-linked") {
           // Already linked from a previous attempt — treat as verified.
           await setDoc(doc(db, "users", auth.currentUser!.uid), { phoneVerified: true, phoneVerifiedAt: new Date().toISOString() }, { merge: true });
+          await dataService.redeemPendingBetaCodeForUser(auth.currentUser!.uid);
           setIsPhoneVerified(true);
           // A phone-verified account with no profile yet still needs
           // onboarding — see the matching fix on handleConfirmPhoneCode below.
@@ -10375,6 +10376,7 @@ const App = () => {
           { phone: formatPhoneE164(phoneInput), phoneVerified: true, phoneVerifiedAt: new Date().toISOString() },
           { merge: true }
         );
+        await dataService.redeemPendingBetaCodeForUser(auth.currentUser!.uid);
         setIsPhoneVerified(true);
         // This used to always jump to "dashboard" regardless of whether the
         // account had ever picked a profile — since phone verification is
@@ -10540,7 +10542,10 @@ const App = () => {
               throw new Error(reason ?? "Code d'accès invalide.");
             }
             const cred = await createUserWithEmailAndPassword(auth, email, "autocompt123");
-            await dataService.redeemBetaCode(code, cred.user.uid);
+            // Redeemed later, once phone verification (the mandatory next
+            // step) actually succeeds — not here, so a user stuck on that
+            // screen doesn't burn their code or start their trial early.
+            await setDoc(doc(db, "users", cred.user.uid), { pendingBetaCode: code.trim().toUpperCase() }, { merge: true });
           } else {
             throw error;
           }

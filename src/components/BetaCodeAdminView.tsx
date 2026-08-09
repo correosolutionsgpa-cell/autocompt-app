@@ -15,9 +15,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft, Ticket, Loader2, LogOut, ShieldAlert,
-  CheckCircle2, Clock, Copy, Check,
+  CheckCircle2, Clock, Copy, Check, Mail,
 } from 'lucide-react';
 import { dataService, type BetaCodeDoc } from '../lib/dataService';
+import { auth } from '../lib/firebase';
 
 export interface BetaCodeAdminViewProps {
   darkMode: boolean;
@@ -34,6 +35,8 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
   const [codes, setCodes] = useState<BetaCodeDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [sentFeedback, setSentFeedback] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -60,6 +63,27 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
       setError(e.message ?? 'Échec de génération du code.');
     }
     setGenerating(false);
+  };
+
+  const handleSendEmail = async (c: BetaCodeDoc) => {
+    setSendingEmail(c.code);
+    setSentFeedback(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/send-beta-code-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ recipientEmail: c.email, code: c.code, validDays: c.validDays }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || "Échec de l'envoi");
+      setSentFeedback(`Code envoyé à ${c.email}.`);
+    } catch (e: any) {
+      setSentFeedback(`Échec de l'envoi : ${e.message}`);
+    } finally {
+      setSendingEmail(null);
+      setTimeout(() => setSentFeedback(null), 4000);
+    }
   };
 
   const card = `${D ? 'bg-zinc-900/70 border-zinc-800' : 'bg-white border-slate-200'} rounded-3xl border shadow-sm`;
@@ -135,6 +159,9 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
             <h3 className="text-[10px] font-black uppercase tracking-wider">Codes déjà générés</h3>
             {loading && <Loader2 size={13} className="animate-spin text-emerald-500" />}
           </div>
+          {sentFeedback && (
+            <p className={`px-5 py-2 text-[10px] font-bold ${sentFeedback.startsWith('Échec') ? 'text-rose-500' : 'text-emerald-500'}`}>{sentFeedback}</p>
+          )}
           {!loading && codes.length === 0 && (
             <p className={`p-6 text-center text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>Aucun code généré pour l'instant.</p>
           )}
@@ -145,14 +172,26 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
                   <p className="font-mono font-black text-[12px]">{c.code}</p>
                   <p className={`text-[10px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{c.email} · {c.validDays} jours</p>
                 </div>
-                <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border ${
-                  c.status === 'redeemed'
-                    ? (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
-                    : (D ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-500')
-                }`}>
-                  {c.status === 'redeemed' ? <CheckCircle2 size={10} /> : <Clock size={10} />}
-                  {c.status === 'redeemed' ? 'Utilisé' : 'Disponible'}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border ${
+                    c.status === 'redeemed'
+                      ? (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                      : (D ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-500')
+                  }`}>
+                    {c.status === 'redeemed' ? <CheckCircle2 size={10} /> : <Clock size={10} />}
+                    {c.status === 'redeemed' ? 'Utilisé' : 'Disponible'}
+                  </span>
+                  <button
+                    onClick={() => handleSendEmail(c)}
+                    disabled={sendingEmail !== null}
+                    title={`Envoyer ce code par courriel à ${c.email}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 border ${
+                      D ? 'border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {sendingEmail === c.code ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -222,6 +222,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [newCodeEmail, setNewCodeEmail] = useState('');
   const [generatingCode, setGeneratingCode] = useState<'trial' | 'extension' | null>(null);
+  const [sendingCodeEmail, setSendingCodeEmail] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>(SAMPLE_USERS);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1036,6 +1037,25 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
     }
   };
 
+  const handleSendCodeEmail = async (c: BetaCodeDoc) => {
+    setSendingCodeEmail(c.code);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/send-beta-code-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ recipientEmail: c.email, code: c.code, validDays: c.validDays }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Échec de l\'envoi');
+      toast(`Code envoyé par courriel à ${c.email}.`);
+    } catch (err: any) {
+      toast(`Échec de l'envoi : ${err.message}`, 'error');
+    } finally {
+      setSendingCodeEmail(null);
+    }
+  };
+
   const CodesTab = () => (
     <div className="space-y-6">
       <div className={card}>
@@ -1095,6 +1115,17 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                 }`}>
                   {c.status === 'redeemed' ? 'Utilisé' : 'Disponible'}
                 </span>
+                <button
+                  onClick={() => handleSendCodeEmail(c)}
+                  disabled={sendingCodeEmail !== null}
+                  title={`Envoyer ce code par courriel à ${c.email}`}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 border ${
+                    D ? 'border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {sendingCodeEmail === c.code ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+                  {sendingCodeEmail === c.code ? 'Envoi…' : 'Envoyer'}
+                </button>
               </div>
             ))}
           </div>

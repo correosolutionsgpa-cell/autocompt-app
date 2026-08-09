@@ -1539,6 +1539,105 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // Sends a freshly generated beta access code directly to the invitee —
+  // used by the "Codes Bêta" admin tab so the code doesn't have to be
+  // copy-pasted manually into a separate email client.
+  app.post("/api/send-beta-code-email", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) {
+        console.error("[send-beta-code-email] 401: no/invalid auth token");
+        return res.status(401).json({ success: false, error: "Non authentifié" });
+      }
+
+      const { recipientEmail, code, validDays } = req.body;
+      console.log(`[send-beta-code-email] request from uid=${auth.uid} -> recipientEmail=${recipientEmail} code=${code}`);
+
+      if (!recipientEmail || !code) {
+        console.error(`[send-beta-code-email] 400: missing required field(s) — recipientEmail=${!!recipientEmail} code=${!!code}`);
+        return res.status(400).json({ success: false, error: "recipientEmail et code sont requis" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        console.error(`[send-beta-code-email] 400: invalid recipientEmail format: ${recipientEmail}`);
+        return res.status(400).json({ success: false, error: "Courriel du destinataire invalide" });
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        console.error("[send-beta-code-email] 500: RESEND_API_KEY not configured");
+        return res.status(500).json({ success: false, error: "RESEND_API_KEY not configured" });
+      }
+
+      const esc = (v: any) => String(v ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+      const safeCode = esc(code);
+      const safeDays = esc(validDays || 30);
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+          <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+            <div style="background:#059669;padding:32px 40px">
+              <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">AutoCompt</div>
+              <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">Votre accès bêta</div>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                Bonjour, voici votre code d'accès à la version bêta d'AutoCompt.
+              </p>
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;text-align:center;margin:0 0 16px">
+                <div style="font-size:24px;font-weight:900;letter-spacing:3px;color:#059669">${safeCode}</div>
+              </div>
+              <p style="color:#374151;font-size:13px;margin:0 0 16px">
+                Rendez-vous sur <a href="https://autocompt-app.vercel.app" style="color:#059669">autocompt-app.vercel.app</a>,
+                entrez ce code avec l'adresse courriel <strong>${esc(recipientEmail)}</strong> pour créer votre compte.
+                Ce code est valide ${safeDays} jours et à usage unique.
+              </p>
+              <p style="color:#6b7280;font-size:13px;margin:0">
+                Si vous avez des questions, répondez simplement à ce courriel.
+              </p>
+            </div>
+            <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+              <p style="color:#9ca3af;font-size:10px;margin:0">
+                Envoyé via AutoCompt · <a href="https://www.autocompt.ca" style="color:#059669">www.autocompt.ca</a>
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `AutoCompt <factures@autocompt.ca>`,
+          to: [recipientEmail],
+          subject: `Votre code d'accès bêta AutoCompt : ${code}`,
+          html: emailHtml,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error(`[send-beta-code-email] Resend rejected (status ${resp.status}):`, JSON.stringify(errBody));
+        return res.status(502).json({ success: false, error: "Resend a refusé l'envoi du courriel" });
+      }
+
+      const resendData = await resp.json().catch(() => ({}));
+      console.log(`[send-beta-code-email] sent OK — resend id=${resendData?.id} to=${recipientEmail}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[send-beta-code-email] uncaught exception:", error?.message || error, error?.stack);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // ── Google Drive: connect a company's Drive permanently (authorization-code flow) ──
   // The client sends the one-time `code` from google.accounts.oauth2.initCodeClient.
   // We exchange it for a refresh token here (needs the Client Secret, server-only) and

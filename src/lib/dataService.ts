@@ -2288,6 +2288,22 @@ export const dataService = {
     return { trialStartDate, trialValidDays: data.validDays };
   },
 
+  /**
+   * Redeems whatever code was stashed on `users/{uid}.pendingBetaCode` at
+   * account-creation time — called only once phone verification (the
+   * mandatory next step) actually succeeds. Keeps the code "unused" and the
+   * 30-day trial clock unstarted for anyone stuck on that screen, instead of
+   * burning both the moment the Firebase Auth account is created. No-op if
+   * nothing is pending (e.g. this account already redeemed on a prior visit).
+   */
+  async redeemPendingBetaCodeForUser(uid: string): Promise<void> {
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    const pending = (userSnap.data() as any)?.pendingBetaCode;
+    if (!pending) return;
+    await this.redeemBetaCode(pending, uid);
+    await setDoc(doc(db, 'users', uid), { pendingBetaCode: '' }, { merge: true });
+  },
+
   /** Lists every generated code — for the admin "Codes Beta" tab. Enforced superadmin-only by firestore.rules' `allow list`. */
   async fetchBetaCodes(): Promise<BetaCodeDoc[]> {
     const snap = await getDocs(collection(db, 'betaCodes'));
