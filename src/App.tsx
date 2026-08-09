@@ -11171,14 +11171,21 @@ const App = () => {
             />
           </div>
 
-          <div className="flex-1 flex flex-col items-center text-center px-4 overflow-hidden">
+          {/* `min-w-0` on this flex-1 column is required — without it, the
+              "Usager:"/"Profil Plex" text has no width ceiling and forces
+              this column wider than its fair share on narrow viewports,
+              overlapping the logo on the left (worst on mobile). Same root
+              cause as the sidebar nav-list fix earlier — a flex child
+              defaults to min-width:auto, sized to its content instead of
+              the space actually available. Found 2026-08-09. */}
+          <div className="flex-1 min-w-0 flex flex-col items-center text-center px-4 overflow-hidden">
             <p className="text-[10px] font-black uppercase italic tracking-tighter leading-none truncate w-full max-w-[160px]">
               {currentCompany?.nombre}
             </p>
-            <div className="flex flex-col items-center justify-center mt-1">
-              <div className="flex items-center space-x-1">
-                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+            <div className="flex flex-col items-center justify-center mt-1 w-full min-w-0">
+              <div className="flex items-center space-x-1 max-w-full min-w-0">
+                <div className="w-1 h-1 bg-emerald-500 rounded-full shrink-0"></div>
+                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate">
                   {/* activeUser defaults to "Fabiola" (her own demo company's
                       partner slot) until a real company with a `partners`
                       array loads and corrects it — for a brand-new account
@@ -11187,13 +11194,13 @@ const App = () => {
                   Usager: {currentCompany ? activeUser : (adminName || activeUser)}
                 </p>
               </div>
-              <div className="mt-1">
+              <div className="mt-1 max-w-full min-w-0">
                 {dashboardMode === "Plex" ? (
-                  <span className="text-[6px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                  <span className="block text-[6px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded truncate">
                     PROFIL PLEX : {userLevel || "Travailleur autonome (Revenu)"}
                   </span>
                 ) : (
-                  <span className="text-[6px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                  <span className="block text-[6px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded truncate">
                     PROFIL SYNDICAT DE COPROPRIÉTÉ
                   </span>
                 )}
