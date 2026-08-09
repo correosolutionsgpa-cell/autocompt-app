@@ -875,6 +875,12 @@ const App = () => {
   // creation without getting any of SuperAdmin's other access (billing,
   // DocuLegal documents, other users' data). Never self-service.
   const [canGenerateBetaCodes, setCanGenerateBetaCodes] = useState(false);
+  // Manual per-account SuperAdmin switch (Panneau d'Administration → Users)
+  // — false blocks uploadToDrive app-wide for this account (view/read stays
+  // untouched). Undefined/true means enabled — only accounts explicitly
+  // restricted are affected. Default true here matches "field absent on the
+  // user doc" until a SuperAdmin actually flips it. Found/added 2026-08-09.
+  const [driveEnabled, setDriveEnabled] = useState(true);
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneOtpInput, setPhoneOtpInput] = useState("");
   const [phoneConsentChecked, setPhoneConsentChecked] = useState(false);
@@ -6856,6 +6862,20 @@ const App = () => {
   // see driveService.ts). Works identically for the owner and any invited
   // collaborator; no per-browser OAuth popup needed once the company connected once.
   const uploadToDrive = async (file: File) => {
+    // Manual per-account switch (Panneau d'Administration → Users → icône
+    // Cloud) — blocks new Drive saves app-wide for this account while
+    // leaving everything already saved fully readable. Designed as a manual
+    // SuperAdmin toggle first; intended to later back an automatic rule for
+    // accounts that arrive via a comptable/gestionnaire invitation and
+    // haven't paid yet. Found/added 2026-08-09.
+    if (!driveEnabled) {
+      setDispatcherSuccessToast({
+        text: "Accès Drive désactivé 🔒",
+        channel: "Google Drive",
+        customMessage: "Votre compte peut consulter ses documents existants, mais l'enregistrement de nouveaux fichiers dans Drive nécessite un accès actif. Contactez votre gestionnaire/comptable ou AutoCompt pour l'activer.",
+      });
+      throw new Error("DRIVE_ACCESS_DISABLED");
+    }
     setDispatcherSuccessToast({
       text: "Synchronisation en cours...",
       channel: "Google Drive",
@@ -8631,6 +8651,7 @@ const App = () => {
             phoneAlreadyVerified = !!userData.phoneVerified;
             setIsPhoneVerified(phoneAlreadyVerified);
             setCanGenerateBetaCodes(!!userData.canGenerateBetaCodes);
+            setDriveEnabled(userData.driveEnabled !== false);
             hasSelectedProfile = !!userData.selectedProfile;
             setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 

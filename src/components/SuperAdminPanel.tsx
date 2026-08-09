@@ -7,6 +7,7 @@ import {
   BarChart2, PieChart as PieIcon, RefreshCw, Mail, Phone,
   Building2, Calendar, Plus, Eye, Ban, Edit3, Receipt,
   Sparkles, Globe, LogOut, Bell, Settings, Trash2, Loader2, AlertOctagon,
+  Cloud, CloudOff,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db, auth } from '../lib/firebase';
@@ -41,6 +42,14 @@ interface AdminUser {
    *  only) — granted per-account here, never self-service. Does NOT imply
    *  any of SuperAdmin's other access. */
   canGenerateBetaCodes?: boolean;
+  /** Manual per-account switch — false blocks that user from uploading
+   *  anything to Google Drive app-wide (see uploadToDrive's guard in
+   *  App.tsx), while leaving read/view access untouched. Undefined means
+   *  enabled (default) — only accounts explicitly restricted here are
+   *  affected, so nothing changes for existing users. Designed first as a
+   *  manual SuperAdmin toggle; intended to later back an automatic rule for
+   *  accounts that arrive via a comptable/gestionnaire invitation. */
+  driveEnabled?: boolean;
 }
 
 interface SuperAdminPanelProps {
@@ -349,6 +358,22 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       await updateDoc(doc(db, 'users', u.id), { canGenerateBetaCodes: next });
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, canGenerateBetaCodes: next } : x));
       toast(next ? `Accès Codes Bêta accordé à ${u.email}.` : `Accès Codes Bêta retiré de ${u.email}.`);
+    } catch (err: any) {
+      toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
+  /**
+   * Manual per-account Drive switch — false blocks that user from uploading
+   * anything to Google Drive app-wide (enforced in uploadToDrive, App.tsx),
+   * read/view access is untouched. Undefined/true means enabled.
+   */
+  const handleToggleDriveAccess = async (u: AdminUser) => {
+    const next = u.driveEnabled === false; // currently disabled → re-enable; otherwise disable
+    try {
+      await updateDoc(doc(db, 'users', u.id), { driveEnabled: next });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, driveEnabled: next } : x));
+      toast(next ? `Accès Drive réactivé pour ${u.email}.` : `Accès Drive désactivé pour ${u.email}.`);
     } catch (err: any) {
       toast(`Échec : ${err.message}`, 'error');
     }
@@ -690,6 +715,13 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                             ? (D ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-600')
                             : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
                           <Sparkles size={13} />
+                        </button>
+                        <button onClick={() => handleToggleDriveAccess(u)}
+                          title={u.driveEnabled === false ? "Réactiver l'accès Drive (peut de nouveau y sauvegarder)" : "Désactiver l'accès Drive (lecture seule — ne pourra plus rien y sauvegarder)"}
+                          className={`p-1.5 rounded-lg transition-colors ${u.driveEnabled === false
+                            ? (D ? 'bg-rose-500/15 text-rose-400' : 'bg-rose-100 text-rose-600')
+                            : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
+                          {u.driveEnabled === false ? <CloudOff size={13} /> : <Cloud size={13} />}
                         </button>
                         <button
                           title="Envoyer le courriel de prolongation (mois gratuit)"
