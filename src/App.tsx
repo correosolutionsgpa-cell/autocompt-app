@@ -151,7 +151,7 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc } from "./lib/dataService";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
@@ -1474,6 +1474,20 @@ const App = () => {
     // and with it, the "Propriétaire-client" selector in Gestion Plex.
     // Found 2026-08-09.
   }, [activeCompanyId, currentUserEmail]);
+
+  // Pending "Relevé de Gestion" invitations for this account's email — a
+  // brand-new user invited by their gestionnaire had no way to discover
+  // this at all: the accept screen lives inside Dossiers Fiscaux, a module
+  // a first-time user has no reason to open. Surfaced instead as a banner
+  // right on the dashboard, wherever they land first. Found 2026-08-09.
+  const [pendingGestionInvites, setPendingGestionInvites] = useState<StatementLinkDoc[]>([]);
+  useEffect(() => {
+    if (!currentUserEmail) { setPendingGestionInvites([]); return; }
+    dataService.fetchPendingStatementLinksForEmail(currentUserEmail)
+      .then(setPendingGestionInvites)
+      .catch(console.error);
+  }, [currentUserEmail]);
+
   // Remember the last-viewed company across reloads. Only non-empty values
   // are persisted — the transient "" used while entering the "add a company"
   // setup wizard must never overwrite the last real selection.
@@ -12301,6 +12315,27 @@ const App = () => {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {pendingGestionInvites.length > 0 && (
+            <button
+              onClick={() => { setVista("releves_gestion"); playNotificationSound(); }}
+              className={`w-full mb-4 p-4 rounded-2xl border flex items-center gap-3 text-left transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
+                darkMode ? "bg-amber-900/10 border-amber-500/30 hover:border-amber-500/50" : "bg-amber-50 border-amber-200 hover:border-amber-300"
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-200/50 text-amber-600"}`}>
+                <Mail size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-black uppercase italic tracking-tight ${darkMode ? "text-amber-300" : "text-amber-800"}`}>
+                  Une gestora vous invite à consulter vos relevés de gestion
+                </p>
+                <p className={`text-[9px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-amber-500/70" : "text-amber-600/80"}`}>
+                  Cliquez ici pour accepter l'invitation
+                </p>
+              </div>
+            </button>
+          )}
 
           {dashboardMode === "Syndic" ? (
             <SyndicModuleGrid
