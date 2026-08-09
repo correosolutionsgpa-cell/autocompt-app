@@ -104,7 +104,7 @@ export interface PropertyDoc {
   buildingId?: string;
   typeLocation: string;   // "Appartement/Maison" | "Immeuble à revenus" | etc.
   adresse: string;
-  status: 'Actif' | 'Vacant' | 'Archivé';
+  status: 'Actif' | 'Vacant' | 'Archivé' | 'Entretien' | 'Propriétaire occupant';
   /** % of this property occupied by the owner themselves (0 for a fully-rented
    * building). When set, tax/insurance expenses filed against this property
    * are only logged as deductible for the remaining (100 − occupancyPct)% —

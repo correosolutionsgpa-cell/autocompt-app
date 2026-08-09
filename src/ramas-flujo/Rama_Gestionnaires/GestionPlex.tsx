@@ -419,9 +419,9 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   Statut de l'unité
                 </label>
                 <div
-                  className={`flex p-1 rounded-full w-full max-w-sm gap-1 border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}
+                  className={`flex flex-wrap p-1 rounded-full w-full max-w-lg gap-1 border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}
                 >
-                  {["Actif", "Vacant", "Entretien"].map((s) => {
+                  {["Actif", "Vacant", "Entretien", "Propriétaire occupant"].map((s) => {
                     const isSelected = plexManagementForm.status === s;
                     return (
                       <button
@@ -433,7 +433,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             status: s,
                           })
                         }
-                        className={`flex-1 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border ${
+                        className={`flex-1 min-w-[45%] sm:min-w-0 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border whitespace-nowrap ${
                           isSelected
                             ? darkMode
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm"
@@ -964,6 +964,11 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   {visibleProperties.filter((p) => p.status === "Entretien").length} En Entretien
                 </span>
               )}
+              {visibleProperties.filter((p) => p.status === "Propriétaire occupant").length > 0 && (
+                <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-md">
+                  {visibleProperties.filter((p) => p.status === "Propriétaire occupant").length} Occupée(s) par le propriétaire
+                </span>
+              )}
             </div>
           </div>
 
@@ -993,7 +998,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                     <div className="flex flex-col space-y-2">
                       <div className="flex items-center space-x-2">
                         <span
-                          className={`text-[10px] px-2 py-1 rounded-md font-black uppercase tracking-widest text-white ${p.status === "Vacant" ? "bg-slate-500" : p.status === "Entretien" ? "bg-rose-500" : "bg-emerald-500"}`}
+                          className={`text-[10px] px-2 py-1 rounded-md font-black uppercase tracking-widest text-white ${p.status === "Vacant" ? "bg-slate-500" : p.status === "Entretien" ? "bg-rose-500" : p.status === "Propriétaire occupant" ? "bg-amber-500" : "bg-emerald-500"}`}
                         >
                           {isContainer ? "Habitations" : p.status || "Actif"}
                         </span>
