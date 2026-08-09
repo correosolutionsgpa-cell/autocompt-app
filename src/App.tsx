@@ -1466,7 +1466,14 @@ const App = () => {
     dataService.fetchFideicommisClients(userId, activeCompanyId)
       .then(setFideicommisClients)
       .catch(console.error);
-  }, [activeCompanyId]);
+    // `currentUserEmail` (set inside onAuthStateChanged) is also a dependency
+    // here — on a fresh load/hard refresh, Firebase Auth resolves
+    // asynchronously, and this effect could otherwise fire once with
+    // `auth.currentUser` still null (activeCompanyId defaults to "1" and
+    // never changes again), permanently leaving fideicommisClients empty —
+    // and with it, the "Propriétaire-client" selector in Gestion Plex.
+    // Found 2026-08-09.
+  }, [activeCompanyId, currentUserEmail]);
   // Remember the last-viewed company across reloads. Only non-empty values
   // are persisted — the transient "" used while entering the "add a company"
   // setup wizard must never overwrite the last real selection.
@@ -2846,7 +2853,15 @@ const App = () => {
               )}
 
               {/* QUICK LINKS LIST */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-1">
+              {/* `min-h-0` is required here — a flex child with overflow-y-auto
+                  otherwise defaults to min-height:auto and sizes to fit ALL its
+                  nav items instead of the space actually available, pushing the
+                  <aside>'s total height past h-screen. That squeezed everything
+                  below (Paramètres, Drive config, support, logout, etc.) into
+                  view simultaneously, leaving only ~1 nav item visible before
+                  the list ran out of room — on desktop and even worse on
+                  mobile's shorter viewport. Found 2026-08-09. */}
+              <div className="flex-1 min-h-0 p-4 overflow-y-auto space-y-1">
                 <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 mb-3">
                   Outils de Gestion
                 </p>
