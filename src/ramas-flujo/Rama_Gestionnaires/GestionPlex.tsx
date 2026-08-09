@@ -107,6 +107,12 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   // from scratch), which blocked correcting a mistake like a wrong "durée
   // minimale" value on an existing room.
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+  // Custom-styled dropdown state for "Propriétaire-client" — a native
+  // <select>'s open option list is rendered by the OS/browser and can't be
+  // styled, which broke the app's minimalist rounded-pill look. Replaced
+  // with the same button+panel pattern already used for the workspace
+  // selector in App.tsx. Found 2026-08-09.
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   // Only show this company's properties. Untagged (`companyId` missing) entries
   // are properties saved before this feature existed — keep showing them until
@@ -227,26 +233,65 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
               afterthought right before saving. Found 2026-08-09. */}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             {fideicommisClients.length > 0 && (
-              <select
-                value={plexManagementForm.fideicommisClientId || ""}
-                onChange={e => {
-                  const client = fideicommisClients.find(c => c.id === e.target.value);
-                  setPlexManagementForm({
-                    ...plexManagementForm,
-                    fideicommisClientId: e.target.value || undefined,
-                    fideicommisClientName: client?.nom || undefined,
-                  });
-                }}
-                title="Propriétaire-client (optionnel) — lier cet immeuble à un client de votre Compte en fidéicommis"
-                className={`px-4 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${
-                  darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"
-                }`}
-              >
-                <option value="">— Immeuble géré en propre —</option>
-                {fideicommisClients.map(c => (
-                  <option key={c.id} value={c.id}>{c.nom}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowClientDropdown(!showClientDropdown)}
+                  title="Propriétaire-client (optionnel) — lier cet immeuble à un client de votre Compte en fidéicommis"
+                  className={`flex items-center gap-2 max-w-[220px] px-4 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm transition-all ${
+                    darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100 hover:border-indigo-500/40" : "bg-slate-50 border-slate-200 text-slate-900 hover:border-indigo-300"
+                  }`}
+                >
+                  <span className="truncate">
+                    {plexManagementForm.fideicommisClientName || "— Immeuble géré en propre —"}
+                  </span>
+                  <ChevronDown size={11} className={`shrink-0 transition-transform duration-300 ${showClientDropdown ? "rotate-180" : ""}`} />
+                </button>
+                <AnimatePresence>
+                  {showClientDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className={`absolute right-0 mt-2 w-64 p-2 rounded-2xl border shadow-2xl z-30 text-left space-y-1 max-h-[280px] overflow-y-auto ${
+                        darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlexManagementForm({ ...plexManagementForm, fideicommisClientId: undefined, fideicommisClientName: undefined });
+                          setShowClientDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+                          !plexManagementForm.fideicommisClientId
+                            ? (darkMode ? "bg-zinc-800 text-white" : "bg-slate-100 text-slate-900")
+                            : (darkMode ? "text-zinc-400 hover:bg-zinc-800/60" : "text-slate-500 hover:bg-slate-50")
+                        }`}
+                      >
+                        — Immeuble géré en propre —
+                      </button>
+                      {fideicommisClients.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setPlexManagementForm({ ...plexManagementForm, fideicommisClientId: c.id, fideicommisClientName: c.nom });
+                            setShowClientDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+                            plexManagementForm.fideicommisClientId === c.id
+                              ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                              : (darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-slate-700 hover:bg-slate-50")
+                          }`}
+                        >
+                          {c.nom}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
             <input
               ref={taxScanInputRef}
