@@ -466,10 +466,16 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
 
   // Filter users
   const filteredUsers = users.filter(u => {
+    // Fields aren't guaranteed on every account (e.g. a doc created before
+    // the email field was stamped on login) — matching against "" instead of
+    // undefined avoids crashing the whole list the moment anyone types a
+    // search query, which silently hid every user (not just the one with a
+    // missing field) once it happened.
+    const q = searchQuery.toLowerCase();
     const matchSearch = !searchQuery ||
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.company.toLowerCase().includes(searchQuery.toLowerCase());
+      (u.name || "").toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q) ||
+      (u.company || "").toLowerCase().includes(q);
     const matchPlan = filterPlan === 'all' || u.plan === filterPlan;
     const matchStatus = filterStatus === 'all' || u.status === filterStatus;
     return matchSearch && matchPlan && matchStatus;

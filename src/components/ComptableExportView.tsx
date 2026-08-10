@@ -166,6 +166,12 @@ export default function ComptableExportView({
   const [gifiSaving, setGifiSaving]   = useState(false);
   const [gifiSavedMsg, setGifiSavedMsg] = useState<string|null>(null);
 
+  // ── Numéros de compte Sage 50 (mapping, une seule fois par dossier) ────────
+  const [sageCodes, setSageCodes]         = useState<Record<string,string>>({});
+  const [sageSaving, setSageSaving]       = useState(false);
+  const [sageSavedMsg, setSageSavedMsg]   = useState<string|null>(null);
+  const [showSageMapping, setShowSageMapping] = useState(false);
+
   // ── DPA + T776/TP-128 (Comptable only) — both are per-building ─────────────
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
   const [fiscalYear, setFiscalYear] = useState(String(yr));
@@ -239,6 +245,30 @@ export default function ComptableExportView({
       alert(e.message ?? 'Erreur lors de l\'enregistrement des codes GIFI.');
     }
     setGifiSaving(false);
+  };
+
+  // ── Load / save — mapping des numéros de compte Sage 50 ─────────────────────
+  useEffect(() => {
+    if (!companyId) return;
+    getDoc(doc(db, 'sageMappings', companyId))
+      .then(snap => { if (snap.exists()) setSageCodes((snap.data().codes as Record<string,string>) || {}); })
+      .catch(() => {});
+  }, [companyId]);
+
+  const saveSageCodes = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setSageSaving(true);
+    try {
+      await setDoc(doc(db, 'sageMappings', companyId), {
+        ownerId: uid, companyId, codes: sageCodes, updatedAt: new Date().toISOString(),
+      });
+      setSageSavedMsg('Numéros enregistrés.');
+      setTimeout(() => setSageSavedMsg(null), 3000);
+    } catch (e: any) {
+      alert(e.message ?? 'Erreur lors de l\'enregistrement des numéros de compte Sage 50.');
+    }
+    setSageSaving(false);
   };
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -398,6 +428,55 @@ export default function ComptableExportView({
     URL.revokeObjectURL(url);
   };
   const expJournalCSV = () => downloadCsv(buildJournalCsv(), journalCsvFilename());
+
+  // Format spécifique à l'import "Écritures du journal général" de Sage 50
+  // Canada — plus strict que le format universel ci-dessus : une colonne
+  // Montant unique (positif = débit, négatif = crédit, pas deux colonnes
+  // séparées), un numéro de compte qui doit correspondre exactement au plan
+  // comptable Sage 50 du client (jamais deviné — voir sageCodes), et le
+  // nombre de lignes de l'écriture répété sur chaque ligne ("Number of
+  // Distributions"), qui indique à Sage combien de lignes regrouper.
+  // Colonnes confirmées via la documentation officielle Sage 50 (Import/Export
+  // Fields — General Journal).
+  const sageDate = (iso: string): string => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso.slice(0, 10);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${mm}/${dd}/${yy}`;
+  };
+  const buildSageCsv = (): string | null => {
+    const missing = allIds.filter(id => !(sageCodes[id] || '').trim());
+    if (missing.length > 0) {
+      alert(`Numéros de compte Sage 50 manquants pour: ${missing.map(m => aLabel(m)).join(', ')}.\nAssignez-les ci-dessous avant d'exporter (une seule fois par dossier).`);
+      setShowSageMapping(true);
+      return null;
+    }
+    const rows: string[][] = [[
+      'Date', 'Reference', 'Date Cleared in Bank Rec', 'Number of Distributions', 'G/L Account',
+      'Description', 'Amount', 'Job ID', 'Used for Reimbursable Expense', 'Consolidated Transaction',
+      'Recur Number', 'Recur Frequency',
+    ]];
+    filt.forEach(e => {
+      const lines = e.lines ?? [];
+      const n = String(lines.length);
+      lines.forEach(l => {
+        const amt = l.type === 'Debit' ? l.amount : -l.amount;
+        rows.push([
+          sageDate(e.date), (e.documentReference || '').slice(0, 20), '', n,
+          sageCodes[l.accountId] || '', (e.description || '').slice(0, 160), amt.toFixed(2),
+          '', 'False', 'False', '0', '0',
+        ]);
+      });
+    });
+    return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  };
+  const sageCsvFilename = () => `Journal_Sage50_${dfrom}_${dto}.csv`;
+  const expSageCSV = () => {
+    const csv = buildSageCsv();
+    if (csv) downloadCsv(csv, sageCsvFilename());
+  };
 
   const buildGrandLivrePdf = (): jsPDF => {
     const pdf=new jsPDF({unit:'mm',format:'a4'});const M=14,W=210;
@@ -592,8 +671,66 @@ export default function ComptableExportView({
   );
 
   // ── TAB: Journal ──────────────────────────────────────────────────────────
+  const SageMappingPanel = () => {
+    const missingCount = allIds.filter(id => !(sageCodes[id] || '').trim()).length;
+    return (
+      <div className={`${card} p-4 space-y-4`}>
+        <div className="flex items-start gap-3">
+          <AlertCircle size={16} className="text-orange-500 mt-0.5 shrink-0"/>
+          <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+            À faire une seule fois par dossier : associez chaque compte AutoCompt utilisé ci-dessous à son numéro dans le plan comptable Sage 50 de {co}. Une fois enregistrés, l'export « Journal .csv (Sage 50) » est prêt à importer directement dans Sage 50 (Fichier → Importer/Exporter → Importer → Écritures du journal général) — plus besoin de ressaisir les montants ligne par ligne.
+          </p>
+        </div>
+        {missingCount > 0 && (
+          <div className={`p-3 rounded-xl border text-[10px] font-bold ${D?'bg-rose-500/10 border-rose-500/30 text-rose-400':'bg-rose-50 border-rose-200 text-rose-700'}`}>
+            ⚠ {missingCount} compte(s) utilisé(s) cette période n'ont pas encore de numéro Sage 50 — l'export sera bloqué tant qu'ils ne le sont pas.
+          </div>
+        )}
+        {allIds.length === 0 ? (
+          <p className={`text-[11px] italic ${D?'text-zinc-500':'text-slate-400'}`}>Aucun compte utilisé dans cette période.</p>
+        ) : (
+          <div className={`overflow-hidden rounded-xl border ${D?'border-zinc-800':'border-slate-100'}`}>
+            <table className="w-full text-[10px]">
+              <thead><tr className={D?'bg-zinc-800/60':'bg-slate-50'}>
+                {['Compte AutoCompt','Numéro de compte Sage 50'].map(h=>(
+                  <th key={h} className={`px-4 py-2.5 text-[8px] font-black uppercase text-left ${D?'text-zinc-400':'text-slate-400'}`}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {allIds.map(id => (
+                  <tr key={id} className={`border-t ${D?'border-zinc-800':'border-slate-100'}`}>
+                    <td className={`px-4 py-2 font-semibold ${D?'text-zinc-200':'text-slate-700'}`}>
+                      <span className={`text-[8px] font-black mr-1.5 ${D?'text-zinc-600':'text-slate-400'}`}>{aCode(id)}</span>{aLabel(id)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        value={sageCodes[id] || ''}
+                        onChange={e => setSageCodes(prev => ({ ...prev, [id]: e.target.value }))}
+                        placeholder="Ex: 5010"
+                        className={`${inp} w-28 font-mono`}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <button onClick={saveSageCodes} disabled={sageSaving}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-800 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
+            {sageSaving ? <Loader2 size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>}
+            <span>Enregistrer les numéros</span>
+          </button>
+          {sageSavedMsg && <span className="text-[10px] font-bold text-emerald-600">{sageSavedMsg}</span>}
+        </div>
+      </div>
+    );
+  };
+
   const JournalTab=()=>(
     <div className="space-y-3">
+      {showSageMapping && <SageMappingPanel/>}
       {jPaged.length===0&&(
         <div className={`${card} p-8 text-center`}>
           <FileText size={32} className={`mx-auto mb-3 ${D?'text-zinc-600':'text-slate-300'}`}/>
@@ -1181,6 +1318,16 @@ export default function ComptableExportView({
           {tab==='journal' && (
             <button onClick={expJournalCSV} title="Format universel pour import dans un logiciel de tenue de livres (QuickBooks, Xero, Acomba...)" className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-300':'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
               <Download size={13}/>Journal .csv (comptabilité)
+            </button>
+          )}
+          {tab==='journal' && (
+            <button onClick={expSageCSV} title="Format compatible avec l'importation d'écritures dans Sage 50 Comptabilité (Fichier → Importer/Exporter → Importer)" className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-300':'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+              <Download size={13}/>Journal .csv (Sage 50)
+            </button>
+          )}
+          {tab==='journal' && (
+            <button onClick={()=>setShowSageMapping(v=>!v)} title="Associer les comptes AutoCompt aux numéros de compte Sage 50" className={`p-2.5 rounded-2xl border transition-all active:scale-95 ${showSageMapping?(D?'border-orange-500/40 bg-orange-500/10 text-orange-400':'border-orange-200 bg-orange-50 text-orange-600'):(D?'border-zinc-700 hover:bg-zinc-800 text-zinc-400':'border-slate-200 hover:bg-slate-50 text-slate-500')}`}>
+              <Hash size={13}/>
             </button>
           )}
           {tab==='sources' && (

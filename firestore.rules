@@ -64,6 +64,16 @@ service cloud.firestore {
       return isSignedIn() && resource.data.companyId != null &&
         request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.get('collaboratorUIDs', []);
     }
+    // Narrow write for a collaborator (e.g. an accountant linked to a client's
+    // real company) — lets them append to the notes thread on an expense/
+    // invoice they don't own, without granting any access to the amount,
+    // category, or any other field. Mirrors isAcceptingOwnInvite()'s
+    // affectedKeys().hasOnly() pattern above.
+    function isCollaboratorNoteUpdate() {
+      return isSignedIn() && resource.data.companyId != null &&
+        request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.get('collaboratorUIDs', []) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes']);
+    }
     // Lets an invited user add themselves to a company's collaboratorUIDs —
     // only allowed when a matching *pending* invite exists (see
     // `companyInvites` below) and the update touches nothing else.
@@ -103,13 +113,15 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
-      allow update, delete: if isOwnerDoc();
+      allow update: if isOwnerDoc() || isCollaboratorNoteUpdate();
+      allow delete: if isOwnerDoc();
     }
 
     match /invoices/{invoiceId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
-      allow update, delete: if isOwnerDoc();
+      allow update: if isOwnerDoc() || isCollaboratorNoteUpdate();
+      allow delete: if isOwnerDoc();
     }
 
     match /docTemplates/{templateId} {
@@ -260,6 +272,16 @@ service cloud.firestore {
     // filled in by a human, exactly like every other AI/estimated value in
     // this app that must be confirmed before it's trusted.
     match /gifiMappings/{mappingId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    // Même principe que gifiMappings ci-dessus, mais pour le numéro de compte
+    // du plan comptable Sage 50 du client — nécessaire une seule fois pour que
+    // l'export "Journal .csv (Sage 50)" soit importable tel quel, sans ressaisie
+    // manuelle par le comptable.
+    match /sageMappings/{mappingId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();

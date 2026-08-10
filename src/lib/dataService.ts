@@ -25,6 +25,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  arrayUnion,
   query,
   where,
   orderBy,
@@ -234,6 +235,18 @@ export interface ExpenseAuditLog {
   timestamp: string;
 }
 
+/** Un échange dans le fil de discussion comptable↔client d'une dépense ou
+ *  facture — pourquoi cette dépense est là, à quoi elle correspond. Sert
+ *  aussi de trace horodatée : qui a classifié/expliqué la dépense et quand,
+ *  ce qui devient la pièce justificative derrière une éventuelle "lettre
+ *  d'attestation" (le client confirme, le comptable garde la preuve). */
+export interface ExpenseNote {
+  authorName: string;
+  authorUid: string;
+  text: string;
+  timestamp: string; // ISO
+}
+
 export interface ExpenseDoc {
   id: string;
   companyId: string;
@@ -252,6 +265,12 @@ export interface ExpenseDoc {
   auditLogs?: ExpenseAuditLog[];
   /** Receipt confirmed missing — set by disclaimer checkbox */
   noReceiptConfirmed?: boolean;
+  /** Simple note saisie à la création (legacy, encore utilisée par le
+   *  formulaire "Ajouter une dépense") — voir `notes` ci-dessous pour le
+   *  vrai fil de discussion, consultable/complétable après coup. */
+  noteComptable?: string;
+  /** Fil de discussion comptable↔client — voir ExpenseNote ci-dessus. */
+  notes?: ExpenseNote[];
   /** FK → UnitDoc.id (optional, for property-linked expenses) */
   unitId?: string;
   /** FK → BuildingLedger.id (optional, for property-linked expenses) */
@@ -557,6 +576,8 @@ export interface InvoiceDoc {
   total: number;
   status?: string;
   noteComptable?: string;
+  /** Fil de discussion comptable↔client — voir ExpenseNote (dataService.ts). */
+  notes?: ExpenseNote[];
   unitId?: string;
   buildingId?: string;
   /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
@@ -2024,6 +2045,14 @@ export const dataService = {
     return { id, ...data, companyId: originalCompanyId } as ExpenseDoc;
   },
 
+  /** Ajoute un message au fil de discussion d'une dépense — un `arrayUnion`
+   *  ciblé plutôt qu'un saveExpense complet, pour ne jamais déclencher
+   *  d'effets de bord (re-postage du journal, etc.) juste pour un commentaire. */
+  async addExpenseNote(expenseId: string, note: ExpenseNote): Promise<void> {
+    assertCanWrite();
+    await updateDoc(doc(db, 'expenses', String(expenseId)), { notes: arrayUnion(note) });
+  },
+
   async deleteExpense(expenseId: string): Promise<boolean> {
     const id = String(expenseId);
     await deleteDoc(doc(db, 'expenses', id));
@@ -2107,6 +2136,12 @@ export const dataService = {
     }
 
     return { id, ...data, companyId: originalCompanyId } as InvoiceDoc;
+  },
+
+  /** Même principe que addExpenseNote ci-dessus, pour les factures. */
+  async addInvoiceNote(invoiceId: string, note: ExpenseNote): Promise<void> {
+    assertCanWrite();
+    await updateDoc(doc(db, 'invoices', String(invoiceId)), { notes: arrayUnion(note) });
   },
 
   async deleteInvoiceDoc(invoiceId: string): Promise<boolean> {

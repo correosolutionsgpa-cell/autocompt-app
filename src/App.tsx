@@ -152,6 +152,7 @@ import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc } from "./lib/dataService";
+import { tr } from "./lib/i18n";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
@@ -1537,6 +1538,10 @@ const App = () => {
   }, [darkMode]);
   const [activeLang, setActiveLang] = useState<"FR" | "ES" | "EN">("FR");
   const [showLangDropdown, setShowLangDropdown] = useState(false);
+  // Traduction à la demande — voir src/lib/i18n.ts. Retombe toujours sur le
+  // français si la chaîne n'a pas encore été migrée, donc sûr à appeler
+  // partout même avant que tout le texte de l'app ne soit couvert.
+  const t = (frText: string) => tr(activeLang, frText);
 
   const [listaEmpresas, setListaEmpresas] = useState<any[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1830,6 +1835,11 @@ const App = () => {
   >({});
   const [showPreview, setShowPreview] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  // Fil de discussion comptable↔client — texte en cours de saisie dans la
+  // fenêtre "Validation IA", et indicateur d'envoi pour désactiver le bouton
+  // le temps de l'écriture Firestore.
+  const [newExpenseNoteText, setNewExpenseNoteText] = useState("");
+  const [savingExpenseNote, setSavingExpenseNote] = useState(false);
   /**
    * Blur detection modal — shown when a camera photo scores below the
    * Laplacian-variance sharpness threshold before being sent to AI.
@@ -2379,23 +2389,23 @@ const App = () => {
       currentCompany?.badgeBg || "bg-emerald-100 text-emerald-800";
 
     const baseNavItems = [
-      { id: "dashboard", label: "Tableau de Bord", icon: <Layout size={18} /> },
+      { id: "dashboard", label: t("Tableau de Bord"), icon: <Layout size={18} /> },
     ];
 
     const plexNavItems = [
-      { id: "plex", label: "Gestion Immobilière", icon: <Building2 size={18} /> },
-      { id: "meuble", label: "Meublé / Airbnb", icon: <Home size={18} /> },
-      { id: "dossiers", label: "Dossiers Fiscaux", icon: <FolderOpen size={18} /> },
-      { id: "taxes_assurances", label: "Taxes & Assurances", icon: <ShieldAlert size={18} /> },
-      { id: "banque", label: "Conciliation", icon: <Wallet size={18} /> },
-      { id: "reportes", label: "Tenue de Livres", icon: <FileSpreadsheet size={18} /> },
-      { id: "facturas", label: "Facturation", icon: <Receipt size={18} /> },
-      { id: "homeoffice", label: "Bureau Rénov", icon: <Home size={18} /> },
-      { id: "kilometraje", label: "GPS trajets", icon: <Car size={18} /> },
-      { id: "taxes", label: "TPS / TVQ", icon: <Percent size={18} /> },
-      { id: "doculegal", label: "DocuLegal", icon: <FileSignature size={18} /> },
-      { id: "equipe", label: "Notre Équipe", icon: <UserPlus size={18} /> },
-      { id: "heures-paie", label: "Heures & Paie", icon: <Timer size={18} /> },
+      { id: "plex", label: t("Gestion Immobilière"), icon: <Building2 size={18} /> },
+      { id: "meuble", label: t("Meublé / Airbnb"), icon: <Home size={18} /> },
+      { id: "dossiers", label: t("Dossiers Fiscaux"), icon: <FolderOpen size={18} /> },
+      { id: "taxes_assurances", label: t("Taxes & Assurances"), icon: <ShieldAlert size={18} /> },
+      { id: "banque", label: t("Conciliation"), icon: <Wallet size={18} /> },
+      { id: "reportes", label: t("Tenue de Livres"), icon: <FileSpreadsheet size={18} /> },
+      { id: "facturas", label: t("Facturation"), icon: <Receipt size={18} /> },
+      { id: "homeoffice", label: t("Bureau Rénov"), icon: <Home size={18} /> },
+      { id: "kilometraje", label: t("GPS trajets"), icon: <Car size={18} /> },
+      { id: "taxes", label: t("TPS / TVQ"), icon: <Percent size={18} /> },
+      { id: "doculegal", label: t("DocuLegal"), icon: <FileSignature size={18} /> },
+      { id: "equipe", label: t("Notre Équipe"), icon: <UserPlus size={18} /> },
+      { id: "heures-paie", label: t("Heures & Paie"), icon: <Timer size={18} /> },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
@@ -2434,14 +2444,14 @@ const App = () => {
     };
 
     const syndicNavItemsAll = [
-      { id: "dashboard", label: "Tableau de Bord", icon: <Layout size={18} />, bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
-      { id: "cotisations", label: "Gestion des Cotisations", icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
-      { id: "contrats", label: "Contrats & Résolutions (DocuLegal)", icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
-      { id: "transparence", label: "Tableau de Transparence", icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
-      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
-      { id: "rapport-ia", label: "Rapport IA (SyndicAI)", icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
-      { id: "muro", label: "Mur de Communication", icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
-      { id: "equipe", label: "Notre Équipe", icon: <UserPlus size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
+      { id: "dashboard", label: t("Tableau de Bord"), icon: <Layout size={18} />, bgClass: "bg-emerald-100 dark:bg-emerald-500/20", textClass: "text-emerald-600 dark:text-emerald-400" },
+      { id: "cotisations", label: t("Gestion des Cotisations"), icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
+      { id: "contrats", label: t("Contrats & Résolutions (DocuLegal)"), icon: <FileSignature size={18} />, bgClass: "bg-teal-100 dark:bg-teal-500/20", textClass: "text-teal-600 dark:text-teal-400" },
+      { id: "transparence", label: t("Tableau de Transparence"), icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
+      { id: "loi16", label: t("Loi 16 & Carnet Entretien"), icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
+      { id: "rapport-ia", label: t("Rapport IA (SyndicAI)"), icon: <Sparkles size={18} />, bgClass: "bg-purple-100 dark:bg-purple-500/20", textClass: "text-purple-600 dark:text-purple-400" },
+      { id: "muro", label: t("Mur de Communication"), icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
+      { id: "equipe", label: t("Notre Équipe"), icon: <UserPlus size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
@@ -2461,8 +2471,8 @@ const App = () => {
     });
 
     const coproprietaireNavItems = [
-      { id: "dashboard", label: "Espace Copropriétaire", icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
-      { id: "loi16", label: "Loi 16 & Carnet Entretien", icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
+      { id: "dashboard", label: t("Espace Copropriétaire"), icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
+      { id: "loi16", label: t("Loi 16 & Carnet Entretien"), icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
@@ -3113,7 +3123,7 @@ const App = () => {
                     }`}>
                     <Settings size={18} />
                   </span>
-                  <span className={showSettingsTour ? "text-cyan-400 font-black" : ""}>Paramètres</span>
+                  <span className={showSettingsTour ? "text-cyan-400 font-black" : ""}>{t("Paramètres")}</span>
                   {showSettingsTour && (
                     <span className="ml-auto text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 whitespace-nowrap animate-pulse">
                       ➡ ici
@@ -3474,6 +3484,33 @@ const App = () => {
   const askSofiAbout = (question: string) => {
     setChatInput(question);
     setShowFiscalChat(true);
+  };
+
+  // Fil de discussion comptable↔client sur une dépense — voir ExpenseNote
+  // (dataService.ts). Écrit directement via un arrayUnion ciblé (pas un
+  // saveExpense complet) pour que le message soit visible pour l'autre
+  // partie immédiatement, même si le reste du formulaire "Validation IA"
+  // n'a pas encore été sauvegardé.
+  const handleAddExpenseNote = async () => {
+    const text = newExpenseNoteText.trim();
+    if (!text || !editingExpense?.id) return;
+    setSavingExpenseNote(true);
+    try {
+      const note = {
+        authorName: adminName || auth.currentUser?.email || "Utilisateur",
+        authorUid: auth.currentUser?.uid || "",
+        text,
+        timestamp: new Date().toISOString(),
+      };
+      await dataService.addExpenseNote(editingExpense.id, note);
+      const updatedNotes = [...(editingExpense.notes || []), note];
+      setEditingExpense({ ...editingExpense, notes: updatedNotes });
+      setDepenses((prev) => prev.map((d) => (d.id === editingExpense.id ? { ...d, notes: updatedNotes } : d)));
+      setNewExpenseNoteText("");
+    } catch (e: any) {
+      alert(e.message ?? "Erreur lors de l'enregistrement de la note.");
+    }
+    setSavingExpenseNote(false);
   };
 
   // Extracted so it can be rendered from more than one vista block (this
@@ -8683,6 +8720,15 @@ const App = () => {
           // dashboard (see that redirect for the bug this guards against).
           let hasSelectedProfile = false;
           const userDocRef = doc(db, "users", user.uid);
+          // Stamp the auth email onto the Firestore user doc on every login —
+          // no signup path ever wrote this field, so SuperAdminPanel's user
+          // list/search silently broke for any account whose doc predates
+          // this (found 2026-08-10: Daniel's beta-tester account redeemed a
+          // code but never showed up searchable in the Users tab). Best-effort,
+          // never blocks login if it fails.
+          if (user.email) {
+            setDoc(userDocRef, { email: user.email }, { merge: true }).catch(() => {});
+          }
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -17505,11 +17551,11 @@ const App = () => {
                                     >
                                       {(depense.lien || depense.documentUrl) ? <Eye size={15} /> : <PenLine size={15} />}
                                     </button>
-                                    {depense.noteComptable && (
+                                    {((depense.notes && depense.notes.length > 0) || depense.noteComptable) && (
                                       <button
-                                        onClick={() => alert(`Note pour le comptable :\n\n${depense.noteComptable}`)}
-                                        className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-amber-500 hover:bg-amber-900/30" : "text-amber-500 hover:bg-amber-50"}`}
-                                        title="Note pour le comptable"
+                                        onClick={() => setEditingExpense(depense)}
+                                        className={`p-1.5 rounded-lg transition-colors relative ${darkMode ? "text-amber-500 hover:bg-amber-900/30" : "text-amber-500 hover:bg-amber-50"}`}
+                                        title={`Voir les notes (${depense.notes?.length || 1})`}
                                       >
                                         <MessageSquare size={15} />
                                       </button>
@@ -18394,6 +18440,61 @@ const App = () => {
                           </button>
                         </div>
                       )}
+
+                      {/* ── Fil de discussion comptable↔client — pourquoi cette
+                          dépense est là. Vit dans cette même fenêtre de
+                          classification (pas un écran séparé), pour que la
+                          question et la réponse restent au même endroit que
+                          la catégorie et "Demander à Sofi". Remplace l'ancien
+                          noteComptable en lecture seule (un seul message,
+                          jamais de réponse possible). ── */}
+                      <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? "border-zinc-800 bg-zinc-900/50" : "border-slate-200 bg-slate-50"}`}>
+                        <div className="flex items-center gap-2">
+                          <MessageSquare size={14} className="text-amber-500" />
+                          <span className={`text-[10px] font-black uppercase italic tracking-wider ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>Notes — pourquoi cette dépense ?</span>
+                        </div>
+                        {(() => {
+                          // Legacy single-string note (ancien formulaire de création) —
+                          // affichée comme premier message du fil si elle n'a pas déjà
+                          // été migrée dans `notes`, pour ne jamais perdre une note existante.
+                          const legacy = editingExpense.noteComptable && !(editingExpense.notes || []).some((n: any) => n.text === editingExpense.noteComptable)
+                            ? [{ authorName: "Note initiale", text: editingExpense.noteComptable, timestamp: editingExpense.createdAt || editingExpense.fecha }]
+                            : [];
+                          const allNotes = [...legacy, ...(editingExpense.notes || [])];
+                          return allNotes.length > 0 ? (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {allNotes.map((n: any, i: number) => (
+                                <div key={i} className={`p-3 rounded-xl text-left ${darkMode ? "bg-zinc-800" : "bg-white border border-slate-100"}`}>
+                                  <div className="flex items-center justify-between mb-1 gap-2">
+                                    <span className={`text-[8.5px] font-black truncate ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{n.authorName}</span>
+                                    <span className={`text-[7.5px] font-bold shrink-0 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>{n.timestamp ? new Date(n.timestamp).toLocaleString("fr-CA") : ""}</span>
+                                  </div>
+                                  <p className={`text-[10.5px] leading-snug whitespace-pre-wrap ${darkMode ? "text-zinc-200" : "text-slate-700"}`}>{n.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className={`text-[9.5px] italic ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>Aucune note pour l'instant — expliquez ici à quoi correspond cette dépense (utile si le comptable demande, ex: usage locataires vs personnel).</p>
+                          );
+                        })()}
+                        <div className="flex items-end gap-2">
+                          <textarea
+                            value={newExpenseNoteText}
+                            onChange={(e) => setNewExpenseNoteText(e.target.value)}
+                            placeholder="Ex: pour usage des locataires, pas personnel..."
+                            rows={2}
+                            className={`flex-1 p-3 rounded-xl text-[10.5px] font-medium border-none outline-none resize-none ${darkMode ? "bg-zinc-800 text-zinc-100 placeholder:text-zinc-600" : "bg-white text-slate-800 placeholder:text-slate-400 border border-slate-200"}`}
+                          />
+                          <button
+                            type="button"
+                            disabled={!newExpenseNoteText.trim() || savingExpenseNote}
+                            onClick={handleAddExpenseNote}
+                            className="shrink-0 p-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white transition-all active:scale-95"
+                          >
+                            {savingExpenseNote ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="mt-8">
