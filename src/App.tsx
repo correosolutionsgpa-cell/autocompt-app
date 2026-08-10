@@ -4521,8 +4521,16 @@ const App = () => {
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   };
 
-  const generateInvoicePdfDoc = async (): Promise<jsPDF> => {
-    const fac: any = selectedFac;
+  const generateInvoicePdfDoc = async (facOverride?: any): Promise<jsPDF> => {
+    // Accepts an explicit invoice instead of always reading `selectedFac` —
+    // a caller that JUST called setSelectedFac(fac) can still be executing
+    // inside a closure captured BEFORE that state update committed (classic
+    // React stale-closure timing), so `selectedFac` here could still read
+    // the OLD value (often null) even moments after the setter ran. Passing
+    // the real invoice through explicitly makes this immune to that timing
+    // entirely — see actuallySendInvoiceEmail below. Found 2026-08-10 via a
+    // real "Invoice content not found" send failure.
+    const fac: any = facOverride ?? selectedFac;
     if (!fac) throw new Error("Invoice content not found");
     const clientInfo = clientes.find((c: any) => c.nom === fac.cliente) || fac;
     const [ar, ag, ab] = hexToRgb(userProfile.color || "#059669");
@@ -4693,8 +4701,8 @@ const App = () => {
     return pdf;
   };
 
-  const generateInvoicePdfBase64 = async (): Promise<string> => {
-    const pdf = await generateInvoicePdfDoc();
+  const generateInvoicePdfBase64 = async (facOverride?: any): Promise<string> => {
+    const pdf = await generateInvoicePdfDoc(facOverride);
     return pdf.output("datauristring").split(",")[1];
   };
 
@@ -4712,7 +4720,7 @@ const App = () => {
     setIsSendingInvoice(true);
     setSendInvoiceResult(null);
     try {
-      const pdfBase64 = await generateInvoicePdfBase64();
+      const pdfBase64 = await generateInvoicePdfBase64(fac);
       const idToken = await auth.currentUser?.getIdToken();
       const resp = await fetch("/api/send-client-invoice-email", {
         method: "POST",
@@ -19717,11 +19725,11 @@ const App = () => {
                           })()}
                         </div>
                       </div>
-                      <div className="shrink-0 p-6 bg-slate-900 flex flex-col space-y-3 print:hidden">
+                      <div className={`shrink-0 p-6 flex flex-col space-y-3 print:hidden border-t ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-100"}`}>
                         <div className="flex space-x-3 w-full">
                           <button
                             onClick={() => window.print()}
-                            className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-[9px] font-black uppercase italic transition-all active:scale-95 flex items-center justify-center space-x-2 border border-slate-700"
+                            className={`flex-1 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border ${darkMode ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                           >
                             <Printer size={14} />
                             <span>Imprimer</span>
@@ -19729,7 +19737,7 @@ const App = () => {
                           <button
                             disabled={isSendingInvoice}
                             onClick={() => handleSendFacture(selectedFac)}
-                            className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait text-white rounded-2xl text-[9px] font-black uppercase italic transition-all active:scale-95 flex items-center justify-center space-x-2 border border-slate-700"
+                            className={`flex-1 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border disabled:opacity-50 disabled:cursor-wait ${darkMode ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"}`}
                           >
                             <Mail size={14} />
                             <span>{isSendingInvoice ? "Envoi..." : "Envoyer"}</span>
