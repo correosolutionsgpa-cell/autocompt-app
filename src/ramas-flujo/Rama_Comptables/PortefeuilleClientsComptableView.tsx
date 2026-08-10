@@ -31,7 +31,7 @@
  */
 
 import React, { useState } from "react";
-import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check, ChevronDown } from "lucide-react";
+import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check, ChevronDown, Edit3 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
 import type { BookkeepingClientDoc, BookkeepingClientTypeEntite, PropertyDoc } from "../../lib/dataService";
@@ -62,7 +62,10 @@ async function sendComptableInviteNudge(recipientEmail: string, recipientName: s
       context: "comptable_to_client",
     }),
   });
-  if (!resp.ok) throw new Error("Échec de l'envoi du courriel");
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error || "Échec de l'envoi du courriel");
+  }
 }
 
 /** Lightweight — no units/tenants/rent tracking, just an address list, since
@@ -106,7 +109,12 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   const [showClientForm, setShowClientForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [clientForm, setClientForm] = useState<{ nom: string; email: string; telephone: string; typeEntite: BookkeepingClientTypeEntite | "" }>({ nom: "", email: "", telephone: "", typeEntite: "" });
+  // Non-empty while the "Nouveau client" modal is editing an EXISTING
+  // client instead of creating one — there was previously no way at all to
+  // fix a typo'd email/phone/name after creation.
+  const [editingClientId, setEditingClientId] = useState("");
   const [invitingClientId, setInvitingClientId] = useState("");
+  const [inviteFeedback, setInviteFeedback] = useState<{ clientId: string; text: string; ok: boolean } | null>(null);
   // Custom-styled dropdown state — a native <select>'s open option list is
   // rendered by the OS/browser and can't be styled, breaking the app's
   // minimalist look. Same pattern as GestionPlex's "Propriétaire-client".
@@ -188,8 +196,17 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
     const uid = auth.currentUser?.uid;
     if (!uid || !client.email) return;
     setInvitingClientId(client.id);
+    setInviteFeedback(null);
     try {
-      await sendComptableInviteNudge(client.email, client.nom, adminName, adminEmail, currentCompany?.nombre);
+      // adminName can be an empty string on accounts that never went through
+      // Paramètres to set a display name (e.g. it's absent on the Firestore
+      // user doc entirely) — the endpoint requires a non-empty inviterName
+      // and rejects the request with a 400 if it's blank. Fall back to the
+      // company name, then the account's own email, so this never silently
+      // 400s. Found 2026-08-10: a real invite send failed for exactly this
+      // reason, with no error shown to the user at all.
+      const inviterName = adminName || currentCompany?.nombre || auth.currentUser?.email || "Votre comptable";
+      await sendComptableInviteNudge(client.email, client.nom, inviterName, adminEmail, currentCompany?.nombre);
       await dataService.saveClient(uid, {
         id: client.id,
         companyId: client.companyId,
@@ -197,10 +214,13 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         invitedAt: new Date().toISOString(),
       });
       setReloadKey((k) => k + 1);
-    } catch (e) {
+      setInviteFeedback({ clientId: client.id, text: `Courriel envoyé à ${client.email}.`, ok: true });
+    } catch (e: any) {
       console.error("[PortefeuilleClientsComptableView] invite client error:", e);
+      setInviteFeedback({ clientId: client.id, text: `Échec de l'envoi à ${client.email} : ${e?.message || "erreur inconnue"}.`, ok: false });
     } finally {
       setInvitingClientId("");
+      setTimeout(() => setInviteFeedback(null), 6000);
     }
   };
 
@@ -210,6 +230,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
     setIsSaving(true);
     try {
       await dataService.saveClient(uid, {
+        id: editingClientId || undefined,
         companyId: activeCompanyId,
         nom: clientForm.nom.trim(),
         email: clientForm.email.trim(),
@@ -217,6 +238,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         typeEntite: clientForm.typeEntite || undefined,
       });
       setShowClientForm(false);
+      setEditingClientId("");
       setClientForm({ nom: "", email: "", telephone: "", typeEntite: "" });
       // ClientPortfolioShell fetches on mount/activeCompanyId change — bump a
       // key to force it to re-fetch after adding a client, same effect as a
@@ -227,6 +249,17 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleOpenEditClient = (client: Agg) => {
+    setEditingClientId(client.id);
+    setClientForm({
+      nom: client.nom || "",
+      email: client.email || "",
+      telephone: client.telephone || "",
+      typeEntite: client.typeEntite || "",
+    });
+    setShowClientForm(true);
   };
 
   const handleSaveProperty = async (client: Agg) => {
@@ -332,7 +365,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         fetchClients={dataService.fetchClients}
         fetchExtra={fetchExtra}
         emptyExtra={emptyExtra}
-        onAddClient={() => setShowClientForm(true)}
+        onAddClient={() => { setEditingClientId(""); setClientForm({ nom: "", email: "", telephone: "", typeEntite: "" }); setShowClientForm(true); }}
         hideGenericKpisFor={(a: Agg) => !!a.extra.linked}
         extraKpis={(a: Agg) => a.extra.linked ? [
           { label: "Revenus (compte lié)", value: fmtCAD(a.extra.linked.revenue), icon: <TrendingUp size={16} />, color: "emerald" },
@@ -341,6 +374,13 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         ] : []}
         renderHeaderBadge={(a: Agg) => (
           <>
+            <button
+              onClick={() => handleOpenEditClient(a)}
+              title="Modifier les informations du client"
+              className={`p-1.5 rounded-full transition-colors ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800"}`}
+            >
+              <Edit3 size={11} />
+            </button>
             {a.typeEntite && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${darkMode ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
                 {TYPE_ENTITE_LABELS[a.typeEntite]}
@@ -372,6 +412,11 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                     {invitingClientId === a.id ? <Loader2 size={10} className="animate-spin" /> : a.invitedAt ? <Check size={10} /> : <Mail size={10} />}
                     {a.invitedAt ? "Invitation envoyée" : "Inviter ce client à AutoCompt"}
                   </button>
+                )}
+                {inviteFeedback && inviteFeedback.clientId === a.id && (
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${inviteFeedback.ok ? (darkMode ? "text-emerald-400" : "text-emerald-600") : (darkMode ? "text-rose-400" : "text-rose-600")}`}>
+                    {inviteFeedback.text}
+                  </span>
                 )}
               </>
             )}
@@ -557,7 +602,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
       {showClientForm && (
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60"
-          onClick={() => !isSaving && setShowClientForm(false)}
+          onClick={() => !isSaving && (setShowClientForm(false), setEditingClientId(""))}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -565,10 +610,10 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                <Briefcase size={16} className="text-blue-500" />
-                Nouveau client
+                {editingClientId ? <Edit3 size={16} className="text-blue-500" /> : <Briefcase size={16} className="text-blue-500" />}
+                {editingClientId ? "Modifier le client" : "Nouveau client"}
               </h3>
-              <button onClick={() => setShowClientForm(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowClientForm(false); setEditingClientId(""); }} className="text-slate-400 hover:text-slate-600">
                 <X size={16} />
               </button>
             </div>
@@ -632,7 +677,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
               onClick={handleSaveClient}
               className="w-full mt-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all"
             >
-              {isSaving ? "Enregistrement..." : "Ajouter le client"}
+              {isSaving ? "Enregistrement..." : editingClientId ? "Enregistrer les modifications" : "Ajouter le client"}
             </button>
           </div>
         </div>
