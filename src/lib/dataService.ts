@@ -694,6 +694,12 @@ export interface BookkeepingClientDoc {
   linkedCompanyDocId?: string;
   /** Denormalised for display without an extra lookup. */
   linkedCompanyName?: string;
+  /** Set when the comptable sends this client the "try AutoCompt" email nudge
+   *  (see /api/send-company-invite-email, context 'comptable_to_client') —
+   *  purely a timestamp for the UI ("Invitation envoyée le..."), not an
+   *  access grant. The real access grant still only ever happens when the
+   *  client invites the comptable back via the existing companyInvites flow. */
+  invitedAt?: string;
   ownerId: string;
   createdAt: string;
 }

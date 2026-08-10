@@ -900,6 +900,72 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // Real email for the companyInvites flow — BOTH directions share this one
+  // endpoint (distinguished by `context`) since they're the same underlying
+  // "you've been invited, log in (or create a free account) with this exact
+  // email and you'll be added automatically" mechanic, just phrased for a
+  // different audience:
+  //  - 'client_to_comptable': the CLIENT already has an account and invited
+  //    their accountant (existing "Inviter un associé" flow) — the
+  //    accountant is auto-joined the moment they next log in, no accept
+  //    click needed.
+  //  - 'comptable_to_client': the ACCOUNTANT is reaching a prospect who may
+  //    not have an AutoCompt account yet — this is a pure email NUDGE, not a
+  //    new access grant. It tells the prospect to create an account and then
+  //    invite the accountant back via that SAME existing flow — never
+  //    bypasses or duplicates it.
+  app.post("/api/send-company-invite-email", async (req, res) => {
+    try {
+      const { recipientEmail, recipientName, inviterName, inviterEmail, companyName, context } = req.body;
+      if (!recipientEmail || !inviterName || !context) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        return res.status(400).json({ error: "Invalid recipientEmail" });
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const esc = (v: any) => String(v ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+      const safeInviter = esc(inviterName);
+
+      const isClientToComptable = context === "client_to_comptable";
+      const subject = isClientToComptable
+        ? `${inviterName} vous invite à accéder à sa comptabilité sur AutoCompt`
+        : `${inviterName} vous invite à essayer AutoCompt`;
+      const introText = isClientToComptable
+        ? `<strong>${safeInviter}</strong>${companyName ? ` (${esc(companyName)})` : ""} vous a ajouté comme associé/collaborateur sur son compte AutoCompt.`
+        : `<strong>${safeInviter}</strong>, votre comptable/gestionnaire, utilise AutoCompt — un outil de comptabilité automatisée conçu pour la fiscalité québécoise — et vous invite à l'essayer.`;
+      const stepText = isClientToComptable
+        ? `Connectez-vous (ou créez un compte gratuit) avec cette adresse courriel — vous serez automatiquement ajouté comme collaborateur dès votre connexion, aucune autre étape n'est nécessaire.`
+        : `Créez un compte gratuit avec cette adresse courriel, puis dans <strong>Paramètres → « Inviter un associé »</strong>, entrez l'adresse courriel de ${safeInviter}${inviterEmail ? ` (${esc(inviterEmail)})` : ""} pour lui donner accès à votre comptabilité.`;
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#059669,#047857);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">AutoCompt</h1></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour${recipientName ? ` <strong>${esc(recipientName)}</strong>` : ""},</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">${introText}</p><div style="background:#ecfdf5;border-radius:12px;padding:16px 20px;margin:20px 0;border-left:4px solid #059669;"><p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">${stepText}</p></div><p style="color:#9ca3af;font-size:11px;">En cas de questions, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">Propulsé par AutoCompt · <a href="https://autocompt-app.vercel.app" style="color:#059669">autocompt-app.vercel.app</a></p></div></div></body></html>`;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviterEmail || "") ? inviterEmail : "info@autocompt.ca",
+          to: [recipientEmail],
+          subject,
+          html,
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-company-invite-email]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── DocuLegal: Send signature invitation email to signer ─────────────────────
   // Creates the legal audit chain: email delivery → link click → consent → signature
 

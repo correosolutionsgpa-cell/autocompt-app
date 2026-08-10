@@ -2818,6 +2818,28 @@ const App = () => {
                                 currentCompany.nombre,
                                 partnerInviteEmail.trim()
                               );
+                              // Real email — this used to only write the Firestore
+                              // invite doc and claim "Invitation envoyée" with no
+                              // actual notification ever sent. Best-effort: the
+                              // Firestore invite is the real access grant and
+                              // already succeeded above; a failed email here just
+                              // means the invitee won't get a heads-up until they
+                              // happen to log in with that address.
+                              try {
+                                await fetch("/api/send-company-invite-email", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    recipientEmail: partnerInviteEmail.trim(),
+                                    inviterName: adminName,
+                                    inviterEmail: currentUserEmail,
+                                    companyName: currentCompany.nombre,
+                                    context: "client_to_comptable",
+                                  }),
+                                });
+                              } catch (emailErr) {
+                                console.error("send-company-invite-email failed (non-blocking):", emailErr);
+                              }
                               setInviteSuccessMsg(`Invitation envoyée à ${partnerInviteEmail.trim()}.`);
                               playNotificationSound();
                             } catch (err) {

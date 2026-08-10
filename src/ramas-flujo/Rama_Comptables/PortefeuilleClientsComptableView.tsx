@@ -31,7 +31,7 @@
  */
 
 import React, { useState } from "react";
-import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck } from "lucide-react";
+import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
 import type { BookkeepingClientDoc, BookkeepingClientTypeEntite, PropertyDoc } from "../../lib/dataService";
@@ -47,6 +47,22 @@ export interface PortefeuilleClientsComptableViewProps {
   setVista: (v: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
+}
+
+/** Pure email nudge — tells a prospect to create a free AutoCompt account and
+ *  invite the comptable back via the EXISTING "Inviter un associé" flow.
+ *  Never grants access itself; the real access grant still only happens via
+ *  companyInvites when the client invites the comptable, same as always. */
+async function sendComptableInviteNudge(recipientEmail: string, recipientName: string, inviterName: string, inviterEmail: string, companyName?: string) {
+  const resp = await fetch("/api/send-company-invite-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipientEmail, recipientName, inviterName, inviterEmail, companyName,
+      context: "comptable_to_client",
+    }),
+  });
+  if (!resp.ok) throw new Error("Échec de l'envoi du courriel");
 }
 
 /** Lightweight — no units/tenants/rent tracking, just an address list, since
@@ -78,6 +94,9 @@ type Agg = ClientPortfolioAggregate<BookkeepingClientDoc, ComptableExtra>;
 const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableViewProps> = ({
   darkMode,
   activeCompanyId,
+  currentCompany,
+  adminName,
+  adminEmail,
   setSelectedLedgerBuildingId,
   setVista,
   setIsSidebarOpen,
@@ -87,6 +106,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   const [showClientForm, setShowClientForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [clientForm, setClientForm] = useState<{ nom: string; email: string; telephone: string; typeEntite: BookkeepingClientTypeEntite | "" }>({ nom: "", email: "", telephone: "", typeEntite: "" });
+  const [invitingClientId, setInvitingClientId] = useState("");
 
   // Which client's "Ajouter une propriété" mini-form is open (client id, or "" = closed).
   const [propertyFormClientId, setPropertyFormClientId] = useState("");
@@ -157,6 +177,26 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
       console.error("[PortefeuilleClientsComptableView] unlink client error:", e);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleInviteClient = async (client: Agg) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !client.email) return;
+    setInvitingClientId(client.id);
+    try {
+      await sendComptableInviteNudge(client.email, client.nom, adminName, adminEmail, currentCompany?.nombre);
+      await dataService.saveClient(uid, {
+        id: client.id,
+        companyId: client.companyId,
+        nom: client.nom,
+        invitedAt: new Date().toISOString(),
+      });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      console.error("[PortefeuilleClientsComptableView] invite client error:", e);
+    } finally {
+      setInvitingClientId("");
     }
   };
 
@@ -307,12 +347,29 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                 <ShieldCheck size={10} />Compte lié — données réelles
               </span>
             ) : (
-              <button
-                onClick={() => handleOpenLinkModal(a)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-              >
-                <Link2 size={10} />Lier à un compte client existant
-              </button>
+              <>
+                <button
+                  onClick={() => handleOpenLinkModal(a)}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                >
+                  <Link2 size={10} />Lier à un compte client existant
+                </button>
+                {a.email && (
+                  <button
+                    onClick={() => handleInviteClient(a)}
+                    disabled={invitingClientId === a.id}
+                    title={a.invitedAt ? `Invitation envoyée le ${new Date(a.invitedAt).toLocaleDateString('fr-CA')} — renvoyer` : "Envoyer un courriel invitant ce client à créer un compte AutoCompt gratuit"}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors disabled:opacity-50 ${
+                      a.invitedAt
+                        ? (darkMode ? "bg-emerald-900/20 text-emerald-400" : "bg-emerald-50 text-emerald-600")
+                        : (darkMode ? "bg-indigo-900/20 text-indigo-400 hover:bg-indigo-900/40" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100")
+                    }`}
+                  >
+                    {invitingClientId === a.id ? <Loader2 size={10} className="animate-spin" /> : a.invitedAt ? <Check size={10} /> : <Mail size={10} />}
+                    {a.invitedAt ? "Invitation envoyée" : "Inviter ce client à AutoCompt"}
+                  </button>
+                )}
+              </>
             )}
           </>
         )}
