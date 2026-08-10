@@ -938,11 +938,26 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
       const introText = isClientToComptable
         ? `<strong>${safeInviter}</strong>${companyName ? ` (${esc(companyName)})` : ""} vous a ajouté comme associé/collaborateur sur son compte AutoCompt.`
         : `<strong>${safeInviter}</strong>, votre comptable/gestionnaire, utilise AutoCompt — un outil de comptabilité automatisée conçu pour la fiscalité québécoise — et vous invite à l'essayer.`;
+      // Every new signup still requires a beta access code during this beta
+      // phase (no public self-serve signup yet) — the invite email used to
+      // say "créez un compte gratuit" with no mention of this, which left a
+      // real invited prospect stuck exactly like Fabiola was earlier today.
+      // Codes are issued manually today (Panneau d'Administration), so the
+      // simplest correct next step is a pre-filled mailto request instead of
+      // building a whole intake form for what's still a handful of testers.
+      const betaCodeMailto = `mailto:info@autocompt.ca` +
+        `?subject=${encodeURIComponent("Demande de code d'accès bêta AutoCompt")}` +
+        `&body=${encodeURIComponent(
+          `Bonjour,\n\nJ'ai été invité(e) par ${inviterName} à essayer AutoCompt.\nMon adresse courriel : ${recipientEmail}\n\nPourriez-vous me faire parvenir un code d'accès bêta ?\n\nMerci !`
+        )}`;
       const stepText = isClientToComptable
         ? `Connectez-vous (ou créez un compte gratuit) avec cette adresse courriel — vous serez automatiquement ajouté comme collaborateur dès votre connexion, aucune autre étape n'est nécessaire.`
-        : `Créez un compte gratuit avec cette adresse courriel, puis dans <strong>Paramètres → « Inviter un associé »</strong>, entrez l'adresse courriel de ${safeInviter}${inviterEmail ? ` (${esc(inviterEmail)})` : ""} pour lui donner accès à votre comptabilité.`;
+        : `AutoCompt est en phase bêta : chaque nouveau compte nécessite un code d'accès. Cliquez ci-dessous pour en demander un, avec cette adresse courriel (${esc(recipientEmail)}). Une fois votre compte créé, allez dans <strong>Paramètres → « Inviter un associé »</strong> et entrez l'adresse courriel de ${safeInviter}${inviterEmail ? ` (${esc(inviterEmail)})` : ""} pour lui donner accès à votre comptabilité.`;
+      const ctaButton = !isClientToComptable
+        ? `<a href="${betaCodeMailto}" style="display:inline-block;margin-top:16px;background:#059669;color:#fff;text-decoration:none;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:700;">Demander mon code d'accès bêta</a>`
+        : "";
 
-      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#059669,#047857);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">AutoCompt</h1></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour${recipientName ? ` <strong>${esc(recipientName)}</strong>` : ""},</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">${introText}</p><div style="background:#ecfdf5;border-radius:12px;padding:16px 20px;margin:20px 0;border-left:4px solid #059669;"><p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">${stepText}</p></div><p style="color:#9ca3af;font-size:11px;">En cas de questions, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">Propulsé par AutoCompt · <a href="https://autocompt-app.vercel.app" style="color:#059669">autocompt-app.vercel.app</a></p></div></div></body></html>`;
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#059669,#047857);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">AutoCompt</h1></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour${recipientName ? ` <strong>${esc(recipientName)}</strong>` : ""},</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">${introText}</p><div style="background:#ecfdf5;border-radius:12px;padding:16px 20px;margin:20px 0;border-left:4px solid #059669;"><p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">${stepText}</p>${ctaButton}</div><p style="color:#9ca3af;font-size:11px;">En cas de questions, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">Propulsé par AutoCompt · <a href="https://autocompt-app.vercel.app" style="color:#059669">autocompt-app.vercel.app</a></p></div></div></body></html>`;
 
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
