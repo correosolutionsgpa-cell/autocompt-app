@@ -31,7 +31,7 @@
  */
 
 import React, { useState } from "react";
-import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check } from "lucide-react";
+import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check, ChevronDown } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
 import type { BookkeepingClientDoc, BookkeepingClientTypeEntite, PropertyDoc } from "../../lib/dataService";
@@ -107,6 +107,10 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   const [isSaving, setIsSaving] = useState(false);
   const [clientForm, setClientForm] = useState<{ nom: string; email: string; telephone: string; typeEntite: BookkeepingClientTypeEntite | "" }>({ nom: "", email: "", telephone: "", typeEntite: "" });
   const [invitingClientId, setInvitingClientId] = useState("");
+  // Custom-styled dropdown state — a native <select>'s open option list is
+  // rendered by the OS/browser and can't be styled, breaking the app's
+  // minimalist look. Same pattern as GestionPlex's "Propriétaire-client".
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
   // Which client's "Ajouter une propriété" mini-form is open (client id, or "" = closed).
   const [propertyFormClientId, setPropertyFormClientId] = useState("");
@@ -591,16 +595,36 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                 placeholder="Téléphone"
                 className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
               />
-              <select
-                value={clientForm.typeEntite}
-                onChange={(e) => setClientForm({ ...clientForm, typeEntite: e.target.value as BookkeepingClientTypeEntite | "" })}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
-              >
-                <option value="">Type de client (optionnel)</option>
-                <option value="autonome">Propriétaire autogéré</option>
-                <option value="inc">Société (INC)</option>
-                <option value="gestion_tierce">Déjà sous gestion d'un gestionnaire immobilier</option>
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowTypeDropdown(v => !v)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-sm text-left flex items-center justify-between transition-colors ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white hover:border-blue-500/40" : "bg-slate-50 border-slate-200 text-slate-800 hover:border-blue-300"}`}
+                >
+                  <span className={clientForm.typeEntite ? "" : (darkMode ? "text-zinc-500" : "text-slate-400")}>
+                    {clientForm.typeEntite ? TYPE_ENTITE_LABELS[clientForm.typeEntite as BookkeepingClientTypeEntite] : "Type de client (optionnel)"}
+                  </span>
+                  <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${showTypeDropdown ? "rotate-180" : ""} ${darkMode ? "text-zinc-500" : "text-slate-400"}`} />
+                </button>
+                {showTypeDropdown && (
+                  <div className={`absolute left-0 right-0 mt-2 p-1.5 rounded-2xl border shadow-2xl z-10 space-y-1 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
+                    {(["", "autonome", "inc", "gestion_tierce"] as const).map(val => (
+                      <button
+                        key={val || "none"}
+                        type="button"
+                        onClick={() => { setClientForm({ ...clientForm, typeEntite: val }); setShowTypeDropdown(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-colors ${
+                          clientForm.typeEntite === val
+                            ? (darkMode ? "bg-blue-500/15 text-blue-400" : "bg-blue-50 text-blue-600")
+                            : (darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-slate-700 hover:bg-slate-50")
+                        }`}
+                      >
+                        {val ? TYPE_ENTITE_LABELS[val] : "Type de client (optionnel)"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
