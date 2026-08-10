@@ -142,6 +142,16 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // DPA/CCA (déduction pour amortissement) tracking — Comptable profile
+    // only, per building per fiscal year. Same access shape as expenses/
+    // invoices: owner or a linked collaborator (e.g. the accountant on a
+    // client's real company) can read/write.
+    match /ccaAssets/{assetId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     // Taxes & Assurances documents filed per property. This collection had
     // no rule at all before — every write was silently rejected by the
     // default-deny catch-all, so no document ever actually saved here.

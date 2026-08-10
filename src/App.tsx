@@ -17812,6 +17812,8 @@ const App = () => {
                 companyId={activeCompanyId || 'default'}
                 companyName={currentCompany?.nombre || "Solutions GPA Inc."}
                 comptableEmail={comptableEmail}
+                activeProfile={activeProfile}
+                properties={visiblePlexManagementProperties}
                 userProfile={{
                   nom: userProfile.nom,
                   neq: userProfile.neq,

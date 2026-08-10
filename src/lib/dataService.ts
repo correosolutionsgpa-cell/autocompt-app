@@ -132,6 +132,46 @@ export interface PropertyDoc {
   bookkeepingClientName?: string;
 }
 
+/**
+ * CcaAssetDoc — `ccaAssets` collection (Comptable profile only)
+ * DPA/CCA (déduction pour amortissement / Capital Cost Allowance) tracking,
+ * per building, per CCA class, per fiscal year — one doc per year so a
+ * prior year's filed figures never shift once the next year starts (same
+ * "coffre-fort annuel" principle as sealedStatements).
+ *
+ * `claimedThisYear` is ALWAYS user-entered, never auto-maximized: CCA is
+ * elective under the ITA/LI — claiming the maximum isn't always the right
+ * call (e.g. it can trigger recapture, or waste room in a low-income year),
+ * so this is a calculator that shows the ceiling, not an auto-filer.
+ *
+ * Document ID: `{buildingId}_cca_{ccaClassSlug}_{fiscalYear}`
+ */
+export interface CcaAssetDoc {
+  id: string;
+  companyId: string;
+  /** FK → PropertyDoc.buildingId (or .id when buildingId is unset) — same
+   *  key already used to tag expenses/invoices to a building. */
+  buildingId: string;
+  fiscalYear: string; // "2026"
+  /** e.g. "Classe 1 (bâtiment, 4%)", "Classe 8 (mobilier/équipement, 20%)" */
+  ccaClass: string;
+  ratePct: number;
+  description: string;
+  /** Only meaningful the year of acquisition. */
+  acquisitionCost?: number;
+  acquisitionDate?: string;
+  /** Fraction non amortie (UCC) at the START of this fiscal year — for the
+   *  first year of an asset's life this is 0 (the acquisition cost becomes
+   *  an "addition" instead); for later years, carry forward the PRIOR
+   *  year's closing UCC (openingUCC + additions − dispositions − claimed). */
+  openingUCC: number;
+  additionsThisYear: number;
+  dispositionsThisYear: number;
+  claimedThisYear: number;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── UnitDoc — Firestore `units` collection ────────────────────────────────────
 
 /**
@@ -3201,6 +3241,52 @@ export const dataService = {
 
   async deleteClient(clientId: string): Promise<boolean> {
     await deleteDoc(doc(db, 'bookkeepingClients', String(clientId)));
+    return true;
+  },
+
+  // ── DPA/CCA (Comptable profile only) — `ccaAssets` collection ──────────────
+
+  async fetchCcaAssets(userId: string, buildingId: string): Promise<CcaAssetDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'ccaAssets'),
+        where('ownerId', '==', userId),
+        where('buildingId', '==', buildingId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as CcaAssetDoc);
+    } catch (e) {
+      console.error('fetchCcaAssets failed:', e);
+      return [];
+    }
+  },
+
+  async saveCcaAsset(
+    userId: string,
+    data: Partial<CcaAssetDoc> & { companyId: string; buildingId: string; fiscalYear: string; ccaClass: string }
+  ): Promise<CcaAssetDoc> {
+    assertCanWrite();
+    const slug = data.ccaClass.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase();
+    const id = data.id || `${data.buildingId}_cca_${slug}_${data.fiscalYear}`;
+    const entry: any = {
+      openingUCC: 0,
+      additionsThisYear: 0,
+      dispositionsThisYear: 0,
+      claimedThisYear: 0,
+      ratePct: 0,
+      description: '',
+      ...data,
+      id,
+      ownerId: userId,
+      createdAt: data.createdAt || new Date().toISOString(),
+    };
+    Object.keys(entry).forEach((k) => { if (entry[k] === undefined) delete entry[k]; });
+    await setDoc(doc(db, 'ccaAssets', id), entry, { merge: true });
+    return entry as CcaAssetDoc;
+  },
+
+  async deleteCcaAsset(assetId: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'ccaAssets', String(assetId)));
     return true;
   },
 

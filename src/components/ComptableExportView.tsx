@@ -21,8 +21,9 @@ import {
   BookOpen, BarChart2, Scale, Receipt, Download, Loader2,
   ChevronLeft, ChevronRight, CheckCircle2, AlertCircle,
   Calendar, Filter, RefreshCw, FileText, Percent, Hash, Mail,
+  Building2, Plus, Trash2, Save, Info,
 } from 'lucide-react';
-import { dataService, type InvoiceDoc, type ExpenseDoc } from '../lib/dataService';
+import { dataService, type InvoiceDoc, type ExpenseDoc, type PropertyDoc, type CcaAssetDoc } from '../lib/dataService';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -60,6 +61,12 @@ export interface ComptableExportViewProps {
   /** Pré-remplit le destinataire du bouton "Envoyer par courriel" — optionnel,
    *  l'utilisateur peut toujours saisir/corriger l'adresse au moment d'envoyer. */
   comptableEmail?: string;
+  /** Gates the DPA/Amortissement + T776/TP-128 tabs — Comptable profile only. */
+  activeProfile?: string;
+  /** This account's properties, already filtered to the active company —
+   *  needed to let the comptable pick which building the DPA/T776 report is
+   *  for (both are inherently per-building, unlike the other 6 tabs). */
+  properties?: PropertyDoc[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,21 +130,27 @@ function chkPg(pdf: jsPDF, y: number, need=12): number {
 // §5 — Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi'|'sources';
+type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi'|'sources'|'dpa'|'t776';
 const PER = 25;
 const SOURCE_NON_CLASSE = 'Non classé';
 
-const TABS = [
+const TABS: { id: TabId; label: string; short: string; icon: React.ReactNode; ac: string; comptableOnly?: boolean }[] = [
   { id:'journal'    as TabId, label:'Journal Général',         short:'Journal',  icon:<BookOpen size={14}/>,  ac:'border-indigo-500 text-indigo-600'  },
   { id:'grandlivre' as TabId, label:'Grand Livre',             short:'G. Livre', icon:<BarChart2 size={14}/>, ac:'border-emerald-500 text-emerald-600' },
   { id:'balance'    as TabId, label:'Balance de Vérification', short:'Balance',  icon:<Scale size={14}/>,     ac:'border-amber-500 text-amber-600'     },
   { id:'tvq'        as TabId, label:'Rapport TPS / TVQ',       short:'TPS/TVQ',  icon:<Percent size={14}/>,   ac:'border-rose-500 text-rose-600'       },
   { id:'gifi'       as TabId, label:'Export GIFI',             short:'GIFI',     icon:<Hash size={14}/>,      ac:'border-slate-500 text-slate-600'     },
   { id:'sources'    as TabId, label:'Sources d\'Activité',     short:'Sources',  icon:<Filter size={14}/>,    ac:'border-teal-500 text-teal-600'       },
+  // Comptable-only — les deux sont intrinsèquement par immeuble, contrairement
+  // aux 6 onglets ci-dessus (voir le sélecteur d'immeuble affiché seulement
+  // pour ces deux-là).
+  { id:'dpa'        as TabId, label:'Amortissement (DPA)',     short:'DPA',      icon:<Building2 size={14}/>, ac:'border-orange-500 text-orange-600',  comptableOnly: true },
+  { id:'t776'       as TabId, label:'Rapport T776 / TP-128',   short:'T776',     icon:<FileText size={14}/>,  ac:'border-cyan-500 text-cyan-600',      comptableOnly: true },
 ];
 
 export default function ComptableExportView({
   darkMode, companyId, companyName='Mon Entreprise', userProfile, comptableEmail,
+  activeProfile, properties = [],
 }: ComptableExportViewProps) {
   const D = darkMode;
   const [entries, setEntries]   = useState<JournalEntry[]>([]);
@@ -152,6 +165,54 @@ export default function ComptableExportView({
   const [gifiCodes, setGifiCodes]     = useState<Record<string,string>>({});
   const [gifiSaving, setGifiSaving]   = useState(false);
   const [gifiSavedMsg, setGifiSavedMsg] = useState<string|null>(null);
+
+  // ── DPA + T776/TP-128 (Comptable only) — both are per-building ─────────────
+  const [selectedBuildingId, setSelectedBuildingId] = useState('');
+  const [fiscalYear, setFiscalYear] = useState(String(yr));
+  const [ccaAssets, setCcaAssets] = useState<CcaAssetDoc[]>([]);
+  const [loadingCca, setLoadingCca] = useState(false);
+  const [savingCcaId, setSavingCcaId] = useState('');
+  const [buildingExpenses, setBuildingExpenses] = useState<ExpenseDoc[]>([]);
+  const [buildingInvoices, setBuildingInvoices] = useState<InvoiceDoc[]>([]);
+  const [loadingBuildingData, setLoadingBuildingData] = useState(false);
+
+  const isComptable = activeProfile === 'comptable';
+  const visibleTabs = TABS.filter(t => !t.comptableOnly || isComptable);
+
+  // Default to this company's only/first property once the list loads.
+  useEffect(() => {
+    if (!selectedBuildingId && properties.length > 0) {
+      setSelectedBuildingId(properties[0].buildingId || properties[0].id);
+    }
+  }, [properties, selectedBuildingId]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !selectedBuildingId || !(tab === 'dpa' || tab === 't776')) return;
+    setLoadingCca(true);
+    dataService.fetchCcaAssets(uid, selectedBuildingId)
+      .then(all => setCcaAssets(all.filter(a => a.fiscalYear === fiscalYear)))
+      .catch(e => console.error('fetchCcaAssets failed:', e))
+      .finally(() => setLoadingCca(false));
+  }, [selectedBuildingId, fiscalYear, tab]);
+
+  // T776 needs raw revenue/expense docs (with buildingId) — the journal
+  // entries loaded above for the other 6 tabs don't carry buildingId at all,
+  // so this is a dedicated fetch, filtered client-side to this one building
+  // and fiscal year.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !selectedBuildingId || tab !== 't776') return;
+    setLoadingBuildingData(true);
+    Promise.all([dataService.fetchExpenses(uid), dataService.fetchInvoices(uid)])
+      .then(([exp, inv]) => {
+        const inYear = (d: string) => (d || '').startsWith(fiscalYear);
+        setBuildingExpenses(exp.filter(e => e.buildingId === selectedBuildingId && inYear(e.fecha)));
+        setBuildingInvoices(inv.filter(i => i.buildingId === selectedBuildingId && inYear(i.fecha)));
+      })
+      .catch(e => console.error('T776 data fetch failed:', e))
+      .finally(() => setLoadingBuildingData(false));
+  }, [selectedBuildingId, fiscalYear, tab]);
 
   // ── Load GIFI mapping ────────────────────────────────────────────────────
   // Codes are never machine-guessed — the accountant assigns them once here
@@ -483,6 +544,7 @@ export default function ComptableExportView({
     else if (tab === 'tvq') attachment = { filename: tvqPdfFilename(), content: buildTVQPdf().output('datauristring').split(',')[1] };
     else if (tab === 'gifi') { const csv = buildGifiCsv(); if (csv) attachment = { filename: gifiCsvFilename(), content: utf8ToBase64(csv) }; }
     else if (tab === 'sources') attachment = { filename: sourcesPdfFilename(), content: buildSourcesPdf().output('datauristring').split(',')[1] };
+    else if (tab === 't776') attachment = { filename: t776PdfFilename(), content: buildT776Pdf().output('datauristring').split(',')[1] };
     if (!attachment) return;
 
     const recipient = window.prompt('Envoyer ce rapport à quel courriel ?', comptableEmail || '');
@@ -842,9 +904,259 @@ export default function ComptableExportView({
     </div>
   );
 
+  // ── DPA (Amortissement) — Comptable only ────────────────────────────────────
+  const CCA_PRESETS = [
+    { label: 'Classe 1 — Bâtiment (4%)',                ratePct: 4 },
+    { label: 'Classe 8 — Mobilier et équipement (20%)', ratePct: 20 },
+    { label: 'Classe 10 — Véhicule (30%)',              ratePct: 30 },
+    { label: 'Autre (taux manuel)',                     ratePct: 0 },
+  ];
+
+  const ccaMax = (a: CcaAssetDoc) => {
+    const net = a.additionsThisYear - a.dispositionsThisYear;
+    // Règle de la demi-année : seule la moitié des ajouts nets de l'année
+    // entre dans la base de calcul du taux, cette année-là.
+    const base = a.openingUCC + net / 2;
+    return Math.max(0, Math.round(base * (a.ratePct / 100) * 100) / 100);
+  };
+  const ccaClosingUCC = (a: CcaAssetDoc) =>
+    a.openingUCC + a.additionsThisYear - a.dispositionsThisYear - a.claimedThisYear;
+  const totalCcaClaimed = ccaAssets.reduce((s, a) => s + (a.claimedThisYear || 0), 0);
+
+  const handleAddCcaRow = () => {
+    const preset = CCA_PRESETS[0];
+    const draft: CcaAssetDoc = {
+      id: `${selectedBuildingId}_cca_new_${Date.now()}`,
+      companyId, buildingId: selectedBuildingId, fiscalYear,
+      ccaClass: preset.label, ratePct: preset.ratePct, description: '',
+      openingUCC: 0, additionsThisYear: 0, dispositionsThisYear: 0, claimedThisYear: 0,
+      ownerId: '', createdAt: new Date().toISOString(),
+    };
+    setCcaAssets(prev => [...prev, draft]);
+  };
+  const updateCcaRow = (id: string, patch: Partial<CcaAssetDoc>) =>
+    setCcaAssets(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+  const handleSaveCcaRow = async (a: CcaAssetDoc) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setSavingCcaId(a.id);
+    try {
+      const saved = await dataService.saveCcaAsset(uid, a);
+      setCcaAssets(prev => prev.map(x => x.id === a.id ? saved : x));
+    } catch (e) { console.error('saveCcaAsset failed:', e); }
+    setSavingCcaId('');
+  };
+  const handleDeleteCcaRow = async (a: CcaAssetDoc) => {
+    if (!confirm(`Supprimer « ${a.description || a.ccaClass} » ?`)) return;
+    try {
+      if (a.ownerId) await dataService.deleteCcaAsset(a.id);
+      setCcaAssets(prev => prev.filter(x => x.id !== a.id));
+    } catch (e) { console.error('deleteCcaAsset failed:', e); }
+  };
+
+  const DpaTab = () => (
+    <div className="space-y-4">
+      <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-orange-500/5':'bg-orange-50/50'}`}>
+        <Info size={16} className="text-orange-500 mt-0.5 shrink-0"/>
+        <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+          La DPA est <strong>facultative</strong> — « CCA maximale » n'est qu'un plafond de référence, jamais réclamé automatiquement. Le montant « Réclamé cette année » reste toujours votre choix : le maximiser n'est pas toujours optimal (ex. déclenche une récupération, ou gaspille de la marge une année à faible revenu). Outil de calcul, pas un avis fiscal — vérifiez indépendamment.
+        </p>
+      </div>
+      {loadingCca ? (
+        <div className="flex items-center justify-center py-10"><Loader2 size={20} className="animate-spin text-orange-500"/></div>
+      ) : (
+        <>
+          {ccaAssets.map(a => (
+            <div key={a.id} className={`${card} p-4 space-y-3`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Description</label>
+                  <input type="text" value={a.description} onChange={e=>updateCcaRow(a.id,{description:e.target.value})} placeholder="Ex: Bâtiment principal" className={`${inp} w-full`}/>
+                </div>
+                <div>
+                  <label className={lbl}>Catégorie DPA</label>
+                  <select value={a.ccaClass} onChange={e=>{
+                    const preset = CCA_PRESETS.find(p=>p.label===e.target.value);
+                    updateCcaRow(a.id,{ccaClass:e.target.value, ratePct: preset ? preset.ratePct : a.ratePct});
+                  }} className={`${inp} w-full`}>
+                    {CCA_PRESETS.map(p=><option key={p.label} value={p.label}>{p.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <label className={lbl}>Taux (%)</label>
+                  <input type="number" value={a.ratePct} onChange={e=>updateCcaRow(a.id,{ratePct:parseFloat(e.target.value)||0})} className={`${inp} w-full`}/>
+                </div>
+                <div>
+                  <label className={lbl}>UCC début d'année ($)</label>
+                  <input type="number" value={a.openingUCC} onChange={e=>updateCcaRow(a.id,{openingUCC:parseFloat(e.target.value)||0})} className={`${inp} w-full`}/>
+                </div>
+                <div>
+                  <label className={lbl}>Ajouts cette année ($)</label>
+                  <input type="number" value={a.additionsThisYear} onChange={e=>updateCcaRow(a.id,{additionsThisYear:parseFloat(e.target.value)||0})} className={`${inp} w-full`}/>
+                </div>
+                <div>
+                  <label className={lbl}>Dispositions ($)</label>
+                  <input type="number" value={a.dispositionsThisYear} onChange={e=>updateCcaRow(a.id,{dispositionsThisYear:parseFloat(e.target.value)||0})} className={`${inp} w-full`}/>
+                </div>
+                <div>
+                  <label className={lbl}>Réclamé cette année ($)</label>
+                  <input type="number" value={a.claimedThisYear} onChange={e=>updateCcaRow(a.id,{claimedThisYear:parseFloat(e.target.value)||0})} className={`${inp} w-full border-orange-400`}/>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                <div className="flex gap-4 text-[10px]">
+                  <span className={D?'text-zinc-500':'text-slate-400'}>CCA maximale (référence) : <strong className="text-orange-500">{fmtAmt(ccaMax(a))} $</strong></span>
+                  <span className={D?'text-zinc-500':'text-slate-400'}>UCC fin d'année : <strong className={D?'text-zinc-300':'text-slate-700'}>{fmtAmt(ccaClosingUCC(a))} $</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={()=>handleSaveCcaRow(a)} disabled={savingCcaId===a.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 disabled:opacity-50">
+                    {savingCcaId===a.id?<Loader2 size={11} className="animate-spin"/>:<Save size={11}/>}Enregistrer
+                  </button>
+                  <button onClick={()=>handleDeleteCcaRow(a)} className={`p-1.5 rounded-xl ${D?'text-zinc-500 hover:text-rose-400':'text-slate-400 hover:text-rose-600'}`}><Trash2 size={13}/></button>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={handleAddCcaRow} disabled={!selectedBuildingId} className={`w-full py-3 rounded-2xl border border-dashed text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${D?'border-zinc-700 text-zinc-400 hover:bg-zinc-800':'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+            <Plus size={13}/>Ajouter une catégorie DPA
+          </button>
+          {ccaAssets.length>0 && (
+            <div className={`${card} p-4 flex items-center justify-between`}>
+              <span className={`text-[10px] font-black uppercase ${D?'text-zinc-400':'text-slate-500'}`}>Total DPA réclamée — {fiscalYear}</span>
+              <span className="text-[16px] font-black text-orange-600">{fmtAmt(totalCcaClaimed)} $</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  // ── T776 / TP-128 (Comptable only) ──────────────────────────────────────────
+  // Standard CRA T776/Revenu Québec TP-128 line groupings — mapped from the
+  // SAME category labels already used in the expense-entry form (Gestion
+  // Plex/App.tsx), never a second, separately-maintained category list.
+  const T776_GROUPS: { label: string; cats: string[] }[] = [
+    { label: 'Assurances', cats: ['Assurances'] },
+    { label: 'Intérêts et frais bancaires', cats: ['Intérêts hypothécaires', 'Intérêts de financement'] },
+    { label: 'Frais de bureau', cats: ['Fournitures de bureau'] },
+    { label: 'Honoraires professionnels', cats: ['Honoraires professionnels'] },
+    { label: 'Frais de gestion et publicité', cats: ['Frais de gestion / Marketing'] },
+    { label: 'Réparations et entretien', cats: ['Réparations et entretien'] },
+    { label: 'Taxes foncières', cats: ['Taxes foncières et scolaires'] },
+    { label: 'Services publics (électricité, chauffage)', cats: ['Électricité / Chauffage'] },
+    { label: 'Frais de véhicule à moteur', cats: ['Essence / Carburant', 'Entretien Véhicule', 'Assurance auto', 'Déplacements / Automobile', 'Immatriculation / Permis'] },
+    { label: 'Autres dépenses', cats: ['Autre'] },
+  ];
+  const NON_DEDUCTIBLE_CATS = ['Capital remboursé (non déductible)'];
+
+  const t776Revenue = buildingInvoices.reduce((s, i) => s + (i.total || 0), 0);
+  const t776Rows = T776_GROUPS.map(g => ({
+    label: g.label,
+    amount: buildingExpenses.filter(e => g.cats.includes(e.cat)).reduce((s, e) => s + (e.total || 0), 0),
+  }));
+  const t776UnmappedTotal = buildingExpenses
+    .filter(e => !NON_DEDUCTIBLE_CATS.includes(e.cat) && !T776_GROUPS.some(g => g.cats.includes(e.cat)))
+    .reduce((s, e) => s + (e.total || 0), 0);
+  const t776NonDeductibleTotal = buildingExpenses.filter(e => NON_DEDUCTIBLE_CATS.includes(e.cat)).reduce((s, e) => s + (e.total || 0), 0);
+  const t776TotalExpenses = t776Rows.reduce((s, r) => s + r.amount, 0) + t776UnmappedTotal;
+  const t776NetBeforeCca = t776Revenue - t776TotalExpenses;
+  const t776NetAfterCca = t776NetBeforeCca - totalCcaClaimed;
+  const selectedProperty = properties.find(p => (p.buildingId || p.id) === selectedBuildingId);
+
+  const buildT776Pdf = (): jsPDF => {
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' }); const M = 14, W = 210;
+    let y = pdfHdr(pdf, 'Rapport T776 / TP-128', `Année ${fiscalYear} — ${selectedProperty?.adresse || 'Immeuble'}`, co, [8, 145, 178]);
+    y = pdfSec(pdf, 'Revenus', y, M);
+    pdf.setFont('Helvetica', 'normal'); pdf.setFontSize(8.5);
+    pdf.text('Revenus de location bruts', M + 2, y); pdf.text(`${fmtAmt(t776Revenue)} $`, W - M, y, { align: 'right' }); y += 8;
+    y = pdfSec(pdf, 'Dépenses', y, M);
+    t776Rows.forEach(r => {
+      y = chkPg(pdf, y, 6); pdf.setFont('Helvetica', 'normal'); pdf.setFontSize(8);
+      pdf.text(r.label, M + 2, y); pdf.text(`${fmtAmt(r.amount)} $`, W - M, y, { align: 'right' }); y += 5.5;
+    });
+    if (t776UnmappedTotal > 0) {
+      pdf.text('Autres dépenses non catégorisées', M + 2, y); pdf.text(`${fmtAmt(t776UnmappedTotal)} $`, W - M, y, { align: 'right' }); y += 5.5;
+    }
+    pdf.setDrawColor(226, 232, 240); pdf.line(M, y, W - M, y); y += 5;
+    pdf.setFont('Helvetica', 'bold'); pdf.setFontSize(8.5);
+    pdf.text('Total des dépenses', M + 2, y); pdf.text(`${fmtAmt(t776TotalExpenses)} $`, W - M, y, { align: 'right' }); y += 8;
+    pdf.text('Revenu net avant DPA', M + 2, y); pdf.text(`${fmtAmt(t776NetBeforeCca)} $`, W - M, y, { align: 'right' }); y += 6;
+    pdf.setFont('Helvetica', 'normal'); pdf.setFontSize(8);
+    pdf.text('Déduction pour amortissement (DPA) réclamée', M + 2, y); pdf.text(`${fmtAmt(totalCcaClaimed)} $`, W - M, y, { align: 'right' }); y += 8;
+    pdf.setDrawColor(148, 163, 184); pdf.line(M, y, W - M, y); y += 5;
+    pdf.setFont('Helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(8, 145, 178);
+    pdf.text('Revenu net après DPA', M + 2, y); pdf.text(`${fmtAmt(t776NetAfterCca)} $`, W - M, y, { align: 'right' }); pdf.setTextColor(30, 41, 59); y += 10;
+    if (t776NonDeductibleTotal > 0) {
+      pdf.setFont('Helvetica', 'italic'); pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
+      pdf.text(`Note — remboursement de capital exclu (non déductible) : ${fmtAmt(t776NonDeductibleTotal)} $`, M + 2, y);
+      pdf.setTextColor(30, 41, 59);
+    }
+    return pdf;
+  };
+  const t776PdfFilename = () => `T776_TP128_${(selectedProperty?.adresse||'Immeuble').replace(/[^a-zA-Z0-9]+/g,'_')}_${fiscalYear}.pdf`;
+  const expT776 = () => buildT776Pdf().save(t776PdfFilename());
+
+  const T776Tab = () => (
+    <div className="space-y-4">
+      <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-cyan-500/5':'bg-cyan-50/50'}`}>
+        <Info size={16} className="text-cyan-500 mt-0.5 shrink-0"/>
+        <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+          Regroupé selon les catégories standards du formulaire T776 (fédéral) / TP-128 (Québec), à partir des dépenses déjà catégorisées de cet immeuble pour {fiscalYear}. La DPA reprend le total réclamé dans l'onglet Amortissement. Prêt à transcrire ou joindre — vérifiez toujours avant de produire.
+        </p>
+      </div>
+      {loadingBuildingData ? (
+        <div className="flex items-center justify-center py-10"><Loader2 size={20} className="animate-spin text-cyan-500"/></div>
+      ) : (
+        <div className={`${card} overflow-hidden`}>
+          <div className={`p-4 ${D?'bg-zinc-900':'bg-slate-50'} flex items-center justify-between`}>
+            <span className={`text-[10px] font-black uppercase ${D?'text-zinc-400':'text-slate-500'}`}>Revenus de location bruts</span>
+            <span className="text-[14px] font-black text-emerald-600">{fmtAmt(t776Revenue)} $</span>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-zinc-800">
+            {t776Rows.map(r => (
+              <div key={r.label} className="px-4 py-2.5 flex items-center justify-between text-[11px]">
+                <span className={D?'text-zinc-400':'text-slate-600'}>{r.label}</span>
+                <span className={`font-bold ${D?'text-zinc-200':'text-slate-800'}`}>{fmtAmt(r.amount)} $</span>
+              </div>
+            ))}
+            {t776UnmappedTotal > 0 && (
+              <div className="px-4 py-2.5 flex items-center justify-between text-[11px]">
+                <span className={D?'text-zinc-400':'text-slate-600'}>Autres dépenses non catégorisées</span>
+                <span className={`font-bold ${D?'text-zinc-200':'text-slate-800'}`}>{fmtAmt(t776UnmappedTotal)} $</span>
+              </div>
+            )}
+          </div>
+          <div className={`p-4 space-y-2 border-t ${D?'border-zinc-800':'border-slate-100'}`}>
+            <div className="flex items-center justify-between text-[11px] font-bold">
+              <span className={D?'text-zinc-300':'text-slate-700'}>Total des dépenses</span>
+              <span className="text-rose-600">{fmtAmt(t776TotalExpenses)} $</span>
+            </div>
+            <div className="flex items-center justify-between text-[12px] font-black">
+              <span className={D?'text-zinc-200':'text-slate-800'}>Revenu net avant DPA</span>
+              <span>{fmtAmt(t776NetBeforeCca)} $</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className={D?'text-zinc-400':'text-slate-600'}>DPA réclamée</span>
+              <span className="text-orange-600">− {fmtAmt(totalCcaClaimed)} $</span>
+            </div>
+            <div className={`flex items-center justify-between text-[15px] font-black pt-2 border-t ${D?'border-zinc-800':'border-slate-100'}`}>
+              <span className={D?'text-zinc-100':'text-slate-900'}>Revenu net après DPA</span>
+              <span className="text-cyan-600">{fmtAmt(t776NetAfterCca)} $</span>
+            </div>
+            {t776NonDeductibleTotal > 0 && (
+              <p className={`text-[9px] italic pt-1 ${D?'text-zinc-600':'text-slate-400'}`}>Remboursement de capital exclu (non déductible) : {fmtAmt(t776NonDeductibleTotal)} $</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
-  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI, sources:expSources};
-  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)', sources:'Sources PDF'};
+  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI, sources:expSources, dpa:()=>{}, t776:expT776};
+  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)', sources:'Sources PDF', dpa:'', t776:'Rapport T776 PDF'};
 
   return (
     <div className="space-y-5">
@@ -859,9 +1171,11 @@ export default function ComptableExportView({
           <button onClick={load} disabled={loading} className={`p-2 rounded-xl border transition-all ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-400':'border-slate-200 hover:bg-slate-50 text-slate-500'}`}>
             <RefreshCw size={14} className={loading?'animate-spin':''}/>
           </button>
-          <button onClick={expFn[tab]} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
-            <Download size={13}/>{expLbl[tab]}
-          </button>
+          {tab !== 'dpa' && (
+            <button onClick={expFn[tab]} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
+              <Download size={13}/>{expLbl[tab]}
+            </button>
+          )}
           {/* Format universel prêt à importer dans QuickBooks/Xero/Acomba —
               distinct du PDF (lecture humaine) et du GIFI (déclaration fiscale). */}
           {tab==='journal' && (
@@ -874,10 +1188,12 @@ export default function ComptableExportView({
               <Download size={13}/>Sources .csv (détail)
             </button>
           )}
-          <button onClick={sendCurrentTabByEmail} disabled={sendingEmail} title="Envoyer ce rapport par courriel — vraiment expédié, pas simulé" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60">
-            {sendingEmail ? <Loader2 size={13} className="animate-spin"/> : <Mail size={13}/>}
-            Envoyer par courriel
-          </button>
+          {tab !== 'dpa' && (
+            <button onClick={sendCurrentTabByEmail} disabled={sendingEmail} title="Envoyer ce rapport par courriel — vraiment expédié, pas simulé" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60">
+              {sendingEmail ? <Loader2 size={13} className="animate-spin"/> : <Mail size={13}/>}
+              Envoyer par courriel
+            </button>
+          )}
         </div>
       </div>
 
@@ -892,6 +1208,30 @@ export default function ComptableExportView({
         </div>
       </div>
 
+      {/* ── Building/year selector — DPA + T776 are inherently per-building,
+           unlike the other 6 tabs (company-wide). ── */}
+      {isComptable && (tab==='dpa'||tab==='t776') && (
+        <div className={`${card} p-4 flex items-center gap-4 flex-wrap`}>
+          <Building2 size={14} className={D?'text-zinc-500':'text-slate-400'}/>
+          <div>
+            <label className={lbl}>Immeuble</label>
+            {properties.length === 0 ? (
+              <p className={`text-[11px] italic ${D?'text-zinc-500':'text-slate-400'}`}>Aucun immeuble enregistré pour ce client.</p>
+            ) : (
+              <select value={selectedBuildingId} onChange={e=>setSelectedBuildingId(e.target.value)} className={inp}>
+                {properties.map(p=>(
+                  <option key={p.buildingId||p.id} value={p.buildingId||p.id}>{p.adresse}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div>
+            <label className={lbl}>Année d'imposition</label>
+            <input type="number" value={fiscalYear} onChange={e=>setFiscalYear(e.target.value)} className={inp} style={{width:90}}/>
+          </div>
+        </div>
+      )}
+
       {/* ── Error ── */}
       {err&&<div className={`p-4 rounded-2xl border flex items-center gap-2 text-[11px] ${D?'bg-rose-500/10 border-rose-500/30 text-rose-400':'bg-rose-50 border-rose-200 text-rose-700'}`}><AlertCircle size={14}/><span>{err}</span></div>}
 
@@ -902,7 +1242,7 @@ export default function ComptableExportView({
         <>
           {/* ── Tabs ── */}
           <div className={`flex gap-0.5 border-b ${D?'border-zinc-800':'border-slate-200'} overflow-x-auto`}>
-            {TABS.map(t=>(
+            {visibleTabs.map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)}
                 className={`flex items-center gap-2 px-5 py-3 text-[10px] font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${tab===t.id?t.ac:`border-transparent ${D?'text-zinc-500 hover:text-zinc-300':'text-slate-400 hover:text-slate-600'}`}`}>
                 {t.icon}<span className="hidden sm:inline">{t.label}</span><span className="sm:hidden">{t.short}</span>
@@ -919,6 +1259,8 @@ export default function ComptableExportView({
               {tab==='tvq'        &&<TVQTab/>}
               {tab==='gifi'       &&<GifiTab/>}
               {tab==='sources'    &&<SourcesTab/>}
+              {tab==='dpa'        && isComptable &&<DpaTab/>}
+              {tab==='t776'       && isComptable &&<T776Tab/>}
             </motion.div>
           </AnimatePresence>
         </>
