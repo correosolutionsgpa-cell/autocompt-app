@@ -1564,9 +1564,20 @@ const App = () => {
     // chosen Plex profile (e.g. Gestionnaire) back to Syndic on every reload
     // until the user's first company existed.
     if (!company) return;
-    const mode = company.dashboardMode ?? (activeCompanyId === "1" ? "Syndic" : "Plex");
+    // Fallback used to hardcode `activeCompanyId === "1" → Syndic` — true
+    // only for old seeded/demo accounts where company "1" was always
+    // Fabiola's own Syndic. For any newer account, "1" is just an
+    // auto-incrementing id for whatever profile they picked (Comptable,
+    // Gestionnaire, etc.), so that assumption silently forced their first
+    // company into Syndic mode whenever its own `dashboardMode` field was
+    // unset. Derive from `selectedProfile` instead — the same authoritative
+    // signal already used at login (see onAuthStateChanged's modeForProfile)
+    // — so this can never contradict it. Found 2026-08-10 via a comptable
+    // account that kept landing on the Syndicat dashboard after every
+    // login/reload despite selectedProfile correctly being "comptable".
+    const mode = company.dashboardMode ?? (selectedProfile === "syndicat" ? "Syndic" : "Plex");
     setDashboardMode(mode);
-  }, [activeCompanyId, listaEmpresas]);
+  }, [activeCompanyId, listaEmpresas, selectedProfile]);
 
   // Beta strategy (2026-07-22, Fabiola): pricing is intentionally hidden
   // everywhere while the beta is free — she wants usage data first, prices
