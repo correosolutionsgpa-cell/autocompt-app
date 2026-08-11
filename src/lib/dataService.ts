@@ -1459,14 +1459,20 @@ export const dataService = {
    * collaboratorUIDs (allowed by the `isAcceptingOwnInvite` Firestore rule,
    * which checks this exact invite doc is 'pending' before permitting it),
    * then marks the invite 'accepted'.
+   *
+   * Uses arrayUnion instead of read-then-merge on purpose — a chicken-and-egg
+   * permissions bug: the invitee has neither owner nor collaborator access to
+   * the company doc YET (that's exactly what accepting the invite is meant to
+   * grant), so the earlier getDoc() here was silently rejected by
+   * firestore.rules every time, the invite stayed 'pending' forever, and the
+   * failure never surfaced to the user (caught by the caller's try/catch).
+   * arrayUnion needs no prior read — the security rule can still evaluate the
+   * resulting document server-side even though the client can't fetch it.
+   * Found 2026-08-11: Natalia's invite to Achat Direct never went through.
    */
   async acceptCompanyInvite(userId: string, invite: CompanyInviteDoc): Promise<void> {
     const companyRef = doc(db, 'companies', invite.companyDocId);
-    const companySnap = await getDoc(companyRef);
-    const existingUIDs: string[] = companySnap.exists() ? (companySnap.data().collaboratorUIDs || []) : [];
-    if (!existingUIDs.includes(userId)) {
-      await updateDoc(companyRef, { collaboratorUIDs: [...existingUIDs, userId] });
-    }
+    await updateDoc(companyRef, { collaboratorUIDs: arrayUnion(userId) });
     await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted' });
   },
 
