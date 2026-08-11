@@ -10913,9 +10913,14 @@ const App = () => {
 
     return (
       <div
-        className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
+        className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left leading-relaxed max-w-full overflow-x-hidden relative transition-all duration-300`}
       >
-        <WorkspaceSidebar />
+        {/* No WorkspaceSidebar here — this screen renders before/during auth,
+            so it can show STALE navigation state left over from a previous
+            session in the same browser tab (company name, nav items...),
+            making an unauthenticated login screen look like it's already
+            inside the dashboard. Found 2026-08-11: Fabiola saw the full menu
+            behind the beta-code/phone-verify box on a retried login. */}
         <header
           className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm`}
           style={{
