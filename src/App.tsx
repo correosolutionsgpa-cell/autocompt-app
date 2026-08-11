@@ -13941,6 +13941,14 @@ const App = () => {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
+                            <a
+                              href="/exemple-modele-promesse-achat.docx"
+                              download
+                              title="Télécharger un exemple de structure (.docx) — pas un document légal, juste un modèle technique montrant où placer les champs et clauses"
+                              className={`p-1.5 rounded-full border transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:text-violet-400 hover:border-violet-500" : "border-slate-200 text-slate-400 hover:text-[#7c3aed] hover:border-[#7c3aed]"}`}
+                            >
+                              <Download size={14} />
+                            </a>
                             <button
                               type="button"
                               onClick={() => setShowDocTemplateGuide(true)}
@@ -13955,7 +13963,11 @@ const App = () => {
 
                         {docTemplates.length === 0 ? (
                           <p className={`text-[10px] font-medium ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                            Aucun modèle importé. Utilisez le bouton ci-dessous pour monter votre propre Promesse d'Achat (ou autre document) avec des espaces {"{{"}nom_champ{"}}"}  — vous serez le seul à le voir et à l'utiliser.
+                            Aucun modèle importé. Utilisez le bouton ci-dessous pour monter votre propre Promesse d'Achat (ou autre document) avec des espaces {"{{"}nom_champ{"}}"}  — vous serez le seul à le voir et à l'utiliser.{" "}
+                            <a href="/exemple-modele-promesse-achat.docx" download className={`underline font-bold ${darkMode ? "text-violet-400" : "text-[#7c3aed]"}`}>
+                              Télécharger un exemple de structure
+                            </a>{" "}
+                            pour voir comment le construire.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -14140,6 +14152,14 @@ const App = () => {
                                   💡 Vous pouvez revoir ce guide à tout moment avec le bouton [?] à côté de « Mes Modèles ».
                                 </p>
                               </div>
+
+                              <a
+                                href="/exemple-modele-promesse-achat.docx"
+                                download
+                                className={`mt-4 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${darkMode ? "border-violet-500/30 text-violet-400 hover:bg-violet-950/30" : "border-[#7c3aed]/30 text-[#7c3aed] hover:bg-violet-50"}`}
+                              >
+                                <Download size={12} /> Télécharger un exemple de structure (.docx)
+                              </a>
 
                               <button
                                 type="button"
