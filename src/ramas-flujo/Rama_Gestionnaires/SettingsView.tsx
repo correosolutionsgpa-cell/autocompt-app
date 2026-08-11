@@ -114,7 +114,9 @@ export interface SettingsViewProps {
   ownerId?: string;
 
   // Profil actif (prospecteur/investisseur/flippeur/gestionnaire/syndicat) —
-  // change quel module grid + RBAC s'applique. Persisté dans Firestore.
+  // change quel module grid + RBAC s'applique. selectedProfile est le
+  // réglage de secours au niveau du COMPTE (legacy, comptes mono-entreprise);
+  // companyProfile ci-dessous prend le dessus dès qu'il est défini.
   selectedProfile?: string | null;
   updateSelectedProfile?: (profile: string) => void;
   // Profils déjà débloqués pour ce compte — base pour un futur forfait
@@ -124,6 +126,11 @@ export interface SettingsViewProps {
   // Compte fondateur/SuperAdmin — voir src/lib/superAdmin.ts. Débloque tous
   // les profils sans passer par unlockedProfiles ni le mur beta.
   currentUserEmail?: string | null;
+  // Profil actif DE CETTE ENTREPRISE — un même compte peut gérer Solutions
+  // GPA en Gestionnaire tout en ayant AchatDirect en Prospecteur/Flippeur.
+  // Stocké sur le document de l'entreprise, même schéma que modeGestion.
+  companyProfile?: string | null;
+  onUpdateCompanyProfile?: (profile: string) => void;
 
   // Type de gestion DE CETTE ENTREPRISE (pas du compte) — reprend la même
   // question/copie que l'onboarding (mode_gestion_investisseur), mais
@@ -262,6 +269,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   updateSelectedProfile,
   unlockedProfiles,
   currentUserEmail,
+  companyProfile,
+  onUpdateCompanyProfile,
   modeGestion,
   onUpdateModeGestion,
 }) => {
@@ -493,10 +502,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
               <div>
                 <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Profil actif
+                  Profil actif — {companyName || "cette entreprise"}
                 </h3>
                 <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                  Détermine les modules visibles (DocuLegal, Heures & Paie, etc.)
+                  Détermine les modules visibles pour CETTE ENTREPRISE (DocuLegal, Heures & Paie, etc.) — indépendant des autres entreprises de votre compte
                 </p>
               </div>
             </div>
@@ -516,14 +525,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     : selectedProfile
                       ? [selectedProfile]
                       : [];
+                // The profile actually in effect for THIS company — its own
+                // companyProfile wins, falling back to the account-wide
+                // selectedProfile for companies that haven't set one yet.
+                const effectiveActiveProfile = companyProfile || selectedProfile;
                 return PROFILE_OPTIONS.map((p) => {
-                  const isActive = selectedProfile === p.id;
+                  const isActive = effectiveActiveProfile === p.id;
                   const isUnlocked = effectiveUnlocked.includes(p.id);
                   if (isUnlocked) {
                     return (
                       <button
                         key={p.id}
-                        onClick={() => updateSelectedProfile(p.id)}
+                        onClick={() => onUpdateCompanyProfile ? onUpdateCompanyProfile(p.id) : updateSelectedProfile(p.id)}
                         className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
                           isActive
                             ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")

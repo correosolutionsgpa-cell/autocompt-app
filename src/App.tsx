@@ -1811,11 +1811,22 @@ const App = () => {
   // apply to a company whose management is delegated. Set via Paramètres →
   // "Type de gestion" (SettingsView.tsx), reusing the same copy as the
   // onboarding question mode_gestion_investisseur.
+  // Per-company profile override — added 2026-08-11 after Fabiola's own
+  // multi-company use (Solutions GPA as gestionnaire, AchatDirect as
+  // prospecteur/flippeur, all under ONE login) exposed that "profil actif"
+  // used to be a single account-wide setting: switching it for AchatDirect
+  // silently switched it for every other company too. companyProfile lives
+  // on the company doc (same pattern as modeGestion below) and wins when
+  // set; selectedProfile (account-wide) remains the fallback for companies
+  // that haven't picked their own yet, so nothing breaks for existing
+  // single-company accounts.
   const activeProfile: ProfileId = currentCompany?.modeGestion === "gestion_deleguee"
     ? "investisseur"
-    : _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
-      ? (selectedProfile as ProfileId)
-      : "investisseur"; // safe default: broadest Plex access
+    : _RBAC_VALID_PROFILES.includes(currentCompany?.companyProfile as ProfileId)
+      ? (currentCompany!.companyProfile as ProfileId)
+      : _RBAC_VALID_PROFILES.includes(selectedProfile as ProfileId)
+        ? (selectedProfile as ProfileId)
+        : "investisseur"; // safe default: broadest Plex access
 
   const handleUpdateModeGestion = async (mode: "autogestion" | "gestion_deleguee") => {
     if (!currentCompany?._companyDocId) return;
@@ -1824,6 +1835,18 @@ const App = () => {
       await setDoc(doc(db, "companies", currentCompany._companyDocId), { modeGestion: mode }, { merge: true });
     } catch (err) {
       console.error("Failed to save modeGestion:", err);
+    }
+  };
+
+  // Same pattern as handleUpdateModeGestion, for the per-company profile
+  // override above.
+  const handleUpdateCompanyProfile = async (profile: string) => {
+    if (!currentCompany?._companyDocId) return;
+    setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, companyProfile: profile } : w)));
+    try {
+      await setDoc(doc(db, "companies", currentCompany._companyDocId), { companyProfile: profile }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save companyProfile:", err);
     }
   };
 
@@ -21471,6 +21494,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         updateSelectedProfile={updateSelectedProfile}
         unlockedProfiles={unlockedProfiles}
         currentUserEmail={currentUserEmail}
+        companyProfile={currentCompany?.companyProfile}
+        onUpdateCompanyProfile={handleUpdateCompanyProfile}
         modeGestion={currentCompany?.modeGestion}
         onUpdateModeGestion={handleUpdateModeGestion}
       />
