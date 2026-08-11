@@ -1398,6 +1398,18 @@ export const dataService = {
     return { ...data, id: originalId };
   },
 
+  /** Only "Ajouter" existed until now — no way to remove a company created by
+   *  mistake or no longer needed (found 2026-08-11 via Daniel's QA report:
+   *  testing the form twice left a stray "Nouvelle Enterprise" with no way
+   *  to clean it up). `originalId` is the app-internal id (e.g. "custom-…"),
+   *  not the prefixed Firestore doc id — callers already have this from
+   *  workspace.id, same as saveWorkspace's own id parameter. */
+  async deleteWorkspace(userId: string, originalId: string): Promise<void> {
+    assertCanWrite();
+    const docId = `${userId}_company_${originalId}`;
+    await deleteDoc(doc(db, 'companies', docId));
+  },
+
   // ── Company invites — real partner-sharing flow ─────────────────────────────
 
   /** Owner invites a partner by email to collaborate on one of their companies. */

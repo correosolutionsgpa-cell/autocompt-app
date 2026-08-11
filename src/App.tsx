@@ -8,6 +8,7 @@ import {
   Upload,
   PlusCircle,
   Trash2,
+  Edit3,
   Lock,
   Unlock,
   X,
@@ -255,11 +256,19 @@ const LogoPrincipal = ({
   showText = false,
   animate = false,
   textColor = "text-[#1E293B] dark:text-zinc-100",
+  hideTextOnMobile = false,
 }: {
   size?: number;
   showText?: boolean;
   animate?: boolean;
   textColor?: string;
+  /** For the dashboard header only, where the logo sits between a hamburger
+   *  button and the user/profile column — on a narrow phone there isn't
+   *  room for the "AutoCompt" wordmark AND that column, so "Usager: X" was
+   *  getting truncated down to 1-2 letters (found 2026-08-11 via Daniel's
+   *  QA report). Every other screen (login, onboarding...) keeps the
+   *  wordmark at every width — this only opts in where it's actually tight. */
+  hideTextOnMobile?: boolean;
 }) => {
   if (animate) {
     return (
@@ -301,7 +310,7 @@ const LogoPrincipal = ({
       </div>
       {showText && (
         <span
-          className={`font-black italic ${textColor} tracking-tighter uppercase text-lg`}
+          className={`${hideTextOnMobile ? "hidden sm:inline" : ""} font-black italic ${textColor} tracking-tighter uppercase text-lg`}
         >
           AutoCompt
         </span>
@@ -847,6 +856,11 @@ const App = () => {
   // Guards the "setup" screen's create-workspace button while its Firestore
   // write is in flight (prevents a double-click creating two companies).
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
+  // Set when "setup" was opened via the pencil icon on an existing workspace
+  // (Espace de Travail dropdown) instead of "Ajouter / Créer" — the same form
+  // is reused for both, this just tells the submit handler to update that
+  // company's existing doc instead of minting a new "custom-{timestamp}" one.
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   // NOTE: homeOfficeFiles, showHomeOfficeConfig, hoConfigForm
   // → Déplacés dans src/ramas-flujo/Rama_Entrepreneurs/BureauDomicile.tsx (Fase 2)
   const [hasAcceptedLoi25, setHasAcceptedLoi25] = useState(false);
@@ -2612,6 +2626,7 @@ const App = () => {
                     playNotificationSound();
                     setSetupComplet(false);
                     setActiveCompanyId('');
+                    setEditingCompanyId(null);
                     setOnboardingStep(1);
                     setVista('setup');
                     setPartners(["Pro"]);
@@ -2717,52 +2732,124 @@ const App = () => {
                           const isSelected = workspace.id === activeCompanyId;
                           const wsColor =
                             workspace.userProfile?.color || "#059669";
+                          const isOwnWorkspace = workspace.ownerId === auth.currentUser?.uid;
                           return (
-                            <button
+                            <div
                               key={workspace.id}
-                              onClick={() => {
-                                setActiveCompanyId(workspace.id);
-                                setShowWorkspaceDropdown(false);
-                                playNotificationSound();
-                                setVista("dashboard");
-                                setIsSidebarOpen(false);
-                              }}
-                              className={`w-full flex flex-col p-3 rounded-xl transition-all text-left border ${isSelected ? "border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/80" : "border-transparent hover:bg-slate-50 dark:hover:bg-zinc-800/40"}`}
+                              className={`w-full flex flex-col p-3 rounded-xl transition-all border ${isSelected ? "border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/80" : "border-transparent hover:bg-slate-50 dark:hover:bg-zinc-800/40"}`}
                             >
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => {
+                                  setActiveCompanyId(workspace.id);
+                                  setShowWorkspaceDropdown(false);
+                                  playNotificationSound();
+                                  setVista("dashboard");
+                                  setIsSidebarOpen(false);
+                                }}
+                                className="w-full flex flex-col text-left"
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center space-x-2 min-w-0">
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: wsColor }}
+                                    />
+                                    <span
+                                      className={`text-[9.5px] font-black uppercase tracking-tight leading-none truncate ${isSelected ? "text-[#059669] dark:text-emerald-400" : darkMode ? "text-zinc-200" : "text-[#374151]"}`}
+                                    >
+                                      {workspace.nombre}
+                                    </span>
+                                  </div>
                                   <span
-                                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: wsColor }}
-                                  />
-                                  <span
-                                    className={`text-[9.5px] font-black uppercase tracking-tight leading-none ${isSelected ? "text-[#059669] dark:text-emerald-400" : darkMode ? "text-zinc-200" : "text-[#374151]"}`}
+                                    className={`text-[6px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 ml-2 ${getWorkspaceVisualTag(workspace.id)}`}
                                   >
-                                    {workspace.nombre}
+                                    Espacio{" "}
+                                    {workspace.id === "2"
+                                      ? "1"
+                                      : workspace.id === "1"
+                                        ? "2"
+                                        : workspace.id === "3"
+                                          ? "3"
+                                          : workspace.id}
                                   </span>
                                 </div>
-                                <span
-                                  className={`text-[6px] font-black px-1.5 py-0.5 rounded uppercase ${getWorkspaceVisualTag(workspace.id)}`}
-                                >
-                                  Espacio{" "}
-                                  {workspace.id === "2"
-                                    ? "1"
-                                    : workspace.id === "1"
-                                      ? "2"
-                                      : workspace.id === "3"
-                                        ? "3"
-                                        : workspace.id}
+                                <span className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest block mt-1.5 truncate">
+                                  {workspace.googleEmail || currentUserEmail || "—"}
                                 </span>
-                              </div>
-                              <span className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest block mt-1.5 truncate">
-                                {workspace.googleEmail ||
-                                  "solutionsgpa@gmail.com"}
-                              </span>
-                              <span className="text-[6.5px] text-[#059669] dark:text-emerald-400 uppercase font-black tracking-widest mt-1 block leading-none">
-                                🔒 Drive: /
-                                {workspace.driveConfig?.folderId || "vault"}
-                              </span>
-                            </button>
+                                <span className="text-[6.5px] text-[#059669] dark:text-emerald-400 uppercase font-black tracking-widest mt-1 block leading-none">
+                                  🔒 Drive: /
+                                  {workspace.driveConfig?.folderId || "vault"}
+                                </span>
+                              </button>
+                              {/* Only "Ajouter" existed until now — no way to fix a
+                                  typo'd address/NEQ or remove a company created by
+                                  mistake (found 2026-08-11 via Daniel's QA report).
+                                  Collaborators never get these — only the owner's
+                                  own workspaces are editable/deletable here. */}
+                              {isOwnWorkspace && (
+                                <div className="flex items-center gap-1 mt-2 pt-2 border-t border-slate-100 dark:border-zinc-800/60">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingCompanyId(workspace.id);
+                                      setActiveCompanyId(workspace.id);
+                                      setIndustry(workspace.industry || "Immobilier");
+                                      setLegalEntity(workspace.legalEntity || "Travailleur Autonome");
+                                      setPartners(workspace.partners || ["Pro"]);
+                                      setHasPlex(!!workspace.hasPlex);
+                                      setNombrePortes(workspace.nombrePortes || 999);
+                                      setUserProfile({
+                                        logo: workspace.userProfile?.logo ?? null,
+                                        color: workspace.userProfile?.color || "#059669",
+                                        font: workspace.userProfile?.font || "Moderne",
+                                        invoiceTemplate: workspace.userProfile?.invoiceTemplate || "epure",
+                                        nom: workspace.userProfile?.nom || workspace.nombre || "",
+                                        adresse: workspace.userProfile?.adresse || "",
+                                        tel: workspace.userProfile?.tel || "",
+                                        neq: workspace.userProfile?.neq || "",
+                                        tps: workspace.userProfile?.tps || "",
+                                        tvq: workspace.userProfile?.tvq || "",
+                                        site: workspace.userProfile?.site || "",
+                                        pago: workspace.userProfile?.pago || "",
+                                        tpsRate: workspace.userProfile?.tpsRate ?? 5,
+                                        tvqRate: workspace.userProfile?.tvqRate ?? 9.975,
+                                        numeroCITQ: workspace.userProfile?.numeroCITQ || "",
+                                        taxeSejourRegion: workspace.userProfile?.taxeSejourRegion ?? 3.5,
+                                      });
+                                      setHasAcceptedLoi25(true); // already accepted when this company was first created
+                                      setShowWorkspaceDropdown(false);
+                                      setVista("setup");
+                                    }}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[7.5px] font-black uppercase tracking-wider transition-colors ${darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-800" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"}`}
+                                  >
+                                    <Edit3 size={10} /> Modifier
+                                  </button>
+                                  {visibleEmpresas.length > 1 && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const uid = auth.currentUser?.uid;
+                                        if (!uid) return;
+                                        if (!window.confirm(`Supprimer définitivement "${workspace.nombre}" ? Cette action est irréversible.`)) return;
+                                        try {
+                                          await dataService.deleteWorkspace(uid, workspace.id);
+                                          setListaEmpresas((prev) => prev.filter((c) => c.id !== workspace.id));
+                                          if (activeCompanyId === workspace.id) {
+                                            const remaining = visibleEmpresas.find((c) => c.id !== workspace.id);
+                                            if (remaining) setActiveCompanyId(remaining.id);
+                                          }
+                                        } catch (err: any) {
+                                          alert("Erreur lors de la suppression : " + err.message);
+                                        }
+                                      }}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[7.5px] font-black uppercase tracking-wider transition-colors ${darkMode ? "text-rose-500/80 hover:text-rose-400 hover:bg-rose-950/30" : "text-rose-500 hover:text-rose-600 hover:bg-rose-50"}`}
+                                    >
+                                      <Trash2 size={10} /> Supprimer
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                         <button
@@ -2777,6 +2864,7 @@ const App = () => {
                               playNotificationSound();
                               setSetupComplet(false);
                               setActiveCompanyId("");
+                              setEditingCompanyId(null);
                               setOnboardingStep(1);
                               setVista("setup");
                             }
@@ -9112,7 +9200,9 @@ const App = () => {
             setVista("dashboard");
           }}
         />
-        <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
+        {/* SofiOnboarding already renders its own SiteFooter internally at
+            the end of its layout — this second one stacked a duplicate
+            footer under the wizard (found 2026-08-11 via Daniel's QA report). */}
       </div>
     );
   }
@@ -10114,6 +10204,17 @@ const App = () => {
         <div className="absolute top-6 left-6 md:left-12 flex items-center space-x-2 z-50">
           <LogoPrincipal size={24} showText={true} textColor={darkMode ? "text-white" : "text-slate-900"} />
         </div>
+        {/* No way back to the Panel from this form — a user who opened
+            "Ajouter une entreprise" and changed their mind had to hard-refresh
+            (found 2026-08-11 via Daniel's QA report). */}
+        <button
+          type="button"
+          onClick={() => { setEditingCompanyId(null); setVista("dashboard"); }}
+          title="Retour au Panel"
+          className={`absolute top-6 right-6 md:right-12 z-50 p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-800" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"}`}
+        >
+          <X size={18} />
+        </button>
 
         <div className="w-full max-w-2xl relative pt-8 px-6 pb-10 mt-12 md:mt-0 md:p-8 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col space-y-8 z-10 animate-in slide-in-from-right-8 mx-auto isolate">
           <div className={darkMode ? "absolute inset-0 bg-zinc-900/60 backdrop-blur-xl rounded-[32px] border border-white/[0.08] -z-10" : "absolute inset-0 bg-white/80 backdrop-blur-xl rounded-[32px] border border-white/40 -z-10"} />
@@ -10460,7 +10561,7 @@ const App = () => {
               }}
               className={darkMode ? "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-all cursor-pointer border border-transparent order-2 sm:order-1" : "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"}
             >
-              Retour aux Forfaits
+              Retour
             </button>
             <button
               type="button"
@@ -10483,7 +10584,13 @@ const App = () => {
                 }
                 setIsCreatingCompany(true);
                 try {
-                  const newCompanyId = "custom-" + Date.now();
+                  // Editing an existing company (pencil icon in Espace de
+                  // Travail) reuses its own id so saveWorkspace's merge:true
+                  // updates that same doc — otherwise this always minted a
+                  // fresh "custom-{timestamp}" id, so there was no way to
+                  // fix a typo'd address/NEQ without creating a duplicate
+                  // company (found 2026-08-11 via Daniel's QA report).
+                  const newCompanyId = editingCompanyId || ("custom-" + Date.now());
                   const saved = await dataService.saveWorkspace(uid, {
                     id: newCompanyId,
                     nombre: userProfile.nom || (isCreatingSecondCompany ? "Entreprise 2" : "Nouvelle Entreprise"),
@@ -10496,14 +10603,20 @@ const App = () => {
                     nombrePortes: nombrePortes,
                     gradientFromTo: "from-emerald-500 to-teal-600",
                   });
-                  setListaEmpresas((prev) => [...prev, saved]);
+                  if (editingCompanyId) {
+                    setListaEmpresas((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+                  } else {
+                    setListaEmpresas((prev) => [...prev, saved]);
+                  }
                   setActiveCompanyId(saved.id);
                   setSetupComplet(true);
                   setIsForfaitSelected(true);
                   setActiveUser("Nouveau");
+                  const wasEditing = !!editingCompanyId;
+                  setEditingCompanyId(null);
 
                   const currentTier = getEffectiveTier();
-                  if ((currentTier === "integral" || selectedTier === "multi_entreprise" || selectedTier === "integral" || selectedTier === "pro_multi") && !isCreatingSecondCompany) {
+                  if (!wasEditing && (currentTier === "integral" || selectedTier === "multi_entreprise" || selectedTier === "integral" || selectedTier === "pro_multi") && !isCreatingSecondCompany) {
                     setShowMultiPrompt(true);
                     if (typeof playNotificationSound === "function") playNotificationSound();
                   } else {
@@ -10515,15 +10628,15 @@ const App = () => {
                     if (typeof playNotificationSound === "function") playNotificationSound();
                   }
                 } catch (err: any) {
-                  console.error("Failed to save new workspace:", err);
-                  alert("Erreur lors de la création de l'entreprise. Veuillez réessayer.");
+                  console.error("Failed to save workspace:", err);
+                  alert("Erreur lors de l'enregistrement de l'entreprise. Veuillez réessayer.");
                 } finally {
                   setIsCreatingCompany(false);
                 }
               }}
               className={`w-full sm:w-auto py-4 px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg order-1 sm:order-2 ${hasAcceptedLoi25 && !isCreatingCompany ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/30 hover:shadow-emerald-500/50' : (darkMode ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed shadow-none' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none')}`}
             >
-              {isCreatingCompany ? "Création..." : "Commencer"}
+              {isCreatingCompany ? "Enregistrement..." : editingCompanyId ? "Enregistrer les modifications" : "Commencer"}
             </button>
           </div>
         </div>
@@ -11286,6 +11399,7 @@ const App = () => {
             <LogoPrincipal
               size={18}
               showText
+              hideTextOnMobile
               textColor={darkMode ? "text-white" : "text-[#0F172A]"}
             />
           </div>

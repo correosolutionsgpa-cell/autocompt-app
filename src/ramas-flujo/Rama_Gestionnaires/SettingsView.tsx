@@ -675,7 +675,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <ImageIcon size={11} className="text-emerald-500" />
                 Upload de Logo
               </label>
-              <div className={`flex items-start gap-4 p-4 rounded-2xl border ${darkMode ? "bg-zinc-950/50 border-zinc-800" : "bg-slate-50 border-slate-200"
+              {/* flex-col on mobile — the fixed-width preview box, flexible
+                  upload button, and S.O.F.I. tip card together are wider than
+                  a phone screen in a single row, clipping the tip card off
+                  the right edge (found 2026-08-11 via Daniel's QA report). */}
+              <div className={`flex flex-col sm:flex-row items-start gap-4 p-4 rounded-2xl border ${darkMode ? "bg-zinc-950/50 border-zinc-800" : "bg-slate-50 border-slate-200"
                 }`}>
                 {/* Preview */}
                 <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center shrink-0 overflow-hidden ${darkMode ? "border-zinc-700 bg-zinc-900" : "border-slate-200 bg-white"
