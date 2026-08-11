@@ -154,6 +154,7 @@ import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc } from "./lib/dataService";
 import { tr } from "./lib/i18n";
+import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
@@ -1616,13 +1617,7 @@ const App = () => {
     setVista("setup");
   }, [vista]);
 
-  const isSuperAdmin =
-    currentUserEmail ? (
-      ["correo.solutionsgpa@gmail.com", "solutionsgpa@gmail.com"].includes(currentUserEmail.toLowerCase().trim()) ||
-      currentUserEmail.toLowerCase().trim().startsWith("fabiola") ||
-      currentUserEmail.toLowerCase().trim().includes("solutionsgpa") ||
-      currentUserEmail.toLowerCase().trim().endsWith("@autocompt.ca")  // ← toutes les adresses @autocompt.ca
-    ) : false;
+  const isSuperAdmin = isSuperAdminEmail(currentUserEmail);
 
   const visibleEmpresas = isSuperAdmin
     ? listaEmpresas
@@ -1634,14 +1629,7 @@ const App = () => {
 
   // --- SUPERADMIN BYPASS (CRITICAL) ---
   useEffect(() => {
-    const email = currentUserEmail?.toLowerCase().trim();
-    if (
-      email === "correo.solutionsgpa@gmail.com" ||
-      email === "solutionsgpa@gmail.com" ||
-      email?.startsWith("fabiola") ||
-      email?.includes("solutionsgpa") ||
-      email?.endsWith("@autocompt.ca")           // ← info@, fabiola@, doculegal@autocompt.ca
-    ) {
+    if (isSuperAdminEmail(currentUserEmail)) {
       // Allow testing of onboarding by skipping force if requested
       if (localStorage.getItem("superadmin_test_onboarding") === "true") {
         return;
@@ -1947,17 +1935,8 @@ const App = () => {
     | "pro_multi"
     | "integral"
     | "superadmin" => {
-    if (currentUserEmail) {
-      const email = currentUserEmail.toLowerCase().trim();
-      if (
-        email === "correo.solutionsgpa@gmail.com" ||
-        email === "solutionsgpa@gmail.com" ||
-        email.startsWith("fabiola") ||
-        email.includes("solutionsgpa") ||
-        email.endsWith("@autocompt.ca")           // ← info@, fabiola@, doculegal@autocompt.ca
-      ) {
-        return "superadmin";
-      }
+    if (isSuperAdminEmail(currentUserEmail)) {
+      return "superadmin";
     }
     // SuperAdmin bypass global pour l'ID de compagnie Solutions GPA
     if (activeCompanyId === "1") {
@@ -8808,13 +8787,7 @@ const App = () => {
         setCurrentUserEmail(user.email);
         setIsLoadingData(true);
         // Same founder allowlist as getEffectiveTier()/the trial-bypass check below.
-        const authedEmail = (user.email ?? "").toLowerCase().trim();
-        const isFounderAccount =
-          authedEmail === "correo.solutionsgpa@gmail.com" ||
-          authedEmail === "solutionsgpa@gmail.com" ||
-          authedEmail.startsWith("fabiola") ||
-          authedEmail.includes("solutionsgpa") ||
-          authedEmail.endsWith("@autocompt.ca");
+        const isFounderAccount = isSuperAdminEmail(user.email);
         try {
           // Seed demo/dev data (company "Solutions GPA Inc.", sample expenses,
           // properties, units, loyers) ONLY for founder accounts — this is
