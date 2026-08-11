@@ -2367,6 +2367,7 @@ const App = () => {
   const [hasServices, setHasServices] = useState(false);
   const [hasPlex, setHasPlex] = useState(false);
   const [frequenceTpsTvq, setFrequenceTpsTvq] = useState("Mensuelle");
+  const [showFrequenceTpsTvqDropdown, setShowFrequenceTpsTvqDropdown] = useState(false);
   const [superficiTotale, setSuperficiTotale] = useState("1000");
   const [superficiBureau, setSuperficiBureau] = useState("150");
   const [syndicatSetup, setSyndicatSetup] = useState({
@@ -10292,19 +10293,47 @@ const App = () => {
                     className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
                   />
                 </div>
-                <div className="space-y-1.5 col-span-1 sm:col-span-2">
+                <div className="space-y-1.5 col-span-1 sm:col-span-2 relative">
                   <label className={darkMode ? "text-[10px] font-bold uppercase text-zinc-500 pl-1" : "text-[10px] font-bold uppercase text-slate-500 pl-1"}>
                     Fréquence de déclaration TPS/TVQ <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={frequenceTpsTvq}
-                    onChange={(e) => setFrequenceTpsTvq(e.target.value)}
-                    className={darkMode ? "w-full p-3.5 rounded-2xl text-sm border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-white placeholder-zinc-500 transition-all bg-zinc-950 focus:bg-zinc-900" : "w-full p-3.5 rounded-2xl text-sm border border-slate-200/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-800 transition-all bg-slate-50/50 focus:bg-white"}
+                  {/* Menu déroulant maison — jamais le <select> natif du
+                      navigateur (règle de design établie : "se ve cuadrado,
+                      años 70-80"). Même motif que le sélecteur "Espace de
+                      Travail". */}
+                  <button
+                    type="button"
+                    onClick={() => setShowFrequenceTpsTvqDropdown((v) => !v)}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-2xl text-sm border transition-all text-left ${darkMode ? "border-zinc-800 focus:border-emerald-500 text-white bg-zinc-950 hover:bg-zinc-900" : "border-slate-200/60 focus:border-emerald-500 text-slate-800 bg-slate-50/50 hover:bg-white"}`}
                   >
-                    <option value="Mensuelle">Mensuelle</option>
-                    <option value="Trimestrielle">Trimestrielle</option>
-                    <option value="Annuelle">Annuelle</option>
-                  </select>
+                    <span>{frequenceTpsTvq}</span>
+                    <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${showFrequenceTpsTvqDropdown ? "rotate-180" : ""}`} />
+                  </button>
+                  <AnimatePresence>
+                    {showFrequenceTpsTvqDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowFrequenceTpsTvqDropdown(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                          transition={{ duration: 0.15 }}
+                          className={`absolute left-0 right-0 mt-1 p-2 rounded-2xl border shadow-2xl z-50 origin-top ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
+                        >
+                          {["Mensuelle", "Trimestrielle", "Annuelle"].map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => { setFrequenceTpsTvq(opt); setShowFrequenceTpsTvqDropdown(false); }}
+                              className={`w-full px-3 py-2.5 rounded-xl text-left text-sm font-semibold transition-colors ${frequenceTpsTvq === opt ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : darkMode ? "text-zinc-300 hover:bg-zinc-800" : "text-slate-700 hover:bg-slate-50"}`}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
