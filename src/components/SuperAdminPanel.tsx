@@ -7,7 +7,7 @@ import {
   BarChart2, PieChart as PieIcon, RefreshCw, Mail, Phone,
   Building2, Calendar, Plus, Eye, Ban, Edit3, Receipt,
   Sparkles, Globe, LogOut, Bell, Settings, Trash2, Loader2, AlertOctagon,
-  Cloud, CloudOff,
+  Cloud, CloudOff, Unlock, Lock,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db, auth } from '../lib/firebase';
@@ -50,7 +50,15 @@ interface AdminUser {
    *  manual SuperAdmin toggle; intended to later back an automatic rule for
    *  accounts that arrive via a comptable/gestionnaire invitation. */
   driveEnabled?: boolean;
+  /** Beta plan normally locks every profile except the one chosen at
+   *  onboarding (see the "profil verrouillé" upsell message) — a QA tester
+   *  needs every profile open on one account instead of juggling a separate
+   *  beta code per profile. Toggle here writes the full profile list to
+   *  users/{uid}.unlockedProfiles, same field SettingsView already reads. */
+  unlockedProfiles?: string[];
 }
+
+const ALL_PROFILE_IDS = ["prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable"];
 
 interface SuperAdminPanelProps {
   darkMode: boolean;
@@ -374,6 +382,20 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       await updateDoc(doc(db, 'users', u.id), { driveEnabled: next });
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, driveEnabled: next } : x));
       toast(next ? `Accès Drive réactivé pour ${u.email}.` : `Accès Drive désactivé pour ${u.email}.`);
+    } catch (err: any) {
+      toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
+  /** All-or-nothing toggle: unlocks every profile for QA testing, or reverts
+   *  to the normal beta restriction (only the account's original profile). */
+  const handleToggleAllProfilesUnlocked = async (u: AdminUser) => {
+    const isFullyUnlocked = (u.unlockedProfiles?.length ?? 0) >= ALL_PROFILE_IDS.length;
+    const next = isFullyUnlocked ? [] : ALL_PROFILE_IDS;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { unlockedProfiles: next });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, unlockedProfiles: next } : x));
+      toast(isFullyUnlocked ? `Profils reverrouillés pour ${u.email}.` : `Tous les profils débloqués pour ${u.email} (test).`);
     } catch (err: any) {
       toast(`Échec : ${err.message}`, 'error');
     }
@@ -728,6 +750,13 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                             ? (D ? 'bg-rose-500/15 text-rose-400' : 'bg-rose-100 text-rose-600')
                             : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
                           {u.driveEnabled === false ? <CloudOff size={13} /> : <Cloud size={13} />}
+                        </button>
+                        <button onClick={() => handleToggleAllProfilesUnlocked(u)}
+                          title={(u.unlockedProfiles?.length ?? 0) >= ALL_PROFILE_IDS.length ? "Reverrouiller les profils (retour au plan bêta normal)" : "Débloquer tous les profils sur ce compte (pour un testeur QA)"}
+                          className={`p-1.5 rounded-lg transition-colors ${(u.unlockedProfiles?.length ?? 0) >= ALL_PROFILE_IDS.length
+                            ? (D ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600')
+                            : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
+                          {(u.unlockedProfiles?.length ?? 0) >= ALL_PROFILE_IDS.length ? <Unlock size={13} /> : <Lock size={13} />}
                         </button>
                         <button
                           title="Envoyer le courriel de prolongation (mois gratuit)"
