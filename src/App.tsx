@@ -2847,6 +2847,36 @@ const App = () => {
                               setEditingCompanyId(null);
                               setOnboardingStep(1);
                               setVista("setup");
+                              // This button skipped resetting the form fields —
+                              // "Derniers ajustements de votre entreprise" opened
+                              // pre-filled with whatever company was active before
+                              // (found 2026-08-11: Fabiola saw Solutions GPA's own
+                              // data instead of a blank form while trying to add
+                              // Achat Direct). Same reset as the empty-state
+                              // "Ajouter une entreprise" button above.
+                              setPartners(["Pro"]);
+                              setIndustry("Immobilier");
+                              setLegalEntity("Travailleur Autonome");
+                              setHasPlex(false);
+                              setNombrePortes(999);
+                              setUserProfile({
+                                logo: null,
+                                color: "#059669",
+                                font: "Moderne",
+                                invoiceTemplate: "epure",
+                                nom: "",
+                                adresse: "",
+                                tel: "",
+                                neq: "",
+                                tps: "",
+                                tvq: "",
+                                site: "",
+                                pago: "",
+                                tpsRate: 5,
+                                tvqRate: 9.975,
+                                numeroCITQ: "",
+                                taxeSejourRegion: 3.5,
+                              });
                             }
                           }}
                           className={`w-full mt-2 flex items-center justify-center space-x-2 p-3 rounded-xl transition-all border border-dashed text-left ${darkMode ? "border-zinc-800 hover:bg-zinc-800/40 text-emerald-400 bg-zinc-900/50" : "border-emerald-200 hover:bg-emerald-50 hover:border-emerald-400 text-emerald-600 bg-emerald-50/30"}`}
