@@ -1562,7 +1562,9 @@ const App = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [partnerInviteEmail, setPartnerInviteEmail] = useState("");
+  // Uncontrolled on purpose — see the ref usage below for why (WorkspaceSidebar
+  // remount-on-every-keystroke bug).
+  const inviteEmailInputRef = useRef<HTMLInputElement>(null);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -2898,7 +2900,6 @@ const App = () => {
                           <button
                             onClick={() => {
                               setShowWorkspaceDropdown(false);
-                              setPartnerInviteEmail("");
                               setInviteSuccessMsg(null);
                               setShowInviteModal(true);
                               playNotificationSound();
@@ -2923,7 +2924,16 @@ const App = () => {
                   at identity value) — that makes it the containing block for
                   any `position: fixed` descendant, so without the portal this
                   modal would be clipped to the sidebar's own box instead of
-                  covering the full viewport. */}
+                  covering the full viewport.
+                  Email field is deliberately UNCONTROLLED (ref, not useState) —
+                  WorkspaceSidebar is defined inline inside App() (see the
+                  "KNOWN REACT ANTI-PATTERN" comment above), so any setState
+                  call here re-renders App and gives WorkspaceSidebar a brand
+                  new function identity; React then tears down and remounts
+                  this entire subtree on every keystroke, dropping input focus
+                  after each character. Found 2026-08-11: Fabiola couldn't type
+                  more than 1-2 characters into this exact field. An
+                  uncontrolled input never triggers that re-render while typing. */}
               {showInviteModal && createPortal(
                 <div
                   className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60"
@@ -2953,15 +2963,20 @@ const App = () => {
                     ) : (
                       <>
                         <input
+                          ref={inviteEmailInputRef}
                           type="email"
-                          value={partnerInviteEmail}
-                          onChange={(e) => setPartnerInviteEmail(e.target.value)}
+                          defaultValue=""
                           placeholder="courriel@exemple.com"
                           className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
                         />
                         <button
-                          disabled={!partnerInviteEmail.trim() || inviteSending}
+                          disabled={inviteSending}
                           onClick={async () => {
+                            const invitedEmail = inviteEmailInputRef.current?.value.trim() || "";
+                            if (!invitedEmail) {
+                              alert("Veuillez entrer une adresse courriel.");
+                              return;
+                            }
                             if (!auth.currentUser || !currentCompany?._companyDocId) return;
                             setInviteSending(true);
                             try {
@@ -2970,7 +2985,7 @@ const App = () => {
                                 adminName,
                                 currentCompany._companyDocId,
                                 currentCompany.nombre,
-                                partnerInviteEmail.trim()
+                                invitedEmail
                               );
                               // Real email — this used to only write the Firestore
                               // invite doc and claim "Invitation envoyée" with no
@@ -2984,7 +2999,7 @@ const App = () => {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({
-                                    recipientEmail: partnerInviteEmail.trim(),
+                                    recipientEmail: invitedEmail,
                                     inviterName: adminName,
                                     inviterEmail: currentUserEmail,
                                     companyName: currentCompany.nombre,
@@ -2994,7 +3009,7 @@ const App = () => {
                               } catch (emailErr) {
                                 console.error("send-company-invite-email failed (non-blocking):", emailErr);
                               }
-                              setInviteSuccessMsg(`Invitation envoyée à ${partnerInviteEmail.trim()}.`);
+                              setInviteSuccessMsg(`Invitation envoyée à ${invitedEmail}.`);
                               playNotificationSound();
                             } catch (err) {
                               console.error("Failed to send invite:", err);
