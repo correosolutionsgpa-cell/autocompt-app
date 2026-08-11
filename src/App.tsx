@@ -13144,10 +13144,11 @@ const App = () => {
         ];
         break;
       case "gestionnaire":
-        // .cursorrules §2D: Multi-tenant admin — full mandate docs
+        // Gère des propriétés déjà achetées — ne rédige pas d'offres d'achat.
+        // "Promesses d'Achat" retiré 2026-08-11 (confirmé avec Fabiola) : réservé
+        // aux profils qui achètent réellement (Prospecteur/Flippeur/Investisseur).
         folders = [
           "Contrats de Gestion",
-          "Promesses d'Achat",
           "Baux de Clients",
           "Documents Corporatifs",
         ];
@@ -13170,8 +13171,9 @@ const App = () => {
         ];
         break;
       default:
+        // Comptable et tout autre profil sans mandat d'achat immobilier —
+        // "Promesses d'Achat" retiré pour la même raison que Gestionnaire ci-dessus.
         folders = [
-          "Promesses d'Achat",
           "Documents Juridiques",
           "Conformité Fiscale",
         ];
