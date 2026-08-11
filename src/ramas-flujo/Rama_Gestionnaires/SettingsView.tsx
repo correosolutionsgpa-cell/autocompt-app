@@ -21,6 +21,7 @@ import { computeVehicleBusinessRate, formatVehicleRate } from "../../lib/vehicle
 import { useToast, DEFAULT_TOAST_DURATION_MS } from "../../lib/ToastContext";
 import { INVOICE_COLOR_PALETTE, INVOICE_FONT_STACKS, INVOICE_TEMPLATES } from "../../lib/invoiceTemplates";
 import { auth, db } from "../../lib/firebase";
+import { isSuperAdminEmail } from "../../lib/superAdmin";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -120,6 +121,9 @@ export interface SettingsViewProps {
   // "multi-profil" payant. Absent/vide = seul selectedProfile compte comme
   // débloqué (compte legacy d'avant ce champ, ou onboarding tout juste fini).
   unlockedProfiles?: string[] | null;
+  // Compte fondateur/SuperAdmin — voir src/lib/superAdmin.ts. Débloque tous
+  // les profils sans passer par unlockedProfiles ni le mur beta.
+  currentUserEmail?: string | null;
 
   // Type de gestion DE CETTE ENTREPRISE (pas du compte) — reprend la même
   // question/copie que l'onboarding (mode_gestion_investisseur), mais
@@ -257,6 +261,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   selectedProfile,
   updateSelectedProfile,
   unlockedProfiles,
+  currentUserEmail,
   modeGestion,
   onUpdateModeGestion,
 }) => {
@@ -501,8 +506,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 // that just finished onboarding only have their own chosen
                 // profile unlocked — every other profile shows as locked,
                 // ready for a future paid "multi-profil" upsell.
-                const effectiveUnlocked =
-                  unlockedProfiles && unlockedProfiles.length > 0
+                // SuperAdmin accounts bypass this entirely — same allowlist as
+                // isSuperAdminEmail() everywhere else — since this beta
+                // paywall was never meant to gate the founder's own account.
+                const effectiveUnlocked = isSuperAdminEmail(currentUserEmail)
+                  ? PROFILE_OPTIONS.map((p) => p.id)
+                  : unlockedProfiles && unlockedProfiles.length > 0
                     ? unlockedProfiles
                     : selectedProfile
                       ? [selectedProfile]
