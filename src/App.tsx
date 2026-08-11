@@ -320,6 +320,140 @@ const LogoPrincipal = ({
   );
 };
 
+// Extracted to a genuinely stable top-level component — it used to be an
+// inline JSX block inside WorkspaceSidebar (defined inline inside App(), see
+// the "KNOWN REACT ANTI-PATTERN" comment on WorkspaceSidebar itself), so
+// ANY App-level re-render gave WorkspaceSidebar a brand new function
+// identity, and React tore down and remounted this modal's whole subtree —
+// including its portaled contents — on every such render. Converting the
+// input to uncontrolled (2026-08-11, first fix attempt) only removed ONE
+// trigger for that; WorkspaceSidebar still re-renders for unrelated reasons
+// while the modal is open, and each of those was enough to steal focus from
+// the input (the DOM node itself got reconciled/moved, not destroyed, which
+// is why the typed value visibly stuck but focus kept dropping — reported by
+// Fabiola as "must click again after every letter"). A component defined
+// here, outside App(), never has that problem — it renders into a stable
+// position in the tree regardless of what WorkspaceSidebar is doing.
+function InviteAssociateModal({
+  darkMode,
+  show,
+  onClose,
+  currentCompany,
+  successMsg,
+  setSuccessMsg,
+  sending,
+  setSending,
+  adminName,
+  currentUserEmail,
+  playNotificationSound,
+}: {
+  darkMode: boolean;
+  show: boolean;
+  onClose: () => void;
+  currentCompany: any;
+  successMsg: string | null;
+  setSuccessMsg: (msg: string | null) => void;
+  sending: boolean;
+  setSending: (v: boolean) => void;
+  adminName: string;
+  currentUserEmail: string | null;
+  playNotificationSound?: () => void;
+}) {
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  if (!show) return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-sm p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+            <Users size={16} className="text-indigo-500" />
+            Inviter un associé
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={16} />
+          </button>
+        </div>
+        <p className={`text-xs mb-4 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+          La personne invitée pourra voir et gérer les données de{" "}
+          <strong>{currentCompany?.nombre}</strong> dès sa connexion avec cette adresse courriel.
+        </p>
+        {successMsg ? (
+          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold text-center">
+            {successMsg}
+          </div>
+        ) : (
+          <>
+            <input
+              ref={emailInputRef}
+              type="email"
+              defaultValue=""
+              placeholder="courriel@exemple.com"
+              className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
+            />
+            <button
+              disabled={sending}
+              onClick={async () => {
+                const invitedEmail = emailInputRef.current?.value.trim() || "";
+                if (!invitedEmail) {
+                  alert("Veuillez entrer une adresse courriel.");
+                  return;
+                }
+                if (!auth.currentUser || !currentCompany?._companyDocId) return;
+                setSending(true);
+                try {
+                  await dataService.createCompanyInvite(
+                    auth.currentUser.uid,
+                    adminName,
+                    currentCompany._companyDocId,
+                    currentCompany.nombre,
+                    invitedEmail
+                  );
+                  // Real email — best-effort: the Firestore invite is the real
+                  // access grant and already succeeded above; a failed email
+                  // here just means the invitee won't get a heads-up until
+                  // they happen to log in with that address.
+                  try {
+                    await fetch("/api/send-company-invite-email", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        recipientEmail: invitedEmail,
+                        inviterName: adminName,
+                        inviterEmail: currentUserEmail,
+                        companyName: currentCompany.nombre,
+                        context: "client_to_comptable",
+                      }),
+                    });
+                  } catch (emailErr) {
+                    console.error("send-company-invite-email failed (non-blocking):", emailErr);
+                  }
+                  setSuccessMsg(`Invitation envoyée à ${invitedEmail}.`);
+                  if (typeof playNotificationSound === "function") playNotificationSound();
+                } catch (err) {
+                  console.error("Failed to send invite:", err);
+                  alert("Erreur lors de l'envoi de l'invitation.");
+                } finally {
+                  setSending(false);
+                }
+              }}
+              className="w-full py-2.5 bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-wider text-[10px]"
+            >
+              {sending ? "Envoi..." : "Envoyer l'invitation"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 const getCategoryInfo = (cat: string) => {
   switch (cat) {
     case "À classer":
@@ -1562,9 +1696,6 @@ const App = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  // Uncontrolled on purpose — see the ref usage below for why (WorkspaceSidebar
-  // remount-on-every-keystroke bug).
-  const inviteEmailInputRef = useRef<HTMLInputElement>(null);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -2917,117 +3048,6 @@ const App = () => {
                   )}
                 </AnimatePresence>
               </div>
-
-              {/* INVITE A PARTNER — real invite flow (Phase 4/5)
-                  Rendered via portal straight into <body>: this component lives
-                  inside <aside>, which has a Tailwind `transform` class (even
-                  at identity value) — that makes it the containing block for
-                  any `position: fixed` descendant, so without the portal this
-                  modal would be clipped to the sidebar's own box instead of
-                  covering the full viewport.
-                  Email field is deliberately UNCONTROLLED (ref, not useState) —
-                  WorkspaceSidebar is defined inline inside App() (see the
-                  "KNOWN REACT ANTI-PATTERN" comment above), so any setState
-                  call here re-renders App and gives WorkspaceSidebar a brand
-                  new function identity; React then tears down and remounts
-                  this entire subtree on every keystroke, dropping input focus
-                  after each character. Found 2026-08-11: Fabiola couldn't type
-                  more than 1-2 characters into this exact field. An
-                  uncontrolled input never triggers that re-render while typing. */}
-              {showInviteModal && createPortal(
-                <div
-                  className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60"
-                  onClick={() => setShowInviteModal(false)}
-                >
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className={`w-full max-w-sm p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                        <Users size={16} className="text-indigo-500" />
-                        Inviter un associé
-                      </h3>
-                      <button onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <p className={`text-xs mb-4 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
-                      La personne invitée pourra voir et gérer les données de{" "}
-                      <strong>{currentCompany?.nombre}</strong> dès sa connexion avec cette adresse courriel.
-                    </p>
-                    {inviteSuccessMsg ? (
-                      <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold text-center">
-                        {inviteSuccessMsg}
-                      </div>
-                    ) : (
-                      <>
-                        <input
-                          ref={inviteEmailInputRef}
-                          type="email"
-                          defaultValue=""
-                          placeholder="courriel@exemple.com"
-                          className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
-                        />
-                        <button
-                          disabled={inviteSending}
-                          onClick={async () => {
-                            const invitedEmail = inviteEmailInputRef.current?.value.trim() || "";
-                            if (!invitedEmail) {
-                              alert("Veuillez entrer une adresse courriel.");
-                              return;
-                            }
-                            if (!auth.currentUser || !currentCompany?._companyDocId) return;
-                            setInviteSending(true);
-                            try {
-                              await dataService.createCompanyInvite(
-                                auth.currentUser.uid,
-                                adminName,
-                                currentCompany._companyDocId,
-                                currentCompany.nombre,
-                                invitedEmail
-                              );
-                              // Real email — this used to only write the Firestore
-                              // invite doc and claim "Invitation envoyée" with no
-                              // actual notification ever sent. Best-effort: the
-                              // Firestore invite is the real access grant and
-                              // already succeeded above; a failed email here just
-                              // means the invitee won't get a heads-up until they
-                              // happen to log in with that address.
-                              try {
-                                await fetch("/api/send-company-invite-email", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    recipientEmail: invitedEmail,
-                                    inviterName: adminName,
-                                    inviterEmail: currentUserEmail,
-                                    companyName: currentCompany.nombre,
-                                    context: "client_to_comptable",
-                                  }),
-                                });
-                              } catch (emailErr) {
-                                console.error("send-company-invite-email failed (non-blocking):", emailErr);
-                              }
-                              setInviteSuccessMsg(`Invitation envoyée à ${invitedEmail}.`);
-                              playNotificationSound();
-                            } catch (err) {
-                              console.error("Failed to send invite:", err);
-                              alert("Erreur lors de l'envoi de l'invitation.");
-                            } finally {
-                              setInviteSending(false);
-                            }
-                          }}
-                          className="w-full py-2.5 bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-wider text-[10px]"
-                        >
-                          {inviteSending ? "Envoi..." : "Envoyer l'invitation"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>,
-                document.body
-              )}
 
               {/* DYNAMIC CO-OPERATION OPERATOR SWITCH (Achat Direct ONLY) */}
               {activeCompanyId === "2" && (
@@ -11450,6 +11470,19 @@ const App = () => {
         )}
         <ScrollToTopOnMount />
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <header
           className={`sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} shadow-sm`}
           style={{
@@ -13794,6 +13827,19 @@ const App = () => {
       >
         <ScrollToTopOnMount />
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
 
         {/* Top Header strictly matching main workspace navigation styles */}
         <header
@@ -16808,6 +16854,19 @@ const App = () => {
         className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left animate-in zoom-in-95 max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <header
           className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-5 border-b flex items-center justify-between shadow-sm text-left`}
           style={{
@@ -19277,6 +19336,19 @@ const App = () => {
           } flex flex-col animate-in slide-in-from-right font-sans max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         {/* Sticky page header — matches dashboard header pattern */}
         <header
           className={`sticky top-0 z-30 ${darkMode
@@ -19346,6 +19418,19 @@ const App = () => {
         className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col animate-in slide-in-from-right text-left font-sans max-w-full overflow-x-hidden md:pl-72 print:pl-0 relative transition-all duration-300 print:bg-white print:m-0 print:p-0 print:h-auto`}
       >
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
 
         {/* ── Grande bannière d'envoi de facture — remplace le petit toast en
               coin qui passait inaperçu (signalé par Fabiola). Fixe, centrée,
@@ -20802,6 +20887,19 @@ const App = () => {
         className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left overflow-x-hidden md:pl-72 relative transition-all duration-300`}
       >
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <DossierFiscauxView
           darkMode={darkMode}
           setVista={setVista}
@@ -20846,6 +20944,19 @@ const App = () => {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans text-left max-w-full overflow-x-hidden md:pl-72 relative transition-all duration-300`}>
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center gap-3 shadow-sm sticky top-0 z-50`}
           style={{ borderTop: '3px solid #f43f5e' }}>
           <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}>
@@ -21011,6 +21122,19 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     return (
       <div className={`flex ${darkMode ? "bg-black" : "bg-slate-50"} font-sans antialiased text-slate-900 min-h-screen md:pl-72 relative transition-all duration-300`}>
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <main className="flex-1 p-4 md:p-6 w-full animate-in fade-in duration-300">
           <div className="flex items-center justify-between mb-8">
             <div className="text-left">
@@ -21062,6 +21186,19 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
     return (
       <div className={`min-h-screen ${darkMode ? "bg-transparent text-zinc-100" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72 relative`}>
         <WorkspaceSidebar />
+        <InviteAssociateModal
+          darkMode={darkMode}
+          show={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          currentCompany={currentCompany}
+          successMsg={inviteSuccessMsg}
+          setSuccessMsg={setInviteSuccessMsg}
+          sending={inviteSending}
+          setSending={setInviteSending}
+          adminName={adminName}
+          currentUserEmail={currentUserEmail}
+          playNotificationSound={playNotificationSound}
+        />
         <main className="flex-1 overflow-hidden flex flex-col pt-4 px-4 sm:px-6 w-full">
           <TaxesAssurancesView
             darkMode={darkMode}
