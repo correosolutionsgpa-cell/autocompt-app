@@ -2576,7 +2576,12 @@ const App = () => {
     // they're handled elsewhere per .cursorrules "handled by parent").
     const PLEX_ITEM_RBAC: Record<string, import("./lib/rbacConfig").ModuleId | null> = {
       plex: "gestion_immo",
-      meuble: null,
+      // Was "always-on" (null) regardless of profile — Meublé/Airbnb is
+      // ongoing rental-unit management, same domain as "plex" itself, so it
+      // reuses gestion_immo (Gestionnaire/Investisseur only). Found
+      // 2026-08-11: Fabiola saw it on AchatDirect (Prospecteur/Flippeur),
+      // which has no rental units to manage.
+      meuble: "gestion_immo",
       dossiers: "dossiers_fiscaux",
       taxes_assurances: "taxes_assurances",
       banque: "conciliation",
@@ -2617,13 +2622,15 @@ const App = () => {
     ];
 
     // RBAC filter: keep items whose mapped moduleId is granted, or null (always-on items)
-    const VALID_PROFILES_SIDEBAR: ProfileId[] = [
-      "prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable",
-    ];
-    const sidebarProfile: ProfileId =
-      VALID_PROFILES_SIDEBAR.includes(selectedProfile as ProfileId)
-        ? (selectedProfile as ProfileId)
-        : "syndicat";
+    // Was re-deriving this from the account-wide `selectedProfile`, ignoring
+    // `activeProfile` (declared at outer App scope, already incorporates the
+    // per-company companyProfile override + gestion_deleguee) — so the
+    // sidebar's own module list didn't follow a per-company profile switch
+    // even though the rest of the app did. Found 2026-08-11: Fabiola set
+    // AchatDirect to Prospecteur/Flippeur in Paramètres but the sidebar kept
+    // filtering as if her account-wide profile (Gestionnaire, from Solutions
+    // GPA) were still active.
+    const sidebarProfile: ProfileId = activeProfile;
 
     const syndicNavItems = syndicNavItemsAll.filter((item) => {
       const moduleId = SYNDIC_ITEM_RBAC[item.id];
