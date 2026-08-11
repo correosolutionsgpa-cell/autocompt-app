@@ -14319,6 +14319,7 @@ const App = () => {
                             );
                             setDocFormSmsVerify(true);
                             setSelectedDocuEntry(null);
+                            setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                             setSubVistaDocu("editor");
                             playNotificationSound();
                           }}
@@ -14431,7 +14432,7 @@ const App = () => {
                                           },
                                         ],
                                       );
-                                      setDocLogo(doc.logo || null);
+                                      setDocLogo(doc.logo || currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                       setDocPlacedFields(
                                         doc.placedFields || [
                                           {
@@ -14657,7 +14658,7 @@ const App = () => {
                                     color: "Purple",
                                   },
                                 ]);
-                                setDocLogo(null);
+                                setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                 setDocPlacedFields([]);
                                 setSelectedDocuEntry(null);
                                 setSubVistaDocu("editor");
@@ -14702,7 +14703,7 @@ const App = () => {
                                       },
                                     ],
                                   );
-                                  setDocLogo(doc.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
+                                  setDocLogo(doc.logo || currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                   setDocPlacedFields(
                                     doc.placedFields || [
                                       {
