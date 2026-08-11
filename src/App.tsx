@@ -9039,6 +9039,19 @@ const App = () => {
             // Firestore hiccup. Found 2026-08-11: Fabiola creating Achat
             // Direct Inc. while already fully onboarded on Solutions GPA.
             if (prev === "setup" && hasSelectedProfile) return prev;
+            // Same bug, different screen: SofiOnboarding keeps its question
+            // progress in local component state (step/currentQuestionIndex),
+            // which is lost if this redirect ever swaps `vista` away and
+            // back — including a same-value `setVista("sofi-onboarding")`
+            // that follows a transient false read of phoneAlreadyVerified on
+            // a background token refresh (briefly returns "phone-verify",
+            // unmounting the wizard, then "sofi-onboarding" again on the
+            // next real check, remounting it from question 1). Found
+            // 2026-08-11: Natalia saw the onboarding questions restart mid-
+            // way while signing up for AchatDirect. Once already in
+            // progress, only the wizard's own onComplete should move it
+            // forward — never this background re-check.
+            if (prev === "sofi-onboarding") return prev;
             if (!preAuthScreens.includes(prev)) return prev;
             if (!phoneAlreadyVerified) return "phone-verify";
             if (!hasSelectedProfile) return "sofi-onboarding";
