@@ -9047,6 +9047,17 @@ const App = () => {
           // doing it, every time, unconditionally.
           setVista((prev) => {
             const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal"];
+            // "setup" is deliberately in this list so a brand-new signup's
+            // background token refresh mid-onboarding still moves them
+            // forward correctly (see the history above). But an ALREADY
+            // fully-onboarded account (hasSelectedProfile already true)
+            // revisiting "setup" later just to add a second company was
+            // getting yanked out of that in-progress form by this same
+            // redirect on any silent token refresh — sometimes landing on
+            // "phone-verify" if that particular re-check hit a transient
+            // Firestore hiccup. Found 2026-08-11: Fabiola creating Achat
+            // Direct Inc. while already fully onboarded on Solutions GPA.
+            if (prev === "setup" && hasSelectedProfile) return prev;
             if (!preAuthScreens.includes(prev)) return prev;
             if (!phoneAlreadyVerified) return "phone-verify";
             if (!hasSelectedProfile) return "sofi-onboarding";
