@@ -2086,7 +2086,16 @@ const App = () => {
   }>({ Fabiola: 50, Eric: 50 });
 
   useEffect(() => {
-    if (empresa) {
+    // activeCompanyId is deliberately set to "" while creating a brand-new
+    // company (see the "Ajouter / Créer" buttons) — but `empresa` still
+    // falls back to visibleEmpresas[0] in that case (see currentCompany's own
+    // fallback above), so this effect re-hydrated the blank "new company"
+    // form with whatever the FIRST company in the list happened to be,
+    // undoing the reset a render later. Found 2026-08-11: Fabiola kept
+    // seeing Solutions GPA's own data while trying to create Achat Direct,
+    // even in a fresh incognito window — this effect, not stale cache, was
+    // silently overwriting the blank form right after it was reset.
+    if (empresa && activeCompanyId) {
       setPartners(empresa.partners || []);
       setIndustry(empresa.industry || "Immobilier");
       setLegalEntity(empresa.legalEntity);
