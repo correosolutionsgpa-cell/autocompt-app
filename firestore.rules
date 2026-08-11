@@ -31,11 +31,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
       // A user always owns their own doc. SuperAdmin may ALSO write another
-      // user's doc, but only to flip canGenerateBetaCodes — never anything
-      // else on someone else's profile.
+      // user's doc, but only to flip these specific admin-controlled fields —
+      // never anything else on someone else's profile. driveEnabled and
+      // unlockedProfiles added 2026-08-11: SuperAdminPanel's toggles for
+      // these were silently rejected by this rule (only canGenerateBetaCodes
+      // was allowed) whenever used on an account other than the admin's own.
       allow write: if isSignedIn() && (
         request.auth.uid == userId ||
-        (isSuperAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canGenerateBetaCodes']))
+        (isSuperAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canGenerateBetaCodes', 'driveEnabled', 'unlockedProfiles']))
       );
     }
 
