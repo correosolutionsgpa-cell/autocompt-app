@@ -1824,6 +1824,27 @@ const App = () => {
     }
   }, [isPhoneVerified, vista]);
 
+  // Corrective redirect: never let a stale/leftover `vista` render an
+  // authenticated screen once we know nobody is signed in. Found 2026-08-11
+  // via a QA report: "Déconnexion" clears some state and calls signOut, but
+  // onAuthStateChanged's signed-out branch never resets currentCompany/
+  // selectedProfile/etc — so a nav click (or any stray setVista call) landed
+  // straight back on the real dashboard, showing the previous session's data
+  // as if logout never happened. This is the single guard that closes that
+  // gap for every vista, instead of trying to remember to clear every piece
+  // of state on every logout path.
+  useEffect(() => {
+    if (currentUserEmail) return; // someone is signed in — nothing to correct
+    const PUBLIC_VISTAS = new Set([
+      "splash", "welcome", "login", "benefits", "sofi-onboarding", "portal",
+      "level_selection", "profile", "rental_model", "pricing", "setup",
+      "politique-de-confidentialite", "conditions-d-utilisation",
+    ]);
+    if (!PUBLIC_VISTAS.has(vista)) {
+      setVista("welcome");
+    }
+  }, [currentUserEmail, vista]);
+
   const [subVistaFactura, setSubVistaFactura] = useState("liste");
   const [tabReporte, setTabReporte] = useState("ventes");
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
@@ -2667,7 +2688,13 @@ const App = () => {
                       </span>
                     </div>
                     <span className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-400 uppercase tracking-wider leading-none block mt-1.5 truncate">
-                      {currentCompany?.googleEmail || "solutionsgpa@gmail.com"}
+                      {/* Was hardcoded to Fabiola's own email as a fallback —
+                          leftover from single-account dev days. Any other
+                          user's company without Drive connected yet showed
+                          HER email here instead of their own (found 2026-08-11
+                          via Daniel's QA report). Falls back to the signed-in
+                          user's own account email instead. */}
+                      {currentCompany?.googleEmail || currentUserEmail || "—"}
                     </span>
                   </div>
                   <ChevronDown
