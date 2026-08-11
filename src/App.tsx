@@ -2342,7 +2342,6 @@ const App = () => {
   };
   const [hasEmployment, setHasEmployment] = useState(false);
   const [hasVehicle, setHasVehicle] = useState(false);
-  const [hasCommissions, setHasCommissions] = useState(false);
   const [hasServices, setHasServices] = useState(false);
   const [hasPlex, setHasPlex] = useState(false);
   const [frequenceTpsTvq, setFrequenceTpsTvq] = useState("Mensuelle");
@@ -10488,29 +10487,7 @@ const App = () => {
 
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
-                  Percevez-vous des commissions (ex. immobilier, courtage, ventes) ?
-                </label>
-                <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
-                  <button
-                    type="button"
-                    onClick={() => setHasCommissions(true)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === true ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
-                  >
-                    Oui
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHasCommissions(false)}
-                    className={`flex-1 py-2.5 px-4 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center justify-center ${hasCommissions === false ? "border-[#bc84ee]/50 bg-purple-50 text-[#bc84ee] shadow-sm ring-1 ring-[#bc84ee]/20" : (darkMode ? "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/50")}`}
-                  >
-                    Non
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
-                  Vendez-vous des services ou opérez-vous comme travailleur autonome (Dépenses) ?
+                  Vendez-vous des services (dépenses liées à cette activité) ?
                 </label>
                 <div className={darkMode ? "flex space-x-3 p-1.5 bg-zinc-950 border border-zinc-800 rounded-full max-w-[240px]" : "flex space-x-3 p-1.5 bg-slate-50/50 border border-slate-200/60 rounded-full max-w-[240px]"}>
                   <button
