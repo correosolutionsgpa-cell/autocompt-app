@@ -2027,7 +2027,13 @@ const App = () => {
   // → Déplacés dans src/ramas-flujo/Rama_Entrepreneurs/KilometrageGPS.tsx (Fase 2)
 
   const [onboardingStep, setOnboardingStep] = useState(1);
-  const [activeUser, setActiveUser] = useState("Fabiola");
+  // Was hardcoded to "Fabiola" (her own demo company's original partner
+  // slot) — leaked as the literal displayed name for ANY brand-new account
+  // with no company yet, since nothing corrects it until a real company
+  // with a `partners` array loads. Found 2026-08-11: Natalia saw "Usager:
+  // Fabiola" on her own fresh signup. Neutral default now; see the "Usager:"
+  // display below for the real fallback chain (adminName → email → generic).
+  const [activeUser, setActiveUser] = useState("");
   const [partners, setPartners] = useState(["Fabiola", "Natalia"]);
   const [hasMultiplePartners, setHasMultiplePartners] = useState(true);
   const [industry, setIndustry] = useState("Immobilier");
@@ -11519,12 +11525,12 @@ const App = () => {
               <div className="flex items-center space-x-1 max-w-full min-w-0">
                 <div className="w-1 h-1 bg-emerald-500 rounded-full shrink-0"></div>
                 <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate">
-                  {/* activeUser defaults to "Fabiola" (her own demo company's
-                      partner slot) until a real company with a `partners`
-                      array loads and corrects it — for a brand-new account
-                      with no company yet, fall back to the logged-in admin's
-                      own name instead of leaking that default. */}
-                  Usager: {currentCompany ? activeUser : (adminName || activeUser)}
+                  {/* activeUser only means something once a real company's
+                      `partners` array has loaded and corrected it — for a
+                      brand-new account with no company yet (or no adminName
+                      set either), fall back to the account's own email, then
+                      a generic label. Never leaks another account's name. */}
+                  Usager: {activeUser || adminName || currentUserEmail || "Utilisateur"}
                 </p>
               </div>
               <div className="mt-1 max-w-full min-w-0">
