@@ -2057,7 +2057,11 @@ const App = () => {
   // Fabiola" on her own fresh signup. Neutral default now; see the "Usager:"
   // display below for the real fallback chain (adminName → email → generic).
   const [activeUser, setActiveUser] = useState("");
-  const [partners, setPartners] = useState(["Fabiola", "Natalia"]);
+  // Real company data (loaded moments after auth) always overrides this via
+  // setPartners(empresa.partners || []) — this initial value only shows for
+  // the brief flash before that load completes, but "Fabiola"/"Natalia" as
+  // literal names leaked through that flash on other people's accounts too.
+  const [partners, setPartners] = useState<string[]>([]);
   const [hasMultiplePartners, setHasMultiplePartners] = useState(true);
   const [industry, setIndustry] = useState("Immobilier");
   const [legalEntity, setLegalEntity] = useState("Travailleur Autonome");
@@ -2108,6 +2112,15 @@ const App = () => {
   };
 
   // --- COMPTABLE RAPPORT STATES ---
+  // Used to seed 5 fake accountants (including "Natalia Caisse" — a real
+  // person's name — at keys "1" and "2", which real companies with those
+  // simple default ids actually hit). Every account without its own saved
+  // comptable, plus the "Envoyer rapport" mailto/WhatsApp share, saw one of
+  // these fabricated identities as their own accountant contact. Found
+  // 2026-08-11 alongside the LivreDeSociete fake-resolutions bug — same
+  // class of issue. Also, this state was never persisted to Firestore (see
+  // comptableInfo on the company doc below), so even a real saved contact
+  // reset to these fakes on every reload.
   const [comptablesConfig, setComptablesConfig] = useState<
     Record<
       string,
@@ -2118,45 +2131,13 @@ const App = () => {
         drive: string;
       }
     >
-  >({
-    "1": {
-      nom: "Natalia Caisse",
-      email: "natalia.caisse@solutionsgpa.ca",
-      tel: "+1 (514) 555-0199",
-      drive: "",
-    },
-    "2": {
-      nom: "Natalia Caisse",
-      email: "natalia.caisse@solutionsgpa.ca",
-      tel: "+1 (514) 555-0199",
-      drive: "",
-    },
-    "3": {
-      nom: "Daniel Bernier",
-      email: "daniel.bernier@triplexcompta.ca",
-      tel: "+1 (514) 555-0188",
-      drive: "",
-    },
-    "4": {
-      nom: "Chantal Roy",
-      email: "chantal.roy@gonzalocomptable.ca",
-      tel: "+1 (450) 555-1122",
-      drive: "",
-    },
-    "5": {
-      nom: "Marc Tremblay",
-      email: "marc@tremblayentreprises.ca",
-      tel: "+1 (450) 555-3344",
-      drive: "",
-    },
-  });
+  >({});
 
-  const currentComptable = comptablesConfig[activeCompanyId] || {
-    nom: "Natalia Caisse",
-    email: "natalia.caisse@solutionsgpa.ca",
-    tel: "+1 (514) 555-0199",
-    drive: "",
-  };
+  const EMPTY_COMPTABLE = { nom: "", email: "", tel: "", drive: "" };
+  const currentComptable =
+    currentCompany?.comptableInfo ||
+    comptablesConfig[activeCompanyId] ||
+    EMPTY_COMPTABLE;
 
   const comptableEmail = currentComptable.email;
 
@@ -2301,12 +2282,7 @@ const App = () => {
       );
 
       // Update dynamic accountant inputs based on active company
-      const comp = comptablesConfig[activeCompanyId] || {
-        nom: "Natalia Caisse",
-        email: "natalia.caisse@solutionsgpa.ca",
-        tel: "+1 (514) 555-0199",
-        drive: "",
-      };
+      const comp = empresa.comptableInfo || comptablesConfig[activeCompanyId] || EMPTY_COMPTABLE;
       setComptableNomInput(comp.nom);
       setComptableEmailInput(comp.email);
       setComptableTelInput(comp.tel);
@@ -3508,65 +3484,6 @@ const App = () => {
     null,
   );
 
-  // --- ÉQUIPE ET GESTION DES INVITATIONS ---
-  const [teamMembers, setTeamMembers] = useState<any[]>([
-    {
-      id: "m-1",
-      companyId: "1",
-      name: "Fabiola Villegas",
-      email: "fabiola@propiosolutions.com",
-      role: "Propriétaire / Associé principal",
-      status: "Actif",
-    },
-    {
-      id: "m-2",
-      companyId: "1",
-      name: "Natalia Caisse",
-      email: "natalia.caisse@solutionsgpa.ca",
-      role: "Comptable",
-      status: "Actif",
-    },
-    {
-      id: "m-3",
-      companyId: "2",
-      name: "Fabiola Villegas",
-      email: "fabiola@propiosolutions.com",
-      role: "Co-Propriétaire (50%)",
-      status: "Actif",
-    },
-    {
-      id: "m-4",
-      companyId: "2",
-      name: "Natalia Caisse",
-      email: "natalia.caisse@solutionsgpa.ca",
-      role: "Co-Propriétaire (50%)",
-      status: "Actif",
-    },
-    {
-      id: "m-5",
-      companyId: "3",
-      name: "Fabiola Villegas",
-      email: "fabiola@propiosolutions.com",
-      role: "Co-Propriétaire (50%)",
-      status: "Actif",
-    },
-    {
-      id: "m-6",
-      companyId: "3",
-      name: "Eric Roy",
-      email: "eric.roy@email.com",
-      role: "Co-Propriétaire (50%)",
-      status: "Actif",
-    },
-    {
-      id: "m-7",
-      companyId: "3",
-      name: "Daniel Bernier",
-      email: "daniel.bernier@triplexcompta.ca",
-      role: "Comptable",
-      status: "Actif",
-    },
-  ]);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState(
@@ -17112,16 +17029,28 @@ const App = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
+                      const comptableInfo = {
+                        nom: comptableNomInput,
+                        email: comptableEmailInput,
+                        tel: comptableTelInput,
+                        drive: comptableDriveInput,
+                      };
                       setComptablesConfig((prev) => ({
                         ...prev,
-                        [activeCompanyId]: {
-                          nom: comptableNomInput,
-                          email: comptableEmailInput,
-                          tel: comptableTelInput,
-                          drive: comptableDriveInput,
-                        },
+                        [activeCompanyId]: comptableInfo,
                       }));
+                      // Persist on the company doc — was local-only state
+                      // before, resetting to the fake defaults above on
+                      // every reload.
+                      setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, comptableInfo } : w)));
+                      if (currentCompany?._companyDocId) {
+                        try {
+                          await setDoc(doc(db, "companies", currentCompany._companyDocId), { comptableInfo }, { merge: true });
+                        } catch (err) {
+                          console.error("Failed to save comptableInfo:", err);
+                        }
+                      }
                       setEditingComptable(false);
                       playNotificationSound();
                     }}

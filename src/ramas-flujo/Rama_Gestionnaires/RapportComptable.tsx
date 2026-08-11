@@ -435,56 +435,15 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
-    const displayRows =
-      sortedRows.length > 0
-        ? sortedRows
-        : [
-          {
-            id: "m1",
-            date: "2026-05-15",
-            tiers: currentCompany?.nombre || "Solutions GPA Inc.",
-            compte: "Services Conseil",
-            partenaire: "Fabiola",
-            net: 1500.0,
-            tps: 75.0,
-            tvq: 149.63,
-            total: 1724.63,
-            type: "revenu",
-            lien: null,
-            status: "Payée",
-            original: null,
-          },
-          {
-            id: "m2",
-            date: "2026-05-12",
-            tiers: "Hydro-Québec",
-            compte: "Électricité / Chauffage",
-            partenaire: "Fabiola",
-            net: 0,
-            tps: 0,
-            tvq: 0,
-            total: 0,
-            type: "depense",
-            lien: null,
-            status: "Payée",
-            original: null,
-          },
-          {
-            id: "m3",
-            date: "2026-05-08",
-            tiers: "Videotron",
-            compte: "Internet / Télécom",
-            partenaire: "Natalia",
-            net: 85.0,
-            tps: 4.25,
-            tvq: 8.48,
-            total: 97.73,
-            type: "depense",
-            lien: null,
-            status: "Payée",
-            original: null,
-          },
-        ];
+    // Used to fall back to 3 fabricated transactions (including one tagged
+    // "partenaire: Natalia") whenever a period had zero real invoices/
+    // expenses — those fake rows fed straight into the on-screen table AND
+    // the exported "Livre de Comptes" CSV, so a real company with an empty
+    // period could send fabricated financial data to its real accountant
+    // without realizing it. Found 2026-08-11, same class of bug as the
+    // LivreDeSociete fake resolutions. Empty now — see the empty-state
+    // render below instead.
+    const displayRows = sortedRows;
 
     return (
       <div
@@ -520,7 +479,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                 Rapports Comptables
               </h2>
               <p className="text-[7.5px] font-black uppercase text-slate-400 italic tracking-[0.2em] mt-1.5">
-                Paquet de fin de période pour Natalia
+                {currentComptable?.nom ? `Paquet de fin de période pour ${currentComptable.nom}` : "Paquet de fin de période"}
               </p>
             </div>
           </div>
@@ -879,6 +838,13 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                 <tbody
                   className={`divide-y ${darkMode ? "divide-zinc-900" : "divide-slate-100"}`}
                 >
+                  {displayRows.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-10 text-center text-[10px] font-bold text-slate-400 dark:text-zinc-500">
+                        Aucune transaction pour cette période.
+                      </td>
+                    </tr>
+                  )}
                   {displayRows.map((row) => (
                     <tr
                       key={row.id}
@@ -1522,7 +1488,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                         Succès: Rapport envoyé !
                       </h4>
                       <p className="text-[9px] text-slate-400 dark:text-zinc-500 uppercase font-black tracking-widest mt-1">
-                        Natalia recevra les pièces jointes sous peu
+                        {currentComptable?.nom || "Votre comptable"} recevra les pièces jointes sous peu
                       </p>
                     </div>
 
@@ -1547,7 +1513,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                         Courriel de la comptable{" "}
                         {currentComptable.nom
                           ? `(${currentComptable.nom})`
-                          : "(Natalia C.)"}
+                          : ""}
                       </label>
                       <input
                         type="email"
@@ -1558,16 +1524,16 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                             ...prev,
                             [activeCompanyId]: {
                               ...(prev[activeCompanyId] || {
-                                nom: "Natalia Caisse",
-                                email: "natalia.caisse@solutionsgpa.ca",
-                                tel: "+1 (514) 555-0199",
+                                nom: "",
+                                email: "",
+                                tel: "",
                                 drive: "",
                               }),
                               email: newEmail,
                             },
                           }));
                         }}
-                        placeholder="ex: natalia@comptable.ca"
+                        placeholder="ex: comptable@cabinet.ca"
                         className={`w-full p-4 rounded-2xl border text-[9.5px] font-mono tracking-wide ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-slate-50 border-slate-100 text-slate-800"}`}
                       />
                     </div>

@@ -7,32 +7,24 @@ export interface LivreDeSocieteProps {
   onBack: () => void;
 }
 
+interface Resolution {
+  id: string;
+  title: string;
+  date: string;
+  status: "Signé & Archivé" | "En attente";
+  summary: string;
+}
+
 export default function LivreDeSociete({ darkMode = false, onBack }: LivreDeSocieteProps) {
   const [openAccordionId, setOpenAccordionId] = useState<string | null>(null);
 
-  const resolutions = [
-    {
-      id: "res-1",
-      title: "Résolution d'achat immobilier",
-      date: "14 Mai 2026",
-      status: "Signé & Archivé",
-      summary: "Approbation corporative et procuration pour l'acquisition du Triplex situé à Laval Vimont."
-    },
-    {
-      id: "res-2",
-      title: "Déclaration de dividendes",
-      date: "01 Fév 2026",
-      status: "En attente",
-      summary: "Déclaration formelle des dividendes annuels pour l'année fiscale se terminant le 31 décembre 2025."
-    },
-    {
-      id: "res-3",
-      title: "Nomination des dirigeants - Natalia & Fabiola",
-      date: "10 Jan 2026",
-      status: "Signé & Archivé",
-      summary: "Mise à jour du registre de société confirmant l'élection de Natalia et Fabiola comme dirigeantes principales."
-    }
-  ];
+  // This module has no real backend yet — it used to ship with 3 fabricated
+  // example resolutions (including one naming real people, "Nomination des
+  // dirigeants - Natalia & Fabiola", presented as "Signé & Archivé"), which
+  // every account saw as if it were their own real corporate record. Found
+  // 2026-08-11 when Natalia saw it on her brand-new account. Empty until a
+  // real per-company resolutions store is built.
+  const resolutions: Resolution[] = [];
 
   return (
     <div className={`w-full flex flex-col space-y-6 ${darkMode ? "text-zinc-100" : "text-slate-900"} max-w-4xl mx-auto p-4 md:p-6 animate-in fade-in duration-500`}>
@@ -55,6 +47,19 @@ export default function LivreDeSociete({ darkMode = false, onBack }: LivreDeSoci
         </header>
 
         {/* List of resolutions */}
+        {resolutions.length === 0 ? (
+          <div className={`rounded-[32px] border p-10 text-center space-y-3 ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-slate-200"}`}>
+            <div className={`inline-flex p-3 rounded-2xl ${darkMode ? "bg-indigo-900/30 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
+              <Briefcase size={24} />
+            </div>
+            <p className={`text-sm font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+              Aucune résolution pour l'instant
+            </p>
+            <p className={`text-xs max-w-sm mx-auto ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+              Les résolutions corporatives (nomination des dirigeants, déclaration de dividendes, etc.) archivées ici apparaîtront dans cette liste.
+            </p>
+          </div>
+        ) : (
         <div className="space-y-4">
           <AnimatePresence mode="wait">
             {resolutions.map((res) => {
@@ -135,6 +140,7 @@ export default function LivreDeSociete({ darkMode = false, onBack }: LivreDeSoci
             })}
           </AnimatePresence>
         </div>
+        )}
       </div>
     );
 }
