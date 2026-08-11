@@ -10341,8 +10341,13 @@ const App = () => {
               </div>
             </div>
 
-            {/* Section B: Structure Légale */}
-            {dashboardMode !== "Plex" && (
+            {/* Section B: Structure Légale — était caché en mode Plex, donc
+                impossible d'y marquer une entreprise comme "Société (INC)".
+                Le formulaire assumait alors "Travailleur Autonome" par défaut
+                et posait des questions d'emploi personnel (T4) même pour une
+                vraie société (trouvé 2026-08-11 : Fabiola enregistrait Achat
+                Direct Inc., une société réelle). Visible partout maintenant. */}
+            {(
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Structure Légale
@@ -10373,7 +10378,18 @@ const App = () => {
               </div>
             )}
 
-            {/* Section C: Déduction Bureau à domicile */}
+            {/* Section C: Déduction Bureau à domicile — n'a de sens que pour un
+                travailleur autonome (déduction personnelle basée sur SA propre
+                résidence). Une société (INC) ne réclame pas ce chiffre unique
+                au niveau de l'entreprise — chaque associé qui travaille de chez
+                lui gère ça séparément (remboursement/dépense individuelle), pas
+                un seul pourcentage combiné. Caché pour "Société (INC)" — même
+                logique que le retrait de la question T4 ci-dessous. */}
+            {legalEntity === "Société (INC)" ? (
+              <div className={`p-4 rounded-2xl border text-[10.5px] leading-relaxed ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-zinc-400" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
+                💡 Une société ne réclame pas de "bureau à domicile" comme un seul chiffre d'entreprise — chaque associé qui travaille de chez lui (ex : marketing d'un côté, administration de l'autre) gère sa propre déduction séparément, selon sa propre résidence. Ce champ ne s'applique donc pas ici.
+              </div>
+            ) : (
             <div className="space-y-2">
               <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                 Avez-vous un bureau à domicile ?
@@ -10438,9 +10454,15 @@ const App = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Section D: Ajustements Additionnels (Progressive Disclosure) */}
             <div className="space-y-4">
+              {/* Une société ne peut pas "avoir un T4" — c'est un feuillet
+                  d'emploi personnel. Cette question ne s'applique qu'à un
+                  travailleur autonome. Trouvé 2026-08-11 : Fabiola l'a vue en
+                  enregistrant Achat Direct Inc. (une vraie société). */}
+              {legalEntity !== "Société (INC)" && (
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Avez-vous un emploi salarié en plus de vos activités indépendantes ? (T4)
@@ -10462,6 +10484,7 @@ const App = () => {
                   </button>
                 </div>
               </div>
+              )}
 
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
