@@ -1,14 +1,14 @@
 ﻿/**
  * KilometrageGPS.tsx
- * ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+ * ─────────────────────────────────────────────────────────────────────────────
  * Rama: Rama_Entrepreneurs (Prospecteur / Flippeur)
- * Extra├¡do de: src/App.tsx (L15899ÔÇôL16289) ÔÇö Fase 2 del desmantelamiento modular
+ * Extraído de: src/App.tsx (L15899–L16289) — Fase 2 del desmantelamiento modular
  *
- * Nota arquitect├│nica (Golden Rule ┬º1):
- *   Este componente NO fue eliminado de App.tsx. La l├│gica fue portada aqu├¡
+ * Nota arquitectónica (Golden Rule §1):
+ *   Este componente NO fue eliminado de App.tsx. La lógica fue portada aquí
  *   con todos los estados y dependencias requeridos pasados via props.
  *   App.tsx llama a <KilometrageGPS ... /> exactamente donde el bloque
- *   `if (vista === "kilometraje") { ... }` exist├¡a.
+ *   `if (vista === "kilometraje") { ... }` existía.
  *
  * Props necesarias (todas vienen del closure de App):
  *   - States GPS propios     : encapsulados internamente (ver abajo)
@@ -18,13 +18,13 @@
  *   - Datos compartidos      : darkMode, activeUser, currentCompany,
  *                              activeCompanyId, partnerData, dashboardMode
  *   - Sidebar                : WorkspaceSidebar (componente de App pasado como prop)
- * ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useState, useEffect, useRef } from "react";
 import type { RegisteredVehicle } from "../Rama_Gestionnaires/SettingsView";
 
-// ÔöÇÔöÇ Trip persistence key (localStorage) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Trip persistence key (localStorage) ──────────────────────────────────────
 const TRIP_PERSIST_KEY = "autocompt_active_trip";
 
 interface PersistedTripState {
@@ -35,7 +35,7 @@ interface PersistedTripState {
   lon: number | null;
   accuracy: number | null;
   tab: "calculateur" | "gps";
-  savedAt: number; // timestamp ms ÔÇö used in the resume banner
+  savedAt: number; // timestamp ms — used in the resume banner
 }
 
 function loadPersistedTrip(): PersistedTripState | null {
@@ -67,7 +67,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-// ÔöÇÔöÇ Haversine formula (no external API needed) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Haversine formula (no external API needed) ────────────────────────────────
 // Returns distance in km between two GPS coordinates.
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius km
@@ -81,7 +81,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ÔöÇÔöÇ Tipos ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Tipos ────────────────────────────────────────────────────────────────────
 
 interface MileageLog {
   fecha: string;
@@ -138,7 +138,7 @@ export interface KilometrageGPSProps {
   WorkspaceSidebar: React.ComponentType;
 }
 
-// ÔöÇÔöÇ Composant ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Composant ────────────────────────────────────────────────────────────────
 
 const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   darkMode,
@@ -155,7 +155,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   setDispatcherSuccessToast,
   WorkspaceSidebar,
 }) => {
-  // ÔöÇÔöÇ ├ëtats GPS ÔÇö seed├®s depuis localStorage si un trajet interrompu existe ÔöÇÔöÇ
+  // ── États GPS — seedés depuis localStorage si un trajet interrompu existe ──
   const restoredTrip = useRef<PersistedTripState | null>(loadPersistedTrip());
   const restored = restoredTrip.current;
 
@@ -172,7 +172,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const [gpsLongitude, setGpsLongitude] = useState<number | null>(restored?.lon ?? null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(restored?.accuracy ?? null);
   const [gpsStatus, setGpsStatus] = useState<string>(
-    restored?.isTracking ? "ÔÜá´©Å Trajet interrompu ÔÇö reprise en cours..." : "En attente de signal"
+    restored?.isTracking ? "⚠️ Trajet interrompu — reprise en cours..." : "En attente de signal"
   );
   const [isTrackingAuto, setIsTrackingAuto] = useState(restored?.isTracking ?? false);
   // Banner: shown once when we auto-resume an interrupted GPS trip
@@ -187,13 +187,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   // (mixed use), since the deductible % depends on knowing which trips were work.
   const [pendingTripKm, setPendingTripKm] = useState<number | null>(null);
 
-  // ÔöÇÔöÇ Refs: watchPosition ID + last known position for Haversine ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Refs: watchPosition ID + last known position for Haversine ──────────────
   const watchIdRef = useRef<number | null>(null);
   const lastPosRef = useRef<{ lat: number; lon: number } | null>(
     restored?.lat && restored?.lon ? { lat: restored.lat, lon: restored.lon } : null
   );
 
-  // ÔöÇÔöÇ Effect: Real watchPosition GPS tracking ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Effect: Real watchPosition GPS tracking ──────────────────────────────────
   // Starts when isTrackingAuto=true, stops when false.
   // Accumulates distance using Haversine between each position update.
   useEffect(() => {
@@ -217,7 +217,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         setGpsLatitude(latitude);
         setGpsLongitude(longitude);
         setGpsAccuracy(accuracy);
-        setGpsStatus("­ƒƒó Signal actif ÔÇö suivi en cours");
+        setGpsStatus("🟢 Signal actif — suivi en cours");
         // Accumulate km using Haversine
         if (lastPosRef.current) {
           const delta = haversineKm(
@@ -234,7 +234,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         lastPosRef.current = { lat: latitude, lon: longitude };
       },
       (err) => {
-        setGpsStatus(`ÔÜá´©Å Erreur GPS: ${err.message}`);
+        setGpsStatus(`⚠️ Erreur GPS: ${err.message}`);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
     );
@@ -246,7 +246,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     };
   }, [isTrackingAuto]);
 
-  // ÔöÇÔöÇ Effect: Trip elapsed timer (updates every second while tracking) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Effect: Trip elapsed timer (updates every second while tracking) ─────────
   useEffect(() => {
     if (!isTrackingAuto) { setTripElapsedSec(0); return; }
     setTripStartTime(Date.now());
@@ -256,14 +256,14 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     return () => clearInterval(timer);
   }, [isTrackingAuto]);
 
-  // ÔöÇÔöÇ Helper: format elapsed seconds as MM:SS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Helper: format elapsed seconds as MM:SS ──────────────────────────────────
   const formatElapsed = (sec: number) => {
     const m = Math.floor(sec / 60).toString().padStart(2, "0");
     const s = (sec % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
 
-  // ÔöÇÔöÇ Effect 1: Persist active trip state to localStorage every 5s ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Effect 1: Persist active trip state to localStorage every 5s ────────────
   useEffect(() => {
     if (!isTrackingAuto && kilometrageComputedKm === 0) return;
     const persist = () => {
@@ -284,22 +284,22 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     return () => clearInterval(interval);
   }, [isTrackingAuto, kilometrageComputedKm, kilometrageAddresses, gpsLatitude, gpsLongitude, gpsAccuracy, activeKilometrageTab]);
 
-  // ÔöÇÔöÇ Effect 2: Clear persistence when idle ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Effect 2: Clear persistence when idle ───────────────────────────────────
   useEffect(() => {
     if (!isTrackingAuto && kilometrageComputedKm === 0) {
       clearPersistedTrip();
     }
   }, [isTrackingAuto, kilometrageComputedKm]);
 
-  // ÔöÇÔöÇ Guard: ce module n'existe pas en mode Syndic ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Guard: ce module n'existe pas en mode Syndic ───────────────────────────
   if (dashboardMode === "Syndic") {
     setTimeout(() => setVista("dashboard"), 0);
     return null;
   }
 
-  // ÔöÇÔöÇ Safe data derivation (always works even before Firebase resolves) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Safe data derivation (always works even before Firebase resolves) ────────
   // currentCompany is a derived value (listaEmpresas.find), NOT a loading flag.
-  // It can be undefined indefinitely when there are no companies yet ÔÇö never block on it.
+  // It can be undefined indefinitely when there are no companies yet — never block on it.
   const safePartnerData = partnerData ?? {};
   const safeCurrentCompanyPartnerData = currentCompany?.partnerData ?? {};
   const safeLogs: MileageLog[] =
@@ -366,10 +366,10 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     }
   };
 
-  // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-  // ÔöÇÔöÇ Empty state: no vehicle registered yet ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-  // The GPS module needs at least one registered vehicle from Param├¿tres ÔåÆ V├®hicules.
+  // ── Empty state: no vehicle registered yet ─────────────────────────────────
+  // The GPS module needs at least one registered vehicle from Paramètres → Véhicules.
   // Show a helpful prompt instead of crashing or showing a blank screen.
   if (registeredVehicles.length === 0) {
     return (
@@ -382,7 +382,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 md:hidden mr-1"><Menu size={18} /></button>
           <button onClick={() => setVista("dashboard")} className={`p-2 ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><ArrowLeft /></button>
           <div className="flex-1">
-            <h2 className="font-black uppercase italic tracking-tighter text-lg">Kilom├®trage GPS</h2>
+            <h2 className="font-black uppercase italic tracking-tighter text-lg">Kilométrage GPS</h2>
           </div>
         </header>
         <main className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-5">
@@ -390,16 +390,16 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             ­ƒÜù
           </div>
           <div>
-            <h3 className="font-black text-base uppercase tracking-tight mb-1">Aucun v├®hicule enregistr├®</h3>
+            <h3 className="font-black text-base uppercase tracking-tight mb-1">Aucun véhicule enregistré</h3>
             <p className={`text-[10px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-500"} max-w-[260px] leading-relaxed`}>
-              Pour utiliser le module Kilom├®trage GPS, commencez par enregistrer votre v├®hicule d'entreprise dans les Param├¿tres.
+              Pour utiliser le module Kilométrage GPS, commencez par enregistrer votre véhicule d'entreprise dans les Paramètres.
             </p>
           </div>
           <button
             onClick={() => setVista("settings")}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-600/25 to-indigo-500/15 border border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:from-indigo-600/35 transition-all cursor-pointer"
           >
-            ÔÜÖ´©Å Aller aux Param├¿tres
+            ⚙️ Aller aux Paramètres
           </button>
         </main>
       </div>
@@ -431,14 +431,14 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         </button>
         <div className="flex-1">
           <h2 className="font-black uppercase italic tracking-tighter text-lg text-left">
-            Kilom├®trage GPS
+            Kilométrage GPS
           </h2>
           <p className="text-[8px] font-black text-[#059669] uppercase italic tracking-widest leading-none">
             Usager: {activeUser}
           </p>
           {primaryVehicleLabel && (
             <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1 mt-0.5 leading-none">
-              ­ƒÜù {primaryVehicleLabel}{primaryVehicle?.plaque ? ` ┬À ${primaryVehicle.plaque}` : ""}
+              🚗 {primaryVehicleLabel}{primaryVehicle?.plaque ? ` · ${primaryVehicle.plaque}` : ""}
             </p>
           )}
         </div>
@@ -469,7 +469,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </button>
         </div>
 
-        {/* ÔöÇÔöÇ Tab: Calculateur ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        {/* ── Tab: Calculateur ──────────────────────────────────────────────── */}
         {activeKilometrageTab === "calculateur" && (
           <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
             <div
@@ -479,7 +479,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 <h3
                   className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-400"}`}
                 >
-                  Itin├®raire ├á ├®tapes
+                  Itinéraire à étapes
                 </h3>
               </div>
 
@@ -504,9 +504,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                         className={`text-[7px] font-black uppercase italic tracking-widest block mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                       >
                         {idx === 0
-                          ? "Point de d├®part"
+                          ? "Point de départ"
                           : idx === kilometrageAddresses.length - 1
-                            ? "Destination (Arriv├®e)"
+                            ? "Destination (Arrivée)"
                             : `Escale ${idx}`}
                       </label>
                       <input
@@ -548,7 +548,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       <Plus size={12} />
                     </div>
                     <span>
-                      Ajouter une ├®tape ({kilometrageAddresses.length}/9)
+                      Ajouter une étape ({kilometrageAddresses.length}/9)
                     </span>
                   </button>
                 )}
@@ -575,15 +575,15 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                     );
                     if (typeof setDispatcherSuccessToast === "function") {
                       setDispatcherSuccessToast({
-                        text: "Itin├®raire Calcul├®",
+                        text: "Itinéraire Calculé",
                         channel: "Calculateur API",
-                        customMessage: `${kilometrageAddresses.length} ├®tapes analys├®es. Distance totale : ${simDistance.toFixed(1)} km.`,
+                        customMessage: `${kilometrageAddresses.length} étapes analysées. Distance totale : ${simDistance.toFixed(1)} km.`,
                       });
                     }
                   }}
                   className={`w-full ${darkMode ? "bg-zinc-800 hover:bg-zinc-700" : "bg-slate-900 hover:bg-slate-800"} text-white font-black py-4 rounded-[28px] text-[10px] uppercase italic tracking-widest transition-colors shadow-lg active:scale-95`}
                 >
-                  Calculer l'itin├®raire
+                  Calculer l'itinéraire
                 </button>
               </div>
 
@@ -591,19 +591,19 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/10 p-5 rounded-3xl border border-emerald-200 dark:border-emerald-900/50 mt-4 animate-in zoom-in-95 duration-300">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[9px] font-black uppercase italic tracking-widest text-[#059669] dark:text-emerald-500">
-                      Distance Math├®matique
+                      Distance Mathématique
                     </span>
                     <span className="text-xl font-black text-[#059669] dark:text-emerald-400">
                       {kilometrageComputedKm} km
                     </span>
                   </div>
-                  {/* Pro-rata info ÔÇö no flat rate */}
+                  {/* Pro-rata info — no flat rate */}
                   <div className="flex items-center gap-2 border-t border-emerald-200/50 dark:border-emerald-800/30 pt-3 mt-3">
                     <span className="text-base">­ƒôï</span>
                     <span className="text-[7.5px] font-black uppercase italic tracking-widest text-emerald-700/70 dark:text-emerald-500/70 leading-snug">
-                      Ces km seront ajout├®s ├á votre compteur de km┬ád'affaires.
-                      La d├®duction mon├®taire sera calcul├®e automatiquement
-                      dans Tenue de livres via le syst├¿me proÔÇærata.
+                      Ces km seront ajoutés à votre compteur de km d'affaires.
+                      La déduction monétaire sera calculée automatiquement
+                      dans Tenue de livres via le système pro‑rata.
                     </span>
                   </div>
                 </div>
@@ -612,34 +612,34 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </div>
         )}
 
-        {/* ÔöÇÔöÇ Tab: GPS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        {/* ── Tab: GPS ─────────────────────────────────────────────────────── */}
         {activeKilometrageTab === "gps" && (
           <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
 
-            {/* ÔöÇÔöÇ Resumed trip banner ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+            {/* ── Resumed trip banner ───────────────────────────────────────── */}
             {showResumedBanner && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 animate-in slide-in-from-top duration-300">
-                <span className="text-xl leading-none mt-0.5">ÔÜá´©Å</span>
+                <span className="text-xl leading-none mt-0.5">⚠️</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-0.5">
-                    Trajet interrompu d├®tect├®
+                    Trajet interrompu détecté
                   </p>
                   <p className="text-[8px] font-medium text-amber-700/80 dark:text-amber-300/70 leading-snug">
-                    Votre trajet pr├®c├®dent a ├®t├® restaur├® automatiquement
-                    {restored?.savedAt ? ` (sauvegard├® le ${new Date(restored.savedAt).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })})` : ""}.
-                    {restored?.km && restored.km > 0 ? ` Distance restaur├®e\u00a0: ${restored.km.toFixed(2)}\u00a0km.` : ""}
-                    {" "}Enregistrez le trajet ou arr├¬tez le suivi pour annuler.
+                    Votre trajet précédent a été restauré automatiquement
+                    {restored?.savedAt ? ` (sauvegardé le ${new Date(restored.savedAt).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })})` : ""}.
+                    {restored?.km && restored.km > 0 ? ` Distance restaurée\u00a0: ${restored.km.toFixed(2)}\u00a0km.` : ""}
+                    {" "}Enregistrez le trajet ou arrêtez le suivi pour annuler.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowResumedBanner(false)}
                   className="text-amber-500 hover:text-amber-300 transition-colors text-xs font-black leading-none mt-0.5 cursor-pointer"
                   title="Fermer"
-                >Ô£ò</button>
+                >✕</button>
               </div>
             )}
 
-            {/* ÔöÇÔöÇ Live tracking dashboard (shown while tracking) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+            {/* ── Live tracking dashboard (shown while tracking) ───────────── */}
             {isTrackingAuto && (
               <div className={`p-6 rounded-[32px] border space-y-4 animate-in zoom-in-95 duration-300 ${darkMode
                 ? "bg-[#059669]/10 border-[#059669]/40"
@@ -655,8 +655,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                     <span className="text-lg ml-1 opacity-60">km</span>
                   </p>
                   <p className="text-[9px] font-mono text-emerald-700/60 dark:text-emerald-500/60 mt-1">
-                    ÔÅ▒ {formatElapsed(tripElapsedSec)}
-                    {gpsAccuracy ? ` ┬À ┬▒${gpsAccuracy.toFixed(0)}m` : ""}
+                    ⏱ {formatElapsed(tripElapsedSec)}
+                    {gpsAccuracy ? ` · ±${gpsAccuracy.toFixed(0)}m` : ""}
                   </p>
                 </div>
                 {/* Coordinates row */}
@@ -674,7 +674,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               </div>
             )}
 
-            {/* ÔöÇÔöÇ Static GPS fix panel (shown when NOT tracking) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+            {/* ── Static GPS fix panel (shown when NOT tracking) ───────────── */}
             {!isTrackingAuto && (
               <>
                 <button
@@ -686,7 +686,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                           setGpsLatitude(position.coords.latitude);
                           setGpsLongitude(position.coords.longitude);
                           setGpsAccuracy(position.coords.accuracy);
-                          setGpsStatus("­ƒôì Position initiale verrouill├®e");
+                          setGpsStatus("📍 Position initiale verrouillée");
                           lastPosRef.current = { lat: position.coords.latitude, lon: position.coords.longitude };
                         },
                         (error) => { setGpsStatus(`Erreur GPS: ${error.message}`); },
@@ -699,7 +699,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   className="w-full bg-[#3B82F6] text-white font-black py-4 rounded-[28px] flex items-center justify-center space-x-3 text-[10px] uppercase italic shadow-lg active:scale-95 transition-all outline-none"
                 >
                   <Scan size={18} />
-                  <span>Verrouiller position de d├®part</span>
+                  <span>Verrouiller position de départ</span>
                 </button>
 
                 <div className={`${darkMode
@@ -710,7 +710,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                     <div className={`w-2 h-2 rounded-full ${gpsLatitude ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(5,150,105,0.8)]" : "bg-amber-500"
                       }`} />
                     <p className="text-[8px] font-black uppercase italic tracking-widest text-slate-500 dark:text-zinc-500">
-                      Statut T├®l├®m├®trique
+                      Statut Télémétrique
                     </p>
                   </div>
                   <p className="text-xs font-black text-slate-900 dark:text-zinc-100">{gpsStatus}</p>
@@ -729,9 +729,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                         </p>
                       </div>
                       <div className="col-span-2">
-                        <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Pr├®cision Signal</p>
+                        <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Précision Signal</p>
                         <p className="text-[10px] font-mono font-bold text-[#059669] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 py-1.5 px-3 rounded-lg inline-block border border-emerald-100 dark:border-emerald-900">
-                          ┬▒ {gpsAccuracy?.toFixed(1)} m├¿tres
+                          ± {gpsAccuracy?.toFixed(1)} mètres
                         </p>
                       </div>
                     </div>
@@ -740,13 +740,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               </>
             )}
 
-            {/* ÔöÇÔöÇ Start / Stop tracking button ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+            {/* ── Start / Stop tracking button ─────────────────────────────── */}
             <button
               onClick={() => {
                 if (isTrackingAuto) {
                   // STOP: show the inline save form with the accumulated km pre-filled
                   setIsTrackingAuto(false);
-                  setGpsStatus("Trajet termin├® ÔÇö pr├¬t ├á enregistrer.");
+                  setGpsStatus("Trajet terminé — prêt à enregistrer.");
                   setGpsSaveKmInput(kilometrageComputedKm > 0 ? kilometrageComputedKm.toFixed(2) : "");
                   setShowGpsSaveForm(true);
                 } else {
@@ -778,12 +778,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 </div>
                 <div className="text-left">
                   <p className="text-[10px] font-black uppercase italic tracking-tight">
-                    {isTrackingAuto ? "Arr├¬ter le trajet" : "D├®marrer le trajet GPS"}
+                    {isTrackingAuto ? "Arrêter le trajet" : "Démarrer le trajet GPS"}
                   </p>
                   <p className="text-[7px] font-black uppercase opacity-60 tracking-widest mt-0.5">
                     {isTrackingAuto
-                      ? `${kilometrageComputedKm.toFixed(2)} km ┬À ${formatElapsed(tripElapsedSec)}`
-                      : "Suivi cin├®matique Haversine ÔÇö sans API"}
+                      ? `${kilometrageComputedKm.toFixed(2)} km · ${formatElapsed(tripElapsedSec)}`
+                      : "Suivi cinématique Haversine — sans API"}
                   </p>
                 </div>
               </div>
@@ -795,7 +795,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
               )}
             </button>
 
-            {/* ÔöÇÔöÇ Inline save form (replaces native prompt()) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+            {/* ── Inline save form (replaces native prompt()) ──────────────── */}
             {showGpsSaveForm && !isTrackingAuto && (
               <div className={`p-6 rounded-[28px] border space-y-4 animate-in slide-in-from-bottom duration-300 ${darkMode
                 ? "bg-slate-900/60 border-white/[0.08] backdrop-blur-md"
@@ -807,11 +807,11 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   </p>
                   <p className={`text-[8px] font-medium ${darkMode ? "text-zinc-400" : "text-slate-400"
                     }`}>
-                    Distance mesur├®e par le GPS embarqu├®. Ajustez si n├®cessaire.
+                    Distance mesurée par le GPS embarqué. Ajustez si nécessaire.
                   </p>
                 </div>
 
-                {/* Business km info pill ÔÇö replaces flat-rate preview */}
+                {/* Business km info pill — replaces flat-rate preview */}
                 {parseFloat(gpsSaveKmInput) > 0 && (
                   <div className={`flex items-center gap-2.5 p-3 rounded-2xl border ${darkMode
                     ? "bg-emerald-950/30 border-emerald-900/50"
@@ -820,11 +820,11 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                     <span className="text-base leading-none">­ƒôï</span>
                     <div className="flex-1">
                       <p className="text-[8px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400 mb-0.5">
-                        {parseFloat(gpsSaveKmInput).toFixed(2)} km d'affaires enregistr├®s
+                        {parseFloat(gpsSaveKmInput).toFixed(2)} km d'affaires enregistrés
                       </p>
                       <p className={`text-[7px] font-medium leading-snug ${darkMode ? "text-zinc-400" : "text-slate-500"
                         }`}>
-                        La d├®duction fiscale sera calcul├®e automatiquement
+                        La déduction fiscale sera calculée automatiquement
                         via le pro-rata dans Tenue de livres.
                       </p>
                     </div>
@@ -867,9 +867,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 {parseFloat(gpsSaveKmInput) > 0 && (
                   <div className="flex justify-between items-center px-1">
                     <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"
-                      }`}>Montant d├®ductible (0.70$/km)</span>
+                      }`}>Montant déductible (0.70$/km)</span>
                     <span className="text-sm font-black text-[#059669]">
-                      {(parseFloat(gpsSaveKmInput) * 0.70).toFixed(2)}┬á$
+                      {(parseFloat(gpsSaveKmInput) * 0.70).toFixed(2)} $
                     </span>
                   </div>
                 )}
@@ -878,8 +878,8 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </div>
         )}
 
-        {/* ÔöÇÔöÇ Bouton Enregistrer le trajet ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
-        {/* In GPS mode this button is embedded inside the save form ÔÇö only show for calculateur */}
+        {/* ── Bouton Enregistrer le trajet ──────────────────────────────────── */}
+        {/* In GPS mode this button is embedded inside the save form — only show for calculateur */}
         <div className="pt-2">
           <button
             onClick={() => {
@@ -958,7 +958,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </div>
         )}
 
-        {/* ÔöÇÔöÇ Journal unifi├® ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        {/* ── Journal unifié ────────────────────────────────────────────────── */}
         <div
           className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} p-7 rounded-[40px] border shadow-sm text-left space-y-5 mt-8`}
         >
@@ -966,7 +966,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             <h3
               className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
             >
-              Journal Unifi├®
+              Journal Unifié
             </h3>
             <div className="bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900">
               <span className="text-[8px] font-black text-[#059669] uppercase italic tracking-widest">
@@ -992,7 +992,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                   Registre vierge
                 </p>
                 <p className="text-[7.5px] font-bold mt-2 opacity-60">
-                  Vos trajets appara├«tront ici.
+                  Vos trajets apparaîtront ici.
                 </p>
               </div>
             ) : (
