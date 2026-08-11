@@ -15,6 +15,7 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy }
 import { dataService, type BetaCodeDoc, type PlatformInvoiceDoc } from '../lib/dataService';
 import { autocomptLogoWhiteBase64 } from '../assets/brand/autocomptLogoWhiteBase64';
 import { TRIAL_EXTENSION_FORM_URL } from './modals/TrialExpiredModal';
+import { isSuperAdminEmail } from '../lib/superAdmin';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,44 @@ function trialDaysLeft(u: { trialStartDate?: string; trialValidDays?: number }):
   const validDays = u.trialValidDays ?? 30;
   const daysElapsed = (Date.now() - new Date(u.trialStartDate).getTime()) / 86400000;
   return Math.max(0, Math.ceil(validDays - daysElapsed));
+}
+
+/**
+ * Real `users/{uid}` docs never had `name`/`plan`/`status`/`company`/`mrr` —
+ * this whole AdminUser shape was designed against a schema no signup path
+ * ever actually wrote. Every count/filter here (`plan === 'beta'`,
+ * `status === 'beta'`, revenue by plan...) silently matched ZERO real users
+ * — Fabiola saw "0 en bêta" despite several real beta signups, because
+ * their real fields (betaCodeRedeemed, trialStartDate, adminName) just have
+ * different names. Derives the AdminUser fields from what real docs
+ * actually contain, instead of trusting fields that were never written.
+ */
+function mapFirestoreUserToAdminUser(uid: string, data: any): AdminUser {
+  const isSuperAdmin = isSuperAdminEmail(data?.email);
+  const isBeta = !!data?.betaCodeRedeemed || !!data?.trialStartDate;
+  const plan: Plan = data?.plan || (isSuperAdmin ? 'superadmin' : isBeta ? 'beta' : 'gratuit');
+  const status: UserStatus = data?.status || (isSuperAdmin ? 'active' : isBeta ? 'beta' : 'active');
+  return {
+    id: uid,
+    name: data?.name || data?.adminName || data?.email || 'Utilisateur',
+    email: data?.email || '',
+    plan,
+    status,
+    company: data?.company || '',
+    industry: data?.industry || '',
+    since: data?.since || (data?.createdAt ? String(data.createdAt).slice(0, 10) : ''),
+    lastActive: data?.lastActive,
+    mrr: typeof data?.mrr === 'number' ? data.mrr : 0,
+    docsSignedCount: data?.docsSignedCount,
+    phone: data?.phone,
+    city: data?.city,
+    createdAt: data?.createdAt,
+    trialStartDate: data?.trialStartDate,
+    trialValidDays: data?.trialValidDays,
+    canGenerateBetaCodes: data?.canGenerateBetaCodes,
+    driveEnabled: data?.driveEnabled,
+    unlockedProfiles: data?.unlockedProfiles,
+  };
 }
 
 const STATUS_CONFIG: Record<UserStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -264,10 +303,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       try {
         const snap = await getDocs(collection(db, 'users'));
         if (!snap.empty) {
-          const loaded: AdminUser[] = snap.docs.map(d => ({
-            id: d.id,
-            ...(d.data() as Omit<AdminUser, 'id'>),
-          }));
+          const loaded: AdminUser[] = snap.docs.map(d => mapFirestoreUserToAdminUser(d.id, d.data()));
           setUsers(loaded);
         }
         // else keep sample data
