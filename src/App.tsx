@@ -1850,6 +1850,28 @@ const App = () => {
     }
   };
 
+  // Collaborators on a shared company must never save through
+  // dataService.saveWorkspace(uid, {id: activeCompanyId, ...}) — that
+  // function always mints `${uid}_company_${id}` and stamps ownerId,
+  // assuming the caller owns the company. For a collaborator, activeCompanyId
+  // is the SHORT parsed id of a company owned by someone else, so this
+  // silently created a phantom duplicate company under the collaborator's
+  // own account, with the exact same short id as the real shared company —
+  // breaking company switching entirely, since both resolved to the same
+  // `id` and `.find()` could only ever return one of the two. Found
+  // 2026-08-11: Natalia (collaborator on AchatDirect) editing her vehicle in
+  // Paramètres created "custom-1786467309978" under her own uid, identical
+  // to AchatDirect's own short id. Collaborators write straight to the real
+  // shared doc (currentCompany._companyDocId) instead, same pattern as
+  // handleUpdateModeGestion/handleUpdateCompanyProfile above.
+  const saveActiveCompanyField = async (uid: string, field: Record<string, any>) => {
+    if (currentCompany?._companyDocId && currentCompany.ownerId && currentCompany.ownerId !== uid) {
+      await setDoc(doc(db, "companies", currentCompany._companyDocId), field, { merge: true });
+    } else {
+      await dataService.saveWorkspace(uid, { id: activeCompanyId, ...field });
+    }
+  };
+
   // ── Conciliation Bancaire ↔ Compte Fidéicommis matching — opt-in per
   //    company. Off by default: some gestionnaires won't want the trust-
   //    account ledger cross-referenced automatically against imported bank
@@ -2440,7 +2462,7 @@ const App = () => {
       const uid = auth.currentUser?.uid;
       if (!uid || !activeCompanyId) return;
       try {
-        await dataService.saveWorkspace(uid, { id: activeCompanyId, userProfile });
+        await saveActiveCompanyField(uid, { userProfile });
       } catch (err) {
         console.error("Failed to save userProfile:", err);
       }
@@ -2465,7 +2487,7 @@ const App = () => {
     if (!clientesHydratedRef.current) return;
     const uid = auth.currentUser?.uid;
     if (!uid || !activeCompanyId) return;
-    dataService.saveWorkspace(uid, { id: activeCompanyId, clientes })
+    saveActiveCompanyField(uid, { clientes })
       .catch((err) => console.error("Failed to save clientes:", err));
   }, [clientes]);
 
@@ -6722,8 +6744,7 @@ const App = () => {
         // could silently overwrite OTHER fields (like userProfile) that another
         // effect just saved more recently. saveWorkspace already merges, so a
         // minimal payload is both safer and sufficient.
-        dataService
-          .saveWorkspace(userId, { id: activeCompanyId, partnerData: next })
+        saveActiveCompanyField(userId, { partnerData: next })
           .catch((err: any) => console.error("Failed to save partnerData:", err));
       }
       return next;
