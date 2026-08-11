@@ -575,8 +575,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         {/* Type de gestion DE CETTE ENTREPRISE — indépendant du "Profil actif"
             ci-dessus, qui s'applique à tout le compte. Permet à une même
             personne de gérer une entreprise en tant que gestionnaire tout en
-            ayant, ailleurs, un immeuble dont elle a délégué la gestion. */}
-        {dashboardMode !== "Syndic" && onUpdateModeGestion && (
+            ayant, ailleurs, un immeuble dont elle a délégué la gestion.
+            Non pertinent hors Gestionnaire/Investisseur — un Prospecteur ou
+            un Flippeur ne gère pas de baux/locataires, donc pas de mode de
+            gestion à choisir. Trouvé 2026-08-11 : Fabiola voyait ce bloc sur
+            AchatDirect (profil Prospecteur/Flippeur). */}
+        {dashboardMode !== "Syndic" && onUpdateModeGestion &&
+          ["gestionnaire", "investisseur"].includes((companyProfile || selectedProfile) as string) && (
           <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}>
             <div className="flex items-center gap-3 mb-4">
               <span className={`p-2 rounded-xl ${darkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
