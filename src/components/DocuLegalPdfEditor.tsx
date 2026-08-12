@@ -305,12 +305,20 @@ export default function DocuLegalPdfEditor({
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div
-      className="fixed inset-0 z-[300] flex"
+      // Was a fixed side-by-side layout (w-60 sidebar + flex-1 PDF area) with
+      // no responsive breakpoint at all — on a narrow window/mobile screen,
+      // the 240px sidebar ate most of the width, squeezing the actual PDF
+      // (where you place the fields) down to a barely-usable sliver. Found
+      // 2026-08-12: Fabiola couldn't see where to place fields nor find the
+      // signer name/email step, even though both exist further down. Now
+      // stacks vertically on narrow screens (toolbar on top, capped height
+      // + its own scroll, PDF below) instead of splitting the width.
+      className="fixed inset-0 z-[300] flex flex-col md:flex-row"
       style={{ fontFamily: "'Inter', system-ui, sans-serif", background: dm ? '#09090b' : '#f1f5f9' }}
     >
       {/* ─── Left sidebar / toolbar ────────────────────────────────────────── */}
       <aside
-        className="w-60 shrink-0 flex flex-col overflow-hidden"
+        className="w-full md:w-60 shrink-0 flex flex-col overflow-hidden max-h-[50vh] md:max-h-none border-b md:border-b-0"
         style={{
           background: dm ? '#18181b' : '#ffffff',
           borderRight: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
