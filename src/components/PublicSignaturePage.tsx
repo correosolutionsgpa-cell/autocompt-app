@@ -51,6 +51,20 @@ interface SignatureRequestDoc {
 
 type InputMode = 'draw' | 'type';
 
+// Race a promise against a timeout instead of letting a slow/hung network
+// call (email delivery, Drive upload) spin the "signing" state forever. The
+// signature itself is already written to Firestore before either of these
+// run, so a timeout here just means "best-effort delivery didn't confirm in
+// time" — never lost data. Found 2026-08-12: a real mobile signer got stuck
+// on an infinite spinner after drawing their signature.
+function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(onTimeout), ms);
+    promise.then((v) => { clearTimeout(timer); resolve(v); })
+      .catch(() => { clearTimeout(timer); resolve(onTimeout); });
+  });
+}
+
 interface PublicSignaturePageProps {
   token: string;
 }
@@ -389,20 +403,24 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       let emailResult = { admin: false, client: false };
       if (pdfBase64) {
         try {
-          const resp = await fetch('/api/save-signed-document', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pdfBase64,
-              adminEmail: docData.adminEmail || '',
-              clientEmail: signerEmail,
-              clientName: signerName,
-              docTitle: docData.docTitle,
-              companyName: docData.companyName,
-              token,
+          const resp = await withTimeout(
+            fetch('/api/save-signed-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pdfBase64,
+                adminEmail: docData.adminEmail || '',
+                clientEmail: signerEmail,
+                clientName: signerName,
+                docTitle: docData.docTitle,
+                companyName: docData.companyName,
+                token,
+              }),
             }),
-          });
-          if (resp.ok) {
+            20000,
+            null,
+          );
+          if (resp?.ok) {
             const data = await resp.json();
             emailResult = { admin: data.results?.emailAdmin === true, client: data.results?.emailClient === true };
           }
@@ -420,9 +438,13 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           const safeTitle = (docData.docTitle || 'document').replace(/[^a-z0-9\-_]/gi, '_').slice(0, 40);
           const dateStr = new Date().toISOString().split('T')[0];
           const fileName = `DocuLegal_${safeTitle}_${dateStr}_BIPARTITE.pdf`;
-          driveResult = await uploadDocumentToDrivePublic(
-            docData.companyId, docData.ownerId, pdfBase64, fileName, 'application/pdf',
-            docData.companyName, 'DocuLegal', token,
+          driveResult = await withTimeout(
+            uploadDocumentToDrivePublic(
+              docData.companyId, docData.ownerId, pdfBase64, fileName, 'application/pdf',
+              docData.companyName, 'DocuLegal', token,
+            ),
+            20000,
+            { success: false },
           );
         } catch {
           // Drive upload failure is non-blocking — email delivery is the primary channel
@@ -1323,7 +1345,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         >
           {isSigning
             ? <><Loader2 className="animate-spin" size={18} /> Génération du PDF certifié...</>
-            : <><PenTool size={18} /> Signer et Valider le Document</>
+            : <><PenTool size={18} /> Réviser et Signer</>
           }
         </button>
         {docData?.customDocUrl && !hasViewedDoc && (
