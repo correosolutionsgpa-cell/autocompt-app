@@ -14043,7 +14043,9 @@ const App = () => {
         setDocuLegalList((prev) => [saved, ...prev]);
 
         const driveOwnerId = currentCompany?.ownerId || uid;
-        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://autocompt.ca";
+        // "app." subdomain is required — bare autocompt.ca is a separate
+        // static marketing site with no ?sign= handling. Found 2026-08-12.
+        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://app.autocompt.ca";
         let sentCount = 0;
         const failedSigners: string[] = [];
 
@@ -14178,7 +14180,9 @@ const App = () => {
         setDocuLegalList((prev) => prev.map((d) => (d.id === newId ? saved : d)));
 
         const driveOwnerId = currentCompany?.ownerId || uid;
-        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://autocompt.ca";
+        // "app." subdomain is required — bare autocompt.ca is a separate
+        // static marketing site with no ?sign= handling. Found 2026-08-12.
+        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://app.autocompt.ca";
         let sentCount = 0;
         const failedSigners: string[] = [];
 

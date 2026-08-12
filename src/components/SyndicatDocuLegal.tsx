@@ -632,12 +632,16 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     } catch {}
 
     // ── Canonical URL resolution ─────────────────────────────────────────────
-    // ALWAYS use autocompt.ca as the signing domain — even in localhost dev mode.
-    // The signing page at autocompt.ca reads from Firestore/Storage (cloud),
-    // so the link works for any recipient on any device regardless of where
+    // ALWAYS use app.autocompt.ca as the signing domain — even in localhost
+    // dev mode. The signing page reads from Firestore/Storage (cloud), so
+    // the link works for any recipient on any device regardless of where
     // the admin generated it. localhost links are NOT shareable externally.
+    // NOTE: bare "autocompt.ca" (no "app." subdomain) is a SEPARATE static
+    // marketing site with no knowledge of ?sign= tokens — using it here sent
+    // every signature invitation to a dead end for the recipient. Found
+    // 2026-08-12: Fabiola's real recipient couldn't sign at all.
     const appBase = (import.meta.env.VITE_APP_URL as string | undefined)
-      || 'https://autocompt.ca';
+      || 'https://app.autocompt.ca';
 
     const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
 
@@ -1051,7 +1055,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setPdfEditorFile(null);
     setActiveTab('externe');
 
-    const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || 'https://autocompt.ca';
+    const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || 'https://app.autocompt.ca';
     let sentCount = 0;
     const failedSigners: string[] = [];
     let lastSignUrl = '';
