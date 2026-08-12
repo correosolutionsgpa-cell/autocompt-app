@@ -14546,14 +14546,27 @@ const App = () => {
                         )}
                       </AnimatePresence>
 
-                      {plexPdfEditorFile && (
+                      {/* Portal to document.body — this vista's outer container
+                          uses Tailwind's `animate-in` (a CSS transform-based
+                          animation), which creates a new containing block for
+                          ANY `position: fixed` descendant. DocuLegalPdfEditor's
+                          `fixed inset-0` was being computed relative to THAT
+                          container instead of the viewport, so it only covered
+                          the main content area (not the full screen, not past
+                          the sidebar's md:pl-72 reserve) — the page underneath
+                          (nav, "Déconnexion" link, etc.) showed through at the
+                          edges, and the usable area was smaller than it looked
+                          like it should be. Found 2026-08-12 via Fabiola's
+                          screenshot. Same fix already used for InviteAssociateModal. */}
+                      {plexPdfEditorFile && createPortal(
                         <DocuLegalPdfEditor
                           darkMode={darkMode}
                           pdfFile={plexPdfEditorFile}
                           docTitle={plexPdfEditorFile.name.replace(/\.pdf$/i, "")}
                           onClose={() => setPlexPdfEditorFile(null)}
                           onSendForSignature={handlePlexPdfEditorSend}
-                        />
+                        />,
+                        document.body
                       )}
 
                       {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
