@@ -57,6 +57,7 @@ import {
   Filter,
   Send,
   ExternalLink,
+  Clock,
   Home,
   Users,
   TrendingUp,
@@ -14759,6 +14760,82 @@ const App = () => {
                           );
                         })}
                       </div>
+
+                      {/* MODÈLES TAL — shown for investisseur (autogestion) and gestionnaire
+                          since they are the profiles actively managing leases/tenants.
+                          Source: tal.gouv.qc.ca — displayed at reference only. */}
+                      {(activeProfile === "investisseur" || activeProfile === "gestionnaire") && (
+                        <div className={`p-5 rounded-[28px] border space-y-3 shadow-sm ${darkMode ? "bg-emerald-950/20 border-emerald-800/40" : "bg-emerald-50/60 border-emerald-200"}`}>
+                          {/* Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-200 text-emerald-700"}`}>
+                                <ShieldCheck size={17} />
+                              </div>
+                              <div>
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                                  Modèles du Tribunal administratif du logement
+                                </p>
+                                <p className={`text-[9px] font-semibold mt-0.5 ${darkMode ? "text-emerald-600" : "text-emerald-600"}`}>
+                                  Source : tal.gouv.qc.ca · À titre de référence seulement
+                                </p>
+                              </div>
+                            </div>
+                            <a
+                              href="https://www.tal.gouv.qc.ca/fr/formulaires-et-publications/formulaires"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors whitespace-nowrap ${darkMode ? "border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/40" : "border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}
+                            >
+                              <ExternalLink size={10} />
+                              tal.gouv.qc.ca
+                            </a>
+                          </div>
+
+                          {/* TAL-806 — available */}
+                          <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800/60" : "bg-white border-slate-200"}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border border-emerald-300/60"}`}>
+                                <FileText size={16} />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className={`font-black text-[11px] ${darkMode ? "text-white" : "text-slate-900"}`}>
+                                    Avis d'augmentation de loyer
+                                  </p>
+                                  <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${darkMode ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/50" : "bg-emerald-100 text-emerald-700 border border-emerald-300"}`}>
+                                    TAL-806
+                                  </span>
+                                </div>
+                                <p className={`text-[9px] font-semibold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                                  3 options obligatoires du locataire (Loi déc. 2024) · Pré-rempli depuis Gestion Immobilière
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {["Locataire auto", "Loyer auto", "Adresse auto"].map(tag => (
+                                    <span key={tag} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>✓ {tag}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                            <p className={`text-[9px] font-bold italic shrink-0 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                              Générer via Gestion Immo
+                            </p>
+                          </div>
+
+                          {/* Prochainement placeholders */}
+                          {["Mise en demeure — non-paiement de loyer", "Quittance de loyer", "Avis de non-reconduction"].map(name => (
+                            <div key={name} className={`px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 opacity-50 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-200/60"}`}>
+                              <div className="flex items-center gap-3">
+                                <Clock size={14} className={darkMode ? "text-zinc-600" : "text-slate-400"} />
+                                <p className={`font-black text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{name}</p>
+                              </div>
+                              <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-600" : "bg-slate-100 text-slate-400"}`}>
+                                Prochainement
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* MES MODÈLES — chaque compte monte et garde son propre
                           modèle exclusif de Promesse d'Achat (ou tout autre
