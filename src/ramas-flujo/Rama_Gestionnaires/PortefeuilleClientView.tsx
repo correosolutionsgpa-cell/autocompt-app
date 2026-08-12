@@ -785,7 +785,10 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
             {[
               { icon: <FileText size={16} />, label: "Mandat de gestion", sub: "OACIQ", vista: "mandat_gestion", color: "indigo" },
               { icon: <Scale size={16} />, label: "Fidéicommis", sub: "Dépôts & retraits", vista: "fideicommis", color: "violet" },
-              { icon: <CheckCircle2 size={16} />, label: "Relevé mensuel", sub: "Générer & envoyer", vista: "fideicommis", color: "emerald" },
+              // Was "fideicommis" (same as the Fidéicommis button above), landing
+              // on the generic dashboard instead of the actual Relevés tab —
+              // found via Daniel's QA report.
+              { icon: <CheckCircle2 size={16} />, label: "Relevé mensuel", sub: "Générer & envoyer", vista: "fideicommis_releves", color: "emerald" },
             ].map((act) => (
               <button
                 key={act.label}

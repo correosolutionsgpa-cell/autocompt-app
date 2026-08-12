@@ -23,7 +23,7 @@ import {
   ArrowLeft, ArrowDownCircle, ArrowUpCircle, Scale, Plus, X,
   CheckCircle2, AlertTriangle, ChevronDown, Download, Send,
   Loader2, Users, BarChart3, Menu, Trash2, RefreshCw, FileText,
-  Building2, Mail, Phone, ExternalLink,
+  Building2, Mail, Phone, ExternalLink, Edit3,
 } from "lucide-react";
 import {
   collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy
@@ -59,6 +59,10 @@ export interface CompteFideicommisProps {
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
   playNotificationSound?: () => void;
+  /** Opens directly on this tab instead of the default "tableau" — used by
+   *  Portefeuille par Clients' "Relevé mensuel" quick action, which used to
+   *  land here on the generic dashboard instead of the actual Relevés tab. */
+  initialTab?: Tab;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -285,8 +289,9 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   setIsSidebarOpen,
   WorkspaceSidebar,
   playNotificationSound,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<Tab>("tableau");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab || "tableau");
 
   // Data
   const [clients, setClients] = useState<FideicommisClientDoc[]>([]);
@@ -304,6 +309,10 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const [showDepotForm, setShowDepotForm] = useState(false);
   const [showRetraitForm, setShowRetraitForm] = useState(false);
   const [showClientForm, setShowClientForm] = useState(false);
+  // Daniel's QA report (2026-08-11): could add clients but never edit or
+  // delete one afterward. Non-null id = editing that client instead of
+  // creating a new one.
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const { setDispatcherSuccessToast } = useToast();
@@ -543,25 +552,49 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     }
     setIsSaving(true);
     try {
-      const id = `${uid}_fidclient_${Date.now()}`;
-      const newClient: FideicommisClientDoc = {
+      const existing = editingClientId ? clients.find(c => c.id === editingClientId) : null;
+      const id = existing?.id || `${uid}_fidclient_${Date.now()}`;
+      const savedClient: FideicommisClientDoc = {
         id, companyId: activeCompanyId, nom: clientForm.nom,
         email: clientForm.email, telephone: clientForm.telephone,
         proprietes: clientForm.proprietes.split("\n").map(s => s.trim()).filter(Boolean),
         tauxHonoraires: parseFloat(clientForm.tauxHonoraires) || 8,
-        ownerId: uid, createdAt: new Date().toISOString(),
+        ownerId: uid, createdAt: existing?.createdAt || new Date().toISOString(),
       };
-      await setDoc(doc(db, "fideicommisClients", id), newClient);
-      setClients(prev => [...prev, newClient]);
+      await setDoc(doc(db, "fideicommisClients", id), savedClient);
+      setClients(prev => existing ? prev.map(c => c.id === id ? savedClient : c) : [...prev, savedClient]);
       setShowClientForm(false);
+      setEditingClientId(null);
       setClientForm({ nom: "", email: "", telephone: "", tauxHonoraires: "8", proprietes: "" });
       playNotificationSound?.();
-      setDispatcherSuccessToast({ text: `Client "${newClient.nom}" enregistré`, channel: "Fidéicommis" });
+      setDispatcherSuccessToast({ text: `Client "${savedClient.nom}" ${existing ? "modifié" : "enregistré"}`, channel: "Fidéicommis" });
     } catch (e) {
       console.error(e);
       alert("Erreur lors de l'enregistrement du client. Veuillez réessayer.");
     }
     finally { setIsSaving(false); }
+  };
+
+  const handleEditClient = (c: FideicommisClientDoc) => {
+    setEditingClientId(c.id);
+    setClientForm({
+      nom: c.nom, email: c.email || "", telephone: c.telephone || "",
+      tauxHonoraires: String(c.tauxHonoraires ?? 8), proprietes: (c.proprietes || []).join("\n"),
+    });
+    setShowClientForm(true);
+  };
+
+  const handleDeleteClient = async (c: FideicommisClientDoc) => {
+    if (!confirm(`Supprimer le client "${c.nom}" ? Ses dépôts/retraits déjà enregistrés resteront dans l'historique.`)) return;
+    try {
+      await deleteDoc(doc(db, "fideicommisClients", c.id));
+      setClients(prev => prev.filter(x => x.id !== c.id));
+      playNotificationSound?.();
+      setDispatcherSuccessToast({ text: `Client "${c.nom}" supprimé`, channel: "Fidéicommis" });
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la suppression du client.");
+    }
   };
 
   // ── Save Conciliation ─────────────────────────────────────────────────────
@@ -1234,8 +1267,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
                         <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-500">Nouveau propriétaire-client</h3>
-                            <button onClick={() => setShowClientForm(false)}><X size={16} /></button>
+                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-500">{editingClientId ? "Modifier le propriétaire-client" : "Nouveau propriétaire-client"}</h3>
+                            <button onClick={() => { setShowClientForm(false); setEditingClientId(null); setClientForm({ nom: "", email: "", telephone: "", tauxHonoraires: "8", proprietes: "" }); }}><X size={16} /></button>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Nom complet *</label>
@@ -1251,7 +1284,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                             <textarea rows={3} value={clientForm.proprietes} onChange={e => setClientForm(p => ({ ...p, proprietes: e.target.value }))} placeholder={"123 Rue Principale, Montréal\n456 Ave Laval"} className={`${inputCls} resize-none`} /></div>
                           <button onClick={handleSaveClient} disabled={isSaving || !clientForm.nom} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
                             {isSaving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                            Enregistrer le client
+                            {editingClientId ? "Enregistrer les modifications" : "Enregistrer le client"}
                           </button>
                         </div>
                       </motion.div>
@@ -1284,9 +1317,19 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className={`text-sm font-black ${bal >= 0 ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(bal)}</p>
-                              <p className={`text-[9px] ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>Solde en fidéicommis</p>
+                            <div className="text-right shrink-0 flex items-start gap-2">
+                              <div>
+                                <p className={`text-sm font-black ${bal >= 0 ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(bal)}</p>
+                                <p className={`text-[9px] ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>Solde en fidéicommis</p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => handleEditClient(c)} title="Modifier" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-indigo-400 hover:bg-zinc-800" : "text-slate-400 hover:text-indigo-600 hover:bg-slate-100"}`}>
+                                  <Edit3 size={13} />
+                                </button>
+                                <button onClick={() => handleDeleteClient(c)} title="Supprimer" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-rose-400 hover:bg-zinc-800" : "text-slate-400 hover:text-rose-600 hover:bg-slate-100"}`}>
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                           {c.proprietes.length > 0 && (

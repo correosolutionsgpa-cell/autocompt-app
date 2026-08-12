@@ -113,6 +113,12 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   // with the same button+panel pattern already used for the workspace
   // selector in App.tsx. Found 2026-08-09.
   const [showClientDropdown, setShowClientDropdown] = useState(false);
+  // Was a free-text input requiring the user to type the "½" fraction
+  // character by hand — awkward for casual users. Custom dropdown (never a
+  // native <select>, per established convention), same button+panel pattern
+  // as showClientDropdown above. Found 2026-08-11 via Daniel's QA report.
+  const [showNombrePiecesDropdown, setShowNombrePiecesDropdown] = useState(false);
+  const NOMBRE_PIECES_OPTIONS = ["Studio", "1½", "2½", "3½", "4½", "5½", "6½", "7½", "8½", "9+"];
 
   // Only show this company's properties. Untagged (`companyId` missing) entries
   // are properties saved before this feature existed — keep showing them until
@@ -232,6 +238,15 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
               to is contextually a first-thing-you-pick decision, not an
               afterthought right before saving. Found 2026-08-09. */}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {fideicommisClients.length === 0 && (
+              // Daniel's QA report (2026-08-11): he couldn't find this selector
+              // and concluded it didn't exist — it's just conditionally hidden
+              // until the account has at least one Compte en Fidéicommis
+              // client, with nothing explaining that dependency.
+              <p className={`text-[9px] font-bold italic ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                Créez un client dans Compte en Fidéicommis pour pouvoir lier cet immeuble à un propriétaire-client.
+              </p>
+            )}
             {fideicommisClients.length > 0 && (
               <div className="relative">
                 <button
@@ -428,18 +443,48 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
             >
               Nombre de pièces (format immobilier standard)
             </label>
-            <input
-              type="text"
-              value={plexManagementForm.nombrePieces}
-              onChange={(e) =>
-                setPlexManagementForm({
-                  ...plexManagementForm,
-                  nombrePieces: e.target.value,
-                })
-              }
-              placeholder="Ex: 4½, 3½, Studio"
-              className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowNombrePiecesDropdown(!showNombrePiecesDropdown)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+              >
+                <span className={plexManagementForm.nombrePieces ? "" : "opacity-50"}>
+                  {plexManagementForm.nombrePieces || "Sélectionner…"}
+                </span>
+                <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showNombrePiecesDropdown ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {showNombrePiecesDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className={`absolute left-0 right-0 mt-2 p-2 rounded-2xl border shadow-2xl z-30 text-left space-y-1 max-h-[280px] overflow-y-auto ${
+                      darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+                    }`}
+                  >
+                    {NOMBRE_PIECES_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setPlexManagementForm({ ...plexManagementForm, nombrePieces: opt });
+                          setShowNombrePiecesDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-bold transition-colors ${
+                          plexManagementForm.nombrePieces === opt
+                            ? (darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-700")
+                            : (darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-slate-700 hover:bg-slate-50")
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Logement entier fields */}
@@ -495,7 +540,13 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                   Statut de l'unité
                 </label>
                 <div
-                  className={`flex flex-wrap p-1 rounded-full w-full max-w-lg gap-1 border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}
+                  // Was flex-wrap with whitespace-nowrap pills at min-w-[45%] —
+                  // "Propriétaire occupant" (the longest label) never fit that
+                  // width without overflowing/looking squished, on PC (4 pills
+                  // in a narrow max-w-lg row) and mobile alike. A grid gives
+                  // each label its own cell that can wrap onto 2 lines instead
+                  // of fighting for space. Found 2026-08-11 via Daniel's QA report.
+                  className={`grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 rounded-[28px] w-full border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}
                 >
                   {["Actif", "Vacant", "Entretien", "Propriétaire occupant"].map((s) => {
                     const isSelected = plexManagementForm.status === s;
@@ -509,7 +560,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             status: s,
                           })
                         }
-                        className={`flex-1 min-w-[45%] sm:min-w-0 py-3 px-3 text-[11px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out flex items-center justify-center space-x-1.5 border whitespace-nowrap ${
+                        className={`py-2.5 px-2 text-[10px] font-black uppercase tracking-wide rounded-2xl transition-all duration-300 ease-in-out flex flex-col items-center justify-center gap-1 border text-center leading-tight ${
                           isSelected
                             ? darkMode
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm"
@@ -517,9 +568,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"
                         }`}
                       >
-                        {isSelected && (
-                          <CheckCircle2 size={12} className="mr-1" />
-                        )}
+                        {isSelected && <CheckCircle2 size={12} />}
                         <span>{s}</span>
                       </button>
                     );
@@ -849,6 +898,14 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => {
+                // Daniel's QA report (2026-08-11): the form let him save a
+                // building with nothing filled in at all — required fields
+                // now block the save with a clear message instead.
+                if (!plexManagementForm.adresse?.trim() || !plexManagementForm.nombrePieces?.trim()) {
+                  alert("Veuillez remplir au moins l'adresse et le nombre de pièces avant d'enregistrer l'unité.");
+                  return;
+                }
+
                 const totalUsedDoors = plexManagementProperties.reduce(
                   (sum, p) => {
                     if (

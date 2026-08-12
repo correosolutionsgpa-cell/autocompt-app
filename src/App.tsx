@@ -1957,6 +1957,19 @@ const App = () => {
           // Deep link from the marketing landing page's "Se connecter" button —
           // skip the onboarding wizard entirely for returning users.
           setVista("login");
+        } else if (auth.currentUser) {
+          // This fast path only trusts localStorage — empty on any device/
+          // browser without that cache (private browsing, cleared storage, a
+          // hard refresh right after this exact cache got cleared). But
+          // `auth.currentUser` being set means this IS a real logged-in
+          // session, not a first-time visitor — jumping to "sofi-onboarding"
+          // here forced an already fully-onboarded account (real profile +
+          // phone verification on file in Firestore) back through onboarding
+          // from scratch. Leave `vista` on "splash" and let onAuthStateChanged
+          // below make the real, Firestore-backed call once it resolves —
+          // it already handles "splash" as a preAuthScreen. Found 2026-08-11
+          // via Daniel's QA report: refreshing bounced him to phone-verify,
+          // then to profile selection, despite being fully onboarded.
         } else {
           setVista("sofi-onboarding");
         }
@@ -2587,6 +2600,16 @@ const App = () => {
       { id: "kilometraje", label: t("GPS trajets"), icon: <Car size={18} /> },
       { id: "taxes", label: t("TPS / TVQ"), icon: <Percent size={18} /> },
       { id: "doculegal", label: t("DocuLegal"), icon: <FileSignature size={18} /> },
+      // Both were reachable only from the main dashboard panel, missing from
+      // this sidebar entirely — inconsistent with every other module. Found
+      // 2026-08-11 via Daniel's QA report.
+      { id: "fideicommis", label: t("Compte en Fidéicommis"), icon: <ShieldCheck size={18} /> },
+      { id: activeProfile === "comptable" ? "portefeuille_clients_comptable" : "portefeuille_client", label: t("Portefeuille Clients"), icon: <Briefcase size={18} /> },
+      // Was reachable ONLY via the one-time pending-invite banner on the
+      // dashboard — once accepted, that banner disappears (correctly, no
+      // invite is pending anymore) but there was no other way back in.
+      // Found 2026-08-11 via Daniel's QA report.
+      { id: "releves_gestion", label: t("Mes Relevés de Gestion"), icon: <Mail size={18} /> },
       { id: "equipe", label: t("Notre Équipe"), icon: <UserPlus size={18} /> },
       { id: "heures-paie", label: t("Heures & Paie"), icon: <Timer size={18} /> },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
@@ -2613,6 +2636,10 @@ const App = () => {
       kilometraje: null,
       taxes: "tps_tvq",
       doculegal: "doculegal",
+      fideicommis: "fideicommis",
+      portefeuille_client: "portefeuille_clients",
+      portefeuille_clients_comptable: "portefeuille_clients",
+      releves_gestion: null,
       equipe: null,
       "heures-paie": "heures_paie",
     };
@@ -11737,6 +11764,30 @@ const App = () => {
         </div>
 
         <main className="p-4 space-y-4">
+          {/* Was buried far down the dashboard (past the search bar, KPIs,
+              module grid...) — Daniel's QA report (2026-08-11) said users
+              had to scroll a lot to find it. Now the very first thing shown. */}
+          {pendingGestionInvites.length > 0 && (
+            <button
+              onClick={() => { setVista("releves_gestion"); playNotificationSound(); }}
+              className={`w-full mb-4 p-4 rounded-2xl border flex items-center gap-3 text-left transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
+                darkMode ? "bg-amber-900/10 border-amber-500/30 hover:border-amber-500/50" : "bg-amber-50 border-amber-200 hover:border-amber-300"
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-200/50 text-amber-600"}`}>
+                <Mail size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-black uppercase italic tracking-tight ${darkMode ? "text-amber-300" : "text-amber-800"}`}>
+                  Une gestora vous invite à consulter vos relevés de gestion
+                </p>
+                <p className={`text-[9px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-amber-500/70" : "text-amber-600/80"}`}>
+                  Cliquez ici pour accepter l'invitation
+                </p>
+              </div>
+            </button>
+          )}
+
           {/* BARRE DE RECHERCHE RAPIDE INTÉLLIGENTE */}
           <div
             className={`relative rounded-[28px] border p-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-emerald-500/25 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"}`}
@@ -12663,27 +12714,6 @@ const App = () => {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {pendingGestionInvites.length > 0 && (
-            <button
-              onClick={() => { setVista("releves_gestion"); playNotificationSound(); }}
-              className={`w-full mb-4 p-4 rounded-2xl border flex items-center gap-3 text-left transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
-                darkMode ? "bg-amber-900/10 border-amber-500/30 hover:border-amber-500/50" : "bg-amber-50 border-amber-200 hover:border-amber-300"
-              }`}
-            >
-              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-200/50 text-amber-600"}`}>
-                <Mail size={16} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-[11px] font-black uppercase italic tracking-tight ${darkMode ? "text-amber-300" : "text-amber-800"}`}>
-                  Une gestora vous invite à consulter vos relevés de gestion
-                </p>
-                <p className={`text-[9px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-amber-500/70" : "text-amber-600/80"}`}>
-                  Cliquez ici pour accepter l'invitation
-                </p>
-              </div>
-            </button>
-          )}
 
           {dashboardMode === "Syndic" ? (
             <SyndicModuleGrid
@@ -21494,7 +21524,9 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
 
   // CompteFideicommis → src/ramas-flujo/Rama_Gestionnaires/CompteFideicommis.tsx
   // Conformité OACIQ: dépôts, retraits, conciliation mensuelle, relevés propriétaires
-  if (vista === "fideicommis") {
+  // "fideicommis_releves" is the same screen, opened directly on the Relevés
+  // tab — used by Portefeuille par Clients' "Relevé mensuel" quick action.
+  if (vista === "fideicommis" || vista === "fideicommis_releves") {
     return (
       <CompteFideicommis
         darkMode={darkMode}
@@ -21506,6 +21538,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         playNotificationSound={playNotificationSound}
+        initialTab={vista === "fideicommis_releves" ? "releves" : undefined}
       />
     );
   }
