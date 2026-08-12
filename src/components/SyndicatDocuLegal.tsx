@@ -1028,8 +1028,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   const handlePdfEditorSend = async (
     fields: SignatureField[],
     pdfStorageUrl: string,
-    signerName: string,
-    signerEmail: string,
+    signers: { name: string; email: string }[],
   ) => {
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
     const fileName = pdfEditorFile?.name?.replace(/\.pdf$/i, '') || 'Document PDF importé';
@@ -1038,7 +1037,10 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       title: fileName,
       date: todayStr,
       status: 'attente',
-      summary: `Document PDF importé pour signature électronique. Signataire : ${signerName}. ${fields.length} zone${fields.length > 1 ? 's' : ''} de signature définie${fields.length > 1 ? 's' : ''}.`,
+      // Real contracts need 2+ parties — one document now maps to several
+      // signers, each with their own signing link/fields (see the loop
+      // below), not just one implicit signer.
+      summary: `Document PDF importé pour signature électronique. Signataires : ${signers.map(s => s.name).join(', ')}. ${fields.length} zone${fields.length > 1 ? 's' : ''} de signature définie${fields.length > 1 ? 's' : ''} au total.`,
       provider: companyName,
       signedBy: '',
       signedDate: '',
@@ -1047,14 +1049,47 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     setContrats(prev => [newDoc, ...prev]);
     persistLegalDoc('contrat', newDoc);
     setPdfEditorFile(null);
-    setSignerEmailForInvite(signerEmail);
     setActiveTab('externe');
 
-    // 1. Generate the signing link (sets generatedLink + opens share modal)
-    const signUrl = await handleSendForSignature(newDoc, undefined, fields, pdfStorageUrl);
+    const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || 'https://autocompt.ca';
+    let sentCount = 0;
+    const failedSigners: string[] = [];
+    let lastSignUrl = '';
 
-    // 2. Auto-send the invitation email immediately — no second click needed
-    if (signUrl) {
+    for (let i = 0; i < signers.length; i++) {
+      const { name: signerName, email: signerEmail } = signers[i];
+      const signerFields = fields.filter(f => f.signerIndex === i);
+      const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newDoc.id.slice(0, 6)}-${i}`;
+      const otherSigners = signers.filter((_, si) => si !== i).map(s => s.name).join(', ');
+      const urlPayload = {
+        docId: newDoc.id,
+        docTitle: newDoc.title,
+        docSummary: `Document PDF importé pour signature électronique. ${signerFields.length} zone${signerFields.length > 1 ? 's' : ''} de signature définie${signerFields.length > 1 ? 's' : ''} pour vous.${otherSigners ? ` Signe également : ${otherSigners}.` : ''}`,
+        companyName,
+        companyId,
+        ownerId: driveOwnerId,
+        adminName: adminEmail || companyName,
+        adminEmail,
+        adminSignedDate: new Date().toLocaleDateString('fr-CA'),
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        customDocUrl: pdfStorageUrl,
+        pdfStorageUrl,
+        signatureFields: signerFields,
+      };
+      let b64 = '';
+      try {
+        b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      } catch {}
+      const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ''}`;
+      try {
+        await setDoc(doc(db, 'pendingSignatures', token), urlPayload);
+      } catch (e) {
+        console.error('[handlePdfEditorSend] pendingSignatures write failed:', e);
+      }
+      lastSignUrl = signUrl;
+
       try {
         const resp = await fetch('/api/send-signature-invitation', {
           method: 'POST',
@@ -1064,22 +1099,28 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
             signerName,
             signUrl,
             docTitle: newDoc.title,
-            docSummary: newDoc.summary,
+            docSummary: urlPayload.docSummary,
             companyName,
             adminName: adminEmail || companyName,
             adminEmail,
-            token: signUrl.split('sign=')[1]?.split('&')[0] || newDoc.id,
+            token,
           }),
         });
-        if (resp.ok) {
-          triggerToast(`✉️ Invitation envoyée à ${signerEmail}`, 'success');
-          setInviteSent(true);
-        } else {
-          triggerToast('Document prêt. Envoyez le lien manuellement depuis le modal.', 'success');
-        }
-      } catch {
-        // Non-blocking — user can still send manually from the share modal
+        if (!resp.ok) throw new Error(await resp.text());
+        sentCount++;
+      } catch (e) {
+        console.error(`[handlePdfEditorSend] send failed for ${signerEmail}:`, e);
+        failedSigners.push(`${signerName} (${signerEmail})`);
       }
+    }
+
+    setGeneratedLink(lastSignUrl);
+    setSendLinkDoc(newDoc);
+    if (failedSigners.length === 0) {
+      triggerToast(`✉️ Invitation envoyée à ${signers.length} signataire${signers.length > 1 ? 's' : ''}`, 'success');
+      setInviteSent(true);
+    } else {
+      triggerToast(`Envoyé à ${sentCount}/${signers.length}. Échec pour : ${failedSigners.join(', ')} — lien à transmettre manuellement.`, 'success');
     }
   };
 

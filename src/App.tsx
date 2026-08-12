@@ -13634,8 +13634,7 @@ const App = () => {
     const handlePlexPdfEditorSend = async (
       fields: SignatureField[],
       pdfStorageUrl: string,
-      signerName: string,
-      signerEmail: string,
+      signers: { name: string; email: string }[],
     ) => {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
@@ -13651,68 +13650,86 @@ const App = () => {
           date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
           companyId: activeCompanyId,
           author: currentUserEmail || "",
-          recipient: signerName,
-          recipientEmail: signerEmail,
+          // Real contracts need 2+ parties — one document now maps to
+          // several signers. recipient/recipientEmail stay comma-joined for
+          // display in the doc list; each signer's own status/fields live
+          // in their own pendingSignatures doc below.
+          recipient: signers.map((s) => s.name).join(", "),
+          recipientEmail: signers.map((s) => s.email).join(", "),
           fileUrl: pdfStorageUrl,
           placedFields: fields,
         };
         const saved = await dataService.saveDocuLegalDoc(uid, newDoc);
         setDocuLegalList((prev) => [saved, ...prev]);
 
-        const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}`;
         const driveOwnerId = currentCompany?.ownerId || uid;
-        const urlPayload = {
-          docId: newId,
-          docTitle: fileName,
-          docSummary: `Document PDF importé pour signature électronique. Signataire : ${signerName}. ${fields.length} zone${fields.length > 1 ? "s" : ""} de signature définie${fields.length > 1 ? "s" : ""}.`,
-          companyName: currentCompany?.nombre || "",
-          companyId: activeCompanyId,
-          ownerId: driveOwnerId,
-          adminName: currentUserEmail || "Administrateur",
-          adminEmail: currentUserEmail || "",
-          adminSignedDate: new Date().toLocaleDateString("fr-CA"),
-          status: "pending",
-          createdAt: new Date().toISOString(),
-          customDocUrl: "",
-          pdfStorageUrl,
-          signatureFields: fields,
-        };
-        let b64 = "";
-        try {
-          b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=+$/, "");
-        } catch { }
         const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://autocompt.ca";
-        const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ""}`;
-        await setDoc(doc(db, "pendingSignatures", token), urlPayload);
+        let sentCount = 0;
+        const failedSigners: string[] = [];
 
-        try {
-          const resp = await fetch("/api/send-signature-invitation", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              signerEmail,
-              signerName,
-              signUrl,
-              docTitle: fileName,
-              docSummary: urlPayload.docSummary,
-              companyName: currentCompany?.nombre || "",
-              adminName: currentUserEmail || currentCompany?.nombre || "",
-              adminEmail: currentUserEmail || "",
-              token,
-            }),
-          });
-          if (!resp.ok) throw new Error(await resp.text());
+        for (let i = 0; i < signers.length; i++) {
+          const { name: signerName, email: signerEmail } = signers[i];
+          const signerFields = fields.filter((f) => f.signerIndex === i);
+          const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}-${i}`;
+          const otherSigners = signers.filter((_, si) => si !== i).map((s) => s.name).join(", ");
+          const urlPayload = {
+            docId: newId,
+            docTitle: fileName,
+            docSummary: `Document PDF importé pour signature électronique. ${signerFields.length} zone${signerFields.length > 1 ? "s" : ""} de signature définie${signerFields.length > 1 ? "s" : ""} pour vous.${otherSigners ? ` Signe également : ${otherSigners}.` : ""}`,
+            companyName: currentCompany?.nombre || "",
+            companyId: activeCompanyId,
+            ownerId: driveOwnerId,
+            adminName: currentUserEmail || "Administrateur",
+            adminEmail: currentUserEmail || "",
+            adminSignedDate: new Date().toLocaleDateString("fr-CA"),
+            status: "pending",
+            createdAt: new Date().toISOString(),
+            customDocUrl: "",
+            pdfStorageUrl,
+            signatureFields: signerFields,
+          };
+          let b64 = "";
+          try {
+            b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+          } catch { }
+          const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ""}`;
+          await setDoc(doc(db, "pendingSignatures", token), urlPayload);
+
+          try {
+            const resp = await fetch("/api/send-signature-invitation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                signerEmail,
+                signerName,
+                signUrl,
+                docTitle: fileName,
+                docSummary: urlPayload.docSummary,
+                companyName: currentCompany?.nombre || "",
+                adminName: currentUserEmail || currentCompany?.nombre || "",
+                adminEmail: currentUserEmail || "",
+                token,
+              }),
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            sentCount++;
+          } catch (err: any) {
+            console.error(`send-signature-invitation failed for ${signerEmail}:`, err);
+            failedSigners.push(`${signerName} (${signerEmail})`);
+          }
+        }
+
+        if (failedSigners.length === 0) {
           setDispatcherSuccessToast({
             text: "Document envoyé pour signature !",
             channel: "DocuLegal",
-            customMessage: `"${fileName}" a été envoyé à ${signerName} (${signerEmail}) pour signature électronique.`,
+            customMessage: `"${fileName}" a été envoyé à ${signers.length} signataire${signers.length > 1 ? "s" : ""} pour signature électronique.`,
           });
-        } catch (err: any) {
-          console.error("send-signature-invitation failed:", err);
-          alert(`Le document a été créé, mais l'envoi automatique du courriel a échoué. Vous pouvez copier le lien de signature manuellement.\n\nDétail: ${err?.message || err}`);
+        } else {
+          alert(`Le document a été créé et envoyé à ${sentCount}/${signers.length} signataire(s). L'envoi a échoué pour : ${failedSigners.join(", ")}. Vous pouvez leur transmettre le lien manuellement depuis DocuLegal.`);
         }
 
         setPlexPdfEditorFile(null);
