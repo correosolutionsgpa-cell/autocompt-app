@@ -8906,27 +8906,32 @@ const App = () => {
           // dashboard (see that redirect for the bug this guards against).
           let hasSelectedProfile = false;
           const userDocRef = doc(db, "users", user.uid);
+          // Use getDocFromServer to always read directly from Firestore's
+          // server, bypassing the local SDK cache entirely.
+          //
+          // This read used to run CONCURRENTLY with the "stamp email"
+          // fire-and-forget write below (unawaited setDoc merge on this same
+          // doc, fired first). The diagnostic logs Fabiola captured
+          // 2026-08-12 proved that's exactly what was happening:
+          // getDocFromServer correctly returned exists():true both times,
+          // but the FIRST read (racing the in-flight write) came back with
+          // phoneVerified/selectedProfile missing, while a second read
+          // moments later (write long since settled) read them correctly —
+          // ruling out the "cold cache" theory from the previous fix
+          // attempt, which is why that one didn't hold. Moving the stamp
+          // write to AFTER this read removes the race entirely: nothing
+          // else writes to this doc during the read anymore.
+          let userDoc = await getDocFromServer(userDocRef);
+          console.log("[AUTH-DEBUG] getDocFromServer resolved, exists():", userDoc.exists());
           // Stamp the auth email onto the Firestore user doc on every login —
           // no signup path ever wrote this field, so SuperAdminPanel's user
           // list/search silently broke for any account whose doc predates
           // this (found 2026-08-10: Daniel's beta-tester account redeemed a
           // code but never showed up searchable in the Users tab). Best-effort,
-          // never blocks login if it fails.
+          // never blocks login if it fails. Runs AFTER the read now (see above).
           if (user.email) {
             setDoc(userDocRef, { email: user.email }, { merge: true }).catch(() => {});
           }
-          // Use getDocFromServer to always read directly from Firestore's
-          // server, bypassing the local SDK cache entirely. getDoc() (which
-          // uses the cache-first strategy) would silently return !exists() on
-          // the very first request of a fresh/incognito session — before the
-          // cache is populated — tricking the app into treating an already
-          // fully-registered user as brand-new and redirecting them to
-          // "Vérification par SMS". A direct server read eliminates this
-          // on the first attempt, with no delays or retries needed.
-          // Found 2026-08-12: Fabiola and Natalia both hit this every time
-          // they opened the app in a fresh window.
-          let userDoc = await getDocFromServer(userDocRef);
-          console.log("[AUTH-DEBUG] getDocFromServer resolved, exists():", userDoc.exists());
           if (userDoc.exists()) {
             const userData = userDoc.data();
             role = userData.role || "admin";
