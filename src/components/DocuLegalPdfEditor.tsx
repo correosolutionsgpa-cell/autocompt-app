@@ -252,7 +252,15 @@ export default function DocuLegalPdfEditor({
     setFields(p => [...p, newField]);
     setSelectedId(newField.id);
     setShowInstructions(false);
-    // Don't reset clickPlaceType — user probably wants to place multiple
+    // Reset after every placement — leaving the same type "armed" meant a
+    // second click on the PDF (e.g. after scrolling away from the sidebar,
+    // where the "Sélectionné" badge on the type button is no longer visible)
+    // silently placed ANOTHER field of the same type instead of nothing,
+    // with no indication anything was wrong. Found 2026-08-12: Fabiola
+    // placed 3 overlapping "Nom complet" fields for a second signer because
+    // the type from an earlier placement was still armed. Now every field
+    // requires an explicit, visible type selection right before it's placed.
+    setClickPlaceType(null);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, pageIndex: number) => {
