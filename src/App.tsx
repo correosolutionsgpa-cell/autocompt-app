@@ -158,7 +158,7 @@ import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, GoogleAuthProvider, signInWithPopup, updatePassword, sendPasswordResetEmail, type ConfirmationResult } from "firebase/auth";
 import { doc, getDoc, getDocFromServer, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
@@ -3559,6 +3559,14 @@ const App = () => {
   // yet with that email. Found 2026-08-12: Natalia didn't know what to do
   // faced with this field yesterday.
   const [showLoginBetaCode, setShowLoginBetaCode] = useState(false);
+  // Real per-user password (replaces the old shared "autocompt123" for every
+  // account). Left blank by a returning pre-migration account — see
+  // handleLoginSubmit's legacy fallback and the "set-password" vista below.
+  const [loginPassword, setLoginPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [setPasswordError, setSetPasswordError] = useState("");
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
   // --- BETA TRIAL STATUS (computed once per session in onAuthStateChanged) ---
   const [trialStatus, setTrialStatus] = useState<{ expired: boolean; daysLeft: number } | null>(null);
   const [trialModalDismissed, setTrialModalDismissed] = useState(false);
@@ -8907,6 +8915,11 @@ const App = () => {
           // account with NO profile yet must land on onboarding, not the
           // dashboard (see that redirect for the bug this guards against).
           let hasSelectedProfile = false;
+          // Whether this account has replaced the old shared login password
+          // with its own real one. Defaults to true (brand-new accounts —
+          // both branches below — never need this migration); only an
+          // EXISTING pre-migration doc flips it to false.
+          let passwordMigrated = true;
           const userDocRef = doc(db, "users", user.uid);
           // Use getDocFromServer to always read directly from Firestore's
           // server, bypassing the local SDK cache entirely.
@@ -8959,6 +8972,7 @@ const App = () => {
             setUserLevel(userData.level || "Gestion Immobilière");
             phoneAlreadyVerified = !!userData.phoneVerified;
             setIsPhoneVerified(phoneAlreadyVerified);
+            passwordMigrated = !!userData.passwordMigrated;
             setCanGenerateBetaCodes(!!userData.canGenerateBetaCodes);
             setDriveEnabled(userData.driveEnabled !== false);
             hasSelectedProfile = !!userData.selectedProfile;
@@ -9027,7 +9041,8 @@ const App = () => {
               email: user.email,
               role: "admin",
               level: "Gestion Immobilière",
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              passwordMigrated: true,
             }, { merge: true });
             setUserRole("admin");
             // Brand-new account — trial fields are being written concurrently by
@@ -9173,6 +9188,15 @@ const App = () => {
             if (!phoneAlreadyVerified) {
               console.log("[AUTH-DEBUG] setVista decision: phone-verify. prev=", prev, "phoneAlreadyVerified=", phoneAlreadyVerified, "hasSelectedProfile=", hasSelectedProfile);
               return "phone-verify";
+            }
+            if (!passwordMigrated) {
+              // Pre-existing account that has never set its own real
+              // password (created back when every account shared the same
+              // hardcoded login password). One-time detour to have them
+              // choose a real one before continuing — never asked again
+              // once passwordMigrated is stamped true.
+              console.log("[AUTH-DEBUG] setVista decision: set-password. prev=", prev);
+              return "set-password";
             }
             if (!hasSelectedProfile) {
               console.log("[AUTH-DEBUG] setVista decision: sofi-onboarding. prev=", prev, "hasSelectedProfile=", hasSelectedProfile);
@@ -10958,6 +10982,99 @@ const App = () => {
       />
     );
   }
+  if (vista === "set-password") {
+    const handleSetPassword = async () => {
+      setSetPasswordError("");
+      if (newPassword.length < 6) {
+        setSetPasswordError("Le mot de passe doit contenir au moins 6 caractères.");
+        return;
+      }
+      if (newPassword !== newPasswordConfirm) {
+        setSetPasswordError("Les deux mots de passe ne correspondent pas.");
+        return;
+      }
+      if (!auth.currentUser) {
+        setSetPasswordError("Session expirée — veuillez vous reconnecter.");
+        return;
+      }
+      setIsSettingPassword(true);
+      try {
+        await updatePassword(auth.currentUser, newPassword);
+        await setDoc(doc(db, "users", auth.currentUser.uid), { passwordMigrated: true }, { merge: true });
+        setNewPassword("");
+        setNewPasswordConfirm("");
+        setVista(selectedProfile ? "dashboard" : "sofi-onboarding");
+      } catch (err: any) {
+        if (err?.code === "auth/requires-recent-login") {
+          setSetPasswordError("Pour votre sécurité, veuillez vous déconnecter et vous reconnecter, puis réessayez.");
+        } else {
+          setSetPasswordError(err?.message || "Impossible d'enregistrer le mot de passe. Réessayez.");
+        }
+      } finally {
+        setIsSettingPassword(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 relative isolate bg-[#FAF9F6]">
+        <div className="absolute top-1/4 left-1/4 w-[280px] h-[280px] rounded-full blur-[90px] pointer-events-none select-none bg-emerald-500/10 -z-10" />
+        <div className="flex flex-col items-center space-y-3 text-center mb-8 relative z-10 w-full max-w-md animate-in slide-in-from-bottom-8">
+          <div className="p-4 rounded-[38%] border border-emerald-500/10 shadow-xl text-emerald-600 relative isolate">
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-md rounded-[38%] -z-10" />
+            <Lock size={32} />
+          </div>
+          <h1 className="text-2xl font-extrabold italic tracking-tighter text-slate-900 leading-none">
+            Sécurisez votre compte
+          </h1>
+          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.2em] font-sans text-center w-full mt-1">
+            Étape obligatoire — une seule fois
+          </p>
+        </div>
+
+        <div className="w-full max-w-md p-6 sm:p-8 rounded-[32px] border border-white/40 shadow-xl relative isolate z-10 space-y-5 text-left animate-in slide-in-from-bottom-8 delay-100 bg-white/90 backdrop-blur-xl">
+          <p className="text-[11px] font-medium text-slate-600 leading-relaxed">
+            Nous mettons à jour la sécurité d'AutoCompt : chaque compte doit maintenant avoir son propre mot de passe. Choisissez-en un — vous ne verrez plus cet écran par la suite.
+          </p>
+          <div className="space-y-1 text-left">
+            <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+              Nouveau mot de passe
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Au moins 6 caractères"
+              className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+            />
+          </div>
+          <div className="space-y-1 text-left">
+            <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+              Confirmez le mot de passe
+            </label>
+            <input
+              type="password"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              placeholder="Retapez le mot de passe"
+              onKeyDown={(e) => { if (e.key === "Enter") handleSetPassword(); }}
+              className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+            />
+          </div>
+          {setPasswordError && (
+            <p className="text-[9.5px] font-bold text-red-600">{setPasswordError}</p>
+          )}
+          <button
+            type="button"
+            disabled={isSettingPassword}
+            onClick={handleSetPassword}
+            className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer disabled:opacity-50"
+          >
+            {isSettingPassword ? "Enregistrement..." : "Enregistrer et continuer"}
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (vista === "phone-verify") {
     const formatPhoneE164 = (raw: string): string => {
       const digits = raw.replace(/[^\d+]/g, "");
@@ -11173,17 +11290,23 @@ const App = () => {
   }
 
   if (vista === "login") {
-    const handleLoginSubmit = async (emailStr: string, codeStr?: string) => {
+    const handleLoginSubmit = async (emailStr: string, codeStr?: string, passwordStr?: string) => {
       const email = emailStr.trim().toLowerCase();
       if (!email) {
         alert("Veuillez entrer votre adresse courriel.");
         return;
       }
+      const typedPassword = (passwordStr ?? loginPassword).trim();
 
       setIsLoadingData(true);
       try {
         try {
-          await signInWithEmailAndPassword(auth, email, "autocompt123");
+          // A returning account that has already migrated off the old shared
+          // password types its own; one that hasn't yet can leave the field
+          // blank and this falls back to the legacy shared password — the
+          // "set-password" screen then forces them to pick a real one before
+          // continuing (see onAuthStateChanged's passwordMigrated check).
+          await signInWithEmailAndPassword(auth, email, typedPassword || "autocompt123");
         } catch (error: any) {
           if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.message.includes('INVALID_LOGIN_CREDENTIALS')) {
             // Brand-new account — a valid, email-matched beta code is mandatory during this beta.
@@ -11191,15 +11314,18 @@ const App = () => {
             if (!code) {
               throw new Error("Un code d'accès bêta est requis pour créer un compte.");
             }
+            if (!typedPassword || typedPassword.length < 6) {
+              throw new Error("Choisissez un mot de passe d'au moins 6 caractères pour votre nouveau compte.");
+            }
             const { valid, reason } = await dataService.validateBetaCode(code, email);
             if (!valid) {
               throw new Error(reason ?? "Code d'accès invalide.");
             }
-            const cred = await createUserWithEmailAndPassword(auth, email, "autocompt123");
+            const cred = await createUserWithEmailAndPassword(auth, email, typedPassword);
             // Redeemed later, once phone verification (the mandatory next
             // step) actually succeeds — not here, so a user stuck on that
             // screen doesn't burn their code or start their trial early.
-            await setDoc(doc(db, "users", cred.user.uid), { pendingBetaCode: code.trim().toUpperCase() }, { merge: true });
+            await setDoc(doc(db, "users", cred.user.uid), { pendingBetaCode: code.trim().toUpperCase(), passwordMigrated: true }, { merge: true });
           } else {
             throw error;
           }
@@ -11215,7 +11341,7 @@ const App = () => {
             "4. Activez le fournisseur 'Adresse e-mail/Mot de passe' (Email/Password)."
           );
         } else {
-          if (err.message?.includes("code d'accès bêta est requis")) {
+          if (err.message?.includes("code d'accès bêta est requis") || err.message?.includes("Choisissez un mot de passe")) {
             // First attempt with just an email and no existing account —
             // reveal the field instead of a bare alert, so it's clear WHY
             // it's suddenly needed.
@@ -11224,6 +11350,63 @@ const App = () => {
           alert("Erreur de connexion: " + err.message);
         }
         setIsLoadingData(false);
+      }
+    };
+
+    const handleGoogleSignIn = async () => {
+      setIsLoadingData(true);
+      try {
+        const result = await signInWithPopup(auth, new GoogleAuthProvider());
+        const userDocRef = doc(db, "users", result.user.uid);
+        const snap = await getDocFromServer(userDocRef);
+        if (!snap.exists()) {
+          // Brand-new account via Google — still gated by the same mandatory
+          // beta code as an email signup. Nothing was written for this uid
+          // yet, so an invalid/missing code here must undo the Firebase Auth
+          // account creation by signing back out immediately.
+          const code = loginCode.trim();
+          if (!code) {
+            await signOut(auth);
+            setShowLoginBetaCode(true);
+            alert("Un code d'accès bêta est requis pour créer un compte. Entrez-le, puis cliquez de nouveau sur \"Continuer avec Google\".");
+            setIsLoadingData(false);
+            return;
+          }
+          const { valid, reason } = await dataService.validateBetaCode(code, result.user.email || loginEmail.trim().toLowerCase());
+          if (!valid) {
+            await signOut(auth);
+            alert("Erreur: " + (reason ?? "Code d'accès invalide."));
+            setIsLoadingData(false);
+            return;
+          }
+          await setDoc(userDocRef, { pendingBetaCode: code.trim().toUpperCase(), passwordMigrated: true }, { merge: true });
+        }
+        // Existing accounts, and freshly-approved new ones, fall through to
+        // onAuthStateChanged for phone-verify/dashboard routing.
+      } catch (err: any) {
+        if (err?.code === "auth/operation-not-allowed") {
+          alert(
+            "La connexion Google n'est pas encore activée dans Firebase.\n\n" +
+            "Authentication → Sign-in method → activez le fournisseur 'Google'."
+          );
+        } else if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
+          alert("Erreur de connexion Google: " + (err?.message || err));
+        }
+        setIsLoadingData(false);
+      }
+    };
+
+    const handleForgotPassword = async () => {
+      const email = loginEmail.trim().toLowerCase();
+      if (!email) {
+        alert("Entrez d'abord votre adresse courriel ci-dessus.");
+        return;
+      }
+      try {
+        await sendPasswordResetEmail(auth, email);
+        alert("Un courriel de réinitialisation a été envoyé à " + email + " (vérifiez vos courriels indésirables).");
+      } catch (err: any) {
+        alert("Erreur: " + (err?.message || err));
       }
     };
 
@@ -11300,7 +11483,7 @@ const App = () => {
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="Ex: info@autocompt.ca"
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLoginSubmit(loginEmail);
+                      if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword);
                     }}
                     className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
                   />
@@ -11309,6 +11492,35 @@ const App = () => {
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1 text-left">
+                <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Laissez vide si première connexion"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword);
+                    }}
+                    className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+                  />
+                  <Lock
+                    size={13}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400 hover:text-emerald-600 pl-1"
+                >
+                  Mot de passe oublié ?
+                </button>
               </div>
 
               {showLoginBetaCode ? (
@@ -11323,7 +11535,7 @@ const App = () => {
                       onChange={(e) => setLoginCode(e.target.value)}
                       placeholder="Ex: AC-7F3K9X"
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode);
+                        if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword);
                       }}
                       className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm uppercase"
                     />
@@ -11350,10 +11562,30 @@ const App = () => {
 
               <button
                 type="button"
-                onClick={() => handleLoginSubmit(loginEmail, loginCode)}
+                onClick={() => handleLoginSubmit(loginEmail, loginCode, loginPassword)}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer"
               >
                 Se connecter à mon Espace
+              </button>
+
+              <div className="flex items-center space-x-3 py-1">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400">ou</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full py-3.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-[10px] font-extrabold uppercase tracking-wider transition-all shadow-sm active:scale-95 duration-200 border border-slate-200 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
+                  <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6 29.6 4 24 4c-7.5 0-14 4.2-17.4 10.4z"/>
+                  <path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.6C29.6 35.5 26.9 36.5 24 36.5c-5.2 0-9.6-3.3-11.3-7.9l-6.6 5.1C9.9 39.7 16.4 44 24 44z"/>
+                  <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.4 36 44 30.5 44 24c0-1.3-.1-2.7-.4-3.5z"/>
+                </svg>
+                Continuer avec Google
               </button>
             </div>
           </div>
