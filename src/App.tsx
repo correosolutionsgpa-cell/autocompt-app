@@ -109,6 +109,7 @@ import SyndicAiReporter from "./components/SyndicAiReporter";
 import CoproprietairePortal from "./components/CoproprietairePortal";
 import SyndicLoi16View from "./components/SyndicLoi16View";
 import PublicSignaturePage from "./components/PublicSignaturePage";
+import DocuLegalPdfEditor, { type SignatureField } from "./components/DocuLegalPdfEditor";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import BetaCodeAdminView from "./components/BetaCodeAdminView";
 import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
@@ -3889,7 +3890,19 @@ const App = () => {
   const [docSimulatedFile, setDocSimulatedFile] = useState<string | null>(null);
   const [isArchivingSignedDoc, setIsArchivingSignedDoc] = useState(false);
   const [archiveTargetFolder, setArchiveTargetFolder] = useState<string | null>(null);
+  const [showArchiveFolderDropdown, setShowArchiveFolderDropdown] = useState(false);
   const archiveSignedDocInputRef = React.useRef<HTMLInputElement | null>(null);
+  // "Importer un PDF à signer" — this whole flow (DocuLegalPdfEditor,
+  // pendingSignatures collection, ?sign= public link, /api/send-signature-
+  // invitation) already existed for the Syndicat profile's own DocuLegal
+  // (SyndicatDocuLegal.tsx) but was never wired into this Plex one. Fabiola
+  // remembered seeing "Importer un PDF à signer" and asked why it wasn't
+  // here — found 2026-08-12. Reuses the same generic components/endpoints
+  // rather than rebuilding them (PublicSignaturePage already handles the
+  // pdfStorageUrl/signatureFields shape regardless of which profile sent it).
+  const [plexPdfEditorFile, setPlexPdfEditorFile] = useState<File | null>(null);
+  const [isSendingPlexPdf, setIsSendingPlexPdf] = useState(false);
+  const plexPdfFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
   // Flippeur/Gestionnaire DocuLegal. Each account's templates are private
@@ -13566,6 +13579,106 @@ const App = () => {
       }
     };
 
+    // Called by <DocuLegalPdfEditor> once fields are placed and signer info
+    // entered — same generic pendingSignatures + ?sign= link mechanism the
+    // Syndicat profile's own DocuLegal already uses (see
+    // handleSendForSignature/handlePdfEditorSend in SyndicatDocuLegal.tsx),
+    // just persisted into THIS profile's own docuLegalList instead of the
+    // Syndic-only `contrats` state.
+    const handlePlexPdfEditorSend = async (
+      fields: SignatureField[],
+      pdfStorageUrl: string,
+      signerName: string,
+      signerEmail: string,
+    ) => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      setIsSendingPlexPdf(true);
+      try {
+        const fileName = plexPdfEditorFile?.name?.replace(/\.pdf$/i, "") || "Document PDF importé";
+        const newId = `pdf_${Date.now().toString(36)}`;
+        const newDoc = {
+          id: newId,
+          name: fileName,
+          cat: archiveTargetFolder || selectedDocuFolder || folders[0] || "Documents",
+          status: "En attente",
+          date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
+          companyId: activeCompanyId,
+          author: currentUserEmail || "",
+          recipient: signerName,
+          recipientEmail: signerEmail,
+          fileUrl: pdfStorageUrl,
+          placedFields: fields,
+        };
+        const saved = await dataService.saveDocuLegalDoc(uid, newDoc);
+        setDocuLegalList((prev) => [saved, ...prev]);
+
+        const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}`;
+        const driveOwnerId = currentCompany?.ownerId || uid;
+        const urlPayload = {
+          docId: newId,
+          docTitle: fileName,
+          docSummary: `Document PDF importé pour signature électronique. Signataire : ${signerName}. ${fields.length} zone${fields.length > 1 ? "s" : ""} de signature définie${fields.length > 1 ? "s" : ""}.`,
+          companyName: currentCompany?.nombre || "",
+          companyId: activeCompanyId,
+          ownerId: driveOwnerId,
+          adminName: currentUserEmail || "Administrateur",
+          adminEmail: currentUserEmail || "",
+          adminSignedDate: new Date().toLocaleDateString("fr-CA"),
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          customDocUrl: "",
+          pdfStorageUrl,
+          signatureFields: fields,
+        };
+        let b64 = "";
+        try {
+          b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+        } catch { }
+        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://autocompt.ca";
+        const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ""}`;
+        await setDoc(doc(db, "pendingSignatures", token), urlPayload);
+
+        try {
+          const resp = await fetch("/api/send-signature-invitation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              signerEmail,
+              signerName,
+              signUrl,
+              docTitle: fileName,
+              docSummary: urlPayload.docSummary,
+              companyName: currentCompany?.nombre || "",
+              adminName: currentUserEmail || currentCompany?.nombre || "",
+              adminEmail: currentUserEmail || "",
+              token,
+            }),
+          });
+          if (!resp.ok) throw new Error(await resp.text());
+          setDispatcherSuccessToast({
+            text: "Document envoyé pour signature !",
+            channel: "DocuLegal",
+            customMessage: `"${fileName}" a été envoyé à ${signerName} (${signerEmail}) pour signature électronique.`,
+          });
+        } catch (err: any) {
+          console.error("send-signature-invitation failed:", err);
+          alert(`Le document a été créé, mais l'envoi automatique du courriel a échoué. Vous pouvez copier le lien de signature manuellement.\n\nDétail: ${err?.message || err}`);
+        }
+
+        setPlexPdfEditorFile(null);
+        playNotificationSound();
+      } catch (err: any) {
+        console.error("handlePlexPdfEditorSend failed:", err);
+        alert(`Erreur lors de l'envoi du document pour signature.\n\nDétail: ${err?.message || err}`);
+      } finally {
+        setIsSendingPlexPdf(false);
+      }
+    };
+
     const handleGenerateFromDocTemplate = async () => {
       if (!fillingDocTemplate) return;
       const uid = auth.currentUser?.uid;
@@ -14387,8 +14500,18 @@ const App = () => {
                         )}
                       </AnimatePresence>
 
+                      {plexPdfEditorFile && (
+                        <DocuLegalPdfEditor
+                          darkMode={darkMode}
+                          pdfFile={plexPdfEditorFile}
+                          docTitle={plexPdfEditorFile.name.replace(/\.pdf$/i, "")}
+                          onClose={() => setPlexPdfEditorFile(null)}
+                          onSendForSignature={handlePlexPdfEditorSend}
+                        />
+                      )}
+
                       {/* 1. THE UPLOAD HUB (DROPZONE) & DRAFT CREATOR */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* DROPZONE — archive an already-signed document (photo/PDF) directly */}
                         <div
                           onClick={() => {
@@ -14422,22 +14545,45 @@ const App = () => {
                             Photo ou PDF — archivé directement, sans passer par la signature électronique
                           </p>
                           <div
-                            className="w-full max-w-[220px] mt-3 space-y-1 text-left"
+                            className="w-full max-w-[220px] mt-3 space-y-1 text-left relative"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-1">
                               Enregistrer dans
                             </label>
-                            <select
-                              value={archiveTargetFolder || selectedDocuFolder || folders[0] || ""}
-                              onChange={(e) => setArchiveTargetFolder(e.target.value)}
+                            {/* Custom dropdown — never a native <select>, per
+                                established project convention. Found/fixed
+                                2026-08-12 while adding the PDF-to-sign card. */}
+                            <button
+                              type="button"
+                              onClick={() => setShowArchiveFolderDropdown(!showArchiveFolderDropdown)}
                               disabled={isArchivingSignedDoc}
-                              className={`w-full px-3 py-2 rounded-xl text-[9px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[9px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
                             >
-                              {folders.map((f) => (
-                                <option key={f} value={f}>{f}</option>
-                              ))}
-                            </select>
+                              <span className="truncate">{archiveTargetFolder || selectedDocuFolder || folders[0] || ""}</span>
+                              <ChevronDown size={11} className={`shrink-0 transition-transform duration-300 ${showArchiveFolderDropdown ? "rotate-180" : ""}`} />
+                            </button>
+                            <AnimatePresence>
+                              {showArchiveFolderDropdown && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: -8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  className={`absolute left-0 right-0 mt-1 p-1.5 rounded-2xl border shadow-2xl z-30 text-left space-y-1 max-h-[220px] overflow-y-auto ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
+                                >
+                                  {folders.map((f) => (
+                                    <button
+                                      key={f}
+                                      type="button"
+                                      onClick={() => { setArchiveTargetFolder(f); setShowArchiveFolderDropdown(false); }}
+                                      className={`w-full text-left px-2.5 py-2 rounded-lg text-[9px] font-bold transition-colors ${(archiveTargetFolder || selectedDocuFolder || folders[0]) === f ? (darkMode ? "bg-teal-500/10 text-teal-400" : "bg-emerald-50 text-emerald-700") : (darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-slate-700 hover:bg-slate-50")}`}
+                                    >
+                                      {f}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                           <button
                             type="button"
@@ -14449,6 +14595,42 @@ const App = () => {
                           >
                             Sélectionner un fichier
                           </button>
+                        </div>
+
+                        {/* Importer un PDF à signer — this already existed for
+                            the Syndicat profile's DocuLegal but was never
+                            wired here. Reuses the same DocuLegalPdfEditor +
+                            generic signature-link infrastructure. Found
+                            2026-08-12: Fabiola remembered seeing this option
+                            and asked why it wasn't in her Solutions GPA
+                            (Gestionnaire) account. */}
+                        <div
+                          onClick={() => plexPdfFileInputRef.current?.click()}
+                          className={`p-6 rounded-[32px] border-2 border-dashed ${darkMode
+                            ? "bg-zinc-950/40 border-emerald-500/20 hover:border-emerald-400 text-zinc-300"
+                            : "bg-emerald-50/10 border-emerald-400/30 hover:border-emerald-500 text-slate-800"
+                            } flex flex-col items-center justify-center text-center transition-all duration-300 relative group cursor-pointer shadow-sm min-h-[160px]`}
+                        >
+                          <input
+                            ref={plexPdfFileInputRef}
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) setPlexPdfEditorFile(file);
+                            }}
+                          />
+                          <div className={`p-3 rounded-2xl ${darkMode ? "bg-emerald-950/20 text-emerald-400" : "bg-emerald-50 text-emerald-600"} transition-transform group-hover:scale-110 mb-2`}>
+                            <Upload size={20} />
+                          </div>
+                          <span className="text-[10px] font-black uppercase italic tracking-wider">
+                            Importer un PDF à signer
+                          </span>
+                          <p className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5 max-w-[200px]">
+                            Placez des zones de signature sur votre propre document et envoyez-le pour signature électronique
+                          </p>
                         </div>
 
                         {/* MANUAL EDITOR BUTTON */}
