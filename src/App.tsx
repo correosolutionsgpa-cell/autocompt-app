@@ -11367,6 +11367,23 @@ const App = () => {
           await signInWithEmailAndPassword(auth, email, typedPassword || "autocompt123");
         } catch (error: any) {
           if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.message.includes('INVALID_LOGIN_CREDENTIALS')) {
+            // Before assuming this is a brand-new account, an EXISTING
+            // pre-migration account whose owner typed something (assuming
+            // they already had a password, when they never set one) needs
+            // the same silent legacy fallback the blank-password path gets —
+            // otherwise a returning user who guesses at a password gets
+            // wrongly told they need a beta code. Found 2026-08-12: Fabiola
+            // hit exactly this on her own already-existing account.
+            if (typedPassword) {
+              try {
+                await signInWithEmailAndPassword(auth, email, "autocompt123");
+                setIsLoadingData(false);
+                return;
+              } catch {
+                // Not a legacy account either — fall through to the real
+                // "brand-new account" beta-code path below.
+              }
+            }
             // Brand-new account — a valid, email-matched beta code is mandatory during this beta.
             const code = (codeStr ?? loginCode).trim();
             if (!code) {
