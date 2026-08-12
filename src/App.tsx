@@ -159,7 +159,7 @@ import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, getDocFromServer, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
 import { getCompanyDriveConfig, uploadDocumentToDrive } from "./lib/driveService";
@@ -8913,24 +8913,17 @@ const App = () => {
           if (user.email) {
             setDoc(userDocRef, { email: user.email }, { merge: true }).catch(() => {});
           }
-          let userDoc = await getDoc(userDocRef);
-          if (!userDoc.exists()) {
-            // A genuinely brand-new account's doc truly won't exist even
-            // after this retry — but a real EXISTING, already-verified
-            // account hit by a cold connection on the very first Firestore
-            // request of a fresh browser session (private browsing, first
-            // visit) can spuriously report !exists() on the first try, which
-            // this whole block then treats as a brand-new signup — forcing
-            // phone-verify (then onboarding) on someone already fully set
-            // up. Found 2026-08-12: Fabiola and Natalia both landed on
-            // "Vérification par SMS" for an already-verified account on the
-            // FIRST login attempt in a fresh/incognito window, then it
-            // worked normally on the very next attempt in the same tab
-            // (connection now warm). One retry after a short pause is
-            // enough to distinguish "truly new" from "cold read fluke".
-            await new Promise((resolve) => setTimeout(resolve, 800));
-            userDoc = await getDoc(userDocRef);
-          }
+          // Use getDocFromServer to always read directly from Firestore's
+          // server, bypassing the local SDK cache entirely. getDoc() (which
+          // uses the cache-first strategy) would silently return !exists() on
+          // the very first request of a fresh/incognito session — before the
+          // cache is populated — tricking the app into treating an already
+          // fully-registered user as brand-new and redirecting them to
+          // "Vérification par SMS". A direct server read eliminates this
+          // on the first attempt, with no delays or retries needed.
+          // Found 2026-08-12: Fabiola and Natalia both hit this every time
+          // they opened the app in a fresh window.
+          let userDoc = await getDocFromServer(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
             role = userData.role || "admin";
@@ -14137,6 +14130,17 @@ const App = () => {
         ].join("\n");
       }
 
+      if (lower.includes("partenariat")) {
+        // Was silently matching the "contrat" branch below (both share that
+        // keyword), so this folder loaded the property-management-mandate
+        // text instead of anything resembling a partnership agreement.
+        // AutoCompt has no real partnership-agreement content to offer —
+        // that's genuinely custom, lawyer-reviewed language, same liability
+        // reasoning as Promesse d'Achat above — so this points to "Mes
+        // Modèles" instead of guessing at legal text. Found 2026-08-12 via
+        // Fabiola's audit of Gestionnaire/Investisseur document folders.
+        return "AutoCompt n'offre pas de modèle prérempli pour un Contrat de Partenariat — le contenu d'une entente entre associés est propre à chaque situation et devrait être révisé par un juriste. Utilisez « Mes Modèles » ci-dessus pour importer votre propre entente (format Word avec des espaces {{champ}}) et la faire signer électroniquement.";
+      }
       if (lower.includes("contrat") || lower.includes("gestion")) {
         return `CONTRAT DE SERVICES DE GESTION IMMOBILIÈRE\n\nMandat conféré à:\n${currentCompany?.nombre || "Solutions GPA Inc."}, ci-après le gestionnaire,\nPar:\n[Propriétaire de l'immeuble], ci-après le commettant.\n\nLe gestionnaire administre, loue et perçoit les loyers, gère l'entretien courant et coordonne les sous-traitants pour un taux d'honoraires préétabli de 5% du revenu locatif total.\n\nLiaison BYOS compatible Loi 25 active.`;
       }
