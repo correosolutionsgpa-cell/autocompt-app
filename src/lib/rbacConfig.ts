@@ -252,6 +252,13 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "gestion_immo",
     "taxes_assurances",
     "assistant_ia",       // Universal
+    // Was missing here even though App.tsx's DocuLegal folder switch already
+    // has a dedicated `case "investisseur":` (Promesses d'Achat, Ententes de
+    // Confidentialité, Contrats de Partenariat, Documents Notariés) — that
+    // code was unreachable since this module was never granted, hiding the
+    // sidebar item and PlexModuleGrid card entirely. Found 2026-08-12 via
+    // Fabiola's audit of Gestionnaire/Investisseur (autogestion) documents.
+    "doculegal",
   ],
 
   /**

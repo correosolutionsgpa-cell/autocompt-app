@@ -13314,16 +13314,22 @@ const App = () => {
         // Gère des propriétés déjà achetées — ne rédige pas d'offres d'achat.
         // "Promesses d'Achat" retiré 2026-08-11 (confirmé avec Fabiola) : réservé
         // aux profils qui achètent réellement (Prospecteur/Flippeur/Investisseur).
+        // "Avis d'Augmentation de Loyer" ajouté 2026-08-12 — un gestionnaire
+        // gère des baux existants, l'augmentation de loyer en fait partie.
         folders = [
           "Contrats de Gestion",
           "Baux de Clients",
+          "Avis d'Augmentation de Loyer",
           "Documents Corporatifs",
         ];
         break;
       case "investisseur":
         // .cursorrules §2B: Asset tracking — purchase and partnership docs
+        // "Avis d'Augmentation de Loyer" ajouté 2026-08-12 pour l'investisseur
+        // en autogestion (gère ses propres locataires directement).
         folders = [
           "Promesses d'Achat",
+          "Avis d'Augmentation de Loyer",
           "Ententes de Confidentialité",
           "Contrats de Partenariat",
           "Documents Notariés",
@@ -14130,6 +14136,17 @@ const App = () => {
         ].join("\n");
       }
 
+      if (lower.includes("augmentation") || (lower.includes("avis") && lower.includes("loyer"))) {
+        // No hardcoded "official" notice text here on purpose — same
+        // liability reasoning as Promesse d'Achat above. The Tribunal
+        // administratif du logement (TAL) prescribes specific mandatory
+        // content (notice periods by lease type, the calculation method/
+        // rates) that changes periodically; AutoCompt guessing at that
+        // wording risks handing out a non-compliant notice. Points to the
+        // real official source instead. Added 2026-08-12 via Fabiola's
+        // audit — confirmed no such template existed anywhere before this.
+        return "AutoCompt ne génère pas le texte légal de l'avis d'augmentation de loyer — le TAL (Tribunal administratif du logement) impose un contenu précis (délais selon le type de bail, méthode de calcul) qui change d'une année à l'autre. Utilisez le formulaire officiel et le calculateur du TAL (tal.gouv.qc.ca) pour établir le montant, puis importez-le ici via « Mes Modèles » (format Word avec des espaces {{champ}}) pour le faire signer/accuser réception électroniquement par vos locataires.";
+      }
       if (lower.includes("partenariat")) {
         // Was silently matching the "contrat" branch below (both share that
         // keyword), so this folder loaded the property-management-mandate
