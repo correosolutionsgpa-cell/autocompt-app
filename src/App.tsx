@@ -14811,7 +14811,7 @@ const App = () => {
                             </a>
                           </div>
                           <div className="p-3 space-y-2">
-                            {/* TAL-806 — actif */}
+                            {/* TAL-806 — actif avec bouton Utiliser */}
                             <div className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800/60" : "bg-white border-slate-100"}`}>
                               <div className="flex items-start gap-3">
                                 <div className={`p-2 rounded-lg shrink-0 ${darkMode ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-100 text-emerald-700"}`}>
@@ -14822,17 +14822,40 @@ const App = () => {
                                     <p className={`font-black text-[11px] ${darkMode ? "text-white" : "text-slate-900"}`}>Avis d'augmentation de loyer</p>
                                     <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${darkMode ? "bg-emerald-900/50 text-emerald-400 border border-emerald-700/50" : "bg-emerald-100 text-emerald-700"}`}>TAL-806</span>
                                   </div>
-                                  <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>3 options obligatoires incluses · Loi déc. 2024</p>
+                                  <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Texte officiel du TAL · 3 options obligatoires · Loi déc. 2024</p>
                                   <div className="flex gap-1.5 mt-1 flex-wrap">
-                                    {["Locataire pré-rempli","Loyer pré-rempli","Adresse pré-remplie"].map(t => (
-                                      <span key={t} className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>✓ {t}</span>
+                                    {["nom_locataire","loyer_actuel","nouveau_loyer","date_effet"].map(t => (
+                                      <span key={t} className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>{"{{" + t + "}}"}</span>
                                     ))}
                                   </div>
                                 </div>
                               </div>
-                              <p className={`text-[8px] italic shrink-0 text-right whitespace-nowrap ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
-                                Générer via<br/>Gestion Immo
-                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDocuFolder("Avis d'Augmentation de Loyer");
+                                  setDocFormFolder("Avis d'Augmentation de Loyer");
+                                  setDocFormName("Avis d'augmentation de loyer");
+                                  setDocFormRecipient("");
+                                  setDocFormEmail("");
+                                  setDocFormPhone("");
+                                  setDocFormContent(loadDefaultTemplate("avis augmentation loyer"));
+                                  setDocFormEmailInvite("Bonjour, veuillez prendre connaissance et signer électroniquement l'avis d'augmentation de loyer ci-joint.");
+                                  setDocFormSmsVerify(true);
+                                  setDocFormSignersList([
+                                    { id: "1", name: currentUserEmail || "", email: currentUserEmail || "", phone: "", role: "Locateur / Émetteur", color: "Purple" },
+                                    { id: "2", name: "", email: "", phone: "", role: "Locataire / Signataire", color: "Amber" },
+                                  ]);
+                                  setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
+                                  setDocPlacedFields([]);
+                                  setSelectedDocuEntry(null);
+                                  setSubVistaDocu("editor");
+                                  playNotificationSound();
+                                }}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-colors border-none cursor-pointer whitespace-nowrap"
+                              >
+                                <Sparkles size={11} /> Utiliser
+                              </button>
                             </div>
 
                             {/* Prochainement */}
