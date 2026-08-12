@@ -47,6 +47,116 @@ const EXTRACTION_SCHEMA = {
   required: ["vendor", "date", "subtotal", "taxes", "grandTotal", "category", "payment"],
 };
 
+export interface PayrollEmployeeRow {
+  nom: string;
+  brut: number;
+  deductions: number;
+  net: number;
+}
+
+export interface PayrollExtractionResult {
+  periode: string | null;
+  employees: PayrollEmployeeRow[];
+}
+
+const PAYROLL_EXTRACTION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    periode: {
+      type: Type.STRING,
+      description: "Période de paie couverte par ce rapport (ex: '2026-08-01 au 2026-08-15'), ou null si absente du document.",
+      nullable: true,
+    },
+    employees: {
+      type: Type.ARRAY,
+      description: "Une ligne par employé listé dans le rapport.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          nom: { type: Type.STRING, description: "Nom complet de l'employé." },
+          brut: { type: Type.NUMBER, description: "Salaire brut en CAD." },
+          deductions: { type: Type.NUMBER, description: "Total des déductions/retenues en CAD." },
+          net: { type: Type.NUMBER, description: "Salaire net versé en CAD." },
+        },
+        required: ["nom", "brut", "deductions", "net"],
+      },
+    },
+  },
+  required: ["employees"],
+};
+
+/**
+ * Extracts one row per employee from a payroll report produced by an
+ * EXTERNAL provider (Nethris, Employeur D, ADP...) — AutoCompt never
+ * calculates payroll itself (tax tables, CNESST, RRQ/AE are out of scope
+ * and a real liability risk if done wrong); this only reads back numbers
+ * the third party already computed, for the user to review/correct before
+ * anything is saved. See savePayrollRecordWithJournal's `source` tag,
+ * which marks every record derived from this as externally-sourced.
+ */
+export async function extractPayrollDataFromDocument(base64Data: string, mimeType: string): Promise<PayrollExtractionResult> {
+  const systemInstruction = `ROLE: Act as a meticulous data-entry clerk transcribing a payroll report into a table.
+Task: Extract ONE ROW PER EMPLOYEE from this payroll report (rapport de paie), produced by an external payroll provider.
+Rules:
+1. ZERO HALLUCINATION RULE: Extract ONLY numbers/names actually printed on the document. If a value is missing or unreadable for an employee, use 0 for that number rather than inventing one.
+2. Do NOT calculate or estimate anything — this document already contains the final, provider-calculated figures. You are transcribing, not computing.
+3. One entry in "employees" per distinct employee row found in the report.
+4. Amounts in CAD, as plain numbers (no currency symbols).
+Output: valid JSON only, matching the schema exactly.`;
+
+  const cleanBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+  const normalisedMime: string = (
+    mimeType === "application/pdf" ||
+    mimeType === "application/octet-stream" &&
+      (base64Data.slice(0, 8).startsWith("JVBERi0"))
+      ? "application/pdf"
+      : mimeType || "image/jpeg"
+  );
+
+  const MODEL_CHAIN = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+  ] as const;
+
+  const contents = {
+    parts: [
+      { inlineData: { data: cleanBase64, mimeType: normalisedMime } },
+      { text: "Extract the payroll table from this document following the schema." },
+    ],
+  };
+
+  const config = {
+    systemInstruction,
+    responseMimeType: "application/json",
+    responseSchema: PAYROLL_EXTRACTION_SCHEMA as any,
+  };
+
+  let lastError: any;
+  for (const model of MODEL_CHAIN) {
+    try {
+      const response = await ai.models.generateContent({ model, contents, config });
+      const result = JSON.parse(response.text || "{}");
+      if (!Array.isArray(result.employees)) result.employees = [];
+      return result as PayrollExtractionResult;
+    } catch (err: any) {
+      lastError = err;
+      const msg: string = err?.message ?? String(err);
+      const isModelError =
+        msg.includes("404") ||
+        msg.toLowerCase().includes("not found") ||
+        msg.toLowerCase().includes("not supported") ||
+        msg.toLowerCase().includes("deprecated");
+      if (!isModelError) break;
+    }
+  }
+
+  throw new Error(
+    `Failed to extract payroll data: ${lastError?.message || "unknown error"}. ` +
+    `Ensure the document is clear and VITE_GEMINI_API_KEY is valid.`
+  );
+}
+
 export async function extractDataFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
   const systemInstruction = `ROLE: Act as an expert, highly precise fiscal auditor for Quebec real estate.
 Task: Extract structured data from receipts with 100% accuracy.

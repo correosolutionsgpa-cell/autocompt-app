@@ -51,6 +51,11 @@ interface JournalEntry {
   createdAt: string;
   ownerId: string;
   lines: JournalLine[];
+  /** 'rapport_externe' = transcribed from a third-party payroll report (see
+   *  savePayrollRecordWithJournal) — AutoCompt didn't calculate this amount.
+   *  Surfaced as a visible marker in the Journal/Grand Livre for the account
+   *  holder's own record-keeping/legal protection. */
+  source?: string;
 }
 
 export interface ComptableExportViewProps {
@@ -82,6 +87,7 @@ const PLAN: Record<string, { label: string; type: 'actif'|'passif'|'revenu'|'cha
   'acc-tps-payable':         { label: 'TPS à remettre (passif)',      type: 'passif', code: '2310' },
   'acc-tvq-payable':         { label: 'TVQ à remettre (passif)',      type: 'passif', code: '2320' },
   'acc-taxe-sejour-payable': { label: 'Taxe de séjour à remettre',   type: 'passif', code: '2330' },
+  'acc-salaires':            { label: 'Salaires et charges sociales', type: 'charge', code: '5300' },
 };
 
 const aLabel = (id: string) => PLAN[id]?.label ?? id;
@@ -751,6 +757,10 @@ export default function ComptableExportView({
                     ?<span className={bk('emerald')}><CheckCircle2 size={8} className="inline mr-0.5"/>Équilibré</span>
                     :<span className={bk('rose')}><AlertCircle size={8} className="inline mr-0.5"/>Déséquilibré</span>
                   }
+                  {/* Traçabilité pour la protection légale du client — voir
+                      savePayrollRecordWithJournal : AutoCompt n'a pas calculé
+                      ce montant, il provient d'un rapport de paie externe. */}
+                  {entry.source==='rapport_externe'&&<span className={bk('indigo')}>Provenant d'un tiers</span>}
                 </div>
                 <p className={`text-[11px] font-bold mt-1 truncate ${D?'text-zinc-200':'text-slate-800'}`}>{entry.description}</p>
                 {entry.documentReference&&<p className={`text-[9px] mt-0.5 font-mono ${D?'text-zinc-600':'text-slate-400'}`}><FileText size={8} className="inline mr-0.5"/>Réf: {entry.documentReference}</p>}
@@ -816,7 +826,10 @@ export default function ComptableExportView({
               <tbody>{acct.lines.map(({entry,line},li)=>(
                 <tr key={li} className={`border-t ${D?'border-zinc-800':'border-slate-100'}`}>
                   <td className={`px-4 py-2 whitespace-nowrap ${D?'text-zinc-400':'text-slate-500'}`}>{fmtDate(entry.date)}</td>
-                  <td className={`px-4 py-2 max-w-[240px] truncate ${D?'text-zinc-300':'text-slate-700'}`}>{entry.description}</td>
+                  <td className={`px-4 py-2 max-w-[240px] truncate ${D?'text-zinc-300':'text-slate-700'}`}>
+                    {entry.description}
+                    {entry.source==='rapport_externe'&&<span className={`${bk('indigo')} ml-1.5 whitespace-nowrap`}>Tiers</span>}
+                  </td>
                   <td className="px-4 py-2 text-right font-mono font-bold text-indigo-600">{line.type==='Debit'?fmtAmt(line.amount):''}</td>
                   <td className="px-4 py-2 text-right font-mono font-bold text-emerald-600">{line.type==='Credit'?fmtAmt(line.amount):''}</td>
                 </tr>

@@ -667,6 +667,14 @@ export interface PaieRecordDoc {
   fileUrl?: string;
   ownerId: string;
   createdAt: string;
+  /** Marks a record as transcribed from a third-party payroll provider's
+   *  report (Nethris, Employeur D...) rather than typed in freely — AutoCompt
+   *  never calculates payroll itself. Undefined/'manuel' = entered directly
+   *  in AutoCompt. Surfaced as a visible badge everywhere this record shows
+   *  (history list, Grand Livre/Journal exports) for the account holder's
+   *  own legal protection: it's traceable that this figure came from, and is
+   *  the responsibility of, the external provider — not calculated by AutoCompt. */
+  source?: 'manuel' | 'rapport_externe';
 }
 
 // ── PropertyDocumentDoc — Firestore `propertyDocuments` collection (Taxes & Assurances Docs) ──
@@ -2463,6 +2471,56 @@ export const dataService = {
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'paieRecords', docId), data);
+    return { ...data, id: originalId, companyId: recordData.companyId };
+  },
+
+  /**
+   * Same as savePaieRecord, but also posts a real double-entry journal entry
+   * (Débit: Salaires et charges sociales / Crédit: Banque) — savePaieRecord
+   * alone never reached journalEntries/journalLines, so payroll records
+   * never actually showed up in the Grand Livre / Balance de Vérification /
+   * Sage-Quickbooks-GIFI exports, unlike invoices/expenses/rent which all go
+   * through postJournalEntry. Both the manual entry form and the bulk
+   * payroll-report import use this now.
+   */
+  async savePayrollRecordWithJournal(
+    userId: string,
+    recordData: Omit<PaieRecordDoc, 'ownerId' | 'createdAt'>
+  ): Promise<PaieRecordDoc> {
+    assertCanWrite();
+    const originalId = recordData.id || `paie_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const docId = `${userId}_paie_${originalId}`;
+    const docCompanyId = `${userId}_company_${recordData.companyId}`;
+    const data: PaieRecordDoc = {
+      ...recordData,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'paieRecords', docId), data);
+
+    const entryData = {
+      id: docId,
+      companyId: docCompanyId,
+      date: data.date || new Date().toISOString(),
+      description: `Paie: ${data.nom || 'Employé'}`,
+      documentReference: docId,
+      createdAt: data.createdAt,
+      ownerId: userId,
+      source: data.source || 'manuel',
+    };
+    const totalAmount = data.montantBase || 0;
+    const linesData = [
+      { id: `${docId}-debit`, journalEntryId: docId, accountId: 'acc-salaires', type: 'Debit', amount: totalAmount, ownerId: userId },
+      { id: `${docId}-credit`, journalEntryId: docId, accountId: 'acc-bank', type: 'Credit', amount: totalAmount, ownerId: userId },
+    ];
+
+    if (!auth.currentUser) {
+      throw new Error('User not authenticated — cannot write to journalEntries/journalLines');
+    }
+    await postJournalEntry(entryData, linesData);
+
     return { ...data, id: originalId, companyId: recordData.companyId };
   },
 
