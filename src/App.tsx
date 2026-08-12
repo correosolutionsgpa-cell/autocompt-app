@@ -14762,10 +14762,7 @@ const App = () => {
                       </div>
 
 
-                      {/* MES MODÈLES — chaque compte monte et garde son propre
-                          modèle exclusif de Promesse d'Achat (ou tout autre
-                          document récurrent). Privé par ownerId : jamais visible
-                          par un autre utilisateur d'AutoCompt. */}
+                      {/* MES MODÈLES — modèles officiels du TAL + documents Word personnalisés */}
                       <div
                         className={`p-5 rounded-[28px] border space-y-4 ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-slate-200"} shadow-sm`}
                       >
@@ -14775,7 +14772,7 @@ const App = () => {
                               Mes Modèles
                             </p>
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                              Vos propres documents Word, réutilisables à chaque client
+                              Modèles officiels TAL + vos propres documents réutilisables
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -14797,6 +14794,65 @@ const App = () => {
                             </button>
                             <Layers size={22} className="text-[#7c3aed] opacity-60" />
                           </div>
+                        </div>
+
+                        {/* ── Modèles officiels TAL ──────────────────────────────── */}
+                        <div className={`rounded-[22px] border overflow-hidden ${darkMode ? "border-emerald-800/40 bg-emerald-950/15" : "border-emerald-200 bg-emerald-50/60"}`}>
+                          <div className={`px-4 py-2.5 border-b flex items-center justify-between ${darkMode ? "border-emerald-800/30 bg-emerald-900/20" : "border-emerald-200 bg-emerald-100/50"}`}>
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck size={13} className={darkMode ? "text-emerald-400" : "text-emerald-600"} />
+                              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                                Modèles du Tribunal administratif du logement
+                              </p>
+                            </div>
+                            <a href="https://www.tal.gouv.qc.ca/fr/formulaires-et-publications/formulaires" target="_blank" rel="noopener noreferrer"
+                              className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${darkMode ? "text-emerald-500 hover:text-emerald-400" : "text-emerald-700 hover:text-emerald-800"}`}>
+                              <ExternalLink size={9} />tal.gouv.qc.ca
+                            </a>
+                          </div>
+                          <div className="p-3 space-y-2">
+                            {/* TAL-806 — actif */}
+                            <div className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800/60" : "bg-white border-slate-100"}`}>
+                              <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded-lg shrink-0 ${darkMode ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-100 text-emerald-700"}`}>
+                                  <FileText size={14} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className={`font-black text-[11px] ${darkMode ? "text-white" : "text-slate-900"}`}>Avis d'augmentation de loyer</p>
+                                    <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${darkMode ? "bg-emerald-900/50 text-emerald-400 border border-emerald-700/50" : "bg-emerald-100 text-emerald-700"}`}>TAL-806</span>
+                                  </div>
+                                  <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>3 options obligatoires incluses · Loi déc. 2024</p>
+                                  <div className="flex gap-1.5 mt-1 flex-wrap">
+                                    {["Locataire pré-rempli","Loyer pré-rempli","Adresse pré-remplie"].map(t => (
+                                      <span key={t} className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>✓ {t}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                              <p className={`text-[8px] italic shrink-0 text-right whitespace-nowrap ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+                                Générer via<br/>Gestion Immo
+                              </p>
+                            </div>
+
+                            {/* Prochainement */}
+                            {["Mise en demeure — non-paiement","Quittance de loyer","Avis de non-reconduction"].map(name => (
+                              <div key={name} className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 opacity-50 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-100"}`}>
+                                <div className="flex items-center gap-2">
+                                  <Clock size={12} className={darkMode ? "text-zinc-600" : "text-slate-400"} />
+                                  <p className={`text-[9px] font-black ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{name}</p>
+                                </div>
+                                <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-600" : "bg-slate-100 text-slate-400"}`}>Bientôt</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* ── Separator ───────────────────────────────────────── */}
+                        <div className={`flex items-center gap-3 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}>
+                          <div className="flex-1 h-px bg-current opacity-50" />
+                          <p className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>Mes modèles personnalisés (.docx)</p>
+                          <div className="flex-1 h-px bg-current opacity-50" />
                         </div>
 
                         {docTemplates.length === 0 ? (
@@ -15559,79 +15615,6 @@ const App = () => {
                         </span>
                       </div>
 
-                      {/* ── TAL models: show inside Avis d'Augmentation folder ── */}
-                      {selectedDocuFolder === "Avis d'Augmentation de Loyer" && (
-                        <div className={`p-5 rounded-[28px] border space-y-3 mb-4 ${darkMode ? "bg-emerald-950/20 border-emerald-800/40" : "bg-emerald-50/60 border-emerald-200"}`}>
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-200 text-emerald-700"}`}>
-                                <ShieldCheck size={17} />
-                              </div>
-                              <div>
-                                <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-                                  Modèles du Tribunal administratif du logement
-                                </p>
-                                <p className={`text-[9px] font-semibold mt-0.5 ${darkMode ? "text-emerald-600" : "text-emerald-600"}`}>
-                                  Source : tal.gouv.qc.ca · À titre de référence seulement — consultez un professionnel
-                                </p>
-                              </div>
-                            </div>
-                            <a
-                              href="https://www.tal.gouv.qc.ca/fr/formulaires-et-publications/formulaires"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors whitespace-nowrap ${darkMode ? "border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/40" : "border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}
-                            >
-                              <ExternalLink size={10} />
-                              tal.gouv.qc.ca
-                            </a>
-                          </div>
-
-                          {/* TAL-806 — active */}
-                          <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800/60" : "bg-white border-slate-200"}`}>
-                            <div className="flex items-start gap-3">
-                              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border border-emerald-300/60"}`}>
-                                <FileText size={16} />
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className={`font-black text-[12px] ${darkMode ? "text-white" : "text-slate-900"}`}>Avis d'augmentation de loyer</p>
-                                  <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${darkMode ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/50" : "bg-emerald-100 text-emerald-700 border border-emerald-300"}`}>TAL-806</span>
-                                </div>
-                                <p className={`text-[9px] font-semibold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
-                                  Inclut les 3 options obligatoires du locataire (Loi déc. 2024)
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {["Locataire pré-rempli", "Loyer actuel pré-rempli", "Adresse pré-remplie"].map(tag => (
-                                    <span key={tag} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>✓ {tag}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                            <p className={`text-[9px] font-bold italic shrink-0 text-right ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                              → Générer depuis<br/>Gestion Immobilière
-                            </p>
-                          </div>
-
-                          {/* Prochainement */}
-                          {["Mise en demeure — non-paiement", "Quittance de loyer", "Avis de non-reconduction"].map(name => (
-                            <div key={name} className={`px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 opacity-50 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-200/60"}`}>
-                              <div className="flex items-center gap-3">
-                                <Clock size={13} className={darkMode ? "text-zinc-600" : "text-slate-400"} />
-                                <p className={`font-black text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{name}</p>
-                              </div>
-                              <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-600" : "bg-slate-100 text-slate-400"}`}>Prochainement</span>
-                            </div>
-                          ))}
-
-                          {/* Separator */}
-                          <div className={`flex items-center gap-3 pt-1 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}>
-                            <div className="flex-1 h-px bg-current opacity-50" />
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>Documents envoyés &amp; signés</p>
-                            <div className="flex-1 h-px bg-current opacity-50" />
-                          </div>
-                        </div>
-                      )}
 
                       {/* Documents list in selected folder */}
                       <div className="space-y-3">
