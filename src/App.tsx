@@ -3551,6 +3551,14 @@ const App = () => {
   const [loginEmail, setLoginEmail] = useState("");
   // Beta access code — only required/checked when creating a brand-new account.
   const [loginCode, setLoginCode] = useState("");
+  // The beta-code field used to always show on the login screen, labeled
+  // "(nouveau compte seulement)" — but still visible and seemingly required
+  // for every returning user too, confusing them into wondering if they need
+  // to fill it in. Hidden by default now; only surfaces via the toggle link,
+  // or automatically once a first attempt fails because no account exists
+  // yet with that email. Found 2026-08-12: Natalia didn't know what to do
+  // faced with this field yesterday.
+  const [showLoginBetaCode, setShowLoginBetaCode] = useState(false);
   // --- BETA TRIAL STATUS (computed once per session in onAuthStateChanged) ---
   const [trialStatus, setTrialStatus] = useState<{ expired: boolean; daysLeft: number } | null>(null);
   const [trialModalDismissed, setTrialModalDismissed] = useState(false);
@@ -8905,7 +8913,24 @@ const App = () => {
           if (user.email) {
             setDoc(userDocRef, { email: user.email }, { merge: true }).catch(() => {});
           }
-          const userDoc = await getDoc(userDocRef);
+          let userDoc = await getDoc(userDocRef);
+          if (!userDoc.exists()) {
+            // A genuinely brand-new account's doc truly won't exist even
+            // after this retry — but a real EXISTING, already-verified
+            // account hit by a cold connection on the very first Firestore
+            // request of a fresh browser session (private browsing, first
+            // visit) can spuriously report !exists() on the first try, which
+            // this whole block then treats as a brand-new signup — forcing
+            // phone-verify (then onboarding) on someone already fully set
+            // up. Found 2026-08-12: Fabiola and Natalia both landed on
+            // "Vérification par SMS" for an already-verified account on the
+            // FIRST login attempt in a fresh/incognito window, then it
+            // worked normally on the very next attempt in the same tab
+            // (connection now warm). One retry after a short pause is
+            // enough to distinguish "truly new" from "cold read fluke".
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            userDoc = await getDoc(userDocRef);
+          }
           if (userDoc.exists()) {
             const userData = userDoc.data();
             role = userData.role || "admin";
@@ -11159,6 +11184,12 @@ const App = () => {
             "4. Activez le fournisseur 'Adresse e-mail/Mot de passe' (Email/Password)."
           );
         } else {
+          if (err.message?.includes("code d'accès bêta est requis")) {
+            // First attempt with just an email and no existing account —
+            // reveal the field instead of a bare alert, so it's clear WHY
+            // it's suddenly needed.
+            setShowLoginBetaCode(true);
+          }
           alert("Erreur de connexion: " + err.message);
         }
         setIsLoadingData(false);
@@ -11249,27 +11280,42 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="space-y-1 text-left">
-                <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
-                  Code d'accès bêta (nouveau compte seulement)
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={loginCode}
-                    onChange={(e) => setLoginCode(e.target.value)}
-                    placeholder="Ex: AC-7F3K9X"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode);
-                    }}
-                    className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm uppercase"
-                  />
-                  <Lock
-                    size={13}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+              {showLoginBetaCode ? (
+                <div className="space-y-1 text-left">
+                  <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                    Code d'accès bêta (nouveau compte seulement)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={loginCode}
+                      onChange={(e) => setLoginCode(e.target.value)}
+                      placeholder="Ex: AC-7F3K9X"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode);
+                      }}
+                      className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm uppercase"
+                    />
+                    <Lock
+                      size={13}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                // Was always visible, permanently confusing returning users
+                // into wondering if they needed to fill it in — hidden by
+                // default now, revealed only if actually needed (via this
+                // link, or automatically if the account turns out not to
+                // exist yet). Found 2026-08-12 via Fabiola/Natalia's report.
+                <button
+                  type="button"
+                  onClick={() => setShowLoginBetaCode(true)}
+                  className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 hover:text-emerald-700 text-left"
+                >
+                  Nouveau sur AutoCompt ? Entrez votre code d'accès bêta
+                </button>
+              )}
 
               <button
                 type="button"
