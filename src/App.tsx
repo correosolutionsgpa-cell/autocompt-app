@@ -8871,16 +8871,18 @@ const App = () => {
     return () => clearTimeout(safetyTimer);
   }, []);
 
+  const authInvocationCounterRef = useRef(0);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const invocationId = ++authInvocationCounterRef.current;
       if (user) {
         // Fix: force JWT token refresh before any Firestore call.
         // onAuthStateChanged fires as soon as Auth resolves, but Firestore
         // can take ~1s to propagate the token. Without this, seedUserData
         // and all subsequent reads fail with "Missing or insufficient permissions".
-        console.log("[AUTH-DEBUG] onAuthStateChanged fired for", user.email, "uid:", user.uid);
+        console.log("[AUTH-DEBUG] #" + invocationId, "onAuthStateChanged fired for", user.email, "uid:", user.uid);
         await user.getIdToken(true);
-        console.log("[AUTH-DEBUG] getIdToken(true) resolved");
+        console.log("[AUTH-DEBUG] #" + invocationId, "getIdToken(true) resolved");
         setCurrentUserEmail(user.email);
         setIsLoadingData(true);
         // Same founder allowlist as getEffectiveTier()/the trial-bypass check below.
@@ -8922,7 +8924,24 @@ const App = () => {
           // write to AFTER this read removes the race entirely: nothing
           // else writes to this doc during the read anymore.
           let userDoc = await getDocFromServer(userDocRef);
-          console.log("[AUTH-DEBUG] getDocFromServer resolved, exists():", userDoc.exists());
+          console.log("[AUTH-DEBUG] #" + invocationId, "getDocFromServer resolved, exists():", userDoc.exists());
+          // Firebase can fire onAuthStateChanged more than once for a single
+          // login (e.g. an initial state-restore fire followed by a second
+          // fire once sign-in fully settles, or a background token refresh —
+          // the "sofi-onboarding" guard above already documents this exact
+          // pattern). Each fire starts its own async read, and they don't
+          // resolve in order: an earlier fire's read can land AFTER a later
+          // fire's, overwriting correct state (phoneVerified/selectedProfile)
+          // with stale/incomplete data — this was the actual cause of the
+          // "Vérification par SMS" flash on already-verified accounts (found
+          // 2026-08-12: identical [AUTH-DEBUG] output reproduced even after
+          // removing the write/read race, proving the race was between two
+          // onAuthStateChanged invocations, not the stamp-email write).
+          // Only the MOST RECENT invocation is allowed to apply its results.
+          if (invocationId !== authInvocationCounterRef.current) {
+            console.log("[AUTH-DEBUG] #" + invocationId, "superseded by a newer onAuthStateChanged fire — discarding this read");
+            return;
+          }
           // Stamp the auth email onto the Firestore user doc on every login —
           // no signup path ever wrote this field, so SuperAdminPanel's user
           // list/search silently broke for any account whose doc predates
@@ -8934,6 +8953,7 @@ const App = () => {
           }
           if (userDoc.exists()) {
             const userData = userDoc.data();
+            console.log("[AUTH-DEBUG] #" + invocationId, "raw userData:", JSON.stringify(userData));
             role = userData.role || "admin";
             setUserRole(role);
             setUserLevel(userData.level || "Gestion Immobilière");
