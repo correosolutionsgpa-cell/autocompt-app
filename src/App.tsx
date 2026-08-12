@@ -13742,6 +13742,135 @@ const App = () => {
       }
     };
 
+    // Replaces the old "Envoyer pour Signature" behaviour for the
+    // "Rédiger un nouveau document" editor — that button used to only open
+    // the QR/in-person mobile-sign modal, which (a) only ever captured ONE
+    // signature per document via qrModalDoc.recipient, silently ignoring
+    // docFormSignersList even though its own "Signataires & Rôles" panel
+    // implied multiple people could sign, and (b) had a weaker, client-only
+    // "TX-BYOS-..." id with no IP/consent/timestamp audit trail. Now uses
+    // the same real per-signer email + token + audit-trail mechanism as
+    // "Importer un PDF à signer" (handlePlexPdfEditorSend) — docSummary
+    // carries the FULL document text (generateBipartitePDF in
+    // PublicSignaturePage already paginates/certifies arbitrary-length
+    // text into the final signed PDF, no separate PDF upload needed here).
+    // Found 2026-08-12: Fabiola required certified, traceable signatures
+    // with a distinct identity/reference number per signed document —
+    // confirmed this gives each signer their own token embedded in their
+    // own certified PDF.
+    const handleSendDocForRealSignature = async () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      if (!docFormName.trim() || !docFormContent.trim()) {
+        alert("⚠️ Le nom du document et son contenu sont requis.");
+        return;
+      }
+      const validSigners = docFormSignersList.filter((s) => s.name?.trim() && s.email?.includes("@"));
+      if (validSigners.length === 0) {
+        alert("⚠️ Ajoutez au moins un signataire avec un courriel valide.");
+        return;
+      }
+      setIsSendingPlexPdf(true);
+      try {
+        const isNew = !selectedDocuEntry;
+        const newId = isNew ? `DOC-${Date.now().toString().substring(8)}` : selectedDocuEntry.id;
+        const newDocObj = {
+          id: newId,
+          name: docFormName,
+          cat: docFormFolder,
+          status: "En attente",
+          date: isNew ? new Date().toISOString().split("T")[0] : selectedDocuEntry.date,
+          companyId: activeCompanyId,
+          author: activeUser,
+          recipient: validSigners.map((s) => s.name).join(", "),
+          recipientEmail: validSigners.map((s) => s.email).join(", "),
+          content: docFormContent,
+          smsVerify: docFormSmsVerify,
+          emailInvite: docFormEmailInvite,
+          signers: docFormSignersList,
+        };
+        if (isNew) {
+          setDocuLegalList([newDocObj, ...docuLegalList]);
+        } else {
+          setDocuLegalList(docuLegalList.map((d) => (d.id === selectedDocuEntry.id ? newDocObj : d)));
+        }
+        const saved = await dataService.saveDocuLegalDoc(uid, newDocObj);
+        setDocuLegalList((prev) => prev.map((d) => (d.id === newId ? saved : d)));
+
+        const driveOwnerId = currentCompany?.ownerId || uid;
+        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://autocompt.ca";
+        let sentCount = 0;
+        const failedSigners: string[] = [];
+
+        for (const signer of validSigners) {
+          const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}`;
+          const urlPayload = {
+            docId: newId,
+            docTitle: docFormName,
+            docSummary: docFormContent,
+            companyName: currentCompany?.nombre || "",
+            companyId: activeCompanyId,
+            ownerId: driveOwnerId,
+            adminName: currentUserEmail || "Administrateur",
+            adminEmail: currentUserEmail || "",
+            adminSignedDate: new Date().toLocaleDateString("fr-CA"),
+            status: "pending",
+            createdAt: new Date().toISOString(),
+            customDocUrl: "",
+          };
+          let b64 = "";
+          try {
+            b64 = btoa(unescape(encodeURIComponent(JSON.stringify(urlPayload))))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+          } catch { }
+          const signUrl = `${appBase}?sign=${token}${b64 ? `&d=${b64}` : ""}`;
+          await setDoc(doc(db, "pendingSignatures", token), urlPayload);
+
+          try {
+            const resp = await fetch("/api/send-signature-invitation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                signerEmail: signer.email,
+                signerName: signer.name,
+                signUrl,
+                docTitle: docFormName,
+                docSummary: docFormEmailInvite || `Veuillez prendre connaissance et signer électroniquement "${docFormName}".`,
+                companyName: currentCompany?.nombre || "",
+                adminName: currentUserEmail || currentCompany?.nombre || "",
+                adminEmail: currentUserEmail || "",
+                token,
+              }),
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            sentCount++;
+          } catch (err: any) {
+            console.error(`send-signature-invitation failed for ${signer.email}:`, err);
+            failedSigners.push(`${signer.name} (${signer.email})`);
+          }
+        }
+
+        if (failedSigners.length === 0) {
+          setDispatcherSuccessToast({
+            text: "Document envoyé pour signature !",
+            channel: "DocuLegal",
+            customMessage: `"${docFormName}" a été envoyé à ${validSigners.length} signataire${validSigners.length > 1 ? "s" : ""} pour signature électronique.`,
+          });
+        } else {
+          alert(`Le document a été créé et envoyé à ${sentCount}/${validSigners.length} signataire(s). L'envoi a échoué pour : ${failedSigners.join(", ")}.`);
+        }
+        setSubVistaDocu("liste");
+        playNotificationSound();
+      } catch (err: any) {
+        console.error("handleSendDocForRealSignature failed:", err);
+        alert(`Erreur lors de l'envoi du document pour signature.\n\nDétail: ${err?.message || err}`);
+      } finally {
+        setIsSendingPlexPdf(false);
+      }
+    };
+
     const handleGenerateFromDocTemplate = async () => {
       if (!fillingDocTemplate) return;
       const uid = auth.currentUser?.uid;
@@ -16402,45 +16531,13 @@ const App = () => {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!docFormName || !docFormRecipient) {
-                              alert(
-                                "⚠️ Le nom du document et le destinataire sont requis.",
-                              );
-                              return;
-                            }
-                            // Configure QR Modal to open
-                            const isNew = !selectedDocuEntry;
-                            const newId = isNew
-                              ? `DOC-${Date.now().toString().substring(8)}`
-                              : selectedDocuEntry.id;
-
-                            const tempDocObj = {
-                              id: newId,
-                              name: docFormName,
-                              cat: docFormFolder,
-                              status: "En attente",
-                              date: isNew
-                                ? new Date().toISOString().split("T")[0]
-                                : selectedDocuEntry.date,
-                              companyId: activeCompanyId,
-                              author: activeUser,
-                              recipient: docFormRecipient,
-                              recipientEmail: docFormEmail,
-                              recipientPhone: docFormPhone,
-                              content: docFormContent,
-                              smsVerify: docFormSmsVerify,
-                              emailInvite: docFormEmailInvite,
-                            };
-
-                            setQrModalDoc(tempDocObj);
-                            setShowQrModal(true);
-                            playNotificationSound();
-                          }}
-                          className="w-full py-4 bg-[#059669] hover:bg-emerald-650 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none"
+                          onClick={handleSendDocForRealSignature}
+                          disabled={isSendingPlexPdf}
+                          className="w-full py-4 bg-[#059669] hover:bg-emerald-650 text-white text-xs font-black uppercase italic rounded-3xl transition-all active:scale-95 shadow-xl shadow-emerald-990/15 flex items-center justify-center space-x-2 border-none disabled:opacity-60"
                         >
-                          <Sparkles size={14} />
-                          <span>Envoyer pour Signature</span>
+                          {isSendingPlexPdf
+                            ? <><Loader2 size={14} className="animate-spin" /><span>Envoi en cours...</span></>
+                            : <><Sparkles size={14} /><span>Envoyer pour Signature ({docFormSignersList.filter((s) => s.name?.trim() && s.email?.includes("@")).length})</span></>}
                         </button>
                       </>
                     )}
