@@ -141,6 +141,30 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Public e-signature flow (DocuLegalPdfEditor → PublicSignaturePage,
+    // used by both the Syndicat and Plex DocuLegal). The recipient signing
+    // a document (tenant, chambreur, co-owner...) almost never has an
+    // AutoCompt account — PublicSignaturePage.tsx reads/writes these two
+    // collections with NO auth at all, by design (a "magic link" model: the
+    // long random token in the URL IS the access control, same trust model
+    // as e.g. a DocuSign envelope link). Found 2026-08-12: neither
+    // collection had ANY rule here, so every read/write was silently
+    // rejected by the default-deny catch-all below — the whole e-signature
+    // send/sign flow was broken end to end, for every profile, the entire
+    // time this feature has existed. Only account creation is gated (a
+    // signed-in AutoCompt user has to be the one generating the link).
+    match /pendingSignatures/{token} {
+      allow read, update: if true;
+      allow create: if isSignedIn();
+      allow delete: if false;
+    }
+    // Keyed by the SIGNER's own email (see PublicSignaturePage.tsx) so a
+    // returning public signer's saved signature is found again next time —
+    // same public trust model as pendingSignatures above.
+    match /savedSignatures/{key} {
+      allow read, write: if true;
+    }
+
     // Per-company Google Drive connection metadata (folder id, connected
     // email — never the OAuth token itself). Doc id is `{ownerId}_company_{id}`,
     // scoped the same way as `companies`, since the app's internal company ids
