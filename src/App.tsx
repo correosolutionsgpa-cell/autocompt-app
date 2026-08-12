@@ -14066,7 +14066,11 @@ const App = () => {
             adminSignedDate: new Date().toLocaleDateString("fr-CA"),
             status: "pending",
             createdAt: new Date().toISOString(),
-            customDocUrl: "",
+            // Was "" — the signer had no way to actually open the PDF they
+            // were being asked to sign, only a generic auto-generated
+            // sentence. Found 2026-08-12: Fabiola's real recipient couldn't
+            // read the document before signing at all.
+            customDocUrl: pdfStorageUrl,
             pdfStorageUrl,
             signatureFields: signerFields,
           };

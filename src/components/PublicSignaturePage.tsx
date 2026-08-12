@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, AlertTriangle, Loader2, PenTool, X,
-  ShieldCheck, FileText, Check, Stamp, Pen, Type, ChevronDown, ChevronUp,
+  ShieldCheck, FileText, Check, Stamp, Pen, Type,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
@@ -155,15 +155,18 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [useSavedSig, setUseSavedSig] = useState(false);
   const [saveSigForNextTime, setSaveSigForNextTime] = useState(true);
 
-  // Progress tracking for field-based signing
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({}); // fieldId -> dataUrl or text
-  const [activeFieldId, setActiveFieldId] = useState<string | null>(null)   ; // field being signed
-  const [showProgress, setShowProgress] = useState(true);
-
   // Legal consent & audit trail
   const [hasConsented, setHasConsented] = useState(false);
   const [auditLinkOpenedAt, setAuditLinkOpenedAt] = useState('');
   const [auditIp, setAuditIp] = useState('');
+
+  // Whether the signer has actually opened the source document. When there's
+  // a separate file to view (customDocUrl — e.g. an uploaded PDF), signing
+  // used to be possible without ever opening it — found 2026-08-12 when a
+  // real recipient had no way to read what they were signing at all. There's
+  // nothing separate to open when the full text is already shown inline
+  // (docSummary-only documents), so this starts true in that case.
+  const [hasViewedDoc, setHasViewedDoc] = useState(false);
 
   // Initials (paraphes — every page)
   const [initialMode, setInitialMode] = useState<InputMode>('type');
@@ -903,8 +906,47 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
       <main className="max-w-2xl mx-auto p-6 space-y-5">
 
+        {/* ── Step tracker — replaces the old decorative "Progression" box,
+             which listed placed PDF fields but never actually tracked
+             anything real. This reflects genuine state instead. ──────────── */}
+        {(() => {
+          const needsDocView = !!docData?.customDocUrl;
+          const steps = [
+            { label: 'Document', done: !needsDocView || hasViewedDoc },
+            { label: 'Identité', done: !!signerName.trim() },
+            { label: 'Initiales', done: initialMode === 'draw' ? sigInitials.hasDrawn : !!typedInitials.trim() },
+            { label: 'Signature', done: sigMode === 'draw' ? sigFull.hasDrawn : !!typedSignature.trim() },
+            { label: 'Confirmer', done: hasConsented },
+          ];
+          return (
+            <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                {steps.map((s, i) => (
+                  <React.Fragment key={s.label}>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                        s.done ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {s.done ? <Check size={13} /> : i + 1}
+                      </div>
+                      <span className={`text-[7.5px] font-black uppercase tracking-wider ${s.done ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className={`flex-1 h-0.5 mx-1 -mt-4 ${steps[i + 1].done || s.done ? 'bg-emerald-300' : 'bg-slate-100'}`} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Document card */}
-        <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className={`bg-white rounded-[24px] border-2 shadow-sm p-6 space-y-4 ${
+          docData?.customDocUrl && !hasViewedDoc ? 'border-indigo-300' : 'border-slate-200'
+        }`}>
           <div className="flex items-start gap-4">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0"><FileText size={22} /></div>
             <div>
@@ -918,14 +960,24 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             {docData?.docSummary}
           </div>
           {docData?.customDocUrl && (
-            <a
-              href={docData.customDocUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-indigo-700 text-xs font-black uppercase tracking-widest hover:bg-indigo-100"
-            >
-              <FileText size={14} /> Lire le document complet avant de signer
-            </a>
+            <>
+              <a
+                href={docData.customDocUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setHasViewedDoc(true)}
+                className={`flex items-center justify-center gap-2 py-4 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  hasViewedDoc
+                    ? 'bg-emerald-50 border-2 border-emerald-300 text-emerald-700'
+                    : 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 animate-pulse'
+                }`}
+              >
+                {hasViewedDoc ? <><Check size={14} /> Document ouvert — vous pouvez continuer</> : <><FileText size={14} /> Ouvrir et lire le document avant de signer</>}
+              </a>
+              {!hasViewedDoc && (
+                <p className="text-[9px] text-indigo-600 font-bold text-center">← Obligatoire avant de pouvoir signer</p>
+              )}
+            </>
           )}
           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
             Envoyé par {docData?.adminName} · {docData?.companyName}
@@ -1007,67 +1059,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           </AnimatePresence>
         )}
 
-        {/* ── Progress Indicator (field-based signing) ───────────────────── */}
-        {docData?.signatureFields && docData.signatureFields.length > 0 && (
-          <div className="bg-white rounded-[24px] border-2 border-indigo-200 shadow-sm p-5 space-y-3">
-            <button
-              onClick={() => setShowProgress(p => !p)}
-              className="w-full flex items-center justify-between gap-2"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
-                  <span className="text-[10px]">📋</span>
-                </div>
-                <h2 className="text-[9px] font-black uppercase tracking-widest text-indigo-700">
-                  Progression de la signature
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black text-indigo-600">
-                  {Object.keys(fieldValues).length} / {docData.signatureFields.filter(f => f.required).length} champs
-                </span>
-                {showProgress ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-              </div>
-            </button>
-
-            {/* Progress bar */}
-            <div className="w-full bg-indigo-100 rounded-full h-2">
-              <div
-                className="bg-indigo-500 h-2 rounded-full transition-all duration-500"
-                style={{
-                  width: `${docData.signatureFields.length > 0
-                    ? (Object.keys(fieldValues).length / docData.signatureFields.filter(f => f.required).length) * 100
-                    : 0}%`
-                }}
-              />
-            </div>
-
-            {showProgress && (
-              <div className="space-y-1.5">
-                {docData.signatureFields.map(f => {
-                  const isDone = !!fieldValues[f.id];
-                  return (
-                    <div key={f.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[9px] font-bold transition-all ${
-                      isDone ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'
-                    }`}>
-                      <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{
-                        background: isDone ? '#10b981' : '#e2e8f0'
-                      }}>
-                        {isDone ? <Check size={9} className="text-white" /> : null}
-                      </span>
-                      <span className="flex-1 uppercase tracking-wide">
-                        {f.label} — Page {f.page}
-                      </span>
-                      {f.required && !isDone && (
-                        <span className="text-[7px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase">Requis</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
         <div className="bg-white rounded-[24px] border-2 border-amber-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1320,8 +1311,14 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
         {/* Sign button */}
         <button
-          onClick={handleSign}
-          disabled={isSigning || !signerName.trim() || !hasConsented}
+          onClick={() => {
+            if (docData?.customDocUrl && !hasViewedDoc) {
+              alert("Veuillez d'abord ouvrir et lire le document avant de signer.");
+              return;
+            }
+            handleSign();
+          }}
+          disabled={isSigning || !signerName.trim() || !hasConsented || (!!docData?.customDocUrl && !hasViewedDoc)}
           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.99] shadow-lg shadow-emerald-600/20"
         >
           {isSigning
@@ -1329,6 +1326,11 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             : <><PenTool size={18} /> Signer et Valider le Document</>
           }
         </button>
+        {docData?.customDocUrl && !hasViewedDoc && (
+          <p className="text-[9px] text-indigo-600 font-bold text-center -mt-3">
+            ← Ouvrez d'abord le document ci-dessus pour activer ce bouton
+          </p>
+        )}
 
         <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase text-slate-400 tracking-widest pb-6">
           <ShieldCheck size={12} />
