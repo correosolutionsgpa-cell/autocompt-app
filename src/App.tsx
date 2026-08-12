@@ -8878,7 +8878,9 @@ const App = () => {
         // onAuthStateChanged fires as soon as Auth resolves, but Firestore
         // can take ~1s to propagate the token. Without this, seedUserData
         // and all subsequent reads fail with "Missing or insufficient permissions".
+        console.log("[AUTH-DEBUG] onAuthStateChanged fired for", user.email, "uid:", user.uid);
         await user.getIdToken(true);
+        console.log("[AUTH-DEBUG] getIdToken(true) resolved");
         setCurrentUserEmail(user.email);
         setIsLoadingData(true);
         // Same founder allowlist as getEffectiveTier()/the trial-bypass check below.
@@ -8924,6 +8926,7 @@ const App = () => {
           // Found 2026-08-12: Fabiola and Natalia both hit this every time
           // they opened the app in a fresh window.
           let userDoc = await getDocFromServer(userDocRef);
+          console.log("[AUTH-DEBUG] getDocFromServer resolved, exists():", userDoc.exists());
           if (userDoc.exists()) {
             const userData = userDoc.data();
             role = userData.role || "admin";
@@ -9138,13 +9141,23 @@ const App = () => {
             // progress, only the wizard's own onComplete should move it
             // forward — never this background re-check.
             if (prev === "sofi-onboarding") return prev;
-            if (!preAuthScreens.includes(prev)) return prev;
-            if (!phoneAlreadyVerified) return "phone-verify";
-            if (!hasSelectedProfile) return "sofi-onboarding";
+            if (!preAuthScreens.includes(prev)) {
+              console.log("[AUTH-DEBUG] setVista decision: keep prev (not a preAuthScreen) —", prev);
+              return prev;
+            }
+            if (!phoneAlreadyVerified) {
+              console.log("[AUTH-DEBUG] setVista decision: phone-verify. prev=", prev, "phoneAlreadyVerified=", phoneAlreadyVerified, "hasSelectedProfile=", hasSelectedProfile);
+              return "phone-verify";
+            }
+            if (!hasSelectedProfile) {
+              console.log("[AUTH-DEBUG] setVista decision: sofi-onboarding. prev=", prev, "hasSelectedProfile=", hasSelectedProfile);
+              return "sofi-onboarding";
+            }
+            console.log("[AUTH-DEBUG] setVista decision: dashboard. prev=", prev);
             return "dashboard";
           });
         } catch (err) {
-          console.error("Error loading user data from Firestore:", err);
+          console.error("[AUTH-DEBUG] Error loading user data from Firestore:", err);
         } finally {
           setIsLoadingData(false);
         }
