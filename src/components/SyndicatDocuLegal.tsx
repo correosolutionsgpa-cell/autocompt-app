@@ -1226,8 +1226,101 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
           >
             {activeTab === 'modeles' && (
               <>
+                {/* ── Modèles TAL officiels (système) ─────────────────────── */}
+                <div className={`rounded-[28px] border overflow-hidden ${darkMode ? 'border-emerald-800/40 bg-emerald-950/20' : 'border-emerald-200 bg-emerald-50/60'}`}>
+                  {/* Section header */}
+                  <div className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${darkMode ? 'border-emerald-800/30 bg-emerald-900/20' : 'border-emerald-200 bg-emerald-100/60'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl ${darkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-200 text-emerald-700'}`}>
+                        <ShieldCheck size={18} />
+                      </div>
+                      <div>
+                        <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                          Modèles du Tribunal administratif du logement
+                        </p>
+                        <p className={`text-[9px] font-semibold mt-0.5 ${darkMode ? 'text-emerald-600' : 'text-emerald-600'}`}>
+                          Source : tal.gouv.qc.ca · À titre de référence seulement — consultez un professionnel
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href="https://www.tal.gouv.qc.ca/fr/formulaires-et-publications/formulaires"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors whitespace-nowrap ${darkMode ? 'border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/40' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100'}`}
+                    >
+                      <ExternalLink size={11} />
+                      Voir sur tal.gouv.qc.ca
+                    </a>
+                  </div>
+
+                  {/* Template cards */}
+                  <div className="p-4 space-y-3">
+                    {/* TAL-806 — Avis d'augmentation de loyer */}
+                    <div className={`rounded-[22px] p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-white border-slate-200/80'}`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-2xl shrink-0 ${darkMode ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300/60'}`}>
+                          <FileText size={20} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`font-black text-sm tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                              Avis d'augmentation de loyer
+                            </p>
+                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${darkMode ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-700/50' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'}`}>
+                              TAL-806
+                            </span>
+                          </div>
+                          <p className={`text-[10px] font-semibold leading-relaxed max-w-sm ${darkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            Avis d'augmentation de loyer et de modification d'une autre condition du bail.
+                            Inclut les 3 options obligatoires du locataire (Loi déc. 2024).
+                          </p>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {['Locataire pré-rempli', 'Loyer actuel pré-rempli', 'Adresse pré-remplie', '3 options légales incluses'].map(tag => (
+                              <span key={tag} className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${darkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>
+                                ✓ {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <p className={`text-[9px] font-bold italic hidden sm:block ${darkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                          Générer depuis GestionPlex
+                        </p>
+                        <Sparkles size={14} className={darkMode ? 'text-zinc-600' : 'text-slate-300'} />
+                      </div>
+                    </div>
+
+                    {/* Placeholder — coming soon */}
+                    {['Mise en demeure — non-paiement de loyer', 'Quittance de loyer', 'Avis de non-reconduction'].map(name => (
+                      <div key={name} className={`rounded-[22px] p-4 border flex items-center justify-between gap-4 opacity-50 ${darkMode ? 'bg-zinc-950/40 border-zinc-800/40' : 'bg-white/60 border-slate-200/60'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl ${darkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-slate-100 text-slate-400'}`}>
+                            <Clock size={16} />
+                          </div>
+                          <p className={`font-black text-[11px] tracking-tight ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{name}</p>
+                        </div>
+                        <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${darkMode ? 'bg-zinc-800 text-zinc-600' : 'bg-slate-100 text-slate-400'}`}>
+                          Prochainement
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Separator */}
+                <div className={`flex items-center gap-3 my-4 ${darkMode ? 'text-zinc-700' : 'text-slate-300'}`}>
+                  <div className="flex-1 h-px bg-current opacity-50" />
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                    Mes modèles personnalisés
+                  </p>
+                  <div className="flex-1 h-px bg-current opacity-50" />
+                </div>
+
+                {/* User custom templates */}
                 {templates.length === 0 && (
-                  <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"}`}>
+                  <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? 'border-zinc-800 text-zinc-500' : 'border-slate-200 text-slate-400'}`}>
                     <Layers size={30} className="mx-auto mb-3 opacity-60" />
                     <p className="text-xs font-black uppercase tracking-widest mb-1">Aucun modèle pour l'instant</p>
                     <p className="text-[11px] font-medium max-w-sm mx-auto">
@@ -1236,14 +1329,14 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                   </div>
                 )}
                 {templates.map((tpl) => (
-                  <div key={tpl.id} className={`rounded-[28px] p-6 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? "bg-zinc-950/80 border-zinc-900/80" : "bg-white border-slate-200/80"}`}>
+                  <div key={tpl.id} className={`rounded-[28px] p-6 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-zinc-950/80 border-zinc-900/80' : 'bg-white border-slate-200/80'}`}>
                     <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-2xl shrink-0 ${darkMode ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-indigo-100/90 text-indigo-700 border border-indigo-300/60"}`}>
+                      <div className={`p-3 rounded-2xl shrink-0 ${darkMode ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'bg-indigo-100/90 text-indigo-700 border border-indigo-300/60'}`}>
                         <FileSignature size={20} />
                       </div>
                       <div>
-                        <p className={`font-black text-sm tracking-tight ${darkMode ? "text-white" : "text-slate-900"}`}>{tpl.nombre}</p>
-                        <p className={`text-[10px] font-semibold mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                        <p className={`font-black text-sm tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>{tpl.nombre}</p>
+                        <p className={`text-[10px] font-semibold mt-1 ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
                           {tpl.campos.length} champ{tpl.campos.length > 1 ? 's' : ''} à remplir · {tpl.campos.slice(0, 3).join(', ')}{tpl.campos.length > 3 ? '…' : ''}
                           {(tpl.condiciones?.length || 0) > 0 && <> · {tpl.condiciones.length} clause{tpl.condiciones.length > 1 ? 's' : ''} conditionnelle{tpl.condiciones.length > 1 ? 's' : ''}</>}
                         </p>
@@ -1258,7 +1351,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                       </button>
                       <button
                         onClick={() => handleDeleteTemplate(tpl)}
-                        className={`p-3 rounded-full border-none cursor-pointer ${darkMode ? "bg-rose-950/25 text-rose-400 hover:bg-rose-900/40" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
+                        className={`p-3 rounded-full border-none cursor-pointer ${darkMode ? 'bg-rose-950/25 text-rose-400 hover:bg-rose-900/40' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1267,6 +1360,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
                 ))}
               </>
             )}
+
             {activeTab !== 'modeles' && !docsLoaded && (
               <div className={`text-center py-14 px-6 rounded-[28px] border-2 border-dashed ${darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"}`}>
                 <Loader2 size={24} className="mx-auto mb-3 animate-spin opacity-60" />

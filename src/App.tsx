@@ -94,6 +94,7 @@ import {
   Hash,
   HelpCircle,
   ReceiptText,
+  HardDrive,
 } from "lucide-react";
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
@@ -162,7 +163,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { doc, getDoc, getDocFromServer, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
-import { getCompanyDriveConfig, uploadDocumentToDrive } from "./lib/driveService";
+import { getCompanyDriveConfig, uploadDocumentToDrive, connectCompanyDrive } from "./lib/driveService";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
@@ -1801,6 +1802,63 @@ const App = () => {
   const currentCompany =
     listaEmpresas.find((e) => e.id === activeCompanyId) || visibleEmpresas[0];
   const empresa = currentCompany;
+
+  // One-click "connect Drive now" prompt for the active company, shown once
+  // per company until dismissed or connected — closes the gap where Drive
+  // connection only happened if the user went looking for it in Settings.
+  // Dismissal is remembered per companyId in localStorage so it doesn't nag
+  // every session for a company someone deliberately skipped.
+  const [driveConnectDismissedIds, setDriveConnectDismissedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("autocompt_drive_prompt_dismissed");
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [showDriveConnectPrompt, setShowDriveConnectPrompt] = useState(false);
+  const [isDriveConnectPromptBusy, setIsDriveConnectPromptBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const ownerId = currentCompany?.ownerId || auth.currentUser?.uid || "";
+    if (!activeCompanyId || !ownerId || driveConnectDismissedIds.has(activeCompanyId)) {
+      setShowDriveConnectPrompt(false);
+      return;
+    }
+    getCompanyDriveConfig(activeCompanyId, ownerId)
+      .then((config) => { if (!cancelled) setShowDriveConnectPrompt(!config?.connected); })
+      .catch(() => { if (!cancelled) setShowDriveConnectPrompt(false); });
+    return () => { cancelled = true; };
+  }, [activeCompanyId, currentCompany?.ownerId, driveConnectDismissedIds]);
+
+  const handleQuickConnectDrive = async () => {
+    const ownerId = currentCompany?.ownerId || auth.currentUser?.uid || "";
+    if (!activeCompanyId || !ownerId) return;
+    setIsDriveConnectPromptBusy(true);
+    await connectCompanyDrive(
+      activeCompanyId,
+      ownerId,
+      currentUserEmail || undefined,
+      () => {
+        setIsDriveConnectPromptBusy(false);
+        setShowDriveConnectPrompt(false);
+      },
+      (err) => {
+        setIsDriveConnectPromptBusy(false);
+        alert("Erreur de connexion Google Drive: " + err);
+      }
+    );
+  };
+
+  const dismissDriveConnectPrompt = () => {
+    setShowDriveConnectPrompt(false);
+    setDriveConnectDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(activeCompanyId);
+      try { localStorage.setItem("autocompt_drive_prompt_dismissed", JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // RBAC "profile" is normally one setting for the whole account — but a
   // company can independently be flagged gestion déléguée (this account
@@ -12086,6 +12144,41 @@ const App = () => {
         </div>
 
         <main className="p-4 space-y-4">
+          {showDriveConnectPrompt && (
+            <div
+              className={`w-full mb-4 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${
+                darkMode ? "bg-emerald-900/10 border-emerald-500/30" : "bg-emerald-50 border-emerald-200"
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-200/50 text-emerald-700"}`}>
+                <HardDrive size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-black uppercase italic tracking-tight ${darkMode ? "text-emerald-300" : "text-emerald-800"}`}>
+                  Connecter le Google Drive de {currentCompany?.nombre || "cette entreprise"} ?
+                </p>
+                <p className={`text-[9px] font-bold uppercase tracking-wide mt-0.5 ${darkMode ? "text-emerald-500/70" : "text-emerald-600/80"}`}>
+                  Une seule fois — vos documents s'archiveront automatiquement
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickConnectDrive}
+                disabled={isDriveConnectPromptBusy}
+                className="shrink-0 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95"
+              >
+                {isDriveConnectPromptBusy ? "..." : "Connecter"}
+              </button>
+              <button
+                type="button"
+                onClick={dismissDriveConnectPrompt}
+                className={`shrink-0 p-1.5 rounded-lg ${darkMode ? "text-emerald-500/60 hover:text-emerald-300" : "text-emerald-600/50 hover:text-emerald-700"}`}
+                aria-label="Plus tard"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
           {/* Was buried far down the dashboard (past the search bar, KPIs,
               module grid...) — Daniel's QA report (2026-08-11) said users
               had to scroll a lot to find it. Now the very first thing shown. */}
@@ -21789,6 +21882,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         onTaxScan={handleTaxScan}
         sofiPrefillMessage={sofiPrefillMessage}
         fideicommisClients={fideicommisClients}
+        adminName={adminName}
+        currentCompany={currentCompany}
       />
     );
   }

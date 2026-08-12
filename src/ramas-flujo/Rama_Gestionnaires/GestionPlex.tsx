@@ -32,9 +32,11 @@ import {
   Save,
   Sparkles,
   Trash2,
+  TrendingUp,
   Upload,
   X,
 } from "lucide-react";
+import AvisAugmentationModal from "../../components/modals/AvisAugmentationModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +74,10 @@ export interface GestionPlexProps {
   onTaxScan: (file: File) => Promise<void>;
   /** Set by App when S.O.F.I. has pre-filled the form; cleared on next edit */
   sofiPrefillMessage: string;
+  /** Name of the logged-in admin — used to pre-fill locateur name in generated documents. */
+  adminName?: string;
+  /** Active company — used to pre-fill locateur address/phone in generated documents. */
+  currentCompany?: any;
   /** Fidéicommis clients managed by this gestionnaire.
    *  Used to link a building to its owner-client (fideicommisClientId). */
   fideicommisClients?: Array<{ id: string; nom: string }>;
@@ -98,6 +104,8 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   onTaxScan,
   sofiPrefillMessage,
   fideicommisClients = [],
+  adminName = "",
+  currentCompany,
 }) => {
   const taxScanInputRef = useRef<HTMLInputElement>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
@@ -119,6 +127,14 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   // as showClientDropdown above. Found 2026-08-11 via Daniel's QA report.
   const [showNombrePiecesDropdown, setShowNombrePiecesDropdown] = useState(false);
   const NOMBRE_PIECES_OPTIONS = ["Studio", "1½", "2½", "3½", "4½", "5½", "6½", "7½", "8½", "9+"];
+
+  // ── Avis d'augmentation de loyer modal ───────────────────────────────────
+  const [avisModalOpen, setAvisModalOpen] = useState(false);
+  const [avisModalUnit, setAvisModalUnit] = useState<{ unit: UnitDoc; adresse: string } | null>(null);
+  const openAvisModal = (unit: UnitDoc, adresse: string) => {
+    setAvisModalUnit({ unit, adresse });
+    setAvisModalOpen(true);
+  };
 
   // Only show this company's properties. Untagged (`companyId` missing) entries
   // are properties saved before this feature existed — keep showing them until
@@ -1219,14 +1235,30 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           {p.adresse?.split(" ")[0] || "ADR"}
                         </p>
                       </div>
-                      <p
-                        className={`text-lg font-black mt-2 ${darkMode ? "text-zinc-200" : "text-slate-800"}`}
-                      >
-                        {p.montant} ${" "}
-                        <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">
-                          / Mois
-                        </span>
-                      </p>
+                      <div className="flex items-end justify-between mt-2">
+                        <p
+                          className={`text-lg font-black ${darkMode ? "text-zinc-200" : "text-slate-800"}`}
+                        >
+                          {p.montant} ${" "}
+                          <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">
+                            / Mois
+                          </span>
+                        </p>
+                        {buildingUnits[0] && buildingUnits[0].isActive && (
+                          <button
+                            onClick={() => openAvisModal(buildingUnits[0], p.adresse || "")}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors ${
+                              darkMode
+                                ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
+                                : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                            }`}
+                            title="Générer un avis d'augmentation de loyer"
+                          >
+                            <TrendingUp size={12} />
+                            Avis d'augm.
+                          </button>
+                        )}
+                      </div>
                     </>
                   )}
 
@@ -1272,9 +1304,25 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                             <p className="text-[8px] font-mono font-black uppercase px-2 py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
                               {u.id.slice(0, 12)}…
                             </p>
-                            <p className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
-                              {u.monthlyRent} $
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className={`text-base font-black ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>
+                                {u.monthlyRent} $
+                              </p>
+                              {u.isActive && (
+                                <button
+                                  onClick={() => openAvisModal(u, p.adresse || "")}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${
+                                    darkMode
+                                      ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
+                                      : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                  }`}
+                                  title="Générer un avis d'augmentation de loyer"
+                                >
+                                  <TrendingUp size={10} />
+                                  Avis
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1350,6 +1398,24 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
         )}
       </AnimatePresence>
     </main>
+
+    {/* ── Avis d'augmentation de loyer modal ──────────────────────────── */}
+    {avisModalUnit && (
+      <AvisAugmentationModal
+        darkMode={darkMode}
+        isOpen={avisModalOpen}
+        onClose={() => { setAvisModalOpen(false); setAvisModalUnit(null); }}
+        tenantName={avisModalUnit.unit.tenantName || ""}
+        monthlyRent={avisModalUnit.unit.monthlyRent || 0}
+        moveInDate={avisModalUnit.unit.moveInDate}
+        unitLabel={avisModalUnit.unit.unitName || ""}
+        adresseLogement={avisModalUnit.adresse}
+        locateurNom={adminName || currentCompany?.nombre || ""}
+        locateurAdresse={currentCompany?.adresse}
+        locateurTel={currentCompany?.tel}
+        locateurEmail={currentCompany?.email}
+      />
+    )}
   </div>
   );
 };
