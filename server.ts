@@ -1539,6 +1539,38 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // ── DocuLegal: proxy a Storage PDF so the public signing page can read it ──
+  // Firebase Storage download URLs are public content-wise (token-gated),
+  // but the bucket has no CORS config for cross-origin browser fetch() — a
+  // plain <a href> navigation works fine (no CORS involved), but pdf.js
+  // fetching the bytes directly from client JS to render it inline fails
+  // silently. Found 2026-08-12: the new click-to-sign-on-document viewer
+  // showed "0/4 zones" with nothing to click and no error at all — the PDF
+  // simply never loaded. Routing through the server sidesteps browser CORS
+  // entirely (server-to-server requests aren't subject to it). Restricted to
+  // Firebase Storage URLs only — never an open proxy for arbitrary URLs.
+  app.get("/api/proxy-pdf", async (req, res) => {
+    try {
+      const url = String(req.query.url || "");
+      let parsed: URL;
+      try { parsed = new URL(url); } catch { return res.status(400).json({ error: "URL invalide" }); }
+      if (parsed.hostname !== "firebasestorage.googleapis.com") {
+        return res.status(400).json({ error: "Domaine non autorisé" });
+      }
+      const upstream = await fetch(url);
+      if (!upstream.ok) {
+        return res.status(upstream.status).json({ error: "Échec du chargement du document" });
+      }
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.send(buf);
+    } catch (err: any) {
+      console.error("proxy-pdf error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── DocuLegal: finalize a real multi-party signature (2+ named signers) ────
   // Each signer completes independently from their own link/browser, so no
   // single one of them ever has every other signer's signature image. This

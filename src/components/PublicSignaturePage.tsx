@@ -235,6 +235,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPdfPages, setNumPdfPages] = useState(0);
   const [pdfViewerLoading, setPdfViewerLoading] = useState(true);
+  const [pdfLoadError, setPdfLoadError] = useState(false);
   const pdfPageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const pdfCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
 
@@ -253,6 +254,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     let cancelled = false;
     const load = async () => {
       setPdfViewerLoading(true);
+      setPdfLoadError(false);
       try {
         const w = window as any;
         if (!w.pdfjsLib) {
@@ -266,7 +268,13 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           w.pdfjsLib.GlobalWorkerOptions.workerSrc =
             'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-        const resp = await fetch(docData.pdfStorageUrl!);
+        // Routed through our own server, not fetched directly from Storage —
+        // the bucket has no CORS config for cross-origin browser fetch(), so
+        // a direct fetch() here failed silently (no error, just an empty
+        // viewer showing "0/4 zones" with nothing to click). Found
+        // 2026-08-12. Server-to-server requests aren't subject to CORS.
+        const resp = await fetch(`/api/proxy-pdf?url=${encodeURIComponent(docData.pdfStorageUrl!)}`);
+        if (!resp.ok) throw new Error(`proxy-pdf ${resp.status}`);
         const buf = await resp.arrayBuffer();
         if (cancelled) return;
         const pdf = await w.pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
@@ -276,6 +284,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         setHasViewedDoc(true);
       } catch (e) {
         console.error('[PublicSignaturePage] PDF load error:', e);
+        if (!cancelled) setPdfLoadError(true);
       } finally {
         if (!cancelled) setPdfViewerLoading(false);
       }
@@ -1327,6 +1336,22 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
               <div className="flex items-center justify-center gap-3 py-16">
                 <Loader2 className="animate-spin text-emerald-500" size={24} />
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Chargement du document...</span>
+              </div>
+            ) : pdfLoadError ? (
+              <div className="p-5 bg-rose-50 border-2 border-rose-200 rounded-2xl text-center space-y-3">
+                <AlertTriangle className="text-rose-500 mx-auto" size={24} />
+                <p className="text-sm font-bold text-rose-700">Impossible d'afficher le document ici.</p>
+                {docData?.customDocUrl && (
+                  <a
+                    href={docData.customDocUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setHasViewedDoc(true)}
+                    className="inline-flex items-center gap-2 py-3 px-5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-widest"
+                  >
+                    <FileText size={14} /> Ouvrir le document dans un nouvel onglet
+                  </a>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto -mx-2 px-2">
