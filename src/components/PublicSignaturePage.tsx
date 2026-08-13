@@ -220,6 +220,139 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [selectedSigFont, setSelectedSigFont] = useState(0);
   const sigFull = useDrawingCanvas('Dessinez votre signature ici');
 
+  // ── Click-to-sign directly on the real document ─────────────────────────
+  // When the sender uploaded a PDF and placed exact signature/initials/
+  // date/name zones on it (DocuLegalPdfEditor), the signer should see and
+  // fill THOSE exact zones on the real document — like DocuSign — instead
+  // of a generic "draw your signature" form disconnected from the actual
+  // paper. Requested 2026-08-12: "colocar el documento en el momento de la
+  // firma y que la persona vea donde esta colocando la firma, igual que las
+  // otras aplicaciones de firma". Falls back to the old generic form for
+  // documents with no underlying PDF (the plain-text "Rédiger un nouveau
+  // document" path has nothing to overlay onto).
+  const usesRealPdfSigning = !!(docData?.pdfStorageUrl && docData?.signatureFields && docData.signatureFields.length > 0);
+
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [numPdfPages, setNumPdfPages] = useState(0);
+  const [pdfViewerLoading, setPdfViewerLoading] = useState(true);
+  const pdfPageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const pdfCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+
+  // fieldId -> what the signer put there (image for signature/initials,
+  // plain text for date/name) — this is what gets persisted and, once every
+  // signer for the document is done, burned onto the real PDF server-side.
+  const [fieldValues, setFieldValues] = useState<Record<string, { type: string; dataUrl?: string; text?: string }>>({});
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+  const [activeFieldMode, setActiveFieldMode] = useState<InputMode>('draw');
+  const [activeFieldTypedText, setActiveFieldTypedText] = useState('');
+  const [activeFieldFont, setActiveFieldFont] = useState(0);
+  const activeFieldCanvas = useDrawingCanvas('Signez ici');
+
+  useEffect(() => {
+    if (!usesRealPdfSigning || !docData?.pdfStorageUrl) return;
+    let cancelled = false;
+    const load = async () => {
+      setPdfViewerLoading(true);
+      try {
+        const w = window as any;
+        if (!w.pdfjsLib) {
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            s.onload = () => resolve();
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+          w.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        const resp = await fetch(docData.pdfStorageUrl!);
+        const buf = await resp.arrayBuffer();
+        if (cancelled) return;
+        const pdf = await w.pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+        if (cancelled) return;
+        setPdfDoc(pdf);
+        setNumPdfPages(pdf.numPages);
+        setHasViewedDoc(true);
+      } catch (e) {
+        console.error('[PublicSignaturePage] PDF load error:', e);
+      } finally {
+        if (!cancelled) setPdfViewerLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usesRealPdfSigning, docData?.pdfStorageUrl]);
+
+  useEffect(() => {
+    if (!pdfDoc) return;
+    let cancelled = false;
+    const render = async () => {
+      for (let i = 1; i <= numPdfPages; i++) {
+        if (cancelled) return;
+        try {
+          const page = await pdfDoc.getPage(i);
+          const vp = page.getViewport({ scale: 1.5 });
+          const canvas = pdfCanvasRefs.current[i - 1];
+          if (!canvas || cancelled) continue;
+          canvas.width = vp.width;
+          canvas.height = vp.height;
+          canvas.style.width = `${vp.width / 1.5}px`;
+          canvas.style.height = `${vp.height / 1.5}px`;
+          const ctx = canvas.getContext('2d');
+          if (ctx && !cancelled) await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        } catch { /* can fail on unmount — ignore */ }
+      }
+    };
+    render();
+    return () => { cancelled = true; };
+  }, [pdfDoc, numPdfPages]);
+
+  const openField = (fieldId: string, fieldType: string) => {
+    if (fieldType === 'date') {
+      // Nothing to draw or type — just confirm today's date.
+      const todayLabel = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'long', year: 'numeric' });
+      setFieldValues((p) => ({ ...p, [fieldId]: { type: 'date', text: todayLabel } }));
+      return;
+    }
+    setActiveFieldId(fieldId);
+    setActiveFieldMode(fieldType === 'signature' ? 'draw' : 'type');
+    setActiveFieldTypedText(fieldType === 'name' ? signerName : '');
+    activeFieldCanvas.resetCanvas();
+  };
+
+  const confirmActiveField = async () => {
+    if (!activeFieldId || !docData?.signatureFields) return;
+    const field = docData.signatureFields.find((f) => f.id === activeFieldId);
+    if (!field) return;
+    if (field.type === 'name') {
+      if (!activeFieldTypedText.trim()) { alert('Veuillez saisir un nom.'); return; }
+      setFieldValues((p) => ({ ...p, [activeFieldId]: { type: 'name', text: activeFieldTypedText.trim() } }));
+      setActiveFieldId(null);
+      return;
+    }
+    // signature / initials
+    let dataUrl = '';
+    if (activeFieldMode === 'draw') {
+      if (!activeFieldCanvas.hasDrawn || !activeFieldCanvas.canvasRef.current) {
+        alert('Veuillez dessiner avant de valider.');
+        return;
+      }
+      dataUrl = activeFieldCanvas.canvasRef.current.toDataURL('image/png');
+    } else {
+      if (!activeFieldTypedText.trim()) { alert('Veuillez saisir du texte.'); return; }
+      dataUrl = await renderTextToDataUrl(
+        activeFieldTypedText.trim(), FONT_OPTIONS[activeFieldFont].family,
+        field.type === 'signature' ? 560 : 200,
+        field.type === 'signature' ? 100 : 60,
+        field.type === 'signature' ? 52 : 36,
+      );
+    }
+    setFieldValues((p) => ({ ...p, [activeFieldId]: { type: field.type, dataUrl } }));
+    setActiveFieldId(null);
+  };
+
   useEffect(() => {
     // Load Google Fonts. The css2 endpoint needs a SEPARATE family= param
     // per font — pipe-joining them into one param (the old css1 syntax) is
@@ -348,6 +481,67 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
     if (!hasConsented) {
       alert("Vous devez cocher la case de consentement électronique avant de signer.");
+      return;
+    }
+
+    // ── Click-to-sign-on-the-document flow ──────────────────────────────────
+    if (usesRealPdfSigning) {
+      const requiredFields = (docData.signatureFields || []).filter((f) => f.required);
+      const missing = requiredFields.filter((f) => !fieldValues[f.id]);
+      if (missing.length > 0) {
+        alert(`Il reste ${missing.length} champ${missing.length > 1 ? 's' : ''} à remplir sur le document avant de pouvoir signer.`);
+        return;
+      }
+      setIsSigning(true);
+      try {
+        const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
+        const timeStr = new Date().toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
+        try {
+          await setDoc(doc(db, 'pendingSignatures', token), {
+            ...docData, status: 'signed',
+            clientSignerName: signerName,
+            clientSignerEmail: signerEmail,
+            clientSignedDate: `${todayStr} \xE0 ${timeStr}`,
+            clientSignedAt: new Date().toISOString(),
+            fieldValues,
+            auditConsentGiven: true,
+            auditConsentAt: new Date().toISOString(),
+            auditLinkOpenedAt,
+            auditSignIp: auditIp || 'unknown',
+            auditSignUA: navigator.userAgent.slice(0, 200),
+          });
+        } catch {}
+
+        let groupResult: { allSigned: boolean; signedCount: number; totalSigners: number } = {
+          allSigned: false, signedCount: 1, totalSigners: docData.totalSigners || 1,
+        };
+        try {
+          const resp = await withTimeout(
+            fetch('/api/finalize-signature-group', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ docId: docData.docId, token }),
+            }),
+            25000,
+            null,
+          );
+          if (resp?.ok) {
+            const data = await resp.json();
+            groupResult = {
+              allSigned: !!data.allSigned,
+              signedCount: data.signedCount ?? groupResult.signedCount,
+              totalSigners: data.totalSigners ?? groupResult.totalSigners,
+            };
+          }
+        } catch {}
+        setGroupSignResult(groupResult);
+        setIsDone(true);
+      } catch (e) {
+        alert('Erreur lors de la signature. Veuillez réessayer.');
+        console.error(e);
+      } finally {
+        setIsSigning(false);
+      }
       return;
     }
 
@@ -1069,7 +1263,9 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 font-medium leading-relaxed">
             {docData?.docSummary}
           </div>
-          {docData?.customDocUrl && (
+          {/* When the document renders inline below (usesRealPdfSigning),
+              there's no separate tab to open — skip this link entirely. */}
+          {docData?.customDocUrl && !usesRealPdfSigning && (
             <>
               <a
                 href={docData.customDocUrl}
@@ -1118,8 +1314,171 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           </div>
         </div>
 
+        {/* ── Click-to-sign directly on the real document ──────────────────── */}
+        {usesRealPdfSigning && (
+          <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] font-black text-slate-500">2</div>
+              <h2 className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Cliquez sur chaque zone du document pour la remplir
+              </h2>
+            </div>
+            {pdfViewerLoading ? (
+              <div className="flex items-center justify-center gap-3 py-16">
+                <Loader2 className="animate-spin text-emerald-500" size={24} />
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Chargement du document...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <div className="flex flex-col items-center gap-8 py-2">
+                  {Array.from({ length: numPdfPages }, (_, i) => i).map((pi) => {
+                    const pageFields = (docData?.signatureFields || []).filter((f) => f.page === pi + 1);
+                    return (
+                      <div key={pi} className="relative">
+                        <p className="absolute -top-5 left-0 text-[8px] font-black uppercase tracking-widest text-slate-400">
+                          Page {pi + 1} / {numPdfPages}
+                        </p>
+                        <div ref={(el) => { pdfPageRefs.current[pi] = el; }} className="relative shadow-xl rounded overflow-hidden">
+                          <canvas ref={(el) => { pdfCanvasRefs.current[pi] = el; }} style={{ display: 'block' }} />
+                          {pageFields.map((f) => {
+                            const value = fieldValues[f.id];
+                            const isDone = !!value;
+                            const typeLabel: Record<string, string> = { signature: 'Signature', initials: 'Initiales', date: 'Date', name: 'Nom complet' };
+                            const typeIcon: Record<string, React.ReactElement> = {
+                              signature: <PenTool size={12} />, initials: <Type size={12} />, date: <Stamp size={12} />, name: <Type size={12} />,
+                            };
+                            return (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => openField(f.id, f.type)}
+                                className={`absolute flex items-center justify-center rounded-md border-2 transition-all ${
+                                  isDone
+                                    ? 'border-emerald-500 bg-emerald-50/90'
+                                    : 'border-indigo-500 bg-indigo-50/80 animate-pulse hover:bg-indigo-100'
+                                }`}
+                                style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%` }}
+                              >
+                                {isDone && value?.dataUrl ? (
+                                  <img src={value.dataUrl} alt={typeLabel[f.type]} className="max-h-full max-w-full object-contain" />
+                                ) : isDone && value?.text ? (
+                                  <span className="text-emerald-700 font-bold text-[10px] truncate px-1">{value.text}</span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-indigo-700 text-[8px] font-black uppercase tracking-wider px-1 truncate">
+                                    {typeIcon[f.type]} {typeLabel[f.type]}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <p className="text-[9px] text-slate-400 font-medium text-center">
+              {Object.keys(fieldValues).length} / {(docData?.signatureFields || []).length} zones remplies — cliquez sur les cases indigo clignotantes
+            </p>
+          </div>
+        )}
+
+        {/* ── Field-fill modal ──────────────────────────────────────────────── */}
+        <AnimatePresence>
+          {activeFieldId && docData?.signatureFields && (() => {
+            const field = docData.signatureFields.find((f) => f.id === activeFieldId);
+            if (!field) return null;
+            return (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4"
+                onClick={() => setActiveFieldId(null)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-[24px] p-6 w-full max-w-md space-y-4 max-h-[85vh] overflow-y-auto"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black uppercase italic text-slate-900 text-sm">
+                      {field.type === 'signature' ? 'Votre signature' : field.type === 'initials' ? 'Vos initiales' : 'Nom complet'}
+                    </h3>
+                    <button onClick={() => setActiveFieldId(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+                  </div>
+
+                  {field.type === 'name' ? (
+                    <input
+                      type="text" autoFocus value={activeFieldTypedText}
+                      onChange={(e) => setActiveFieldTypedText(e.target.value)}
+                      placeholder="Nom complet"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
+                    />
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        {(['draw', 'type'] as InputMode[]).map((m) => (
+                          <button key={m} onClick={() => setActiveFieldMode(m)}
+                            className={`flex items-center justify-center gap-1.5 flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
+                              activeFieldMode === m ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'
+                            }`}>
+                            {m === 'draw' ? <><Pen size={11} /> Dessiner</> : <><Type size={11} /> Saisir</>}
+                          </button>
+                        ))}
+                      </div>
+                      {activeFieldMode === 'draw' ? (
+                        <div className="space-y-2">
+                          <canvas
+                            ref={activeFieldCanvas.canvasRef}
+                            width={field.type === 'signature' ? 560 : 300} height={field.type === 'signature' ? 140 : 90}
+                            className="w-full border border-slate-200 rounded-2xl bg-slate-50 cursor-crosshair touch-none"
+                            onMouseDown={activeFieldCanvas.startDraw} onMouseMove={activeFieldCanvas.continueDraw}
+                            onMouseUp={activeFieldCanvas.stopDraw} onMouseLeave={activeFieldCanvas.stopDraw}
+                            onTouchStart={activeFieldCanvas.startDraw} onTouchMove={activeFieldCanvas.continueDraw} onTouchEnd={activeFieldCanvas.stopDraw}
+                          />
+                          <button onClick={activeFieldCanvas.resetCanvas} className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500">
+                            <X size={10} className="inline" /> Recommencer
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="text" autoFocus value={activeFieldTypedText}
+                            onChange={(e) => setActiveFieldTypedText(e.target.value)}
+                            placeholder={field.type === 'signature' ? 'Votre nom' : 'Ex: J.T.'}
+                            className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
+                          />
+                          {activeFieldTypedText.trim() && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {FONT_OPTIONS.map((font, idx) => (
+                                <button key={font.family} onClick={() => setActiveFieldFont(idx)}
+                                  className={`px-3 py-2.5 rounded-xl border-2 text-center transition-all ${activeFieldFont === idx ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                                  <span style={{ fontFamily: `'${font.family}', cursive`, fontSize: '1.2rem', color: activeFieldFont === idx ? '#059669' : '#334155' }}>
+                                    {activeFieldTypedText}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <button
+                    onClick={confirmActiveField}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Valider ce champ
+                  </button>
+                </motion.div>
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
+
         {/* ── Saved Signature Banner ───────────────────────────────────────── */}
-        {savedSig && savedSigLoaded && (
+        {!usesRealPdfSigning && savedSig && savedSigLoaded && (
           <AnimatePresence>
             <motion.div
               initial={{ opacity: 0, y: -8 }}
@@ -1171,6 +1530,8 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           </AnimatePresence>
         )}
 
+        {!usesRealPdfSigning && (
+        <>
         <div className="bg-white rounded-[24px] border-2 border-amber-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1392,6 +1753,8 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
               <p className="text-[8px] text-slate-400 font-medium">Elle sera reconnue automatiquement via votre courriel</p>
             </div>
           </label>
+        )}
+        </>
         )}
 
         {/* ── Mandatory Legal Consent Checkbox ─────────────────────────────── */}

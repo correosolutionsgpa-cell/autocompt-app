@@ -2,6 +2,7 @@ import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import jsPDF from "jspdf";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
 import {
   companyDocId,
@@ -194,6 +195,80 @@ function generateMultiPartyPdf(data: {
     catch { return null; }
   } catch (err) {
     console.error("generateMultiPartyPdf error:", err);
+    return null;
+  }
+}
+
+// ── DocuLegal: burn every real signer's actual signature/initials/date/name ──
+// directly onto the ORIGINAL uploaded PDF, at the exact spots the sender
+// placed them in DocuLegalPdfEditor — the "sign right on the document, like
+// DocuSign" experience requested 2026-08-12, instead of the old separate
+// certificate-style PDF. xPct/yPct/wPct/hPct use the same top-left-origin,
+// percentage-of-page convention as the on-screen field editor/viewer; PDF
+// coordinates start bottom-left, hence the Y flip below.
+async function generatePdfFieldOverlay(params: {
+  pdfBytes: ArrayBuffer;
+  token: string;
+  companyName: string;
+  signers: Array<{
+    fields: Array<{ id: string; page: number; type: string; xPct: number; yPct: number; wPct: number; hPct: number }>;
+    values: Record<string, { type: string; dataUrl?: string; text?: string }>;
+  }>;
+}): Promise<string | null> {
+  try {
+    const pdfDoc = await PDFDocument.load(params.pdfBytes);
+    const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helvOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+    const green = rgb(5 / 255, 150 / 255, 105 / 255);
+
+    for (const signer of params.signers) {
+      for (const field of signer.fields) {
+        const value = signer.values[field.id];
+        if (!value) continue;
+        const pageIndex = Math.max(0, (field.page || 1) - 1);
+        const page = pdfDoc.getPage(Math.min(pageIndex, pdfDoc.getPageCount() - 1));
+        const { width: pw, height: ph } = page.getSize();
+        const xPt = (field.xPct / 100) * pw;
+        const wPt = (field.wPct / 100) * pw;
+        const hPt = (field.hPct / 100) * ph;
+        const yPt = ph - (field.yPct / 100) * ph - hPt;
+
+        if (value.dataUrl) {
+          try {
+            const base64 = value.dataUrl.split(",")[1] || "";
+            const imgBytes = Buffer.from(base64, "base64");
+            const img = await pdfDoc.embedPng(imgBytes);
+            page.drawImage(img, { x: xPt, y: yPt, width: wPt, height: hPt });
+          } catch (imgErr) {
+            console.error("[generatePdfFieldOverlay] image embed failed:", imgErr);
+          }
+        } else if (value.text) {
+          const fontSize = Math.max(7, Math.min(13, hPt * 0.5));
+          page.drawText(value.text, {
+            x: xPt + 2,
+            y: yPt + hPt / 2 - fontSize / 3,
+            size: fontSize,
+            font: helvOblique,
+            color: green,
+          });
+        }
+      }
+    }
+
+    // ── Certification stamp on the last page ──────────────────────────────
+    const lastPage = pdfDoc.getPage(pdfDoc.getPageCount() - 1);
+    const { width: pw } = lastPage.getSize();
+    const stampY = 14;
+    lastPage.drawRectangle({ x: 10, y: stampY - 4, width: pw - 20, height: 22, borderColor: green, borderWidth: 0.8, color: rgb(1, 1, 1), opacity: 0.9 });
+    lastPage.drawText(
+      `Document signé électroniquement via DocuLegal (AutoCompt) — ${params.companyName || ""} — Réf: ${params.token.slice(0, 24).toUpperCase()}`,
+      { x: 14, y: stampY + 4, size: 6.5, font: helv, color: green },
+    );
+
+    const outBytes = await pdfDoc.save();
+    return Buffer.from(outBytes).toString("base64");
+  } catch (err) {
+    console.error("generatePdfFieldOverlay error:", err);
     return null;
   }
 }
@@ -1522,31 +1597,56 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
       const companyId: string | undefined = first.companyId;
       const ownerId: string | undefined = first.ownerId;
 
-      const signerRecords = signedDocs.map((d) => {
+      const signerContacts = signedDocs.map((d) => {
         const data = d.data();
-        return {
-          name: data.clientSignerName || "Signataire",
-          email: data.clientSignerEmail || "",
-          signedDate: data.clientSignedDate || "",
-          sigDataUrl: data.clientSignatureDataUrl || "",
-          initialsDataUrl: data.clientInitialsDataUrl || "",
-        };
+        return { name: data.clientSignerName || "Signataire", email: data.clientSignerEmail || "" };
       });
 
-      const pdfBase64 = generateMultiPartyPdf({ docTitle, docSummary, companyName, token: docId, customDocUrl: first.customDocUrl || undefined, signers: signerRecords });
+      // Click-to-sign-on-the-document (2026-08-12): each signer's own
+      // pendingSignatures doc carries its OWN signatureFields (their exact
+      // placed zones) and fieldValues (what they put in each). When that
+      // shape is present, overlay everyone's real input onto the actual
+      // uploaded PDF instead of building a separate certificate PDF.
+      const hasFieldOverlayData = !!first.pdfStorageUrl && signedDocs.some((d) => {
+        const data = d.data();
+        return data.fieldValues && Object.keys(data.fieldValues).length > 0;
+      });
+
+      let pdfBase64: string | null;
+      if (hasFieldOverlayData) {
+        const pdfResp = await fetch(first.pdfStorageUrl);
+        const pdfBytes = await pdfResp.arrayBuffer();
+        const overlaySigners = signedDocs.map((d) => {
+          const data = d.data();
+          return { fields: data.signatureFields || [], values: data.fieldValues || {} };
+        });
+        pdfBase64 = await generatePdfFieldOverlay({ pdfBytes, token: docId, companyName, signers: overlaySigners });
+      } else {
+        const signerRecords = signedDocs.map((d) => {
+          const data = d.data();
+          return {
+            name: data.clientSignerName || "Signataire",
+            email: data.clientSignerEmail || "",
+            signedDate: data.clientSignedDate || "",
+            sigDataUrl: data.clientSignatureDataUrl || "",
+            initialsDataUrl: data.clientInitialsDataUrl || "",
+          };
+        });
+        pdfBase64 = generateMultiPartyPdf({ docTitle, docSummary, companyName, token: docId, customDocUrl: first.customDocUrl || undefined, signers: signerRecords });
+      }
 
       // ── Email the final PDF to every real signer + the admin (deduped) ──
       const resendApiKey = process.env.RESEND_API_KEY;
       const fromEmail = process.env.RESEND_FROM_EMAIL || "DocuLegal <noreply@autocompt.ca>";
       const recipients = Array.from(new Set([
-        ...signerRecords.map((s) => s.email).filter(Boolean),
+        ...signerContacts.map((s) => s.email).filter(Boolean),
         adminEmail,
       ].filter(Boolean)));
 
       if (resendApiKey && pdfBase64 && recipients.length > 0) {
         const safeTitle = (docTitle || "Document").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim().replace(/\s+/g, "_");
         const attachment = { filename: `DocuLegal_${safeTitle}_Signe_Final.pdf`, content: pdfBase64 };
-        const namesLine = signerRecords.map((s) => s.name).join(", ");
+        const namesLine = signerContacts.map((s) => s.name).join(", ");
         const html = `
           <!DOCTYPE html><html><head><meta charset="utf-8"></head>
           <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
