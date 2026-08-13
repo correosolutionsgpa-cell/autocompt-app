@@ -14910,7 +14910,7 @@ const App = () => {
                                   <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Formulaire officiel gratuit · 3 options locataire · Loi déc. 2024</p>
                                 </div>
                               </div>
-                              <a href="https://www.tal.gouv.qc.ca/sites/default/files/notices/TAL_806.pdf" target="_blank" rel="noopener noreferrer"
+                              <a href="https://www.tal.gouv.qc.ca/sites/default/files/notices/TAL_806_E.pdf" target="_blank" rel="noopener noreferrer"
                                 className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-colors whitespace-nowrap">
                                 <ExternalLink size={11} /> PDF officiel
                               </a>
