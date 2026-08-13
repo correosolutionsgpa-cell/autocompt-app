@@ -298,24 +298,36 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     if (!pdfDoc) return;
     let cancelled = false;
     const render = async () => {
+      // Fit the page to the actual screen width instead of a fixed scale —
+      // on a phone, a fixed 1.5x render is far wider than the viewport, so
+      // the document (and every field box positioned relative to it) spills
+      // off both edges and needs horizontal scrolling to even see, which
+      // looked broken/unprofessional. Found 2026-08-13: Fabiola signing on
+      // her phone. Render at 2x the fitted size for a crisp canvas, then
+      // CSS-size it down to the width that actually fits.
+      const available = Math.min(window.innerWidth - 32, 640);
       for (let i = 1; i <= numPdfPages; i++) {
         if (cancelled) return;
         try {
           const page = await pdfDoc.getPage(i);
-          const vp = page.getViewport({ scale: 1.5 });
+          const nativeVp = page.getViewport({ scale: 1 });
+          const fitScale = Math.max(0.3, Math.min(2, available / nativeVp.width));
+          const renderVp = page.getViewport({ scale: fitScale * 2 });
           const canvas = pdfCanvasRefs.current[i - 1];
           if (!canvas || cancelled) continue;
-          canvas.width = vp.width;
-          canvas.height = vp.height;
-          canvas.style.width = `${vp.width / 1.5}px`;
-          canvas.style.height = `${vp.height / 1.5}px`;
+          canvas.width = renderVp.width;
+          canvas.height = renderVp.height;
+          canvas.style.width = `${nativeVp.width * fitScale}px`;
+          canvas.style.height = `${nativeVp.height * fitScale}px`;
           const ctx = canvas.getContext('2d');
-          if (ctx && !cancelled) await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          if (ctx && !cancelled) await page.render({ canvasContext: ctx, viewport: renderVp }).promise;
         } catch { /* can fail on unmount — ignore */ }
       }
     };
     render();
-    return () => { cancelled = true; };
+    const onResize = () => render();
+    window.addEventListener('resize', onResize);
+    return () => { cancelled = true; window.removeEventListener('resize', onResize); };
   }, [pdfDoc, numPdfPages]);
 
   const openField = (fieldId: string, fieldType: string) => {
