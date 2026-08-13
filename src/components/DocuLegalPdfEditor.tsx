@@ -356,7 +356,7 @@ export default function DocuLegalPdfEditor({
     >
       {/* ─── Left sidebar / toolbar ────────────────────────────────────────── */}
       <aside
-        className="w-full md:w-60 shrink-0 flex flex-col overflow-hidden max-h-[50vh] md:max-h-none border-b md:border-b-0"
+        className="w-full md:w-60 shrink-0 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none border-b md:border-b-0"
         style={{
           background: dm ? '#18181b' : '#ffffff',
           borderRight: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
@@ -496,8 +496,13 @@ export default function DocuLegalPdfEditor({
           )}
         </div>
 
-        {/* Placed fields list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {/* Placed fields list — no longer its own flex:1/scrolling sub-region;
+            the whole <aside> scrolls as one unit now (see className above),
+            so nothing below this (signers list, "Envoyer" button in Step 2)
+            can ever end up clipped and unreachable. Found 2026-08-12:
+            Fabiola had to shrink her whole browser window to reach the
+            email fields and Send button for a second signer. */}
+        <div style={{ padding: '12px 16px' }}>
           {fields.length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: 16 }}>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: dm ? '#3f3f46' : '#cbd5e1' }}>
