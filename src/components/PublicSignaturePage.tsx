@@ -1422,15 +1422,24 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         </label>
 
         {/* Sign button */}
+        {/* Disabling this button on unmet conditions used to mean a click did
+            NOTHING at all — not even an explanatory alert, since a disabled
+            button never fires onClick in the first place. Found 2026-08-12:
+            Fabiola clicked it after skipping the "open document" step and
+            saw zero reaction, no error, nothing. Now only the actual
+            in-flight submission disables it; every other missing condition
+            (name, consent, document not yet opened, signature not drawn —
+            handleSign already checks the last three) always gives a clear
+            alert on click instead of silently doing nothing. */}
         <button
           onClick={() => {
             if (docData?.customDocUrl && !hasViewedDoc) {
-              alert("Veuillez d'abord ouvrir et lire le document avant de signer.");
+              alert("Veuillez d'abord ouvrir et lire le document avant de signer (bouton plus haut sur cette page).");
               return;
             }
             handleSign();
           }}
-          disabled={isSigning || !signerName.trim() || !hasConsented || (!!docData?.customDocUrl && !hasViewedDoc)}
+          disabled={isSigning}
           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.99] shadow-lg shadow-emerald-600/20"
         >
           {isSigning
@@ -1440,7 +1449,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         </button>
         {docData?.customDocUrl && !hasViewedDoc && (
           <p className="text-[9px] text-indigo-600 font-bold text-center -mt-3">
-            ← Ouvrez d'abord le document ci-dessus pour activer ce bouton
+            ← Ouvrez d'abord le document ci-dessus, sinon ce bouton vous le rappellera
           </p>
         )}
 
