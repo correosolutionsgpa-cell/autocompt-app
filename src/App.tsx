@@ -13698,10 +13698,13 @@ const App = () => {
         // aux profils qui achètent réellement (Prospecteur/Flippeur/Investisseur).
         // "Avis d'Augmentation de Loyer" ajouté 2026-08-12 — un gestionnaire
         // gère des baux existants, l'augmentation de loyer en fait partie.
+        // "Relevés 31 (Revenu QC)" ajouté 2026-08-13 — preuve d'envoi du RL-31
+        // au locataire via DocuLegal (PDF téléchargé depuis revenuquebec.ca).
         folders = [
           "Contrats de Gestion",
           "Baux de Clients",
           "Avis d'Augmentation de Loyer",
+          "Relevés 31 (Revenu QC)",
           "Documents Corporatifs",
         ];
         break;
@@ -13709,9 +13712,12 @@ const App = () => {
         // .cursorrules §2B: Asset tracking — purchase and partnership docs
         // "Avis d'Augmentation de Loyer" ajouté 2026-08-12 pour l'investisseur
         // en autogestion (gère ses propres locataires directement).
+        // "Relevés 31 (Revenu QC)" ajouté 2026-08-13 — preuve d'envoi du RL-31
+        // au locataire via DocuLegal (PDF téléchargé depuis revenuquebec.ca).
         folders = [
           "Promesses d'Achat",
           "Avis d'Augmentation de Loyer",
+          "Relevés 31 (Revenu QC)",
           "Ententes de Confidentialité",
           "Contrats de Partenariat",
           "Documents Notariés",
@@ -15859,6 +15865,12 @@ const App = () => {
                                     <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-wider font-sans text-left">
                                       Pour : {doc.recipient} • Émis le {doc.date}
                                     </p>
+                                    {doc.linkOpenedAt && (
+                                      <p className={`text-[6.5px] font-black uppercase tracking-wider mt-0.5 flex items-center gap-1 ${darkMode ? "text-sky-400" : "text-sky-600"}`}>
+                                        <Eye size={8} />
+                                        Consulté le {new Date(doc.linkOpenedAt).toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
 

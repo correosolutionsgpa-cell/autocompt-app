@@ -747,6 +747,31 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           <label
                             className={`block text-[9px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                           >
+                            Courriel du locataire
+                          </label>
+                          <input
+                            type="email"
+                            value={unit.tenantEmail || ""}
+                            onChange={(e) => {
+                              const updated = (
+                                plexManagementForm.units || []
+                              ).map((u: any) =>
+                                u.id === unit.id ? { ...u, tenantEmail: e.target.value } : u
+                              );
+                              setPlexManagementForm({
+                                ...plexManagementForm,
+                                units: updated,
+                              });
+                            }}
+                            placeholder="email@exemple.com"
+                            className={`w-full px-3 py-2 rounded-xl text-xs font-bold border focus:ring-2 focus:ring-emerald-500/50 transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                            disabled={!unit.isActive}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className={`block text-[9px] font-black uppercase tracking-widest mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                          >
                             Loyer mensuel
                           </label>
                           <div className="relative">

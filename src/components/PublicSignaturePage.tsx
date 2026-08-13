@@ -442,25 +442,41 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     if ((docData as any).invitationSentTo && !signerEmail) {
       setSignerEmail((docData as any).invitationSentTo);
     }
+
+    const auditPayload = {
+      linkOpenedAt: openedAt,
+      linkOpenedIp: 'unknown',
+      linkOpenedUA: navigator.userAgent.slice(0, 200),
+    };
+
+    // Helper: also write linkOpenedAt to docuLegalDocs so the owner sees
+    // the "Consulté le…" badge in their DocuLegal list without a cross-
+    // collection query. Only runs when ownerId + docId are available in
+    // the signed URL payload (set since 2026-08-13).
+    const propagateToDocuLegalDocs = (payload: typeof auditPayload) => {
+      const ownerId = (docData as any).ownerId;
+      const docId   = (docData as any).docId;
+      if (ownerId && docId) {
+        setDoc(doc(db, 'docuLegalDocs', `${ownerId}_doculegal_${docId}`), {
+          linkOpenedAt: payload.linkOpenedAt,
+        }, { merge: true }).catch(() => {});
+      }
+    };
+
     // Fetch IP (best-effort, non-blocking)
     fetch('https://api.ipify.org?format=json')
       .then(r => r.json())
       .then(d => {
+        const withIp = { ...auditPayload, linkOpenedIp: d.ip || 'unknown' };
         setAuditIp(d.ip || '');
         // Persist link-open event to Firestore
-        setDoc(doc(db, 'pendingSignatures', token), {
-          linkOpenedAt: openedAt,
-          linkOpenedIp: d.ip || 'unknown',
-          linkOpenedUA: navigator.userAgent.slice(0, 200),
-        }, { merge: true }).catch(() => {});
+        setDoc(doc(db, 'pendingSignatures', token), withIp, { merge: true }).catch(() => {});
+        propagateToDocuLegalDocs(withIp);
       })
       .catch(() => {
         // IP fetch failed — still record the timestamp
-        setDoc(doc(db, 'pendingSignatures', token), {
-          linkOpenedAt: openedAt,
-          linkOpenedIp: 'unknown',
-          linkOpenedUA: navigator.userAgent.slice(0, 200),
-        }, { merge: true }).catch(() => {});
+        setDoc(doc(db, 'pendingSignatures', token), auditPayload, { merge: true }).catch(() => {});
+        propagateToDocuLegalDocs(auditPayload);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!docData]);

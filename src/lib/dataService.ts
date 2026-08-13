@@ -189,6 +189,10 @@ export interface UnitDoc {
   /** Human-readable unit label, e.g. "Appt 1 (RDC)", "Habitation 3" */
   unitName: string;
   tenantName: string;
+  /** Courriel du locataire — utilisé pour l'envoi du Relevé 31 et des avis
+   *  TAL via DocuLegal (pré-remplit le destinataire). Saisi manuellement,
+   *  jamais présumé ni partagé hors du workspace. */
+  tenantEmail?: string;
   monthlyRent: number;
   isActive: boolean;
   /** true = location touristique/courte durée (< 31 nuits) — soumise à la CITQ
