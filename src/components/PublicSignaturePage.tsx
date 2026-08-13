@@ -47,6 +47,14 @@ interface SignatureRequestDoc {
     required: boolean;
     label: string;
   }>;
+  // Real multi-party document metadata (2+ named signers, none of them
+  // "the account") — present only on documents created after 2026-08-12.
+  // When set, the final certified PDF is compiled server-side once every
+  // one of these has a 'signed' pendingSignatures doc, instead of this
+  // signer generating their own incomplete 2-party PDF locally.
+  signerIndex?: number;
+  totalSigners?: number;
+  allSigners?: Array<{ name: string; email: string }>;
 }
 
 type InputMode = 'draw' | 'type';
@@ -172,6 +180,10 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [isSigning, setIsSigning] = useState(false);
   const [emailDelivered, setEmailDelivered] = useState<{ admin: boolean; client: boolean } | null>(null);
   const [driveUploadResult, setDriveUploadResult] = useState<{ success: boolean; webViewLink?: string } | null>(null);
+  // Real multi-party documents (2+ named signers): set once this signer's
+  // own signature is recorded, telling them whether everyone else is done
+  // too (final PDF sent to all) or they're still waiting on others.
+  const [groupSignResult, setGroupSignResult] = useState<{ allSigned: boolean; signedCount: number; totalSigners: number } | null>(null);
 
   // Signer identity
   const [signerName, setSignerName] = useState('');
@@ -373,6 +385,86 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         );
       }
 
+      const finalSigDataUrl = sigMode === 'draw' ? sigDataUrl : typedSigDataUrl;
+
+      // A real multi-party document (2+ named signers, none of them "the
+      // account") can't be certified from any ONE signer's browser — nobody
+      // here has the OTHER signers' signature images. The old template
+      // always rendered a fixed "Partie 1 = the sending account" / "Partie
+      // 2 = this signer" PDF regardless, so a genuine 2-person contract only
+      // ever showed ONE real signature per copy, with the account's own
+      // email standing in — unsigned — for the other party. Found
+      // 2026-08-12: Fabiola's real 2-signer contract did exactly this.
+      // Instead: persist THIS signer's own signature image, then ask the
+      // server to check whether every signer for this docId is done; once
+      // they all are, the server compiles and sends ONE true multi-party
+      // PDF to everyone. See /api/finalize-signature-group in server.ts.
+      const isMultiParty = (docData.totalSigners ?? 1) > 1;
+
+      try {
+        await setDoc(doc(db, 'pendingSignatures', token), {
+          ...docData, status: 'signed',
+          clientSignerName: signerName,
+          clientSignerEmail: signerEmail,
+          clientSignedDate: `${todayStr} \xE0 ${timeStr}`,
+          clientSignatureType: sigMode,
+          clientHasInitials: needsInitials,
+          clientSignedAt: new Date().toISOString(),
+          clientSignatureDataUrl: finalSigDataUrl || '',
+          clientInitialsDataUrl: initialsDataUrl || '',
+          // ── Audit trail (legal non-repudiation) ─────────────────────────
+          auditConsentGiven: true,
+          auditConsentAt: new Date().toISOString(),
+          auditLinkOpenedAt,
+          auditSignIp: auditIp || 'unknown',
+          auditSignUA: navigator.userAgent.slice(0, 200),
+        });
+      } catch {}
+
+      // ── Persist signature for next time ──────────────────────────────────
+      if (saveSigForNextTime && signerEmail.includes('@') && finalSigDataUrl) {
+        const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        try {
+          await setDoc(doc(db, 'savedSignatures', key), {
+            email: signerEmail,
+            sigDataUrl: finalSigDataUrl,
+            sigType: sigMode,
+            fontFamily: sigMode === 'type' ? FONT_OPTIONS[selectedSigFont].family : undefined,
+            savedAt: new Date().toISOString(),
+            usedCount: 1,
+          });
+        } catch {}
+      }
+
+      if (isMultiParty) {
+        let groupResult: { allSigned: boolean; signedCount: number; totalSigners: number } = {
+          allSigned: false, signedCount: 1, totalSigners: docData.totalSigners || 1,
+        };
+        try {
+          const resp = await withTimeout(
+            fetch('/api/finalize-signature-group', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ docId: docData.docId, token }),
+            }),
+            25000,
+            null,
+          );
+          if (resp?.ok) {
+            const data = await resp.json();
+            groupResult = {
+              allSigned: !!data.allSigned,
+              signedCount: data.signedCount ?? groupResult.signedCount,
+              totalSigners: data.totalSigners ?? groupResult.totalSigners,
+            };
+          }
+        } catch {}
+        setGroupSignResult(groupResult);
+        setIsDone(true);
+        setIsSigning(false);
+        return;
+      }
+
       const pdfBase64 = generateBipartitePDF(docData, {
         name: signerName,
         email: signerEmail,
@@ -384,42 +476,6 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         initialsDataUrl,
         initialsText: typedInitials,
       });
-
-      try {
-        await setDoc(doc(db, 'pendingSignatures', token), {
-          ...docData, status: 'signed',
-          clientSignerName: signerName,
-          clientSignerEmail: signerEmail,
-          clientSignedDate: `${todayStr} \xE0 ${timeStr}`,
-          clientSignatureType: sigMode,
-          clientHasInitials: needsInitials,
-          clientSignedAt: new Date().toISOString(),
-          // ── Audit trail (legal non-repudiation) ─────────────────────────
-          auditConsentGiven: true,
-          auditConsentAt: new Date().toISOString(),
-          auditLinkOpenedAt,
-          auditSignIp: auditIp || 'unknown',
-          auditSignUA: navigator.userAgent.slice(0, 200),
-        });
-      } catch {}
-
-      // ── Persist signature for next time ──────────────────────────────────
-      if (saveSigForNextTime && signerEmail.includes('@')) {
-        const finalSigDataUrl = sigMode === 'draw' ? sigDataUrl : typedSigDataUrl;
-        if (finalSigDataUrl) {
-          const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-          try {
-            await setDoc(doc(db, 'savedSignatures', key), {
-              email: signerEmail,
-              sigDataUrl: finalSigDataUrl,
-              sigType: sigMode,
-              fontFamily: sigMode === 'type' ? FONT_OPTIONS[selectedSigFont].family : undefined,
-              savedAt: new Date().toISOString(),
-              usedCount: 1,
-            });
-          } catch {}
-        }
-      }
 
       let emailResult = { admin: false, client: false };
       if (pdfBase64) {
@@ -850,15 +906,26 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         </div>
         <div>
           <h1 className="text-xl font-black uppercase italic tracking-tight text-slate-900">
-            {isDone ? 'Document Signé avec Succès !' : 'Ce document a déjà été signé.'}
+            {isDone
+              ? (groupSignResult ? (groupSignResult.allSigned ? 'Document Signé par Toutes les Parties !' : 'Votre Signature est Enregistrée !') : 'Document Signé avec Succès !')
+              : 'Ce document a déjà été signé.'}
           </h1>
           <p className="text-sm text-slate-500 font-medium mt-2">
             {isDone
-              ? 'Le PDF certifié bipartite (paraphes + signature) a été téléchargé.'
+              ? (groupSignResult
+                  ? (groupSignResult.allSigned
+                      ? `Les ${groupSignResult.totalSigners} signataires ont terminé — le PDF final avec toutes les signatures a été envoyé à tout le monde par courriel.`
+                      : `${groupSignResult.signedCount} sur ${groupSignResult.totalSigners} signataires ont signé. Vous recevrez le PDF final par courriel dès que tout le monde aura terminé.`)
+                  : 'Le PDF certifié bipartite (paraphes + signature) a été téléchargé.')
               : "Ce lien a déjà été utilisé. Contactez l'expéditeur si nécessaire."}
           </p>
         </div>
-        {isDone && (
+        {isDone && groupSignResult && (
+          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-sm text-indigo-700 font-medium">
+            {groupSignResult.allSigned ? '✅' : '⏳'} {groupSignResult.signedCount} / {groupSignResult.totalSigners} signatures reçues
+          </div>
+        )}
+        {isDone && !groupSignResult && (
           <div className="space-y-3">
             {/* PDF download confirmation */}
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm text-emerald-700 font-medium">

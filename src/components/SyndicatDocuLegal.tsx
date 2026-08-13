@@ -1080,6 +1080,12 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
         customDocUrl: pdfStorageUrl,
         pdfStorageUrl,
         signatureFields: signerFields,
+        // See App.tsx's handlePlexPdfEditorSend for why: lets the server
+        // recognize a real multi-party document and, once every signer has
+        // signed, compile ONE final PDF with everyone's real signature.
+        signerIndex: i,
+        totalSigners: signers.length,
+        allSigners: signers.map((s) => ({ name: s.name, email: s.email })),
       };
       let b64 = '';
       try {

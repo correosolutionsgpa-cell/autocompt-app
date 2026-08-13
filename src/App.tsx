@@ -14073,6 +14073,17 @@ const App = () => {
             customDocUrl: pdfStorageUrl,
             pdfStorageUrl,
             signatureFields: signerFields,
+            // Lets the server recognize a genuinely multi-party document
+            // (2+ real named signers, none of them "the account") and, once
+            // every one of them has signed, compile ONE final PDF showing
+            // everyone's real signature instead of the old fixed "Partie 1
+            // = whoever's account sent it / Partie 2 = this signer" template
+            // — found 2026-08-12: Fabiola's real 2-party contract only ever
+            // showed one real signature per copy, with her own account
+            // filling the other slot as unsigned text.
+            signerIndex: i,
+            totalSigners: signers.length,
+            allSigners: signers.map((s) => ({ name: s.name, email: s.email })),
           };
           let b64 = "";
           try {
@@ -14190,7 +14201,8 @@ const App = () => {
         let sentCount = 0;
         const failedSigners: string[] = [];
 
-        for (const signer of validSigners) {
+        for (let vi = 0; vi < validSigners.length; vi++) {
+          const signer = validSigners[vi];
           const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}`;
           const urlPayload = {
             docId: newId,
@@ -14205,6 +14217,12 @@ const App = () => {
             status: "pending",
             createdAt: new Date().toISOString(),
             customDocUrl: "",
+            // See handlePlexPdfEditorSend above for why this matters — a
+            // real multi-party document needs its final PDF to show every
+            // real signer, not a fixed "administrateur" slot.
+            signerIndex: vi,
+            totalSigners: validSigners.length,
+            allSigners: validSigners.map((s) => ({ name: s.name, email: s.email })),
           };
           let b64 = "";
           try {

@@ -1,6 +1,7 @@
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import jsPDF from "jspdf";
 import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
 import {
   companyDocId,
@@ -33,6 +34,169 @@ console.log("[server.ts] dotenv loaded. GEMINI_API_KEY present:", !!process.env.
   }
 })();
 
+
+// ── DocuLegal: compile the final certified PDF for a real multi-party ────────
+// document (2+ named signers). Runs server-side because no single signer's
+// browser ever has every OTHER signer's signature image — each one only
+// persists their own to Firestore when they sign (see handleSign in
+// PublicSignaturePage.tsx). Deliberately a single-column stacked layout
+// (not a fixed 2-column "Partie 1/Partie 2" grid) since the signer count is
+// variable.
+function generateMultiPartyPdf(data: {
+  docTitle: string;
+  docSummary: string;
+  companyName: string;
+  token: string;
+  customDocUrl?: string;
+  signers: Array<{ name: string; email: string; signedDate: string; sigDataUrl: string; initialsDataUrl: string }>;
+}): string | null {
+  try {
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const W = 210, H = 297, M = 18;
+    const green: [number, number, number] = [5, 150, 105];
+    const PAGE_BOTTOM = 270;
+    let y = 0;
+
+    const addHeader = (isFirst: boolean) => {
+      if (isFirst) {
+        pdf.setFillColor(...green);
+        pdf.rect(0, 0, W, 32, "F");
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("Helvetica", "bold");
+        pdf.setFontSize(13);
+        pdf.text(data.companyName.toUpperCase() || "AUTOCOMPT", M, 14);
+        pdf.setFont("Helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.text("DOCUMENT SIGNÉ — TOUTES LES PARTIES — DOCULEGAL (AUTOCOMPT)", M, 20);
+        pdf.text(`Réf: ${data.token.slice(0, 16).toUpperCase()} · ${new Date().toLocaleDateString("fr-CA")}`, M, 26);
+      } else {
+        pdf.setFillColor(...green);
+        pdf.rect(0, 0, W, 10, "F");
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("Helvetica", "normal");
+        pdf.setFontSize(6.5);
+        pdf.text(`${data.companyName.toUpperCase()} · ${data.docTitle}`, M, 6.5);
+      }
+    };
+
+    const addFooter = () => {
+      pdf.setFillColor(...green);
+      pdf.rect(0, H - 12, W, 12, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("Helvetica", "normal");
+      pdf.setFontSize(6.5);
+      pdf.text("Document numérique certifié — DocuLegal by AutoCompt Canada", W / 2, H - 7, { align: "center" });
+    };
+
+    const newPage = () => {
+      addFooter();
+      pdf.addPage();
+      addHeader(false);
+      y = 18;
+    };
+
+    addHeader(true);
+    y = 42;
+
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFont("Helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text(data.docTitle, M, y);
+    y += 7;
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(M, y, W - M, y);
+    y += 8;
+
+    if (data.customDocUrl) {
+      pdf.setFont("Helvetica", "italic");
+      pdf.setFontSize(8);
+      pdf.setTextColor(79, 70, 229);
+      pdf.textWithLink("Document original (format complet) : voir la pièce jointe transmise par courriel", M, y, { url: data.customDocUrl });
+      y += 7;
+    }
+
+    pdf.setFont("Helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(71, 85, 105);
+    const contentLines = pdf.splitTextToSize(data.docSummary || "", W - M * 2);
+    for (const line of contentLines) {
+      if (y > PAGE_BOTTOM) newPage();
+      pdf.text(line, M, y);
+      y += 6;
+    }
+
+    y += 6;
+    if (y > PAGE_BOTTOM - 20) newPage();
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(M, y, W - M, y);
+    y += 8;
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFont("Helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.text(`SIGNATURES ÉLECTRONIQUES — ${data.signers.length} PARTIE${data.signers.length > 1 ? "S" : ""}`, M, y);
+    y += 10;
+
+    for (const signer of data.signers) {
+      const blockH = 42;
+      if (y + blockH > PAGE_BOTTOM) newPage();
+
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(203, 213, 225);
+      pdf.roundedRect(M, y, W - M * 2, blockH, 4, 4, "FD");
+      pdf.setFont("Helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(...green);
+      pdf.text(signer.name, M + 6, y + 9);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont("Helvetica", "normal");
+      pdf.setFontSize(8);
+      if (signer.email) pdf.text(`Courriel: ${signer.email}`, M + 6, y + 15);
+      pdf.text(`Signé le: ${signer.signedDate}`, M + 6, y + 20);
+
+      if (signer.sigDataUrl) {
+        try { pdf.addImage(signer.sigDataUrl, "PNG", W - M - 60, y + 6, 54, 20); }
+        catch {
+          pdf.setFont("Times", "italic"); pdf.setFontSize(14);
+          pdf.setTextColor(...green);
+          pdf.text(signer.name, W - M - 33, y + 18, { align: "center" });
+        }
+      } else {
+        pdf.setFont("Times", "italic"); pdf.setFontSize(14);
+        pdf.setTextColor(...green);
+        pdf.text(signer.name, W - M - 33, y + 18, { align: "center" });
+      }
+      y += blockH + 6;
+    }
+
+    if (y + 30 > PAGE_BOTTOM) newPage();
+    pdf.setDrawColor(...green);
+    pdf.setLineDashPattern([2, 1], 0);
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(M, y, W - M * 2, 26, "FD");
+    pdf.setLineDashPattern([], 0);
+    pdf.setTextColor(...green);
+    pdf.setFont("Helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.text("CERTIFICATION DOCULEGAL — DOCUMENT MULTI-PARTIES VALIDÉ", M + 4, y + 8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.setFont("Helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.text(`Ce document a été signé électroniquement par les ${data.signers.length} partie(s) via DocuLegal, une solution AutoCompt.`, M + 4, y + 14);
+    pdf.text("Il constitue une preuve légale d'engagement enregistrée dans les registres sécurisés d'AutoCompt.", M + 4, y + 19);
+    pdf.setFont("Courier", "bold");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(71, 85, 105);
+    pdf.text(`Token: ${data.token.slice(0, 32).toUpperCase()}`, M + 4, y + 24);
+
+    addFooter();
+
+    try { return pdf.output("datauristring").split(",")[1]; }
+    catch { return null; }
+  } catch (err) {
+    console.error("generateMultiPartyPdf error:", err);
+    return null;
+  }
+}
 
 // Builds the Express app with every route registered, but does NOT bind a
 // port — Vercel imports this and wraps it as a serverless function handler
@@ -1296,6 +1460,151 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
 
     } catch (error: any) {
       console.error("save-signed-document error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ── DocuLegal: finalize a real multi-party signature (2+ named signers) ────
+  // Each signer completes independently from their own link/browser, so no
+  // single one of them ever has every other signer's signature image. This
+  // endpoint is called by EVERY signer right after their own signature is
+  // recorded; it checks whether the whole group (same docId) is now fully
+  // signed, and — using a Firestore transaction so only ONE of the possibly-
+  // concurrent callers wins — compiles and emails ONE final PDF showing every
+  // real signer's actual signature to everyone once they're all done.
+  // Replaces the old behavior where each signer's OWN browser generated an
+  // incomplete "Partie 1 = the sending AutoCompt account / Partie 2 = this
+  // signer" PDF — found 2026-08-12: a real 2-party contract only ever showed
+  // one real signature per copy.
+  app.post("/api/finalize-signature-group", async (req, res) => {
+    try {
+      const { docId, token } = req.body;
+      if (!docId || !token) {
+        return res.status(400).json({ success: false, error: "docId et token sont requis" });
+      }
+
+      const db = getAdminDb();
+      const snap = await db.collection("pendingSignatures").where("docId", "==", docId).get();
+      const siblingDocs = snap.docs.filter((d) => !d.id.endsWith("_lock"));
+      if (siblingDocs.length === 0) {
+        return res.status(404).json({ success: false, error: "Document introuvable" });
+      }
+
+      const totalSigners = Math.max(
+        ...siblingDocs.map((d) => Number(d.data().totalSigners) || 0),
+        siblingDocs.length,
+      );
+      const signedDocs = siblingDocs.filter((d) => d.data().status === "signed");
+      const allSigned = signedDocs.length >= totalSigners;
+
+      if (!allSigned) {
+        return res.json({ success: true, allSigned: false, signedCount: signedDocs.length, totalSigners });
+      }
+
+      // ── Everyone has signed — claim the right to compile+send exactly once ──
+      const lockRef = db.collection("pendingSignatures").doc(`${docId}_lock`);
+      const wonLock = await db.runTransaction(async (tx) => {
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists) return false;
+        tx.set(lockRef, { docId, finalizedAt: new Date().toISOString() });
+        return true;
+      });
+
+      if (!wonLock) {
+        return res.json({ success: true, allSigned: true, alreadySent: true, signedCount: signedDocs.length, totalSigners });
+      }
+
+      const first = signedDocs[0].data();
+      const docTitle: string = first.docTitle || "Document";
+      const docSummary: string = first.docSummary || "";
+      const companyName: string = first.companyName || "";
+      const adminEmail: string = first.adminEmail || "";
+      const companyId: string | undefined = first.companyId;
+      const ownerId: string | undefined = first.ownerId;
+
+      const signerRecords = signedDocs.map((d) => {
+        const data = d.data();
+        return {
+          name: data.clientSignerName || "Signataire",
+          email: data.clientSignerEmail || "",
+          signedDate: data.clientSignedDate || "",
+          sigDataUrl: data.clientSignatureDataUrl || "",
+          initialsDataUrl: data.clientInitialsDataUrl || "",
+        };
+      });
+
+      const pdfBase64 = generateMultiPartyPdf({ docTitle, docSummary, companyName, token: docId, customDocUrl: first.customDocUrl || undefined, signers: signerRecords });
+
+      // ── Email the final PDF to every real signer + the admin (deduped) ──
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const fromEmail = process.env.RESEND_FROM_EMAIL || "DocuLegal <noreply@autocompt.ca>";
+      const recipients = Array.from(new Set([
+        ...signerRecords.map((s) => s.email).filter(Boolean),
+        adminEmail,
+      ].filter(Boolean)));
+
+      if (resendApiKey && pdfBase64 && recipients.length > 0) {
+        const safeTitle = (docTitle || "Document").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim().replace(/\s+/g, "_");
+        const attachment = { filename: `DocuLegal_${safeTitle}_Signe_Final.pdf`, content: pdfBase64 };
+        const namesLine = signerRecords.map((s) => s.name).join(", ");
+        const html = `
+          <!DOCTYPE html><html><head><meta charset="utf-8"></head>
+          <body style="font-family:system-ui,sans-serif;background:#f8fafc;margin:0;padding:0">
+            <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+              <div style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px">
+                <div style="color:#fff;font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.85">DocuLegal · AutoCompt</div>
+                <div style="color:#fff;font-size:22px;font-weight:900;margin-top:8px">✅ Document Signé par Toutes les Parties</div>
+              </div>
+              <div style="padding:32px 40px">
+                <p style="color:#374151;font-size:15px;margin:0 0 16px">
+                  Toutes les signatures ont été reçues pour <strong>${docTitle}</strong>, signé par : ${namesLine}.
+                </p>
+                <p style="color:#6b7280;font-size:13px;margin:0 0 8px">
+                  📎 Le PDF final certifié, avec la signature réelle de chaque partie, est joint à cet email.
+                </p>
+              </div>
+              <div style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center">
+                <p style="color:#9ca3af;font-size:11px;margin:0">Document numérique certifié · DocuLegal by AutoCompt Canada</p>
+              </div>
+            </div>
+          </body></html>`;
+        for (const to of recipients) {
+          try {
+            await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                from: fromEmail,
+                to: [to],
+                subject: `✅ Signé par toutes les parties : ${docTitle}`,
+                html,
+                attachments: [attachment],
+              }),
+            });
+          } catch (emailErr) {
+            console.error("[finalize-signature-group] email send failed for", to, emailErr);
+          }
+        }
+      }
+
+      // ── Best-effort Drive upload ─────────────────────────────────────────
+      if (pdfBase64 && companyId && ownerId) {
+        try {
+          const credSnap = await db.collection("driveCredentials").doc(driveCredDocId(ownerId, companyId)).get();
+          if (credSnap.exists) {
+            const accessToken = await refreshAccessToken(credSnap.data()!.refreshToken);
+            const folderId = await resolveCompanyDriveFolder(accessToken, companyName, "DocuLegal", undefined);
+            const safeTitle = (docTitle || "Document").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim().replace(/\s+/g, "_");
+            await uploadBase64ToDrive(accessToken, folderId, `DocuLegal_${safeTitle}_Signe_Final.pdf`, "application/pdf", pdfBase64);
+          }
+        } catch (driveErr) {
+          console.error("[finalize-signature-group] Drive upload failed:", driveErr);
+        }
+      }
+
+      return res.json({ success: true, allSigned: true, signedCount: signedDocs.length, totalSigners });
+    } catch (error: any) {
+      console.error("finalize-signature-group error:", error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
