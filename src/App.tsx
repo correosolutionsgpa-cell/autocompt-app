@@ -161,7 +161,7 @@ import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, GoogleAuthProvider, signInWithPopup, updatePassword, sendPasswordResetEmail, type ConfirmationResult } from "firebase/auth";
-import { doc, getDoc, getDocFromServer, setDoc } from "firebase/firestore";
+import { doc, getDoc, getDocFromServer, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
 import { getCompanyDriveConfig, uploadDocumentToDrive, connectCompanyDrive } from "./lib/driveService";
@@ -3977,6 +3977,7 @@ const App = () => {
   // pdfStorageUrl/signatureFields shape regardless of which profile sent it).
   const [plexPdfEditorFile, setPlexPdfEditorFile] = useState<File | null>(null);
   const [isSendingPlexPdf, setIsSendingPlexPdf] = useState(false);
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
   const plexPdfFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
@@ -14005,6 +14006,64 @@ const App = () => {
       }
     };
 
+    // The reminder bell used to be entirely fake: it just flipped a local
+    // "reminded" flag and showed a hardcoded alert claiming an email/SMS was
+    // sent (to a leftover placeholder address, richard.duchesne@outlook.com,
+    // for anyone with no real recipientEmail) — nothing was ever actually
+    // sent. This resends the real signature-invitation email to whichever
+    // signers of this document haven't signed yet. Requested 2026-08-13.
+    const handleSendReminder = async (legalDoc: any) => {
+      setIsSendingReminder(true);
+      try {
+        const snap = await getDocs(query(collection(db, "pendingSignatures"), where("docId", "==", legalDoc.id)));
+        const pending = snap.docs.filter((d) => d.data().status !== "signed" && !d.id.endsWith("_lock"));
+        if (pending.length === 0) {
+          alert("Aucun signataire en attente pour ce document — tout le monde a peut-être déjà signé.");
+          return;
+        }
+        const appBase = (import.meta.env.VITE_APP_URL as string | undefined) || "https://app.autocompt.ca";
+        let sentCount = 0;
+        for (const d of pending) {
+          const data = d.data();
+          const idx = typeof data.signerIndex === "number" ? data.signerIndex : 0;
+          const signerInfo = Array.isArray(data.allSigners) ? data.allSigners[idx] : null;
+          const signerEmail = signerInfo?.email || "";
+          const signerName = signerInfo?.name || "";
+          if (!signerEmail) continue;
+          let b64 = "";
+          try {
+            b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data))))
+              .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          } catch { }
+          const signUrl = `${appBase}?sign=${d.id}${b64 ? `&d=${b64}` : ""}`;
+          try {
+            const resp = await fetch("/api/send-signature-invitation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                signerEmail, signerName, signUrl,
+                docTitle: data.docTitle, docSummary: data.docSummary,
+                companyName: data.companyName, adminName: data.adminName, adminEmail: data.adminEmail,
+                token: d.id,
+              }),
+            });
+            if (resp.ok) sentCount++;
+          } catch { }
+        }
+        setRemindedDocs((prev) => ({ ...prev, [legalDoc.id]: true }));
+        playNotificationSound();
+        if (sentCount > 0) {
+          alert(`🔔 Rappel envoyé à ${sentCount} signataire${sentCount > 1 ? "s" : ""} en attente.`);
+        } else {
+          alert("Impossible d'envoyer le rappel — aucun courriel de signataire trouvé pour ce document.");
+        }
+      } catch (err: any) {
+        alert("Erreur lors de l'envoi du rappel : " + (err?.message || err));
+      } finally {
+        setIsSendingReminder(false);
+      }
+    };
+
     // Called by <DocuLegalPdfEditor> once fields are placed and signer info
     // entered — same generic pendingSignatures + ?sign= link mechanism the
     // Syndicat profile's own DocuLegal already uses (see
@@ -14837,7 +14896,7 @@ const App = () => {
                             </a>
                           </div>
                           <div className="p-3 space-y-2">
-                            {/* TAL-806 — actif avec bouton Utiliser */}
+                            {/* TAL-806 */}
                             <div className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${darkMode ? "bg-zinc-950/60 border-zinc-800/60" : "bg-white border-slate-100"}`}>
                               <div className="flex items-start gap-3">
                                 <div className={`p-2 rounded-lg shrink-0 ${darkMode ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-100 text-emerald-700"}`}>
@@ -14848,52 +14907,45 @@ const App = () => {
                                     <p className={`font-black text-[11px] ${darkMode ? "text-white" : "text-slate-900"}`}>Avis d'augmentation de loyer</p>
                                     <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${darkMode ? "bg-emerald-900/50 text-emerald-400 border border-emerald-700/50" : "bg-emerald-100 text-emerald-700"}`}>TAL-806</span>
                                   </div>
-                                  <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Texte officiel du TAL · 3 options obligatoires · Loi déc. 2024</p>
-                                  <div className="flex gap-1.5 mt-1 flex-wrap">
-                                    {["nom_locataire","loyer_actuel","nouveau_loyer","date_effet"].map(t => (
-                                      <span key={t} className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-slate-100 text-slate-500"}`}>{"{{" + t + "}}"}</span>
-                                    ))}
-                                  </div>
+                                  <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Formulaire officiel gratuit · 3 options locataire · Loi déc. 2024</p>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedDocuFolder("Avis d'Augmentation de Loyer");
-                                  setDocFormFolder("Avis d'Augmentation de Loyer");
-                                  setDocFormName("Avis d'augmentation de loyer");
-                                  setDocFormRecipient("");
-                                  setDocFormEmail("");
-                                  setDocFormPhone("");
-                                  setDocFormContent(loadDefaultTemplate("avis augmentation loyer"));
-                                  setDocFormEmailInvite("Bonjour, veuillez prendre connaissance et signer électroniquement l'avis d'augmentation de loyer ci-joint.");
-                                  setDocFormSmsVerify(true);
-                                  setDocFormSignersList([
-                                    { id: "1", name: currentUserEmail || "", email: currentUserEmail || "", phone: "", role: "Locateur / Émetteur", color: "Purple" },
-                                    { id: "2", name: "", email: "", phone: "", role: "Locataire / Signataire", color: "Amber" },
-                                  ]);
-                                  setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
-                                  setDocPlacedFields([]);
-                                  setSelectedDocuEntry(null);
-                                  setSubVistaDocu("editor");
-                                  playNotificationSound();
-                                }}
-                                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-colors border-none cursor-pointer whitespace-nowrap"
-                              >
-                                <Sparkles size={11} /> Utiliser
-                              </button>
+                              <a href="https://www.tal.gouv.qc.ca/fr/modeles-d-avis/trouver-un-modele-d-avis" target="_blank" rel="noopener noreferrer"
+                                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-colors whitespace-nowrap">
+                                <ExternalLink size={11} /> Télécharger
+                              </a>
                             </div>
 
-                            {/* Prochainement */}
-                            {["Mise en demeure — non-paiement","Quittance de loyer","Avis de non-reconduction"].map(name => (
-                              <div key={name} className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 opacity-50 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-100"}`}>
+                            {/* Autres formulaires TAL disponibles gratuitement */}
+                            {[
+                              { name: "Avis de non-reconduction du bail", ref: "TAL-807" },
+                              { name: "Avis de reprise de logement", ref: "TAL" },
+                              { name: "Avis de sous-location", ref: "TAL-809" },
+                            ].map(({ name, ref }) => (
+                              <div key={name} className={`px-3 py-2.5 rounded-xl border flex items-center justify-between gap-2 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-100"}`}>
                                 <div className="flex items-center gap-2">
-                                  <Clock size={12} className={darkMode ? "text-zinc-600" : "text-slate-400"} />
-                                  <p className={`text-[9px] font-black ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{name}</p>
+                                  <FileText size={12} className={darkMode ? "text-emerald-500/60" : "text-emerald-600/70"} />
+                                  <div>
+                                    <p className={`text-[9px] font-black ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>{name}</p>
+                                    <span className={`text-[7px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>{ref}</span>
+                                  </div>
                                 </div>
-                                <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-600" : "bg-slate-100 text-slate-400"}`}>Bientôt</span>
+                                <a href="https://www.tal.gouv.qc.ca/fr/modeles-d-avis/trouver-un-modele-d-avis" target="_blank" rel="noopener noreferrer"
+                                  className={`shrink-0 flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border transition-colors ${darkMode ? "border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30" : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}>
+                                  <ExternalLink size={9} /> TAL
+                                </a>
                               </div>
                             ))}
+
+                            {/* Workflow hint */}
+                            <div className={`px-3 py-2.5 rounded-xl flex items-start gap-2 ${darkMode ? "bg-zinc-900/60 border border-zinc-800" : "bg-slate-50 border border-slate-100"}`}>
+                              <div className={`mt-0.5 shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${darkMode ? "bg-violet-500/20 text-violet-400" : "bg-violet-100 text-violet-700"}`}>i</div>
+                              <p className={`text-[8px] leading-relaxed ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                                <span className={`font-black ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Comment utiliser :</span>{" "}
+                                Téléchargez le PDF officiel depuis tal.gouv.qc.ca → convertissez en .docx → ajoutez des espaces {`{{champ}}`} dans les champs variables → importez via{" "}
+                                <span className={darkMode ? "text-violet-400 font-bold" : "text-violet-700 font-bold"}>"Mes modèles personnalisés"</span> ci-dessous → envoyez pour signature électronique.
+                              </p>
+                            </div>
                           </div>
                         </div>
 
@@ -15562,19 +15614,13 @@ const App = () => {
                                         >
                                           <button
                                             type="button"
+                                            disabled={isSendingReminder}
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setRemindedDocs((prev) => ({
-                                                ...prev,
-                                                [doc.id]: true,
-                                              }));
-                                              playNotificationSound();
-                                              alert(
-                                                `🔔 Relance envoyée !\n\nUn courriel de relance d'accord et un rappel SMS immuable ont été transmis à ${doc.recipient} (${doc.recipientEmail || "richard.duchesne@outlook.com"}).`,
-                                              );
+                                              handleSendReminder(doc);
                                             }}
-                                            title="Envoyer une relance par Courriel / SMS"
-                                            className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
+                                            title="Envoyer un rappel de signature par courriel"
+                                            className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${remindedDocs[doc.id]
                                               ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
                                               : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
                                               }`}
@@ -15821,19 +15867,13 @@ const App = () => {
                                     >
                                       <button
                                         type="button"
+                                        disabled={isSendingReminder}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setRemindedDocs((prev) => ({
-                                            ...prev,
-                                            [doc.id]: true,
-                                          }));
-                                          playNotificationSound();
-                                          alert(
-                                            `🔔 Relance envoyée !\n\nUn courriel de relance d'accord et un rappel SMS immuable ont été transmis à ${doc.recipient} (${doc.recipientEmail || "richard.duchesne@outlook.com"}).`,
-                                          );
+                                          handleSendReminder(doc);
                                         }}
-                                        title="Envoyer une relance par Courriel / SMS"
-                                        className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer ${remindedDocs[doc.id]
+                                        title="Envoyer un rappel de signature par courriel"
+                                        className={`p-1.5 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${remindedDocs[doc.id]
                                           ? "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
                                           : "bg-amber-500/10 hover:bg-amber-500 hover:text-white text-amber-600"
                                           }`}
