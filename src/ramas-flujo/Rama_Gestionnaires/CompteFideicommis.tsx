@@ -63,6 +63,12 @@ export interface CompteFideicommisProps {
    *  Portefeuille par Clients' "Relevé mensuel" quick action, which used to
    *  land here on the generic dashboard instead of the actual Relevés tab. */
   initialTab?: Tab;
+  /** Called after a client is added, edited, or deleted — App.tsx keeps its
+   *  OWN separate copy of the client list (feeding the "Propriétaire-client"
+   *  selector in Gestion Plex), which never refreshed after a change made
+   *  here until a manual page reload. Found via Daniel's QA report
+   *  2026-08-13. */
+  onClientsChanged?: () => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -290,6 +296,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   WorkspaceSidebar,
   playNotificationSound,
   initialTab,
+  onClientsChanged,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab || "tableau");
 
@@ -313,6 +320,10 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   // delete one afterward. Non-null id = editing that client instead of
   // creating a new one.
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  // Same fix, extended to dépôts/retraits (2026-08-13): they could only be
+  // deleted, never corrected after a data-entry mistake.
+  const [editingDepotId, setEditingDepotId] = useState<string | null>(null);
+  const [editingRetraitId, setEditingRetraitId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const { setDispatcherSuccessToast } = useToast();
@@ -412,11 +423,17 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     }
     setIsSaving(true);
     try {
-      const id = `${uid}_fiddepot_${Date.now()}`;
+      // Editing an existing dépôt keeps its id/receipt number — only a
+      // brand-new one gets a fresh id and generated numeroRecu. Requested
+      // 2026-08-13 (Daniel's QA report): dépôts could only be deleted, not
+      // corrected, unlike clients which already had edit support.
+      const isEditing = !!editingDepotId;
+      const id = isEditing ? editingDepotId! : `${uid}_fiddepot_${Date.now()}`;
+      const existing = isEditing ? depots.find(d => d.id === id) : null;
       const client = clients.find(c => c.id === depotForm.clientId);
       const selectedBuilding = buildings.find(b => b.id === depotForm.buildingId);
       const selectedUnit = units.find(u => u.id === depotForm.unitId);
-      const numeroRecu = generateReceiptNumber(depots);
+      const numeroRecu = existing?.numeroRecu || generateReceiptNumber(depots);
       const newDepot: FideicommisDepotDoc = {
         id, companyId: activeCompanyId, numeroRecu,
         date: depotForm.date, locataireName: depotForm.locataireName,
@@ -430,7 +447,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
         ...(depotForm.unitId ? { unitId: depotForm.unitId } : {}),
         ...(selectedUnit?.unitName ? { unitName: selectedUnit.unitName } : {}),
         notes: depotForm.notes, ownerId: uid,
-        createdAt: new Date().toISOString(),
+        createdAt: existing?.createdAt || new Date().toISOString(),
       };
       // Firestore's setDoc rejects any field whose value is explicitly
       // `undefined` — no building/unit selected (the common case, since that
@@ -439,16 +456,29 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       // dépôt without a linked building failed silently save-side while the
       // form still looked filled in.
       await setDoc(doc(db, "fideicommisDepots", id), newDepot);
-      setDepots(prev => [newDepot, ...prev]);
+      setDepots(prev => isEditing ? prev.map(d => d.id === id ? newDepot : d) : [newDepot, ...prev]);
       setShowDepotForm(false);
       setDepotForm(emptyDepot());
+      setEditingDepotId(null);
       playNotificationSound?.();
-      setDispatcherSuccessToast({ text: `Dépôt de ${newDepot.montant.toLocaleString("fr-CA")} $ enregistré — reçu #${newDepot.numeroRecu}`, channel: "Fidéicommis" });
+      setDispatcherSuccessToast({ text: isEditing ? `Dépôt #${newDepot.numeroRecu} modifié.` : `Dépôt de ${newDepot.montant.toLocaleString("fr-CA")} $ enregistré — reçu #${newDepot.numeroRecu}`, channel: "Fidéicommis" });
     } catch (e) {
       console.error(e);
       alert("Erreur lors de l'enregistrement du dépôt. Veuillez réessayer.");
     }
     finally { setIsSaving(false); }
+  };
+
+  const handleEditDepot = (d: FideicommisDepotDoc) => {
+    setDepotForm({
+      date: d.date, locataireName: d.locataireName, propertyAddress: d.propertyAddress,
+      periodeDebut: d.periodeDebut, periodeFin: d.periodeFin, montant: String(d.montant),
+      modePaiement: d.modePaiement, clientId: d.clientId,
+      buildingId: (d as any).buildingId || "", unitId: (d as any).unitId || "",
+      notes: d.notes || "",
+    } as any);
+    setEditingDepotId(d.id);
+    setShowDepotForm(true);
   };
 
   // ── Save Retrait ──────────────────────────────────────────────────────────
@@ -460,7 +490,15 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     }
     setIsSaving(true);
     try {
-      const id = `${uid}_fidretrait_${Date.now()}`;
+      // Editing keeps the existing id and never re-runs the side effects
+      // below (mirroring an "honoraires" retrait into a real invoice, and
+      // mirroring dépense/honoraires into the owner's shared ledger) — those
+      // already ran once at creation; re-running them on every correction
+      // would create duplicate invoices/ledger entries. Requested 2026-08-13
+      // (Daniel's QA report): retraits could only be deleted, not corrected.
+      const isEditing = !!editingRetraitId;
+      const id = isEditing ? editingRetraitId! : `${uid}_fidretrait_${Date.now()}`;
+      const existing = isEditing ? retraits.find(r => r.id === id) : null;
       const client = clients.find(c => c.id === retraitForm.clientId);
       const newRetrait: FideicommisRetraitDoc = {
         id, companyId: activeCompanyId,
@@ -470,10 +508,19 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
         type: retraitForm.type, description: retraitForm.description,
         clientId: retraitForm.clientId, clientName: client?.nom || "",
         notes: retraitForm.notes, ownerId: uid,
-        createdAt: new Date().toISOString(),
+        createdAt: existing?.createdAt || new Date().toISOString(),
       };
       await setDoc(doc(db, "fideicommisRetraits", id), newRetrait);
-      setRetraits(prev => [newRetrait, ...prev]);
+      setRetraits(prev => isEditing ? prev.map(r => r.id === id ? newRetrait : r) : [newRetrait, ...prev]);
+
+      if (isEditing) {
+        setShowRetraitForm(false);
+        setRetraitForm(emptyRetrait());
+        setEditingRetraitId(null);
+        playNotificationSound?.();
+        setDispatcherSuccessToast({ text: `Retrait modifié.`, channel: "Fidéicommis" });
+        return;
+      }
 
       // A management-fee withdrawal used to only ever show up as an outflow
       // on the CLIENT's trust books — the gestionnaire's own company never
@@ -543,6 +590,16 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     finally { setIsSaving(false); }
   };
 
+  const handleEditRetrait = (r: FideicommisRetraitDoc) => {
+    setRetraitForm({
+      date: r.date, beneficiaire: r.beneficiaire, propertyAddress: r.propertyAddress,
+      montant: String(r.montant), type: r.type, description: r.description,
+      clientId: r.clientId, notes: r.notes || "",
+    } as any);
+    setEditingRetraitId(r.id);
+    setShowRetraitForm(true);
+  };
+
   // ── Save Client ───────────────────────────────────────────────────────────
   const handleSaveClient = async () => {
     const uid = auth.currentUser?.uid;
@@ -568,6 +625,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       setClientForm({ nom: "", email: "", telephone: "", tauxHonoraires: "8", proprietes: "" });
       playNotificationSound?.();
       setDispatcherSuccessToast({ text: `Client "${savedClient.nom}" ${existing ? "modifié" : "enregistré"}`, channel: "Fidéicommis" });
+      onClientsChanged?.();
     } catch (e) {
       console.error(e);
       alert("Erreur lors de l'enregistrement du client. Veuillez réessayer.");
@@ -591,6 +649,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       setClients(prev => prev.filter(x => x.id !== c.id));
       playNotificationSound?.();
       setDispatcherSuccessToast({ text: `Client "${c.nom}" supprimé`, channel: "Fidéicommis" });
+      onClientsChanged?.();
     } catch (e) {
       console.error(e);
       alert("Erreur lors de la suppression du client.");
@@ -913,7 +972,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     <p className={`text-sm font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                       {periodDepots.length} dépôt(s) · {fmtCAD(periodDepotsSum)}
                     </p>
-                    <button onClick={() => setShowDepotForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20">
+                    <button onClick={() => { setDepotForm(emptyDepot()); setEditingDepotId(null); setShowDepotForm(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20">
                       <Plus size={13} />Nouveau dépôt
                     </button>
                   </div>
@@ -924,8 +983,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
                         <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-emerald-500">Enregistrer un dépôt</h3>
-                            <button onClick={() => setShowDepotForm(false)}><X size={16} className={darkMode ? "text-zinc-500" : "text-slate-400"} /></button>
+                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-emerald-500">{editingDepotId ? "Modifier le dépôt" : "Enregistrer un dépôt"}</h3>
+                            <button onClick={() => { setShowDepotForm(false); setEditingDepotId(null); }}><X size={16} className={darkMode ? "text-zinc-500" : "text-slate-400"} /></button>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
@@ -983,7 +1042,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                           <div className="flex gap-3 pt-2">
                             <button onClick={handleSaveDepot} disabled={isSaving || !depotForm.clientId || !depotForm.montant} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
                               {isSaving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                              Enregistrer · Générer le reçu
+                              {editingDepotId ? "Enregistrer les modifications" : "Enregistrer · Générer le reçu"}
                             </button>
                           </div>
                         </div>
@@ -1016,6 +1075,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-black text-emerald-500">+{fmtCAD(d.montant)}</span>
                           <button onClick={() => downloadRecu(d)} title="Télécharger le reçu" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"}`}><Download size={13} /></button>
+                          <button onClick={() => handleEditDepot(d)} title="Modifier" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10" : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"}`}><Edit3 size={13} /></button>
                           <button onClick={() => deleteDepot(d.id)} title="Supprimer" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-700 hover:text-rose-400" : "text-slate-300 hover:text-rose-500"}`}><Trash2 size={13} /></button>
                         </div>
                       </div>
@@ -1031,7 +1091,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     <p className={`text-sm font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                       {periodRetraits.length} retrait(s) · {fmtCAD(periodRetraitsSum)}
                     </p>
-                    <button onClick={() => setShowRetraitForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-rose-500/20">
+                    <button onClick={() => { setRetraitForm(emptyRetrait()); setEditingRetraitId(null); setShowRetraitForm(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-rose-500/20">
                       <Plus size={13} />Nouveau retrait
                     </button>
                   </div>
@@ -1041,8 +1101,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
                         <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-rose-500">Enregistrer un retrait</h3>
-                            <button onClick={() => setShowRetraitForm(false)}><X size={16} /></button>
+                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-rose-500">{editingRetraitId ? "Modifier le retrait" : "Enregistrer un retrait"}</h3>
+                            <button onClick={() => { setShowRetraitForm(false); setEditingRetraitId(null); }}><X size={16} /></button>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
@@ -1069,7 +1129,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                           </div>
                           <button onClick={handleSaveRetrait} disabled={isSaving || !retraitForm.clientId || !retraitForm.montant} className="w-full py-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
                             {isSaving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                            Enregistrer le retrait
+                            {editingRetraitId ? "Enregistrer les modifications" : "Enregistrer le retrait"}
                           </button>
                         </div>
                       </motion.div>
@@ -1102,6 +1162,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-black text-rose-500">-{fmtCAD(r.montant)}</span>
+                          <button onClick={() => handleEditRetrait(r)} title="Modifier" className={`p-1.5 rounded-lg transition-colors ${darkMode ? "text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}><Edit3 size={13} /></button>
                           <button onClick={() => deleteRetrait(r.id)} className={`p-1.5 rounded-lg ${darkMode ? "text-zinc-700 hover:text-rose-400" : "text-slate-300 hover:text-rose-500"}`}><Trash2 size={13} /></button>
                         </div>
                       </div>

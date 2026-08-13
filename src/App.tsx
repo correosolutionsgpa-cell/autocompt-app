@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import jsPDF from "jspdf";
@@ -1600,6 +1600,44 @@ const App = () => {
   ];
   // --- NAVEGACIÓN ---
   const [vista, setVista] = useState("splash");
+  // Remembers the last real section visited so a browser refresh can
+  // restore it instead of always landing back on "dashboard" — see the
+  // restore logic in onAuthStateChanged's final setVista decision.
+  // Excludes transient/auth/onboarding screens, which should never be
+  // "resumed" into after a fresh reload.
+  useEffect(() => {
+    const transient = [
+      "splash", "login", "welcome", "benefits", "setup", "pricing",
+      "rental_model", "level_selection", "sofi-onboarding", "portal",
+      "phone-verify", "set-password", "accepter-invitation", "preview-email",
+      "politique-de-confidentialite", "conditions-d-utilisation",
+    ];
+    if (!transient.includes(vista)) {
+      try { localStorage.setItem("autocompt_last_vista", vista); } catch { /* ignore */ }
+    }
+  }, [vista]);
+
+  // Every module header's back arrow used to hardcode setVista("dashboard")
+  // — so leaving a sub-screen reached from somewhere other than the
+  // dashboard (e.g. Relevé Mensuel opened from Portefeuille par Client)
+  // always dumped you back on the dashboard instead of where you actually
+  // came from. Requested by Daniel's QA report 2026-08-13. This tracks
+  // visited vistas as a simple back-stack; goBack() pops the current one
+  // and returns to whatever was actually open before it.
+  const vistaHistoryRef = useRef<string[]>([]);
+  useEffect(() => {
+    const stack = vistaHistoryRef.current;
+    if (stack[stack.length - 1] !== vista) {
+      stack.push(vista);
+      if (stack.length > 40) stack.shift();
+    }
+  }, [vista]);
+  const goBack = useCallback(() => {
+    const stack = vistaHistoryRef.current;
+    stack.pop();
+    setVista(stack[stack.length - 1] || "dashboard");
+  }, []);
+
   const [masterAccess, setMasterAccess] = useState(false);
   const [dashboardMode, setDashboardMode] = useState<"Plex" | "Syndic" | "Global">(() => {
     return (localStorage.getItem("autocompt_dashboard_mode") as "Plex" | "Syndic" | "Global") || "Plex";
@@ -1619,12 +1657,22 @@ const App = () => {
     localStorage.setItem("autocompt_user_level", userLevel);
   }, [userLevel]);
   const [activeCompanyId, setActiveCompanyId] = useState("1");
-  useEffect(() => {
+  // Pulled out of the effect so CompteFideicommis can also call it directly
+  // right after adding/editing/deleting a client — that screen keeps its
+  // OWN separate copy of the client list (fetched independently), so
+  // without this, deleting/adding a client there never refreshed THIS
+  // fideicommisClients state, and the "Propriétaire-client" selector in
+  // Gestion Plex (fed from this one) kept showing deleted clients / missing
+  // new ones until a manual page reload. Found via Daniel's QA report
+  // 2026-08-13.
+  const refreshFideicommisClients = useCallback(() => {
     const userId = auth.currentUser?.uid;
     if (!userId || !activeCompanyId) { setFideicommisClients([]); return; }
     dataService.fetchFideicommisClients(userId, activeCompanyId)
       .then(setFideicommisClients)
       .catch(console.error);
+  }, [activeCompanyId]);
+  useEffect(() => {
     // `currentUserEmail` (set inside onAuthStateChanged) is also a dependency
     // here — on a fresh load/hard refresh, Firebase Auth resolves
     // asynchronously, and this effect could otherwise fire once with
@@ -1632,7 +1680,8 @@ const App = () => {
     // never changes again), permanently leaving fideicommisClients empty —
     // and with it, the "Propriétaire-client" selector in Gestion Plex.
     // Found 2026-08-09.
-  }, [activeCompanyId, currentUserEmail]);
+    refreshFideicommisClients();
+  }, [activeCompanyId, currentUserEmail, refreshFideicommisClients]);
 
   // Pending "Relevé de Gestion" invitations for this account's email — a
   // brand-new user invited by their gestionnaire had no way to discover
@@ -2644,6 +2693,19 @@ const App = () => {
     const activeBadge =
       currentCompany?.badgeBg || "bg-emerald-100 text-emerald-800";
 
+    // The nav list's scroll position used to stay wherever it was left,
+    // often at the top — landing on a section further down (e.g. Tenue de
+    // Livres) never scrolled the sidebar to actually show it highlighted,
+    // so it looked like nothing was selected until manually scrolling down
+    // to find it. Requested by Daniel's QA report 2026-08-13.
+    const navScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      const container = navScrollRef.current;
+      if (!container) return;
+      const activeEl = container.querySelector('[data-nav-active="true"]') as HTMLElement | null;
+      activeEl?.scrollIntoView({ block: "nearest" });
+    }, [vista]);
+
     const baseNavItems = [
       { id: "dashboard", label: t("Tableau de Bord"), icon: <Layout size={18} /> },
     ];
@@ -3213,7 +3275,7 @@ const App = () => {
                   view simultaneously, leaving only ~1 nav item visible before
                   the list ran out of room — on desktop and even worse on
                   mobile's shorter viewport. Found 2026-08-09. */}
-              <div className="flex-1 min-h-0 p-4 overflow-y-auto space-y-1">
+              <div ref={navScrollRef} className="flex-1 min-h-0 p-4 overflow-y-auto space-y-1">
                 <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 mb-3">
                   Outils de Gestion
                 </p>
@@ -3279,6 +3341,7 @@ const App = () => {
                             return (
                               <button
                                 key={item.id}
+                                data-nav-active={isActive ? "true" : undefined}
                                 onClick={() => {
                                   setVista(item.id);
                                   setIsSidebarOpen(false);
@@ -3299,6 +3362,7 @@ const App = () => {
                             return (
                               <button
                                 key={item.id}
+                                data-nav-active={isActive ? "true" : undefined}
                                 onClick={() => {
                                   setVista(item.id);
                                   setIsSidebarOpen(false);
@@ -3320,6 +3384,7 @@ const App = () => {
                             return (
                               <button
                                 key={item.id}
+                                data-nav-active={isActive ? "true" : undefined}
                                 onClick={() => {
                                   if (item.id === "doculegal") {
                                     const currentTier = getEffectiveTier();
@@ -9262,6 +9327,22 @@ const App = () => {
               console.log("[AUTH-DEBUG] setVista decision: sofi-onboarding. prev=", prev, "hasSelectedProfile=", hasSelectedProfile);
               return "sofi-onboarding";
             }
+            // A browser refresh (F5 / "Actualiser") always restarts `vista`
+            // at "splash" — there's no URL routing, it's pure in-memory
+            // state — so this used to unconditionally land back on
+            // "dashboard" no matter which section was open. Restore the
+            // last real section instead, if one was saved. Requested by
+            // Daniel's QA report 2026-08-13 ("me gustaría que cuando le dé
+            // click a Actualizar yo siga estando en la sección que estaba
+            // usando"). See the matching persist effect near `vista`'s
+            // declaration.
+            try {
+              const lastVista = localStorage.getItem("autocompt_last_vista");
+              if (lastVista && lastVista !== "dashboard") {
+                console.log("[AUTH-DEBUG] setVista decision: restoring last section —", lastVista);
+                return lastVista;
+              }
+            } catch { /* localStorage unavailable — fall through to dashboard */ }
             console.log("[AUTH-DEBUG] setVista decision: dashboard. prev=", prev);
             return "dashboard";
           });
@@ -17830,7 +17911,7 @@ const App = () => {
               <Menu size={18} />
             </button>
             <button
-              onClick={() => setVista("dashboard")}
+              onClick={goBack}
               className={`p-2 transition-colors rounded-xl transition-all ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}
             >
               <ArrowLeft size={24} />
@@ -20325,7 +20406,7 @@ const App = () => {
             <Menu size={18} />
           </button>
           <button
-            onClick={() => setVista("dashboard")}
+            onClick={goBack}
             className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"
               }`}
           >
@@ -20463,7 +20544,7 @@ const App = () => {
             <button
               onClick={() => {
                 if (subVistaFactura !== "liste") setSubVistaFactura("liste");
-                else setVista("dashboard");
+                else goBack();
               }}
               className={`p-2 rounded-xl transition-all ${darkMode ? "bg-zinc-900 text-zinc-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:text-[#059669]"}`}
             >
@@ -21920,7 +22001,7 @@ const App = () => {
         />
         <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b flex items-center gap-3 shadow-sm sticky top-0 z-50`}
           style={{ borderTop: '3px solid #f43f5e' }}>
-          <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}>
+          <button onClick={goBack} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}>
             <ArrowLeft size={20} />
           </button>
           <div className="flex-1">
@@ -22473,6 +22554,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         WorkspaceSidebar={WorkspaceSidebar}
         playNotificationSound={playNotificationSound}
         initialTab={vista === "fideicommis_releves" ? "releves" : undefined}
+        onClientsChanged={refreshFideicommisClients}
       />
     );
   }
