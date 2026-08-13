@@ -20030,9 +20030,18 @@ const App = () => {
                         <div className="grid grid-cols-2 gap-2 mt-2 max-h-56 overflow-y-auto pr-1 no-scrollbar">
                           {(activeCompanyId === "1"
                             ? (() => {
+                              // "Location - Logement Meublé (Triplex)" removed
+                              // 2026-08-13 at Fabiola's request — it bypassed
+                              // TPS/TVQ, taxe de séjour and CITQ tracking
+                              // entirely (posted as plain exempt "Résidentiel"
+                              // income). Short-term/meublé income now belongs
+                              // exclusively in the dedicated Meublé/Airbnb
+                              // module, which computes all of that correctly.
+                              // Existing historical entries under the old
+                              // category are untouched — only removed from
+                              // this picker so nothing NEW gets misclassified.
                               const cats = [
                                 "Location - Chambres (Triplex)",
-                                "Location - Logement Meublé (Triplex)",
                                 "Frais de Gestion Immobilière",
                               ];
                               if (showServicesHorsLoyer)
