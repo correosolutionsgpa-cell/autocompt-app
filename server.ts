@@ -1571,6 +1571,37 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // ── DocuLegal: permanently delete a document + its signature attempts ──────
+  // pendingSignatures has `allow delete: if false` in firestore.rules — it's
+  // a public, unauthenticated "magic link" collection (any signer, no
+  // AutoCompt account, can read/update it), so deletion is intentionally
+  // blocked at the client level to prevent a signer from destroying their
+  // own signature record. The owner still needs a way to clear out test/
+  // abandoned signature requests, so this does it server-side instead.
+  app.post("/api/delete-doculegal-document", async (req, res) => {
+    try {
+      const { ownerId, docId } = req.body;
+      if (!ownerId || !docId) {
+        return res.status(400).json({ success: false, error: "ownerId and docId are required" });
+      }
+      const db = getAdminDb();
+      const snap = await db.collection("pendingSignatures").where("docId", "==", docId).get();
+      let deletedCount = 0;
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (d.id === `${docId}_lock` || data.ownerId === ownerId) {
+          await d.ref.delete();
+          deletedCount++;
+        }
+      }
+      await db.collection("docuLegalDocs").doc(`${ownerId}_doculegal_${docId}`).delete();
+      res.json({ success: true, deletedCount });
+    } catch (error: any) {
+      console.error("delete-doculegal-document error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // ── DocuLegal: finalize a real multi-party signature (2+ named signers) ────
   // Each signer completes independently from their own link/browser, so no
   // single one of them ever has every other signer's signature image. This

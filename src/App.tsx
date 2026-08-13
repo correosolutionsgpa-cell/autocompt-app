@@ -4076,6 +4076,7 @@ const App = () => {
   const [plexPdfEditorFile, setPlexPdfEditorFile] = useState<File | null>(null);
   const [isSendingPlexPdf, setIsSendingPlexPdf] = useState(false);
   const [isSendingReminder, setIsSendingReminder] = useState(false);
+  const [isDeletingDocuLegal, setIsDeletingDocuLegal] = useState(false);
   const plexPdfFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // ── Mes Modèles (custom document templates) — Prospecteur/Investisseur/
@@ -13247,6 +13248,34 @@ const App = () => {
       }
     };
 
+    // Permanently removes a DocuLegal document and every signing attempt
+    // tied to it (pendingSignatures docs). Requested 2026-08-13: test
+    // signature requests sent while building the click-to-sign feature
+    // (fake names like "beatriz de plante") were cluttering the real list
+    // with no way to clear them — "Retirer / Annuler" only marks the link
+    // invalid, it doesn't remove the document from view.
+    const handleDeleteDocuLegalDoc = async (legalDoc: any) => {
+      if (!confirm(`⚠ Supprimer définitivement "${legalDoc.name}" ?\n\nCette action est irréversible et retirera aussi toutes les tentatives de signature liées à ce document.`)) return;
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      setIsDeletingDocuLegal(true);
+      try {
+        const resp = await fetch("/api/delete-doculegal-document", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ownerId: uid, docId: legalDoc.id }),
+        });
+        const result = await resp.json();
+        if (!resp.ok || !result.success) throw new Error(result.error || "Échec de la suppression");
+        setDocuLegalList((prev) => prev.filter((d) => d.id !== legalDoc.id));
+        playNotificationSound();
+      } catch (err: any) {
+        alert("Erreur lors de la suppression : " + (err?.message || err));
+      } finally {
+        setIsDeletingDocuLegal(false);
+      }
+    };
+
     // Called by <DocuLegalPdfEditor> once fields are placed and signer info
     // entered — same generic pendingSignatures + ?sign= link mechanism the
     // Syndicat profile's own DocuLegal already uses (see
@@ -14870,6 +14899,19 @@ const App = () => {
                                           >
                                             <X size={10} />
                                           </button>
+
+                                          <button
+                                            type="button"
+                                            disabled={isDeletingDocuLegal}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteDocuLegalDoc(doc);
+                                            }}
+                                            title="Supprimer définitivement (ex: tentative de test)"
+                                            className="p-1.5 bg-slate-500/10 hover:bg-rose-600 hover:text-white text-slate-500 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer disabled:opacity-50"
+                                          >
+                                            <Trash2 size={10} />
+                                          </button>
                                         </div>
                                       )}
 
@@ -15128,6 +15170,19 @@ const App = () => {
                                         className="p-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer"
                                       >
                                         <X size={10} />
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        disabled={isDeletingDocuLegal}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteDocuLegalDoc(doc);
+                                        }}
+                                        title="Supprimer définitivement (ex: tentative de test)"
+                                        className="p-1.5 bg-slate-500/10 hover:bg-rose-600 hover:text-white text-slate-500 rounded-lg border-none flex items-center justify-center transition-all cursor-pointer disabled:opacity-50"
+                                      >
+                                        <Trash2 size={10} />
                                       </button>
                                     </div>
                                   )}
