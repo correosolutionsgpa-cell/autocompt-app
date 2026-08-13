@@ -57,10 +57,6 @@ export interface BanqueSyncViewProps {
   isPlex: boolean;
   plexManagementProperties: any[];
 
-  // Modal Triplex Split
-  showTriplexSplitModal: boolean;
-  setShowTriplexSplitModal: (val: boolean) => void;
-
   // Paywall
   setPaywallTargetTier: (val: string) => void;
   setShowPaywallModal: (val: boolean) => void;
@@ -125,8 +121,6 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   isSolutionsGPA,
   isPlex,
   plexManagementProperties,
-  showTriplexSplitModal,
-  setShowTriplexSplitModal,
   setPaywallTargetTier,
   setShowPaywallModal,
   csvInputRef,
@@ -925,27 +919,11 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                   )}
                 </div>
               </div>
-              {isSolutionsGPA && (
-                <div className="pt-4 border-t border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
-                  <div className="text-left">
-                    <p className="text-[8.5px] font-black uppercase tracking-wider text-emerald-400">
-                      Co-Propriétaires Du Triplex 🏡
-                    </p>
-                    <p className="text-[7.5px] text-white/50 uppercase tracking-tight font-bold">
-                      Répartition Fiscale Auto 50/50 Eric & Fabiola
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowTriplexSplitModal(true);
-                      playNotificationSound();
-                    }}
-                    className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white rounded-xl text-[9px] font-black uppercase italic tracking-wider transition-all text-center flex items-center justify-center border-none cursor-pointer"
-                  >
-                    🚀 Calculer le Split du Triplex
-                  </button>
-                </div>
-              )}
+              {/* "Calculer le Split du Triplex" button removed 2026-08-13 —
+                  opened a modal built on hardcoded fake tenant data
+                  (Juan/Marie/Pierre-Luc) and a hardcoded "Eric Plante" 50/50
+                  partner split, none of it backed by real data. Requested by
+                  Fabiola while cleaning up the app for real accounting. */}
 
               <div className="pt-4 border-t border-white/10 flex justify-between items-center text-left">
                 <span className="text-[10px] font-black uppercase italic tracking-widest">
