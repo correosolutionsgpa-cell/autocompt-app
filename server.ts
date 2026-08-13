@@ -1720,6 +1720,7 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
       }
 
       // ── Best-effort Drive upload ─────────────────────────────────────────
+      let driveFileUrl: string | undefined;
       if (pdfBase64 && companyId && ownerId) {
         try {
           const credSnap = await db.collection("driveCredentials").doc(driveCredDocId(ownerId, companyId)).get();
@@ -1727,14 +1728,34 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
             const accessToken = await refreshAccessToken(credSnap.data()!.refreshToken);
             const folderId = await resolveCompanyDriveFolder(accessToken, companyName, "DocuLegal", undefined);
             const safeTitle = (docTitle || "Document").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim().replace(/\s+/g, "_");
-            await uploadBase64ToDrive(accessToken, folderId, `DocuLegal_${safeTitle}_Signe_Final.pdf`, "application/pdf", pdfBase64);
+            const driveFile = await uploadBase64ToDrive(accessToken, folderId, `DocuLegal_${safeTitle}_Signe_Final.pdf`, "application/pdf", pdfBase64);
+            driveFileUrl = driveFile.webViewLink || `https://drive.google.com/file/d/${driveFile.id}/view`;
           }
         } catch (driveErr) {
           console.error("[finalize-signature-group] Drive upload failed:", driveErr);
         }
       }
 
-      return res.json({ success: true, allSigned: true, signedCount: signedDocs.length, totalSigners });
+      // ── Mark the document "Signé" in the app's own DocuLegal list ────────
+      // Without this, the document stayed "En attente" in the app forever
+      // even after every party had signed and the final PDF was emailed —
+      // the only way to find it was digging through email or Drive. Found
+      // 2026-08-13: Fabiola couldn't locate her completed document anywhere
+      // in the app. docuLegalOwnerId is only present on documents created
+      // after this fix; older ones can't be resolved and are skipped.
+      const docuLegalOwnerId = first.docuLegalOwnerId;
+      if (docuLegalOwnerId) {
+        try {
+          await db.collection("docuLegalDocs").doc(`${docuLegalOwnerId}_doculegal_${docId}`).set({
+            status: "Signé",
+            ...(driveFileUrl ? { fileUrl: driveFileUrl } : {}),
+          }, { merge: true });
+        } catch (updateErr) {
+          console.error("[finalize-signature-group] docuLegalDocs status update failed:", updateErr);
+        }
+      }
+
+      return res.json({ success: true, allSigned: true, signedCount: signedDocs.length, totalSigners, fileUrl: driveFileUrl });
     } catch (error: any) {
       console.error("finalize-signature-group error:", error);
       res.status(500).json({ success: false, error: error.message });

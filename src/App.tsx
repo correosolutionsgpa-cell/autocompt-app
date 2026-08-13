@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import jsPDF from "jspdf";
@@ -4648,8 +4648,6 @@ const App = () => {
   const [currentCategoryFolder, setCurrentCategoryFolder] = useState<
     string | null
   >(null);
-  const [dossierSearchQuery, setDossierSearchQuery] = useState("");
-
   const [dossierFiles, setDossierFiles] = useState<FileItem[]>([
     {
       id: "df-1",
@@ -13328,6 +13326,13 @@ const App = () => {
             signerIndex: i,
             totalSigners: signers.length,
             allSigners: signers.map((s) => ({ name: s.name, email: s.email })),
+            // So /api/finalize-signature-group can mark the docuLegalDocs
+            // entry "Signé" once everyone has signed — without this, the
+            // document stayed "En attente" forever in the app's own list
+            // even after the final PDF was emailed to everyone. Found
+            // 2026-08-13: Fabiola couldn't find her completed document
+            // anywhere in the app after both parties signed.
+            docuLegalOwnerId: uid,
           };
           let b64 = "";
           try {
@@ -13467,6 +13472,7 @@ const App = () => {
             signerIndex: vi,
             totalSigners: validSigners.length,
             allSigners: validSigners.map((s) => ({ name: s.name, email: s.email })),
+            docuLegalOwnerId: uid,
           };
           let b64 = "";
           try {
