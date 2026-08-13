@@ -369,6 +369,12 @@ export interface MeubleExpenseDoc {
   unitId?: string;
   ownerId: string;
   createdAt: string;
+  /** true once mirrored into journalEntries/journalLines (acc-expense-meuble
+   *  / acc-bank) — added 2026-08-13. Meublé expenses used to only ever
+   *  write this flat document, never reaching the general ledger, Export
+   *  Comptable, or any TPS/TVQ report at all (unlike saveExpense, which
+   *  always posts a journal entry). */
+  journalPosted?: boolean;
 }
 
 // ── LoanIssuedDoc — Firestore `loansIssued` collection ────────────────────────
@@ -2857,6 +2863,36 @@ export const dataService = {
       if (data[k] === undefined) delete data[k];
     });
     await setDoc(doc(db, 'meubleExpenses', docId), data);
+
+    // Mirror into the general ledger — was missing entirely (unlike
+    // saveExpense, which always posts). Meublé revenue already had its own
+    // dedicated acc-revenue-meuble account in Export Comptable; expenses had
+    // no matching mirror, so Meublé operating costs (ménage, fournitures,
+    // hydro...) never reduced reported profit anywhere outside this screen's
+    // own tab. Non-blocking, same pattern as saveMeubleReservation: a
+    // journal failure never stops the expense itself from being saved.
+    try {
+      if (!auth.currentUser) throw new Error("Not authenticated");
+      const entryData = {
+        id: docId,
+        companyId: expense.companyId,
+        date: data.date || new Date().toISOString(),
+        description: `Meublé: ${data.description || data.category || 'Dépense'}`,
+        documentReference: docId,
+        createdAt: data.createdAt,
+        ownerId: userId,
+      };
+      const linesData = [
+        { id: `${docId}-debit`, journalEntryId: docId, accountId: "acc-expense-meuble", type: 'Debit', amount: data.amount || 0, ownerId: userId },
+        { id: `${docId}-credit`, journalEntryId: docId, accountId: "acc-bank", type: 'Credit', amount: data.amount || 0, ownerId: userId },
+      ];
+      await postJournalEntry(entryData, linesData);
+      await setDoc(doc(db, 'meubleExpenses', docId), { journalPosted: true }, { merge: true });
+      data.journalPosted = true;
+    } catch (error: any) {
+      console.error("[saveMeubleExpense] journal posting failed (non-blocking):", error.message);
+    }
+
     return { ...data, id: originalId, companyId: expense.companyId };
   },
 

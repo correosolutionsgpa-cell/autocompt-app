@@ -84,6 +84,7 @@ const PLAN: Record<string, { label: string; type: 'actif'|'passif'|'revenu'|'cha
   'acc-revenue':             { label: 'Produits — Général',          type: 'revenu', code: '4100' },
   'acc-revenue-meuble':      { label: 'Produits — Location meublée', type: 'revenu', code: '4200' },
   'acc-frais-plateforme':    { label: 'Charges — Frais plateformes', type: 'charge', code: '5210' },
+  'acc-expense-meuble':      { label: 'Charges — Location meublée', type: 'charge', code: '5220' },
   'acc-tps-payable':         { label: 'TPS à remettre (passif)',      type: 'passif', code: '2310' },
   'acc-tvq-payable':         { label: 'TVQ à remettre (passif)',      type: 'passif', code: '2320' },
   'acc-taxe-sejour-payable': { label: 'Taxe de séjour à remettre',   type: 'passif', code: '2330' },

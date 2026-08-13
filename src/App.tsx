@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import jsPDF from "jspdf";
@@ -1229,6 +1229,11 @@ const App = () => {
   // Fidéicommis clients (propriétaires gérés) — used to link a building to its
   // owner-client in Gestion Immobilière (GestionPlex "Propriétaire-client" selector).
   const [fideicommisClients, setFideicommisClients] = useState<Array<{ id: string; nom: string }>>([]);
+  // Meublé/Airbnb expenses — fetched here (separately from the module's own
+  // local copy) only so Dossiers Fiscaux can include their receipts in the
+  // annual archive/CSV export. They previously never appeared there at all
+  // even when a Drive link existed. Found via Meublé module audit, 2026-08-13.
+  const [meubleExpensesForDossiers, setMeubleExpensesForDossiers] = useState<any[]>([]);
   const [plexLoyers, _setPlexLoyers] = useState<any[]>([]);
   const reconcileLoyers = async (prev: any[], next: any[]) => {
     const userId = auth.currentUser?.uid;
@@ -1682,6 +1687,17 @@ const App = () => {
     // Found 2026-08-09.
     refreshFideicommisClients();
   }, [activeCompanyId, currentUserEmail, refreshFideicommisClients]);
+
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !activeCompanyId) { setMeubleExpensesForDossiers([]); return; }
+    dataService.fetchMeubleExpenses(userId, activeCompanyId)
+      .then((list) => setMeubleExpensesForDossiers(list.map((e) => ({
+        id: e.id, date: e.date, category: e.category, description: e.description,
+        montant: e.amount, lien: e.lien, source: "Meublé/Airbnb",
+      }))))
+      .catch(console.error);
+  }, [activeCompanyId, currentUserEmail]);
 
   // Pending "Relevé de Gestion" invitations for this account's email — a
   // brand-new user invited by their gestionnaire had no way to discover
@@ -12018,17 +12034,17 @@ const App = () => {
                       brand-new account with no company yet (or no adminName
                       set either), fall back to the account's own email, then
                       a generic label. Never leaks another account's name. */}
-                  Usager: {activeUser || adminName || currentUserEmail || "Utilisateur"}
+                  {t("Usager")}: {activeUser || adminName || currentUserEmail || "Utilisateur"}
                 </p>
               </div>
               <div className="mt-1 max-w-full min-w-0">
                 {dashboardMode === "Plex" ? (
                   <span className="block text-[6px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded truncate">
-                    PROFIL PLEX : {userLevel || "Travailleur autonome (Revenu)"}
+                    {t("PROFIL PLEX")} : {userLevel || "Travailleur autonome (Revenu)"}
                   </span>
                 ) : (
                   <span className="block text-[6px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded truncate">
-                    PROFIL SYNDICAT DE COPROPRIÉTÉ
+                    {t("PROFIL SYNDICAT DE COPRIÉTÉ")}
                   </span>
                 )}
               </div>
@@ -12219,7 +12235,7 @@ const App = () => {
                     <p
                       className={`text-[10px] font-black uppercase italic tracking-tighter ${darkMode ? "text-white" : "text-slate-900"}`}
                     >
-                      Alertes Fiscales
+                      {t("Alertes Fiscales")}
                     </p>
                   </div>
                   <p
@@ -19113,6 +19129,19 @@ const App = () => {
                       <span className={`text-xs font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-[#059669]"}`}>Net à Remettre / Recevoir</span>
                       <span className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-white w-[fit-content]" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) - processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
                     </div>
+                    {/* This card only sums invoices/expenses (historique/
+                        depenses) — TPS/TVQ from the Meublé/Airbnb module
+                        (separate meubleReservations/meubleExpenses
+                        collections) isn't included here. Rather than risk a
+                        wrong combined number on a live tax figure, point to
+                        the report that already aggregates both correctly.
+                        Found via Meublé module audit, 2026-08-13. */}
+                    <button
+                      onClick={() => { setVista("reportes"); }}
+                      className={`text-[9px] font-bold text-left ${darkMode ? "text-amber-400" : "text-amber-600"} hover:underline`}
+                    >
+                      ⚠️ N'inclut pas les revenus Meublé/Airbnb — voir Export Comptable → Rapport TPS/TVQ pour le total complet.
+                    </button>
                   </div>
                 </div>
 
@@ -21948,7 +21977,7 @@ const App = () => {
           playNotificationSound={playNotificationSound}
           dossierFiles={dossierFiles}
           setDossierFiles={setDossierFiles}
-          depenses={depenses}
+          depenses={[...depenses, ...meubleExpensesForDossiers]}
           setDepenses={setDepenses}
           setArchivesAnnuelles={setArchivesAnnuelles}
           activeCompanyId={activeCompanyId}
