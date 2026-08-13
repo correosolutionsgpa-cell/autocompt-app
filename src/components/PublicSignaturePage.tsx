@@ -17,6 +17,15 @@ const FONT_OPTIONS = [
   { family: 'Alex Brush',           label: 'Alex Brush',  gFontParam: 'Alex+Brush' },
 ] as const;
 
+// ─── Signature Ink Colors ─────────────────────────────────────────────────────
+
+const INK_COLORS = [
+  { value: '#059669', label: 'Vert' },
+  { value: '#1e293b', label: 'Noir' },
+  { value: '#1d4ed8', label: 'Bleu' },
+  { value: '#7c2d92', label: 'Violet' },
+] as const;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SignatureRequestDoc {
@@ -79,7 +88,7 @@ interface PublicSignaturePageProps {
 
 // ─── Reusable canvas drawing hook ────────────────────────────────────────────
 
-function useDrawingCanvas(placeholder: string) {
+function useDrawingCanvas(placeholder: string, color: string = '#059669') {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
@@ -118,7 +127,7 @@ function useDrawingCanvas(placeholder: string) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     if (!hasDrawn) { ctx.clearRect(0, 0, canvas.width, canvas.height); setHasDrawn(true); }
-    ctx.strokeStyle = '#059669';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -152,6 +161,7 @@ async function renderTextToDataUrl(
   width: number,
   height: number,
   fontSize: number,
+  color: string = '#059669',
 ): Promise<string> {
   if (fontFamily !== 'cursive') {
     await document.fonts.load(`${fontSize}px '${fontFamily}'`);
@@ -161,7 +171,7 @@ async function renderTextToDataUrl(
   canvas.height = height;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#059669';
+  ctx.fillStyle = color;
   ctx.font = `${fontSize}px '${fontFamily}', cursive`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -208,17 +218,22 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   // (docSummary-only documents), so this starts true in that case.
   const [hasViewedDoc, setHasViewedDoc] = useState(false);
 
+  // Ink color — applies to every drawn/typed signature and initials on this
+  // page. Requested 2026-08-13: users want a choice besides the default
+  // AutoCompt green.
+  const [sigColor, setSigColor] = useState<string>(INK_COLORS[0].value);
+
   // Initials (paraphes — every page)
   const [initialMode, setInitialMode] = useState<InputMode>('type');
   const [typedInitials, setTypedInitials] = useState('');
   const [selectedInitialFont, setSelectedInitialFont] = useState(0);
-  const sigInitials = useDrawingCanvas('Paraphes ici');
+  const sigInitials = useDrawingCanvas('Paraphes ici', sigColor);
 
   // Full signature (final page)
   const [sigMode, setSigMode] = useState<InputMode>('draw');
   const [typedSignature, setTypedSignature] = useState('');
   const [selectedSigFont, setSelectedSigFont] = useState(0);
-  const sigFull = useDrawingCanvas('Dessinez votre signature ici');
+  const sigFull = useDrawingCanvas('Dessinez votre signature ici', sigColor);
 
   // ── Click-to-sign directly on the real document ─────────────────────────
   // When the sender uploaded a PDF and placed exact signature/initials/
@@ -247,7 +262,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [activeFieldMode, setActiveFieldMode] = useState<InputMode>('draw');
   const [activeFieldTypedText, setActiveFieldTypedText] = useState('');
   const [activeFieldFont, setActiveFieldFont] = useState(0);
-  const activeFieldCanvas = useDrawingCanvas('Signez ici');
+  const activeFieldCanvas = useDrawingCanvas('Signez ici', sigColor);
 
   useEffect(() => {
     if (!usesRealPdfSigning || !docData?.pdfStorageUrl) return;
@@ -368,6 +383,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         field.type === 'signature' ? 560 : 200,
         field.type === 'signature' ? 100 : 60,
         field.type === 'signature' ? 52 : 36,
+        sigColor,
       );
     }
     setFieldValues((p) => ({ ...p, [activeFieldId]: { type: field.type, dataUrl } }));
@@ -601,7 +617,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         initialsDataUrl = sigInitials.canvasRef.current.toDataURL('image/png');
       } else if (initialMode === 'type' && typedInitials.trim()) {
         initialsDataUrl = await renderTextToDataUrl(
-          typedInitials.trim(), FONT_OPTIONS[selectedInitialFont].family, 200, 60, 36
+          typedInitials.trim(), FONT_OPTIONS[selectedInitialFont].family, 200, 60, 36, sigColor
         );
       }
 
@@ -612,7 +628,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         sigDataUrl = sigFull.canvasRef.current.toDataURL('image/png');
       } else if (sigMode === 'type' && typedSignature.trim()) {
         typedSigDataUrl = await renderTextToDataUrl(
-          typedSignature.trim(), FONT_OPTIONS[selectedSigFont].family, 560, 100, 52
+          typedSignature.trim(), FONT_OPTIONS[selectedSigFont].family, 560, 100, 52, sigColor
         );
       }
 
@@ -1479,6 +1495,20 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                           </button>
                         ))}
                       </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Couleur</span>
+                        {INK_COLORS.map((c) => (
+                          <button
+                            key={c.value}
+                            type="button"
+                            title={c.label}
+                            aria-label={c.label}
+                            onClick={() => setSigColor(c.value)}
+                            style={{ backgroundColor: c.value }}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${sigColor === c.value ? 'border-slate-900 scale-110' : 'border-white shadow'}`}
+                          />
+                        ))}
+                      </div>
                       {activeFieldMode === 'draw' ? (
                         <div className="space-y-2">
                           <canvas
@@ -1506,7 +1536,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                               {FONT_OPTIONS.map((font, idx) => (
                                 <button key={font.family} onClick={() => setActiveFieldFont(idx)}
                                   className={`px-3 py-2.5 rounded-xl border-2 text-center transition-all ${activeFieldFont === idx ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                                  <span style={{ fontFamily: `'${font.family}', cursive`, fontSize: '1.2rem', color: activeFieldFont === idx ? '#059669' : '#334155' }}>
+                                  <span style={{ fontFamily: `'${font.family}', cursive`, fontSize: '1.2rem', color: activeFieldFont === idx ? sigColor : '#334155' }}>
                                     {activeFieldTypedText}
                                   </span>
                                 </button>
@@ -1659,7 +1689,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                     {/* Stamp preview */}
                     <div className="mt-3 flex items-center gap-3">
                       <div className="border-2 border-dashed border-amber-300 rounded-xl px-5 py-2 bg-amber-50 text-center">
-                        <span style={{ fontFamily: `'${FONT_OPTIONS[selectedInitialFont].family}', cursive`, fontSize: '1.5rem', color: '#059669' }}>
+                        <span style={{ fontFamily: `'${FONT_OPTIONS[selectedInitialFont].family}', cursive`, fontSize: '1.5rem', color: sigColor }}>
                           {typedInitials}
                         </span>
                         <p className="text-[7px] text-amber-600 font-black uppercase tracking-wider mt-0.5">Paraphes · p.1</p>
@@ -1703,6 +1733,22 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 Signature Complète — Page finale
               </h2>
             </div>
+          </div>
+
+          {/* Ink color — applies to both initials and full signature */}
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Couleur de la signature</span>
+            {INK_COLORS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                aria-label={c.label}
+                onClick={() => setSigColor(c.value)}
+                style={{ backgroundColor: c.value }}
+                className={`w-6 h-6 rounded-full border-2 transition-all ${sigColor === c.value ? 'border-slate-900 scale-110' : 'border-white shadow'}`}
+              />
+            ))}
           </div>
 
           {/* Draw / Type toggle */}
@@ -1754,7 +1800,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                               ? 'border-emerald-400 bg-emerald-50 shadow-sm'
                               : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}>
-                          <span style={{ fontFamily: `'${font.family}', cursive`, fontSize: '1.5rem', color: selectedSigFont === idx ? '#059669' : '#334155' }}>
+                          <span style={{ fontFamily: `'${font.family}', cursive`, fontSize: '1.5rem', color: selectedSigFont === idx ? sigColor : '#334155' }}>
                             {typedSignature}
                           </span>
                           <div className="flex items-center gap-2 ml-3 shrink-0">
@@ -1766,7 +1812,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                     </div>
                     <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-2xl text-center mt-2">
                       <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Aperçu de votre signature</p>
-                      <span style={{ fontFamily: `'${FONT_OPTIONS[selectedSigFont].family}', cursive`, fontSize: '2rem', color: '#059669', display: 'block', lineHeight: '1.2' }}>
+                      <span style={{ fontFamily: `'${FONT_OPTIONS[selectedSigFont].family}', cursive`, fontSize: '2rem', color: sigColor, display: 'block', lineHeight: '1.2' }}>
                         {typedSignature}
                       </span>
                       <p className="text-[8px] text-slate-400 mt-2 font-medium">
