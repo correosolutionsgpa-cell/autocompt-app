@@ -509,6 +509,18 @@ export default function MeubleFinancialModule({
     }), [expenses, reportMonth, reportYear]);
 
   const grossRevenue = reportRes.reduce((s, r) => s + r.nights * r.nightlyRate, 0);
+
+  // "Petit fournisseur" threshold ($30,000) — crossing it makes TPS/TVQ
+  // registration mandatory. This only sums THIS module's own Meublé revenue
+  // for the current calendar year, not the CRA/RQ rule's exact "4
+  // consecutive calendar quarters across all revenue sources" — a
+  // deliberately conservative directional warning, not a precise
+  // determination. Found via Meublé module audit, 2026-08-13.
+  const currentYear = new Date().getFullYear();
+  const ytdGrossRevenue = reservations
+    .filter((r) => r.status !== 'cancelled' && new Date(r.checkIn).getFullYear() === currentYear)
+    .reduce((s, r) => s + r.nights * r.nightlyRate, 0);
+  const pastSmallSupplierThreshold = ytdGrossRevenue >= 30000;
   const platformFees = reportRes.reduce((s, r) => s + r.nights * r.nightlyRate * (r.platformFeePercent / 100), 0);
   const taxeSejourTotal = reportRes.reduce((s, r) => s + r.nights * r.nightlyRate * (r.taxeSejour / 100), 0);
   const netRevenue = grossRevenue - platformFees - taxeSejourTotal;
@@ -552,6 +564,20 @@ export default function MeubleFinancialModule({
   const addReservation = async () => {
     if (!newRes.guestName || !newRes.checkIn || !newRes.checkOut) return;
     const nights = nightsBetween(newRes.checkIn!, newRes.checkOut!);
+
+    // CITQ registration is legally required in Québec for stays under 32
+    // nights — the badge already surfaced this status but never actually
+    // stopped anyone from saving a reservation without it. Soft warning
+    // (confirm, not a hard block) so it can't be missed by accident while
+    // still allowing a deliberate save if the host is handling registration
+    // separately. Found via Meublé module audit, 2026-08-13.
+    if (nights < 32 && nights > 0 && !numeroCITQ) {
+      const proceed = confirm(
+        "⚠️ Cette réservation est une location de moins de 32 nuits — un numéro CITQ (enregistrement touristique) est légalement requis au Québec, et aucun n'est configuré dans Paramètres.\n\nEnregistrer quand même ?"
+      );
+      if (!proceed) return;
+    }
+
     const platform = newRes.platform || 'airbnb';
     const platFee = PLATFORMS[platform].feePercent;
     const gross = (newRes.nightlyRate || 100) * nights;
@@ -1243,7 +1269,9 @@ export default function MeubleFinancialModule({
         </div>
 
         {/* TPS/TVQ status */}
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+        <div
+          title="Ceci reflète votre propre inscription TPS/TVQ, pas ce qu'Airbnb perçoit déjà séparément sur ses propres frais de plateforme (règles fédérales sur les plateformes numériques depuis 2021). Les deux sont distincts — confirmez avec votre comptable ce que ça change pour vos revenus de location eux-mêmes."
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
           registeredTPS
             ? (D ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
             : (D ? 'bg-zinc-800 border-zinc-700 text-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-400')
@@ -1259,6 +1287,20 @@ export default function MeubleFinancialModule({
           <Star size={10} />
           Taxe séjour: {taxeSejourRegion}%
         </div>
+
+        {/* Small-supplier ($30k) threshold warning — only shows once crossed
+            and still unregistered; disappears once TPS/TVQ is registered. */}
+        {pastSmallSupplierThreshold && !registeredTPS && (
+          <div
+            title="Seuil approximatif — revenus Meublé de l'année civile en cours seulement, ne couvre pas toutes vos sources de revenus ni la règle exacte des 4 trimestres consécutifs. Confirmez avec votre comptable."
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+              D ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-700'
+            }`}
+          >
+            <AlertCircle size={10} />
+            Revenus Meublé {'>'} 30 000 $ — inscription TPS/TVQ probablement requise
+          </div>
+        )}
 
         {/* Saving spinner */}
         {isSaving && (

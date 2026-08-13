@@ -176,22 +176,64 @@ const TenueLivresImmeubleView: React.FC<TenueLivresImmeubleViewProps> = ({
     if (!uid || !buildingId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const [props, allUnits, allLoyers, allExpenses] = await Promise.all([
+      const [props, allUnits, allLoyers, allExpenses, meubleRes, meubleExp] = await Promise.all([
         dataService.fetchProperties(uid),
         dataService.fetchAllUnits(uid),
         dataService.fetchLoyers(uid),
         dataService.fetchExpenses(uid),
+        dataService.fetchMeubleReservations(uid, activeCompanyId).catch(() => []),
+        dataService.fetchMeubleExpenses(uid, activeCompanyId).catch(() => []),
       ]);
       setBuilding(props.find(p => p.id === buildingId) || null);
       setUnits(allUnits.filter(u => u.buildingId === buildingId));
-      setLoyers(allLoyers.filter(l => l.buildingId === buildingId));
-      setDepenses(allExpenses.filter(d => d.buildingId === buildingId));
+
+      // Meublé/Airbnb reservations & expenses tagged with this building were
+      // never included here — a gestionnaire managing a short-term-rental
+      // building never saw that revenue/expense in the building's own
+      // ledger. Adapted into LoyerDoc/ExpenseDoc-compatible shapes so the
+      // rest of this view's calculations don't need to know the difference.
+      // Found via Meublé module audit, 2026-08-13.
+      const meubleLoyers: LoyerDoc[] = meubleRes
+        .filter((r) => r.buildingId === buildingId)
+        .map((r) => ({
+          id: r.id,
+          companyId: r.companyId,
+          uniteAdresse: "Meublé/Airbnb",
+          locataire: `${r.guestName} (${r.platform})`,
+          loyer: r.nights * r.nightlyRate,
+          statut: "Payé" as const,
+          unitId: r.unitId,
+          buildingId: r.buildingId,
+          date: r.checkIn,
+          ownerId: uid,
+          createdAt: r.checkIn,
+        }));
+      const meubleDepenses: ExpenseDoc[] = meubleExp
+        .filter((e) => e.buildingId === buildingId)
+        .map((e) => ({
+          id: e.id,
+          companyId: e.companyId,
+          fecha: e.date,
+          fournisseur: "Meublé/Airbnb",
+          cat: e.category,
+          subtotal: e.amount,
+          tps: 0,
+          tvq: 0,
+          total: e.amount,
+          lien: e.lien || null,
+          partnerTag: "",
+          ownerId: uid,
+          createdAt: e.createdAt,
+        }));
+
+      setLoyers([...allLoyers.filter(l => l.buildingId === buildingId), ...meubleLoyers]);
+      setDepenses([...allExpenses.filter(d => d.buildingId === buildingId), ...meubleDepenses]);
     } catch (e) {
       console.error("[TenueLivresImmeuble] load error:", e);
     } finally {
       setIsLoading(false);
     }
-  }, [buildingId]);
+  }, [buildingId, activeCompanyId]);
 
   useEffect(() => { load(); }, [load]);
 

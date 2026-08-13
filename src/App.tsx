@@ -1699,6 +1699,23 @@ const App = () => {
       .catch(console.error);
   }, [activeCompanyId, currentUserEmail]);
 
+  // Meublé/Airbnb TPS/TVQ collected on revenue — the Tenue de Livres tax
+  // card only ever summed invoices/expenses (historique/depenses), so this
+  // was silently excluded from "Taxes perçues". Meublé expenses don't track
+  // TPS/TVQ line-by-line by design (see MeubleExpenseDoc), so only the
+  // revenue side is added here; a warning still covers that remaining gap.
+  // Found via Meublé module audit, 2026-08-13.
+  const [meubleTpsTvqCollected, setMeubleTpsTvqCollected] = useState(0);
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !activeCompanyId) { setMeubleTpsTvqCollected(0); return; }
+    dataService.fetchMeubleReservations(userId, activeCompanyId)
+      .then((list) => setMeubleTpsTvqCollected(
+        list.reduce((sum, r) => sum + (r.tpsCollected || 0) + (r.tvqCollected || 0), 0)
+      ))
+      .catch(console.error);
+  }, [activeCompanyId, currentUserEmail]);
+
   // Pending "Relevé de Gestion" invitations for this account's email — a
   // brand-new user invited by their gestionnaire had no way to discover
   // this at all: the accept screen lives inside Dossiers Fiscaux, a module
@@ -18183,7 +18200,7 @@ const App = () => {
                   <div className="flex flex-col space-y-5">
                     <div className="flex justify-between items-center">
                       <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Perçues (Ventes)</span>
-                      <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
+                      <span className={`text-lg font-black italic ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) + meubleTpsTvqCollected).toFixed(2)} $</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className={`text-sm font-bold uppercase text-slate-500`}>Taxes Payées (Récupérables)</span>
@@ -18191,20 +18208,20 @@ const App = () => {
                     </div>
                     <div className={`pt-3 mt-3 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"} flex justify-between items-center`}>
                       <span className={`text-xs font-black uppercase tracking-widest ${darkMode ? "text-emerald-400" : "text-[#059669]"}`}>Net à Remettre / Recevoir</span>
-                      <span className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-white w-[fit-content]" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) - processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
+                      <span className={`text-2xl font-black italic tracking-tighter ${darkMode ? "text-white w-[fit-content]" : "text-slate-900"}`}>{(processedHistorique.reduce((a, b) => a + b.tps + b.tvq, 0) + meubleTpsTvqCollected - processedDepenses.reduce((a, b) => a + b.tps + b.tvq, 0)).toFixed(2)} $</span>
                     </div>
-                    {/* This card only sums invoices/expenses (historique/
-                        depenses) — TPS/TVQ from the Meublé/Airbnb module
-                        (separate meubleReservations/meubleExpenses
-                        collections) isn't included here. Rather than risk a
-                        wrong combined number on a live tax figure, point to
-                        the report that already aggregates both correctly.
-                        Found via Meublé module audit, 2026-08-13. */}
+                    {/* "Taxes Perçues" now includes Meublé/Airbnb revenue
+                        (meubleTpsTvqCollected, added 2026-08-13). Meublé
+                        expenses still don't track TPS/TVQ line-by-line by
+                        design (see MeubleExpenseDoc) — "Taxes Payées" can't
+                        include their recoverable input tax credits, so this
+                        note stays as a narrower, accurate warning instead of
+                        disappearing entirely. Found via Meublé module audit. */}
                     <button
                       onClick={() => { setVista("reportes"); }}
                       className={`text-[9px] font-bold text-left ${darkMode ? "text-amber-400" : "text-amber-600"} hover:underline`}
                     >
-                      ⚠️ N'inclut pas les revenus Meublé/Airbnb — voir Export Comptable → Rapport TPS/TVQ pour le total complet.
+                      ⚠️ Les dépenses Meublé/Airbnb ne suivent pas de TPS/TVQ récupérable ligne par ligne — voir Export Comptable → Rapport TPS/TVQ pour le détail.
                     </button>
                   </div>
                 </div>
