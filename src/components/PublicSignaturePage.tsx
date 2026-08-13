@@ -90,6 +90,20 @@ function useDrawingCanvas(placeholder: string) {
 
   useEffect(() => { resetCanvas(); }, [resetCanvas]);
 
+  // The canvas's internal drawing buffer (width/height attributes, e.g.
+  // 560x140) doesn't always match its on-screen CSS size — it's stretched
+  // to fit the container (w-full). Mapping a raw clientX/clientY offset
+  // straight onto the buffer without correcting for that ratio draws the
+  // stroke at the wrong spot, worse the narrower the screen — this is what
+  // made a stylus signature land above the actual pen tip. Found
+  // 2026-08-12: Fabiola signing with a stylus on her phone.
+  const toCanvasPoint = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  };
+
   const startDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -100,10 +114,10 @@ function useDrawingCanvas(placeholder: string) {
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const rect = canvas.getBoundingClientRect();
     const { clientX, clientY } = 'touches' in e ? e.touches[0] : e;
+    const p = toCanvasPoint(canvas, clientX, clientY);
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo(p.x, p.y);
     setIsDrawing(true);
   };
 
@@ -111,9 +125,9 @@ function useDrawingCanvas(placeholder: string) {
     if (!isDrawing || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
-    const rect = canvasRef.current.getBoundingClientRect();
     const { clientX, clientY } = 'touches' in e ? e.touches[0] : e;
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    const p = toCanvasPoint(canvasRef.current, clientX, clientY);
+    ctx.lineTo(p.x, p.y);
     ctx.stroke();
   };
 
@@ -195,11 +209,18 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const sigFull = useDrawingCanvas('Dessinez votre signature ici');
 
   useEffect(() => {
-    // Load Google Fonts
-    const families = FONT_OPTIONS.filter(f => f.gFontParam).map(f => f.gFontParam).join('|');
+    // Load Google Fonts. The css2 endpoint needs a SEPARATE family= param
+    // per font — pipe-joining them into one param (the old css1 syntax) is
+    // invalid here and silently loads none of them, so every signature
+    // style fell back to the same default cursive font. Found 2026-08-12:
+    // Fabiola saw all 4 "styles" render identically.
+    const families = FONT_OPTIONS
+      .filter(f => f.gFontParam)
+      .map(f => `family=${f.gFontParam}`)
+      .join('&');
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${families}&display=swap`;
+    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
     document.head.appendChild(link);
     return () => { document.head.removeChild(link); };
   }, []);
@@ -997,7 +1018,9 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 {hasViewedDoc ? <><Check size={14} /> Document ouvert — vous pouvez continuer</> : <><FileText size={14} /> Ouvrir et lire le document avant de signer</>}
               </a>
               {!hasViewedDoc && (
-                <p className="text-[9px] text-indigo-600 font-bold text-center">← Obligatoire avant de pouvoir signer</p>
+                <p className="text-[9px] text-indigo-600 font-bold text-center">
+                  ← S'ouvre dans un nouvel onglet. Une fois la lecture terminée, revenez à CET onglet-ci pour continuer.
+                </p>
               )}
             </>
           )}
