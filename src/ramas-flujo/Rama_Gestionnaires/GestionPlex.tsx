@@ -863,9 +863,17 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                               value={unit.dureeMinimaleJours ?? ""}
                               onChange={(e) => {
                                 const val = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                                // Québec's tourist-establishment threshold is
+                                // "moins de 32 jours" (under 32 nights) — a
+                                // 31-night minimum stay still counts as
+                                // courte durée/requires registration; only
+                                // 32+ nights is exempt as a normal
+                                // residential lease. Was < 31, incorrectly
+                                // exempting 31-night listings. Corrected
+                                // 2026-08-13 per Fabiola.
                                 const updated = (plexManagementForm.units || []).map((u: any) =>
                                   u.id === unit.id
-                                    ? { ...u, dureeMinimaleJours: val, courteDuree: val != null && val > 0 && val < 31 }
+                                    ? { ...u, dureeMinimaleJours: val, courteDuree: val != null && val > 0 && val < 32 }
                                     : u
                                 );
                                 setPlexManagementForm({ ...plexManagementForm, units: updated });
