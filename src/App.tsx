@@ -14890,7 +14890,7 @@ const App = () => {
                                 Modèles du Tribunal administratif du logement
                               </p>
                             </div>
-                            <a href="https://www.tal.gouv.qc.ca/fr/formulaires-et-publications/formulaires" target="_blank" rel="noopener noreferrer"
+                            <a href="https://www.tal.gouv.qc.ca" target="_blank" rel="noopener noreferrer"
                               className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${darkMode ? "text-emerald-500 hover:text-emerald-400" : "text-emerald-700 hover:text-emerald-800"}`}>
                               <ExternalLink size={9} />tal.gouv.qc.ca
                             </a>
@@ -14910,18 +14910,18 @@ const App = () => {
                                   <p className={`text-[9px] mt-0.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Formulaire officiel gratuit · 3 options locataire · Loi déc. 2024</p>
                                 </div>
                               </div>
-                              <a href="https://www.tal.gouv.qc.ca/fr/modeles-d-avis/trouver-un-modele-d-avis" target="_blank" rel="noopener noreferrer"
+                              <a href="https://www.tal.gouv.qc.ca/sites/default/files/notices/TAL_806.pdf" target="_blank" rel="noopener noreferrer"
                                 className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-colors whitespace-nowrap">
-                                <ExternalLink size={11} /> Télécharger
+                                <ExternalLink size={11} /> PDF officiel
                               </a>
                             </div>
 
                             {/* Autres formulaires TAL disponibles gratuitement */}
                             {[
-                              { name: "Avis de non-reconduction du bail", ref: "TAL-807" },
-                              { name: "Avis de reprise de logement", ref: "TAL" },
-                              { name: "Avis de sous-location", ref: "TAL-809" },
-                            ].map(({ name, ref }) => (
+                              { name: "Avis de non-reconduction du bail", ref: "TAL-807", pdf: "https://www.tal.gouv.qc.ca/sites/default/files/notices/TAL_807.pdf" },
+                              { name: "Avis de reprise de logement", ref: "TAL", pdf: "https://www.tal.gouv.qc.ca" },
+                              { name: "Avis de sous-location", ref: "TAL-809", pdf: "https://www.tal.gouv.qc.ca/sites/default/files/notices/TAL_809.pdf" },
+                            ].map(({ name, ref, pdf }) => (
                               <div key={name} className={`px-3 py-2.5 rounded-xl border flex items-center justify-between gap-2 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-white/60 border-slate-100"}`}>
                                 <div className="flex items-center gap-2">
                                   <FileText size={12} className={darkMode ? "text-emerald-500/60" : "text-emerald-600/70"} />
@@ -14930,9 +14930,9 @@ const App = () => {
                                     <span className={`text-[7px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>{ref}</span>
                                   </div>
                                 </div>
-                                <a href="https://www.tal.gouv.qc.ca/fr/modeles-d-avis/trouver-un-modele-d-avis" target="_blank" rel="noopener noreferrer"
+                                <a href={pdf} target="_blank" rel="noopener noreferrer"
                                   className={`shrink-0 flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border transition-colors ${darkMode ? "border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30" : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}>
-                                  <ExternalLink size={9} /> TAL
+                                  <ExternalLink size={9} /> PDF
                                 </a>
                               </div>
                             ))}
