@@ -1842,9 +1842,15 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           disabled={isSigning}
           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.99] shadow-lg shadow-emerald-600/20"
         >
+          {/* "Réviser et Signer" belongs on the EMAIL invitation (the entry
+              point, before anyone has looked at the document) — this is the
+              FINAL button, only reachable once every field is already
+              filled in, so "réviser" (review) no longer fits: at this point
+              the person is confirming/finishing, not starting to look.
+              Found 2026-08-13. */}
           {isSigning
             ? <><Loader2 className="animate-spin" size={18} /> Génération du PDF certifié...</>
-            : <><PenTool size={18} /> Réviser et Signer</>
+            : <><PenTool size={18} /> Accepter et Compléter</>
           }
         </button>
         {docData?.customDocUrl && !hasViewedDoc && (
