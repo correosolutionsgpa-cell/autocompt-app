@@ -423,7 +423,11 @@ export interface FlipProjectDoc {
   // "estimation" to "résultat réel" everywhere it's displayed.
   prixReventeReel?: number;
   dateRevente?: string;
-  fraisRevente?: number; // commission d'agent, frais de notaire à la vente...
+  // Split into two — was one lump "fraisRevente" field, but Fabiola wants
+  // notary fees and the selling broker's commission visible separately
+  // (2026-08-13), not merged into a single opaque number.
+  fraisNotaireVente?: number; // frais de notaire à la vente
+  fraisCourtier?: number;     // commission du courtier qui vend la propriété
   statut: 'en_cours' | 'vendu';
   notes?: string;
   ownerId: string;

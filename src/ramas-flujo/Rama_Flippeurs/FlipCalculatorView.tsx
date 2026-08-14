@@ -18,8 +18,8 @@
  *      depuis les dépenses déjà enregistrées dans Tenue de Livres (n'importe
  *      quelle catégorie), associées à l'adresse du projet — PAS limité à la
  *      rénovation seule.
- *   3. Frais de disposition — commission d'agent, notaire à la vente...
- *      saisis en un seul montant à la vente (fraisRevente).
+ *   3. Frais de disposition — notaire à la vente et commission du courtier,
+ *      saisis séparément à la vente (fraisNotaireVente / fraisCourtier).
  *
  * Délibérément PAS un second endroit pour saisir les dépenses de possession —
  * le formulaire rapide ici écrit dans la MÊME collection `expenses` que le
@@ -96,7 +96,7 @@ const emptyForm = {
   fraisAchat: "", prixReventeEstime: "", notes: "",
 };
 
-const emptySellForm = { prixReventeReel: "", dateRevente: new Date().toISOString().slice(0, 10), fraisRevente: "" };
+const emptySellForm = { prixReventeReel: "", dateRevente: new Date().toISOString().slice(0, 10), fraisNotaireVente: "", fraisCourtier: "" };
 
 const emptyExpenseForm = { date: new Date().toISOString().slice(0, 10), description: "", montant: "", cat: HOLDING_CATEGORIES[0] };
 
@@ -164,7 +164,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         statut: existing?.statut || "en_cours",
         prixReventeReel: existing?.prixReventeReel,
         dateRevente: existing?.dateRevente,
-        fraisRevente: existing?.fraisRevente,
+        fraisNotaireVente: existing?.fraisNotaireVente,
+        fraisCourtier: existing?.fraisCourtier,
       });
       setProjects((prev) => editingId ? prev.map((p) => (p.id === editingId ? saved : p)) : [saved, ...prev]);
       resetForm();
@@ -208,7 +209,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         statut: "vendu",
         prixReventeReel: parseFloat(sellForm.prixReventeReel) || 0,
         dateRevente: sellForm.dateRevente,
-        fraisRevente: sellForm.fraisRevente ? parseFloat(sellForm.fraisRevente) : undefined,
+        fraisNotaireVente: sellForm.fraisNotaireVente ? parseFloat(sellForm.fraisNotaireVente) : undefined,
+        fraisCourtier: sellForm.fraisCourtier ? parseFloat(sellForm.fraisCourtier) : undefined,
       });
       setProjects((prev) => prev.map((x) => (x.id === p.id ? saved : x)));
       setSellingId(null);
@@ -351,7 +353,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
           const projectExp = projectExpensesFor(p.adresse);
           const projectExpTotal = projectExp.reduce((s, d) => s + (d.total || 0), 0);
           const prixRevente = p.statut === "vendu" ? (p.prixReventeReel || 0) : (p.prixReventeEstime || 0);
-          const profit = prixRevente - p.prixAchat - (p.fraisAchat || 0) - projectExpTotal - (p.fraisRevente || 0);
+          const fraisDisposition = (p.fraisNotaireVente || 0) + (p.fraisCourtier || 0);
+          const profit = prixRevente - p.prixAchat - (p.fraisAchat || 0) - projectExpTotal - fraisDisposition;
           const margeSurAchat = p.prixAchat > 0 ? (profit / p.prixAchat) * 100 : 0;
           const endDate = p.statut === "vendu" && p.dateRevente ? p.dateRevente : new Date().toISOString().slice(0, 10);
           const joursDetenus = daysBetween(p.dateAchat, endDate);
@@ -400,7 +403,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       Disposition — {p.statut === "vendu" ? "revente réelle" : "revente estimée"}
                     </p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(prixRevente)}</p>
-                    {!!p.fraisRevente && <p className="text-[7px] font-bold text-slate-400 mt-0.5">Net de {fmtCAD(p.fraisRevente)} de frais</p>}
+                    {!!fraisDisposition && <p className="text-[7px] font-bold text-slate-400 mt-0.5">Net de {fmtCAD(fraisDisposition)} de frais (notaire + courtier)</p>}
                   </div>
                   <div className={`p-3 rounded-2xl border ${profitable ? "border-emerald-500/30" : "border-rose-500/30"} ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
@@ -467,9 +470,13 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                         <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Date de vente</label>
                         <input type="date" value={sellForm.dateRevente} onChange={(e) => setSellForm({ ...sellForm, dateRevente: e.target.value })} className={inputCls} />
                       </div>
-                      <div className="space-y-1 col-span-2">
-                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Frais de revente ($) — commission, notaire...</label>
-                        <input type="number" value={sellForm.fraisRevente} onChange={(e) => setSellForm({ ...sellForm, fraisRevente: e.target.value })} className={inputCls} />
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Frais de notaire (vente) ($)</label>
+                        <input type="number" value={sellForm.fraisNotaireVente} onChange={(e) => setSellForm({ ...sellForm, fraisNotaireVente: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Commission du courtier ($)</label>
+                        <input type="number" value={sellForm.fraisCourtier} onChange={(e) => setSellForm({ ...sellForm, fraisCourtier: e.target.value })} className={inputCls} />
                       </div>
                     </div>
                     <div className="flex gap-2">
