@@ -141,6 +141,7 @@ import RapportTaxes from "./ramas-flujo/Rama_Gestionnaires/RapportTaxes";
 import RapportComptable from "./ramas-flujo/Rama_Gestionnaires/RapportComptable";
 import BanqueSyncView from "./ramas-flujo/Rama_Gestionnaires/BanqueSyncView";
 import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceView";
+import FlipCalculatorView from "./ramas-flujo/Rama_Flippeurs/FlipCalculatorView";
 import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
 import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
 import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
@@ -2813,6 +2814,7 @@ const App = () => {
       { id: "releves_gestion", label: t("Mes Relevés de Gestion"), icon: <Mail size={18} /> },
       { id: "equipe", label: t("Notre Équipe"), icon: <UserPlus size={18} /> },
       { id: "heures-paie", label: t("Heures & Paie"), icon: <Timer size={18} /> },
+      { id: "flip_calculator", label: t("Calculateur de Flip"), icon: <Hammer size={18} /> },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
 
@@ -2843,6 +2845,7 @@ const App = () => {
       releves_gestion: null,
       equipe: null,
       "heures-paie": "heures_paie",
+      flip_calculator: "flip_calculator",
     };
 
     // ── RBAC module-id → vista-id mapping for syndicNavItems filtering ──────
@@ -21770,6 +21773,23 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
+      />
+    );
+  }
+
+  if (vista === "flip_calculator") {
+    return (
+      <FlipCalculatorView
+        darkMode={darkMode}
+        activeCompanyId={activeCompanyId}
+        currentCompany={currentCompany}
+        setVista={setVista}
+        setIsSidebarOpen={setIsSidebarOpen}
+        WorkspaceSidebar={WorkspaceSidebar}
+        depenses={depenses}
+        setDepenses={setDepenses}
+        activeUser={activeUser}
+        playNotificationSound={playNotificationSound}
       />
     );
   }

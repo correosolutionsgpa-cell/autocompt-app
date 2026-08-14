@@ -35,6 +35,7 @@ import {
   Scale,
   Sparkles,
   Users,
+  Hammer,
 } from "lucide-react";
 import { hasAccess, type ProfileId } from "../lib/rbacConfig";
 
@@ -279,6 +280,26 @@ export default function PlexModuleGrid({
             {t("Heures")} &amp;
             <br />
             {t("Paie")}
+          </span>
+        </button>
+      )}
+
+      {/* Calculateur de Flip — flippeur, prospecteur */}
+      {can("flip_calculator") && (
+        <button
+          onClick={() => setVista("flip_calculator")}
+          className={cardBase}
+          style={{ boxShadow: restShadow }}
+          onMouseEnter={onHoverIn}
+          onMouseLeave={onHoverOut}
+        >
+          <div className={iconBadge("bg-amber-500/10", "text-amber-600 dark:text-amber-400")}>
+            <Hammer size={22} />
+          </div>
+          <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+            {t("Calculateur")}
+            <br />
+            {t("de Flip")}
           </span>
         </button>
       )}

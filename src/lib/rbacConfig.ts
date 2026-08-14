@@ -55,6 +55,7 @@ export type ModuleId =
   | "conciliation"
   | "gestion_immo"
   | "taxes_assurances"
+  | "flip_calculator"     // Calculateur de Flip (flippeur only)
   | "fideicommis"         // Compte en Fidéicommis (gestionnaire only)
   | "portefeuille_clients" // Portefeuille Clients (gestionnaire + comptable)
   | "assistant_ia"        // Universal (all Plex profiles)
@@ -152,6 +153,12 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
     description: "Assistant fiscal Sofi — questions et analyses en temps réel",
     dashboard: "Plex",
   },
+  flip_calculator: {
+    id: "flip_calculator",
+    label: "Calculateur de Flip",
+    description: "Budget de rénovation, prix de revente et profit par projet",
+    dashboard: "Plex",
+  },
   fideicommis: {
     id: "fideicommis",
     label: "Compte en Fidéicommis",
@@ -234,6 +241,11 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "dossiers_fiscaux",   // Universal
     "conciliation",
     "taxes_assurances",
+    // A prospecteur doesn't only assign promesses/cessions — they can also
+    // buy-renovate-resell a property themselves, same as a flippeur.
+    // Corrected 2026-08-13 by Fabiola: don't assume "flip" work is exclusive
+    // to the Flippeur profile.
+    "flip_calculator",
     "assistant_ia",       // Universal
   ],
 
@@ -280,6 +292,7 @@ export const RBAC_MATRIX: Record<ProfileId, ModuleId[]> = {
     "heures_paie",
     "conciliation",
     "taxes_assurances",
+    "flip_calculator",    // Budget rénovation, prix de revente, profit par projet
     "assistant_ia",       // Universal
   ],
 

@@ -398,6 +398,38 @@ export interface LoanIssuedDoc {
   createdAt: string;
 }
 
+// ── FlipProjectDoc — Firestore `flipProjects` collection ────────────────────
+/**
+ * A single buy-renovate-resell project for the Flippeur profile. Renovation
+ * spend is deliberately NOT stored here — it's read live from the existing
+ * `expenses` collection (cat === "Rénovation / Construction", matched by
+ * propertyAddress), so a flipper keeps using the same Tenue de Livres they
+ * already use for every other expense instead of a second, disconnected
+ * place to log the same money. Document ID: `{userId}_flip_{id}`.
+ */
+export interface FlipProjectDoc {
+  id: string;
+  companyId: string;
+  adresse: string;
+  dateAchat: string;
+  prixAchat: number;
+  // Fees layered on top of the purchase price itself (notaire, taxe de
+  // bienvenue/mutation, inspection...) — kept as one lump sum rather than
+  // itemized, matching how "frais annexes" is casually tracked by a real
+  // flipper rather than forcing a full sub-ledger for an MVP.
+  fraisAchat?: number;
+  prixReventeEstime?: number;
+  // Set only once the flip actually sells — switches the project from
+  // "estimation" to "résultat réel" everywhere it's displayed.
+  prixReventeReel?: number;
+  dateRevente?: string;
+  fraisRevente?: number; // commission d'agent, frais de notaire à la vente...
+  statut: 'en_cours' | 'vendu';
+  notes?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
 /**
  * Configuration fiscale et opérationnelle d'une unité meublée.
@@ -3012,6 +3044,55 @@ export const dataService = {
   async deleteLoanIssued(userId: string, loanId: string): Promise<void> {
     const docId = `${userId}_loan_${loanId}`;
     await deleteDoc(doc(db, 'loansIssued', docId));
+  },
+
+  // ── Flip Projects — Firestore `flipProjects` collection ─────────────────────
+
+  async saveFlipProject(
+    userId: string,
+    project: Omit<FlipProjectDoc, 'ownerId' | 'createdAt'>
+  ): Promise<FlipProjectDoc> {
+    assertCanWrite();
+    const originalId = project.id || `flip_${Date.now()}`;
+    const docId = `${userId}_flip_${originalId}`;
+    const docCompanyId = `${userId}_company_${project.companyId}`;
+    const data: any = {
+      ...project,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+    await setDoc(doc(db, 'flipProjects', docId), data);
+    return { ...data, id: originalId, companyId: project.companyId };
+  },
+
+  async fetchFlipProjects(userId: string, companyId: string): Promise<FlipProjectDoc[]> {
+    try {
+      const docCompanyId = `${userId}_company_${companyId}`;
+      const q = query(
+        collection(db, 'flipProjects'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', docCompanyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_flip_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId } as FlipProjectDoc;
+      });
+    } catch (e) {
+      console.error('fetchFlipProjects failed:', e);
+      return [];
+    }
+  },
+
+  async deleteFlipProject(userId: string, flipId: string): Promise<void> {
+    const docId = `${userId}_flip_${flipId}`;
+    await deleteDoc(doc(db, 'flipProjects', docId));
   },
 
   /**

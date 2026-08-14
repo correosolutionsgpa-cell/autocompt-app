@@ -286,6 +286,12 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    match /flipProjects/{flipId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /units/{unitId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
