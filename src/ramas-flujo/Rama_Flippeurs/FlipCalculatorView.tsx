@@ -53,7 +53,17 @@ const HOLDING_CATEGORIES = [
   "Réparations et entretien",
   "Assurances",
   "Intérêts hypothécaires",
-  "Intérêts de financement",
+  // Broader than a bank mortgage on purpose — covers a private lender's
+  // interest too (often a higher rate, interest-only during the flip).
+  "Intérêts de financement (incl. prêteur privé)",
+  // A private lender's underwriting/setup fee — distinct from the interest
+  // itself, usually charged once when the loan is arranged. Added 2026-08-13
+  // at Fabiola's request.
+  "Frais de dossier (prêteur privé)",
+  // What's paid to the original promettant-acheteur to take over their
+  // promesse d'achat instead of buying directly — relevant to a
+  // Prospecteur/Flippeur who acquires via cession. Added 2026-08-13.
+  "Frais de cession de promesse d'achat",
   "Électricité / Chauffage",
   "Taxes foncières et scolaires",
   "Autre",
