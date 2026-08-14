@@ -13,13 +13,10 @@
 import React, { useRef, useState } from "react";
 import {
   Camera, Building2, Hash, HardHat,
-  Cloud, Info, Mail, ChevronDown,
-  Send, Users, Shield, CheckCircle2,
-  AlertCircle, UserX, Crown, BookOpen, BarChart3,
-  Sparkles,
+  Cloud, Info, Users, Shield, CheckCircle2,
+  UserX, Sparkles, UserPlus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import MissingReceiptDisclaimerModal from "./modals/MissingReceiptDisclaimerModal";
 
 // ─── Inline SVG brand icons ───────────────────────────────────────────────────
 
@@ -51,49 +48,36 @@ const DropboxIcon = () => (
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ActiveMember {
+// Mirrors dataService's CompanyInviteDoc — kept local (not imported) since
+// this is a display-only component; the parent owns the real Firestore type.
+export interface TeamInvite {
   id: string;
-  email: string;
-  role: string;
-  roleKey: string;
-  initials: string;
-  joinedAt: string;
+  invitedEmail: string;
+  status: "pending" | "accepted";
+  createdAt: string;
 }
 
 interface ProfilEtEquipeProps {
   darkMode?: boolean;
+  // Real invite flow — this component used to fake all of this locally
+  // (a submit button that just added to React state after a setTimeout,
+  // two hardcoded fake members). The real invite modal already existed
+  // elsewhere in the app (InviteAssociateModal) but nothing on this page
+  // ever opened it. Found 2026-08-13: a QA tester's "invitation" here
+  // never sent an email or granted any real access.
+  onInvite: () => void;
+  members: TeamInvite[];
+  onRevoke: (invite: TeamInvite) => void;
+  revokingId?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ROLE_OPTIONS = [
-  { value: "partenaire", label: "Partenaire / Conjoint(e) (Accès complet)",          Icon: Crown,     color: "text-amber-400"   },
-  { value: "comptable",  label: "Comptable (Lecture seule & Extraction)",             Icon: BookOpen,  color: "text-blue-400"    },
-  { value: "client",     label: "Client / Propriétaire (Rendement du bâtiment)",      Icon: BarChart3, color: "text-violet-400"  },
-];
 
 const CLOUD_PROVIDERS = [
   { id: "gdrive",   label: "Connecter Google Drive",       Icon: GoogleDriveIcon, hoverGlow: "hover:shadow-[0_0_20px_rgba(66,133,244,0.20)]"  },
   { id: "onedrive", label: "Connecter Microsoft OneDrive", Icon: OneDriveIcon,    hoverGlow: "hover:shadow-[0_0_20px_rgba(0,120,212,0.20)]"   },
   { id: "dropbox",  label: "Connecter Dropbox",            Icon: DropboxIcon,     hoverGlow: "hover:shadow-[0_0_20px_rgba(0,97,255,0.20)]"    },
 ];
-
-const DUMMY_MEMBERS: ActiveMember[] = [
-  { id: "m1", email: "marie.tremblay@example.com", role: "Comptable (Lecture seule & Extraction)",        roleKey: "comptable",  initials: "MT", joinedAt: "12 juin 2026"   },
-  { id: "m2", email: "jean.lapointe@gmail.com",    role: "Partenaire / Conjoint(e) (Accès complet)",      roleKey: "partenaire", initials: "JL", joinedAt: "3 juin 2026"    },
-];
-
-const ROLE_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
-  partenaire: Crown,
-  comptable:  BookOpen,
-  client:     BarChart3,
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  partenaire: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-  comptable:  "text-blue-400  bg-blue-400/10  border-blue-400/20",
-  client:     "text-violet-400 bg-violet-400/10 border-violet-400/20",
-};
 
 const INITIALS_PALETTES = [
   "from-emerald-500 to-teal-600",
@@ -104,7 +88,7 @@ const INITIALS_PALETTES = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps) {
+export default function ProfilEtEquipe({ darkMode = true, onInvite, members, onRevoke, revokingId = null }: ProfilEtEquipeProps) {
   const D = darkMode;
 
   // Section A
@@ -118,56 +102,11 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
   const [connectedCloud, setConnectedCloud] = useState<string | null>(null);
   const [showInfo, setShowInfo]             = useState(false);
 
-  // Section C
-  const [email, setEmail]           = useState("");
-  const [role, setRole]             = useState(ROLE_OPTIONS[0].value);
-  const [members, setMembers]       = useState<ActiveMember[]>(DUMMY_MEMBERS);
-  const [inviteSent, setInviteSent] = useState(false);
-  const [inviteErr, setInviteErr]   = useState("");
-  const [revoking, setRevoking]     = useState<string | null>(null);
-
-  // ── ⚠️ TEST HARNESS — remove after QA ────────────────────────────────────
-  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
-
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) setAvatarUrl(URL.createObjectURL(f));
-  };
-
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviteErr("");
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setInviteErr("Veuillez saisir une adresse courriel valide.");
-      return;
-    }
-    const roleObj = ROLE_OPTIONS.find(r => r.value === role)!;
-    const initials = email.slice(0, 2).toUpperCase();
-    const newMember: ActiveMember = {
-      id:       `m${Date.now()}`,
-      email:    email.trim(),
-      role:     roleObj.label,
-      roleKey:  roleObj.value,
-      initials,
-      joinedAt: new Date().toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" }),
-    };
-    setInviteSent(true);
-    setTimeout(() => {
-      setMembers(prev => [newMember, ...prev]);
-      setInviteSent(false);
-      setEmail("");
-      setRole(ROLE_OPTIONS[0].value);
-    }, 1800);
-  };
-
-  const handleRevoke = (id: string) => {
-    setRevoking(id);
-    setTimeout(() => {
-      setMembers(prev => prev.filter(m => m.id !== id));
-      setRevoking(null);
-    }, 900);
   };
 
   // ── Style helpers ──────────────────────────────────────────────────────────
@@ -195,34 +134,6 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
   return (
     <div className={`min-h-screen ${D ? "bg-[#070d1e]" : "bg-slate-50"} p-4 sm:p-8`}>
       <div className="max-w-[680px] mx-auto space-y-6">
-
-        {/* ── ⚠️ TEST BANNER — remove after QA ─────────────────────────────── */}
-        <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-500/[0.07]">
-          <div className="flex-1">
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-400/80 mb-0.5">Zone de test QA</p>
-            <p className={`text-[11px] font-semibold ${D ? "text-zinc-400" : "text-slate-600"}`}>
-              Cliquez pour tester la modale de déclaration de dépense sans reçu.
-            </p>
-          </div>
-          <button
-            id="test-missing-receipt-modal"
-            onClick={() => setIsTestModalOpen(true)}
-            className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-amber-500 hover:bg-amber-400 text-white shadow-[0_4px_16px_rgba(245,158,11,0.35)] hover:shadow-[0_4px_24px_rgba(245,158,11,0.50)] transition-all active:scale-95"
-          >
-            🧪 TEST MODAL : Dépense sans reçu
-          </button>
-        </div>
-
-        {/* Modal mount */}
-        <MissingReceiptDisclaimerModal
-          isOpen={isTestModalOpen}
-          onCancel={() => setIsTestModalOpen(false)}
-          onConfirm={() => {
-            alert("✅ onConfirm déclenché — la dépense serait enregistrée ici.");
-            setIsTestModalOpen(false);
-          }}
-          darkMode={D}
-        />
 
         {/* ── Page Header ─────────────────────────────────────────────────── */}
         <div className="mb-6">
@@ -440,96 +351,30 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
 
           <div className="px-6 py-6 space-y-6">
 
-            {/* ── Invite form ───────────────────────────────────────────── */}
-            <form onSubmit={handleInvite} noValidate className="space-y-4">
-
-              {/* Email */}
-              <div className="space-y-1.5">
-                <label htmlFor="pe-invite-email" className={`text-[10px] font-bold ${D ? "text-slate-400" : "text-slate-500"}`}>
-                  Adresse courriel du collaborateur
-                </label>
-                <div className="relative">
-                  <Mail size={12} className={`absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${D ? "text-slate-600" : "text-slate-400"}`} />
-                  <input
-                    id="pe-invite-email"
-                    type="email"
-                    value={email}
-                    onChange={e => { setEmail(e.target.value); setInviteErr(""); }}
-                    placeholder="Courriel du collaborateur"
-                    className={`${inputCls} pl-9`}
-                    autoComplete="email"
-                  />
-                </div>
-              </div>
-
-              {/* Role */}
-              <div className="space-y-1.5">
-                <label htmlFor="pe-invite-role" className={`text-[10px] font-bold ${D ? "text-slate-400" : "text-slate-500"}`}>
-                  Rôle attribué
-                </label>
-                <div className="relative">
-                  <select
-                    id="pe-invite-role"
-                    value={role}
-                    onChange={e => setRole(e.target.value)}
-                    className={`${inputCls} appearance-none pr-9 cursor-pointer`}
-                  >
-                    {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <ChevronDown size={12} className={`absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${D ? "text-slate-500" : "text-slate-400"}`} />
-                </div>
-              </div>
-
-              {/* Error */}
-              <AnimatePresence>
-                {inviteErr && (
-                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${D ? "bg-rose-500/[0.08] border-rose-500/25" : "bg-rose-50 border-rose-200"}`}>
-                    <AlertCircle size={12} className="text-rose-400 shrink-0" />
-                    <p className="text-[10px] font-semibold text-rose-400">{inviteErr}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Success */}
-              <AnimatePresence>
-                {inviteSent && (
-                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${D ? "bg-emerald-500/[0.08] border-emerald-500/25" : "bg-emerald-50 border-emerald-200"}`}>
-                    <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-                    <p className="text-[10px] font-semibold text-emerald-400">Invitation envoyée avec succès&nbsp;!</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* CTA */}
+            {/* ── Invite CTA ────────────────────────────────────────────── */}
+            <div className="space-y-3">
+              <p className={`text-[11px] leading-relaxed ${D ? "text-slate-400" : "text-slate-600"}`}>
+                Invitez un associé, conjoint(e) ou employé à accéder à cette entreprise. La personne invitée obtient un accès complet — les mêmes données, les mêmes outils que vous — dès sa connexion avec cette adresse courriel. Ce n'est pas destiné à un comptable ou à un client-propriétaire : ceux-ci ont leurs propres accès limités ailleurs dans l'app.
+              </p>
               <button
                 id="pe-send-invite"
-                type="submit"
-                disabled={inviteSent}
-                className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all active:scale-[0.98]
-                  ${inviteSent
-                    ? D ? "bg-emerald-500/10 border border-emerald-500/25 text-emerald-400/60 cursor-default" : "bg-emerald-50 border border-emerald-200 text-emerald-400 cursor-default"
-                    : "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-[0_4px_20px_rgba(16,185,129,0.28)] hover:shadow-[0_4px_30px_rgba(16,185,129,0.42)]"}`}
+                type="button"
+                onClick={onInvite}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all active:scale-[0.98] bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-[0_4px_20px_rgba(16,185,129,0.28)] hover:shadow-[0_4px_30px_rgba(16,185,129,0.42)]"
               >
-                <Send size={13} />
-                Envoyer l'invitation
+                <UserPlus size={13} />
+                Inviter un associé
               </button>
+            </div>
 
-              {/* Micro-copy */}
-              <p className={`text-center text-[9.5px] leading-relaxed ${D ? "text-slate-600" : "text-slate-400"}`}>
-                Le collaborateur recevra un lien sécurisé pour créer son propre mot de passe et configurer ses accès.
-              </p>
-            </form>
-
-            {/* ── Active Members ────────────────────────────────────────── */}
+            {/* ── Members (real invites — pending + accepted) ─────────────── */}
             {members.length > 0 && (
               <>
                 <div className={divider} />
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <p className={`text-[10px] font-black uppercase tracking-widest ${D ? "text-slate-500" : "text-slate-400"}`}>
-                      Membres Actifs
+                      Collaborateurs
                     </p>
                     <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black border ${D ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-600"}`}>
                       {members.length}
@@ -539,10 +384,10 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
                   <div className="space-y-2.5">
                     <AnimatePresence>
                       {members.map((m, idx) => {
-                        const RoleIcon = ROLE_ICONS[m.roleKey] ?? Users;
-                        const roleColorCls = ROLE_COLORS[m.roleKey] ?? "text-slate-400 bg-slate-400/10 border-slate-400/20";
                         const avatarGrad = INITIALS_PALETTES[idx % INITIALS_PALETTES.length];
-                        const isRevoking = revoking === m.id;
+                        const isRevoking = revokingId === m.id;
+                        const initials = m.invitedEmail.slice(0, 2).toUpperCase();
+                        const joinedAt = new Date(m.createdAt).toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" });
 
                         return (
                           <motion.div
@@ -555,28 +400,28 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
                           >
                             {/* Initials avatar */}
                             <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarGrad} flex items-center justify-center shrink-0`}>
-                              <span className="text-[11px] font-black text-white">{m.initials}</span>
+                              <span className="text-[11px] font-black text-white">{initials}</span>
                             </div>
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <p className={`text-[11px] font-bold truncate ${D ? "text-white" : "text-slate-800"}`}>{m.email}</p>
+                              <p className={`text-[11px] font-bold truncate ${D ? "text-white" : "text-slate-800"}`}>{m.invitedEmail}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-wider ${roleColorCls}`}>
-                                  <RoleIcon size={7} />
-                                  {m.roleKey === "partenaire" ? "Partenaire" : m.roleKey === "comptable" ? "Comptable" : "Client"}
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-wider ${m.status === "accepted" ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-amber-400 bg-amber-400/10 border-amber-400/20"}`}>
+                                  {m.status === "accepted" ? <CheckCircle2 size={7} /> : <Users size={7} />}
+                                  {m.status === "accepted" ? "Accès actif" : "Invitation en attente"}
                                 </span>
                                 <span className={`text-[8.5px] ${D ? "text-slate-600" : "text-slate-400"}`}>
-                                  · depuis le {m.joinedAt}
+                                  · depuis le {joinedAt}
                                 </span>
                               </div>
                             </div>
 
                             {/* Revoke button */}
                             <button
-                              onClick={() => handleRevoke(m.id)}
+                              onClick={() => onRevoke(m)}
                               disabled={isRevoking}
-                              aria-label={`Révoquer l'accès de ${m.email}`}
+                              aria-label={`Révoquer l'accès de ${m.invitedEmail}`}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all active:scale-95
                                 ${D
                                   ? "border-rose-500/25 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/40"
@@ -598,7 +443,7 @@ export default function ProfilEtEquipe({ darkMode = true }: ProfilEtEquipeProps)
               <div className={`flex flex-col items-center gap-2 py-6 rounded-xl border border-dashed ${D ? "border-white/10" : "border-slate-200"}`}>
                 <Users size={24} className={D ? "text-slate-700" : "text-slate-300"} />
                 <p className={`text-[10px] font-semibold ${D ? "text-slate-600" : "text-slate-400"}`}>
-                  Aucun membre actif pour l'instant.
+                  Aucun collaborateur pour l'instant.
                 </p>
               </div>
             )}

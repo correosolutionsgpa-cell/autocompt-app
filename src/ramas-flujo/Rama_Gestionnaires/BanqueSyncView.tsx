@@ -36,6 +36,7 @@ import {
 
 export interface BanqueSyncViewProps {
   // Mode
+  t: (key: string) => string;
   darkMode: boolean;
   porcBureau: number;
 
@@ -107,6 +108,7 @@ export interface BanqueSyncViewProps {
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
+  t,
   darkMode,
   porcBureau,
   bankTransactions,
@@ -197,7 +199,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
             </button>
           </div>
           <h2 className="font-black uppercase italic tracking-tighter text-xl leading-none">
-            Analyse & Banque sync
+            {t("Analyse & Banque sync")}
           </h2>
           <div className="w-10"></div>
         </header>
@@ -210,11 +212,10 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
             </div>
             <div>
               <p className="text-[10px] font-black uppercase text-white italic leading-tight">
-                Privacité Locale Garantie
+                {t("Privacité Locale Garantie")}
               </p>
               <p className="text-[8px] text-emerald-100 font-bold uppercase mt-0.5 tracking-tight">
-                Vos données bancaires sont traitées localement. Confidentialité
-                totale garantie.
+                {t("Vos données bancaires sont traitées localement. Confidentialité totale garantie.")}
               </p>
             </div>
           </div>
@@ -224,13 +225,13 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
             className={`p-2 rounded-[28px] border flex space-x-1 shadow-sm ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
           >
             <button className="flex-1 py-3 bg-[#059669] text-white rounded-[22px] text-[9px] font-black uppercase italic shadow-lg">
-              Vues Transactions
+              {t("Vues Transactions")}
             </button>
             <button
               onClick={() => setVista("reportes")}
               className={`flex-1 py-3 text-[9px] font-black uppercase italic ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
             >
-              Performance TP-80
+              {t("Performance TP-80")}
             </button>
           </div>
 
@@ -241,19 +242,19 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
               <h3
                 className={`text-[10px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
               >
-                Poids des Déductions
+                {t("Poids des Déductions")}
               </h3>
               <Sparkles size={14} className="text-[#059669]" />
             </div>
             <div className="space-y-6">
               {[
-                { cat: "Repas & Frais (50%)", val: 40, color: "bg-orange-500" },
+                { cat: t("Repas & Frais (50%)"), val: 40, color: "bg-orange-500" },
                 {
-                  cat: "Bureau dom. (Pro rata)",
+                  cat: t("Bureau dom. (Pro rata)"),
                   val: (porcBureau * 100).toFixed(0),
                   color: "bg-[#059669]",
                 },
-                { cat: "Déplacement (KM)", val: 65, color: "bg-blue-600" },
+                { cat: t("Déplacement (KM)"), val: 65, color: "bg-blue-600" },
               ].map((g) => (
                 <div key={g.cat} className="space-y-2">
                   <div
@@ -282,7 +283,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
             <p
               className={`text-[8px] font-bold uppercase mt-6 text-center italic opacity-60 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
             >
-              Optimisation fiscale active • TP-80 / T2125
+              {t("Optimisation fiscale active • TP-80 / T2125")}
             </p>
           </div>
 
@@ -291,9 +292,9 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
               livre entièrement séparé du rapprochement bancaire automatique. */}
           <div className={`p-4 rounded-[24px] border flex items-center justify-between gap-4 ${darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200"}`}>
             <div>
-              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-200" : "text-slate-900"}`}>Faire correspondre avec le Compte Fidéicommis</p>
+              <p className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-200" : "text-slate-900"}`}>{t("Faire correspondre avec le Compte Fidéicommis")}</p>
               <p className={`text-[8px] font-bold uppercase tracking-wider mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
-                Inclut les dépôts et retraits du fidéicommis dans la recherche de correspondances bancaires
+                {t("Inclut les dépôts et retraits du fidéicommis dans la recherche de correspondances bancaires")}
               </p>
             </div>
             <button
@@ -311,7 +312,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                 <h4
                   className={`text-xs font-black uppercase italic tracking-tighter ${darkMode ? "text-zinc-100" : "text-[#0F172A]"}`}
                 >
-                  Réconciliation
+                  {t("Réconciliation")}
                 </h4>
                 <p
                   className={`text-[8px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
@@ -323,7 +324,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                   <p
                     className={`text-[6px] font-bold uppercase tracking-tighter ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                   >
-                    Traitement local Zero-Knowledge • Confidentialité totale
+                    {t("Traitement local Zero-Knowledge • Confidentialité totale")}
                   </p>
                 </div>
               </div>
@@ -353,7 +354,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                   onClick={() => {
                     if (
                       confirm(
-                        "Voulez-vous effacer toutes les transactions bancaires de test pour ce profil?",
+                        t("Voulez-vous effacer toutes les transactions bancaires de test pour ce profil?")
                       )
                     ) {
                       setBankTransactions((prev) =>
@@ -370,7 +371,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                   onClick={() => csvInputRef.current?.click()}
                   className="bg-[#059669] text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase italic flex items-center space-x-2 shadow-xl shadow-emerald-900/10 active:scale-95 transition-all"
                 >
-                  <Upload size={14} /> <span>Sync Relevé</span>
+                  <Upload size={14} /> <span>{t("Sync Relevé")}</span>
                 </button>
               </div>
               <input
@@ -485,20 +486,20 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           <div className="mt-2 flex justify-end">
                             {recoState === "conciliated" ? (
                               <div className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-emerald-200 shadow-sm">
-                                <CheckCircle2 size={10} /> <span>{depValidation ? "Payé" : "Concilié"}</span>
+                                <CheckCircle2 size={10} /> <span>{depValidation ? t("Payé") : t("Concilié")}</span>
                               </div>
                             ) : recoState === "potencial_match" ? (
                               <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-indigo-200 shadow-sm">
-                                <AlertTriangle size={10} /> <span>À Confirmer</span>
+                                <AlertTriangle size={10} /> <span>{t("À Confirmer")}</span>
                               </div>
                             ) : recoState === "erreur_rejet" ? (
                               <div className="bg-red-100 text-red-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-red-200 shadow-sm">
-                                <X size={10} /> <span>Erreur/Rejet</span>
+                                <X size={10} /> <span>{t("Erreur/Rejet")}</span>
                               </div>
                             ) : recoState === "need_receipt" ? (
                               <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-amber-200 shadow-sm">
                                 <FileSearch size={10} />{" "}
-                                <span>Reçu manquant</span>
+                                <span>{t("Reçu manquant")}</span>
                               </div>
                             ) : (
                               <motion.div
@@ -510,7 +511,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                 className="bg-rose-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 shadow-lg shadow-rose-900/10 border border-rose-500"
                               >
                                 <AlertTriangle size={10} />{" "}
-                                <span>Manquant</span>
+                                <span>{t("Manquant")}</span>
                               </motion.div>
                             )}
                           </div>
@@ -528,19 +529,19 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                           <div className="flex-1">
                             <p className="text-[10px] font-black italic uppercase leading-none mb-1 flex items-center">
-                              {matchedExpense?.isManual ? "Saisie Manuelle Confirmée" : "Pièce Justificative Validée"}
+                              {matchedExpense?.isManual ? t("Saisie Manuelle Confirmée") : t("Pièce Justificative Validée")}
                               {matchedExpense?.isManual && (
-                                <span className="ml-2 px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-500 text-[6px] tracking-widest border border-rose-500/20">SANS JUSTIFICATIF</span>
+                                <span className="ml-2 px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-500 text-[6px] tracking-widest border border-rose-500/20">{t("SANS JUSTIFICATIF")}</span>
                               )}
                             </p>
                             <p
                               className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-emerald-500/70" : "text-emerald-600/70"}`}
                             >
                               {matchedExpense
-                                ? `Récépissé: ${matchedExpense.fournisseur}`
+                                ? `${t("Récépissé: ")}${matchedExpense.fournisseur}`
                                 : matchedInvoice
-                                  ? `Facture client: ${matchedInvoice?.cliente}`
-                                  : depValidation?.match?.locataire ? `Dépôt réconcilié (Locataire: ${depValidation.match.locataire})` : `Dépôt réconcilié (Revenu Confirmé)`}
+                                  ? `${t("Facture client: ")}${matchedInvoice?.cliente}`
+                                  : depValidation?.match?.locataire ? `${t("Dépôt réconcilié (Locataire: ")}${depValidation.match.locataire})` : t("Dépôt réconcilié (Revenu Confirmé)")}
                             </p>
                           </div>
                           <button
@@ -555,10 +556,10 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                         >
                           <div className="flex-1">
                             <p className="text-[10px] font-black italic uppercase leading-none mb-1">
-                              Validation Manuelle Requise
+                              {t("Validation Manuelle Requise")}
                             </p>
                             <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-indigo-500/70" : "text-indigo-600/70"}`}>
-                              {depValidation?.reason || "Correspondance partielle trouvée"}
+                              {depValidation?.reason || t("Correspondance partielle trouvée")}
                             </p>
                           </div>
                           {depValidation?.match?.locataire && (
@@ -584,7 +585,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                               }}
                               className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
                             >
-                              Confirmer que ceci est le loyer de {depValidation.match.locataire}
+                              {t("Confirmer que ceci est le loyer de ")}{depValidation.match.locataire}
                             </button>
                           )}
                           {!depValidation?.match?.locataire && (
@@ -609,7 +610,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                               }}
                               className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
                             >
-                              Valider manuellement
+                              {t("Valider manuellement")}
                             </button>
                           )}
                         </div>
@@ -620,20 +621,20 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           <div className="flex justify-between items-center">
                             <div className="flex-1">
                               <p className="text-[10px] font-black italic uppercase leading-none mb-1 text-red-600">
-                                Erreur de Montant / Rejeté
+                                {t("Erreur de Montant / Rejeté")}
                               </p>
                               <p className={`text-[8px] font-bold uppercase tracking-tight ${darkMode ? "text-red-500/70" : "text-red-600/70"}`}>
-                                Aucun dépôt programmé équivalent. Vérifiez la transaction.
+                                {t("Aucun dépôt programmé équivalent. Vérifiez la transaction.")}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-red-200 dark:border-red-900/50">
-                            <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">Assigner manuellement :</p>
+                            <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">{t("Assigner manuellement :")}</p>
                             <select
                               id={`auto-lier-select-${i}`}
                               className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}
                             >
-                              <option value="">Sélectionner la porte...</option>
+                              <option value="">{t("Sélectionner la porte...")}</option>
                               {plexManagementProperties.map(door => (
                                 <optgroup key={door.id} label={`Puerta: ${door.adresse}`}>
                                   {door.isContainer && door.chambres ? door.chambres.map((c: any) => (
@@ -649,7 +650,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                 const select = (e.currentTarget.previousElementSibling as HTMLSelectElement | null);
                                 const selectedId = select?.value;
                                 if (!selectedId) {
-                                  alert("Veuillez sélectionner une porte.");
+                                  alert(t("Veuillez sélectionner une porte."));
                                   return;
                                 }
                                 let locataire = "";

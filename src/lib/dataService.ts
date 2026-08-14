@@ -26,6 +26,7 @@ import {
   updateDoc,
   deleteDoc,
   arrayUnion,
+  arrayRemove,
   query,
   where,
   orderBy,
@@ -570,6 +571,7 @@ export interface CompanyInviteDoc {
   invitedByName: string;
   status: 'pending' | 'accepted';
   createdAt: string;
+  invitedUid?: string;     // set once accepted — needed to revoke collaboratorUIDs later
 }
 
 // ── InvoiceDoc — Firestore `invoices` collection (revenue/ventes ledger) ─────
@@ -1491,7 +1493,42 @@ export const dataService = {
   async acceptCompanyInvite(userId: string, invite: CompanyInviteDoc): Promise<void> {
     const companyRef = doc(db, 'companies', invite.companyDocId);
     await updateDoc(companyRef, { collaboratorUIDs: arrayUnion(userId) });
-    await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted' });
+    // invitedUid wasn't captured here before — with no way to know WHICH uid
+    // an accepted invite granted access to, revoking it later had nothing to
+    // remove from collaboratorUIDs. Needed for revokeCompanyInvite below.
+    await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted', invitedUid: userId });
+  },
+
+  /** All invites (pending + accepted) ever sent for this company — the real
+   *  "who has access" list, replacing the old hardcoded fake member list.
+   *  Filtered by invitedByUid (not just companyDocId) because firestore.rules
+   *  only lets each doc be read by whoever sent that specific invite — a
+   *  query Firestore can't prove is safe without this filter matching the
+   *  rule gets rejected outright. */
+  async fetchCompanyInvites(companyDocId: string, invitedByUid: string): Promise<CompanyInviteDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'companyInvites'),
+        where('companyDocId', '==', companyDocId),
+        where('invitedByUid', '==', invitedByUid)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as CompanyInviteDoc);
+    } catch (e) {
+      console.error('fetchCompanyInvites failed:', e);
+      return [];
+    }
+  },
+
+  /** Revokes a collaborator's access. Pending invites just get deleted; an
+   *  accepted one also loses its slot in collaboratorUIDs (using invitedUid
+   *  captured at accept-time above) before the invite doc is removed. */
+  async revokeCompanyInvite(invite: CompanyInviteDoc): Promise<void> {
+    if (invite.status === 'accepted' && invite.invitedUid) {
+      const companyRef = doc(db, 'companies', invite.companyDocId);
+      await updateDoc(companyRef, { collaboratorUIDs: arrayRemove(invite.invitedUid) });
+    }
+    await deleteDoc(doc(db, 'companyInvites', invite.id));
   },
 
   // ── Buildings — Firestore `buildings` collection ───────────────────────────

@@ -155,7 +155,7 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc, type CompanyInviteDoc } from "./lib/dataService";
 import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
@@ -1795,6 +1795,24 @@ const App = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
+  // "Notre Équipe" (ProfilEtEquipe) used to show two hardcoded fake
+  // collaborators and a form that only wrote to local state — no real
+  // invite was ever sent or access granted. Found 2026-08-13. Real list of
+  // who has (or is pending) access to the active company.
+  const [teamMembers, setTeamMembers] = useState<CompanyInviteDoc[]>([]);
+  const [revokingTeamMemberId, setRevokingTeamMemberId] = useState<string | null>(null);
+  const handleRevokeTeamMember = async (invite: CompanyInviteDoc) => {
+    setRevokingTeamMemberId(invite.id);
+    try {
+      await dataService.revokeCompanyInvite(invite);
+      setTeamMembers((prev) => prev.filter((m) => m.id !== invite.id));
+      playNotificationSound();
+    } catch (err: any) {
+      alert("Erreur lors de la révocation : " + (err?.message || err));
+    } finally {
+      setRevokingTeamMemberId(null);
+    }
+  };
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
@@ -1897,6 +1915,22 @@ const App = () => {
   const currentCompany =
     listaEmpresas.find((e) => e.id === activeCompanyId) || visibleEmpresas[0];
   const empresa = currentCompany;
+
+  // "Notre Équipe" (ProfilEtEquipe) used to show two hardcoded fake
+  // collaborators and a form that only wrote to local state — no real
+  // invite was ever sent or access granted. Found 2026-08-13. Real list of
+  // who has (or is pending) access to the active company.
+  const refreshTeamMembers = useCallback(() => {
+    const companyDocId = currentCompany?._companyDocId;
+    const uid = auth.currentUser?.uid;
+    if (!companyDocId || !uid) { setTeamMembers([]); return; }
+    dataService.fetchCompanyInvites(companyDocId, uid).then(setTeamMembers).catch(() => setTeamMembers([]));
+  }, [currentCompany?._companyDocId]);
+  useEffect(() => { refreshTeamMembers(); }, [refreshTeamMembers]);
+  // A successful invite (InviteAssociateModal, shared across several vistas)
+  // only sets inviteSuccessMsg — re-fetch so a new pending invite shows up
+  // in "Notre Équipe" without the user having to navigate away and back.
+  useEffect(() => { if (inviteSuccessMsg) refreshTeamMembers(); }, [inviteSuccessMsg, refreshTeamMembers]);
 
   // One-click "connect Drive now" prompt for the active company, shown once
   // per company until dismissed or connected — closes the gap where Drive
@@ -19680,7 +19714,13 @@ const App = () => {
         </header>
 
         {/* Component renders its own scrollable container */}
-        <ProfilEtEquipe darkMode={darkMode} />
+        <ProfilEtEquipe
+          darkMode={darkMode}
+          onInvite={() => setShowInviteModal(true)}
+          members={teamMembers}
+          onRevoke={handleRevokeTeamMember}
+          revokingId={revokingTeamMemberId}
+        />
       </div>
     );
 
@@ -21648,6 +21688,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         isPlex={isPlex}
         plexManagementProperties={plexManagementProperties}
         setPaywallTargetTier={setPaywallTargetTier}
+        t={t}
         setShowPaywallModal={setShowPaywallModal}
         csvInputRef={csvInputRef}
         handleCSVUpload={handleCSVUpload}
