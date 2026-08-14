@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  FileSpreadsheet,
   Menu,
   PenLine,
   Save,
@@ -65,6 +66,13 @@ export interface GestionPlexProps {
   // Navigation
   setVista: (vista: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
+  /** Opens this building's own separate ledger (TenueLivresImmeubleView) —
+   *  previously reachable only from Portefeuille Clients (Gestionnaire/
+   *  Comptable only). An Investisseur who owns several buildings directly
+   *  has no Portefeuille Clients at all, so had no way to see one building's
+   *  numbers in isolation — needed at resale time to work out that
+   *  property's own capital gain. Added 2026-08-13 at Fabiola's request. */
+  onOpenBuildingLedger?: (buildingId: string) => void;
 
   // Composant sidebar
   WorkspaceSidebar: React.ComponentType;
@@ -100,6 +108,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   setShowLimitModal,
   setVista,
   setIsSidebarOpen,
+  onOpenBuildingLedger,
   WorkspaceSidebar,
   onTaxScan,
   sofiPrefillMessage,
@@ -1219,6 +1228,15 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                         >
                           <Trash2 size={16} />
                         </button>
+                        {onOpenBuildingLedger && (
+                          <button
+                            onClick={() => onOpenBuildingLedger(p.id)}
+                            className={`p-2 transition-colors rounded-xl ${darkMode ? "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}
+                            title="Voir le Tenue de Livres de cet édifice (séparé, utile à la revente)"
+                          >
+                            <FileSpreadsheet size={16} />
+                          </button>
+                        )}
                         {isContainer && (
                           <button
                             onClick={() =>

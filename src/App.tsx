@@ -21495,6 +21495,10 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setShowLimitModal={setShowLimitModal}
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
+        onOpenBuildingLedger={(buildingId: string) => {
+          setSelectedLedgerBuildingId(buildingId);
+          setVista("tenue_livres_immeuble");
+        }}
         WorkspaceSidebar={WorkspaceSidebar}
         onTaxScan={handleTaxScan}
         sofiPrefillMessage={sofiPrefillMessage}
@@ -21987,6 +21991,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setVista={setVista}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
+        onBack={goBack}
       />
     );
   }

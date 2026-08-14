@@ -757,9 +757,32 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                               </div>
                             </div>
                           </div>
-                          <div className="flex flex-col space-y-2">
+                          <div className="flex flex-col space-y-2 items-end">
+                            {/* Same "à quel immeuble" gap the Validation IA screen already
+                                closes (buildingId selector, S.O.F.I.-suggested but always
+                                correctable) — a missing expense created from an unmatched
+                                bank transaction had no equivalent, so it always landed
+                                un-tagged in the company-wide pool, never in that building's
+                                own separate ledger. Read at click time (uncontrolled select,
+                                same pattern as "Auto-Lier" above) — this component is
+                                deliberately state-free per its own Golden Rule §2. Found
+                                2026-08-13 via Fabiola confirming each building needs its
+                                own separated bookkeeping (capital gain at resale time). */}
+                            {plexManagementProperties.length > 0 && (
+                              <select
+                                id={`missing-expense-building-${i}`}
+                                defaultValue=""
+                                className={`text-[9px] px-2 py-1.5 rounded-lg border ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-200" : "bg-white border-slate-200"}`}
+                              >
+                                <option value="">Immeuble (optionnel)...</option>
+                                {plexManagementProperties.map((p: any) => (
+                                  <option key={p.id} value={p.id}>{p.adresse}</option>
+                                ))}
+                              </select>
+                            )}
                             <button
                               onClick={() => {
+                                const buildingSelect = document.getElementById(`missing-expense-building-${i}`) as HTMLSelectElement | null;
                                 const newDepense = {
                                   id: Date.now(),
                                   companyId: activeCompanyId,
@@ -773,6 +796,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                   lien: null,
                                   partnerTag: activeUser,
                                   refacturableTriplex: false,
+                                  ...(buildingSelect?.value ? { buildingId: buildingSelect.value } : {}),
                                 };
                                 setDepenses((prev) => [newDepense, ...prev]);
                                 alert(
@@ -786,6 +810,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                             {activeCompanyId === "1" && (
                               <button
                                 onClick={() => {
+                                  const buildingSelect = document.getElementById(`missing-expense-building-${i}`) as HTMLSelectElement | null;
                                   const newDepense = {
                                     id: Date.now(),
                                     companyId: "1",
@@ -799,6 +824,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     lien: null,
                                     partnerTag: activeUser,
                                     refacturableTriplex: true,
+                                    ...(buildingSelect?.value ? { buildingId: buildingSelect.value } : {}),
                                   };
                                   setDepenses((prev) => [newDepense, ...prev]);
                                   alert(

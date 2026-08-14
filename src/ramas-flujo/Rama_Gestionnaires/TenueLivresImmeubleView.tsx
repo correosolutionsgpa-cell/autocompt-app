@@ -148,6 +148,12 @@ export interface TenueLivresImmeubleViewProps {
   setVista: (v: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
+  /** Was hardcoded to always return to "portefeuille_client" — correct when
+   *  opened from there (Gestionnaire/Comptable), wrong for an Investisseur
+   *  who reaches this same screen from Gestion Immobilière and has no
+   *  Portefeuille Client to land on. Optional real "go back" callback,
+   *  falling back to the old behavior if not provided. Added 2026-08-13. */
+  onBack?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -159,6 +165,7 @@ const TenueLivresImmeubleView: React.FC<TenueLivresImmeubleViewProps> = ({
   setVista,
   setIsSidebarOpen,
   WorkspaceSidebar,
+  onBack,
 }) => {
   const [building, setBuilding] = useState<PropertyDoc | null>(null);
   const [units, setUnits] = useState<UnitDoc[]>([]);
@@ -270,7 +277,7 @@ const TenueLivresImmeubleView: React.FC<TenueLivresImmeubleViewProps> = ({
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white md:hidden">
           <Menu size={18} />
         </button>
-        <button onClick={() => setVista("portefeuille_client")} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
+        <button onClick={() => (onBack ? onBack() : setVista("portefeuille_client"))} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
           <ArrowLeft size={20} />
         </button>
         <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-500">
