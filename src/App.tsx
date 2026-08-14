@@ -13940,6 +13940,18 @@ const App = () => {
         // Fabiola's audit of Gestionnaire/Investisseur document folders.
         return "AutoCompt n'offre pas de modèle prérempli pour un Contrat de Partenariat — le contenu d'une entente entre associés est propre à chaque situation et devrait être révisé par un juriste. Utilisez « Mes Modèles » ci-dessus pour importer votre propre entente (format Word avec des espaces {{champ}}) et la faire signer électroniquement.";
       }
+      if (lower.includes("sous-traitance") || lower.includes("sous traitance")) {
+        // Same keyword-collision bug as "partenariat" above (both this and
+        // the property-management-mandate branch below share the "contrat"
+        // keyword) — a Flippeur's "Contrats de Sous-traitance" folder was
+        // silently loading the property-management-mandate text instead of
+        // anything resembling a subcontractor agreement. Same liability
+        // reasoning: subcontractor terms (scope, RBQ compliance, holdback,
+        // insurance) are genuinely project-specific and should be reviewed,
+        // not guessed at by AutoCompt. Found 2026-08-13 via Fabiola's audit
+        // of the Flippeur profile.
+        return "AutoCompt n'offre pas de modèle prérempli pour un Contrat de Sous-traitance — les conditions (portée des travaux, conformité RBQ, retenue contractuelle, assurances) sont propres à chaque projet et devraient être révisées par un juriste. Utilisez « Mes Modèles » ci-dessus pour importer votre propre entente (format Word avec des espaces {{champ}}) et la faire signer électroniquement.";
+      }
       if (lower.includes("contrat") || lower.includes("gestion")) {
         return `CONTRAT DE SERVICES DE GESTION IMMOBILIÈRE\n\nMandat conféré à:\n${currentCompany?.nombre || "Solutions GPA Inc."}, ci-après le gestionnaire,\nPar:\n[Propriétaire de l'immeuble], ci-après le commettant.\n\nLe gestionnaire administre, loue et perçoit les loyers, gère l'entretien courant et coordonne les sous-traitants pour un taux d'honoraires préétabli de 5% du revenu locatif total.\n\nLiaison BYOS compatible Loi 25 active.`;
       }
