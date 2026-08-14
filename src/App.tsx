@@ -995,7 +995,7 @@ const App = () => {
   // write is in flight (prevents a double-click creating two companies).
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   // Set when "setup" was opened via the pencil icon on an existing workspace
-  // (Espace de Travail dropdown) instead of "Ajouter / Créer" — the same form
+  // (Espace de Travail dropdown) instead of "{t("Ajouter / Créer")}" — the same form
   // is reused for both, this just tells the submit handler to update that
   // company's existing doc instead of minting a new "custom-{timestamp}" one.
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
@@ -1110,7 +1110,7 @@ const App = () => {
   const [showAutonomeExpenseModal, setShowAutonomeExpenseModal] = useState(false);
   const [showManualExpenseModal, setShowManualExpenseModal] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState({ montant: "", description: "", date: new Date().toISOString().split("T")[0], confirmed: false });
-  // Mobile-only: the "Répartition par catégorie" donut's full category list
+  // Mobile-only: the "{t("Répartition par catégorie")}" donut's full category list
   // made the dashboard very long on phones (desktop shows it side-by-side
   // with the donut, no issue there). On mobile we show the donut + top 2
   // categories, then this expands the rest into a full-screen sheet — a
@@ -2407,7 +2407,7 @@ const App = () => {
 
   useEffect(() => {
     // activeCompanyId is deliberately set to "" while creating a brand-new
-    // company (see the "Ajouter / Créer" buttons) — but `empresa` still
+    // company (see the "{t("Ajouter / Créer")}" buttons) — but `empresa` still
     // falls back to visibleEmpresas[0] in that case (see currentCompany's own
     // fallback above), so this effect re-hydrated the blank "new company"
     // form with whatever the FIRST company in the list happened to be,
@@ -2991,7 +2991,7 @@ const App = () => {
                   className="w-full py-4 px-3 bg-[#059669] hover:bg-emerald-700 text-white rounded-2xl text-[9.5px] font-black uppercase italic tracking-wider transition-all active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 border-none cursor-pointer animate-pulse"
                 >
                   <Plus size={14} />
-                  <span>Ajouter une entreprise</span>
+                  <span>{t("Ajouter une entreprise")}</span>
                 </button>
               </div>
 
@@ -3181,7 +3181,7 @@ const App = () => {
                                       }}
                                       className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[7.5px] font-black uppercase tracking-wider transition-colors ${darkMode ? "text-rose-500/80 hover:text-rose-400 hover:bg-rose-950/30" : "text-rose-500 hover:text-rose-600 hover:bg-rose-50"}`}
                                     >
-                                      <Trash2 size={10} /> Supprimer
+                                      <Trash2 size={10} /> {t("Supprimer")}
                                     </button>
                                   )}
                                 </div>
@@ -3240,7 +3240,7 @@ const App = () => {
                         >
                           <Plus size={12} strokeWidth={3} />
                           <span className="text-[9px] font-black uppercase tracking-widest">
-                            Ajouter / Créer
+                            {t("Ajouter / Créer")}
                           </span>
                         </button>
                         {currentCompany?.ownerId === auth.currentUser?.uid && (
@@ -3893,7 +3893,7 @@ const App = () => {
                   <h3
                     className={`text-xs font-black uppercase italic tracking-tighter leading-none ${darkMode ? "text-white" : "text-slate-900"}`}
                   >
-                    {dashboardMode === "Syndic" ? "Assistante IA Sofi" : "Assistant IA Expert"}
+                    {dashboardMode === "Syndic" ? t("Assistante IA Sofi") : "Assistant IA Expert"}
                   </h3>
                   <p className={`text-[7px] font-black uppercase tracking-widest mt-1 ${dashboardMode === "Syndic" ? "text-purple-500" : "text-emerald-500"}`}>
                     {dashboardMode === "Syndic" ? "Conseils Copropriété en Direct" : "Soutien Fiscal en Direct"}
@@ -8471,7 +8471,7 @@ const App = () => {
           className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"
         />
         <p className="text-emerald-500 font-black uppercase tracking-widest text-sm animate-pulse">
-          Chargement des données...
+          {t("Chargement des données...")}
         </p>
       </div>
     );
@@ -10185,7 +10185,7 @@ const App = () => {
                     }}
                     className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-500 shadow-lg shadow-indigo-500/20 transition-all border-none"
                   >
-                    Ajouter maintenant
+                    {t("Ajouter maintenant")}
                   </button>
                 </div>
               </motion.div>
@@ -10299,7 +10299,24 @@ const App = () => {
             />
           </div>
           {setPasswordError && (
-            <p className="text-[9.5px] font-bold text-red-600">{setPasswordError}</p>
+            <div className="space-y-2">
+              <p className="text-[9.5px] font-bold text-red-600">{setPasswordError}</p>
+              {/* This screen has no sidebar/logout option of its own — without
+                  this, a session too old for updatePassword() (Firebase's
+                  auth/requires-recent-login safeguard) leaves the user stuck
+                  here with no way to act on the error's own instructions.
+                  Found 2026-08-13: Fabiola landed here from a lingering
+                  session and had no visible way to log out. */}
+              {setPasswordError.includes("déconnecter") && (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-[9px] font-black uppercase tracking-wider text-emerald-700 underline underline-offset-2"
+                >
+                  Se déconnecter maintenant
+                </button>
+              )}
+            </div>
           )}
           <button
             type="button"
@@ -10307,7 +10324,7 @@ const App = () => {
             onClick={handleSetPassword}
             className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer disabled:opacity-50"
           >
-            {isSettingPassword ? "Enregistrement..." : "Enregistrer et continuer"}
+            {isSettingPassword ? "Enregistrement..." : t("Enregistrer et continuer")}
           </button>
         </div>
       </div>
@@ -10500,7 +10517,7 @@ const App = () => {
                 onClick={handleConfirmPhoneCode}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-wider italic transition-all shadow-lg active:scale-95 duration-200 border-none cursor-pointer disabled:opacity-50"
               >
-                {phoneVerifyBusy ? "Vérification..." : "Confirmer"}
+                {phoneVerifyBusy ? "Vérification..." : t("Confirmer")}
               </button>
               <button
                 type="button"
@@ -11332,7 +11349,7 @@ const App = () => {
                     }}
                     className="w-full py-2 bg-[#059669] text-white rounded-xl text-[8px] font-black uppercase italic tracking-widest shadow-lg shadow-emerald-900/20"
                   >
-                    Régulariser maintenant
+                    {t("Régulariser maintenant")}
                   </button>
                 </motion.div>
               )}
@@ -11429,7 +11446,7 @@ const App = () => {
                 className={`mt-3 pt-3 border-t max-h-72 overflow-y-auto space-y-2 text-left ${darkMode ? "border-zinc-900" : "border-slate-100"}`}
               >
                 <p className="text-[8px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400 mb-1 leading-none">
-                  Suggestions et Résultats de recherche
+                  {t("Suggestions et Résultats de recherche")}
                 </p>
 
                 {(() => {
@@ -11601,7 +11618,7 @@ const App = () => {
                           className={`w-full flex items-center space-x-2.5 p-2 rounded-xl text-[9.5px] font-black uppercase italic tracking-tight text-left transition-all cursor-pointer ${darkMode ? "bg-zinc-900 hover:bg-zinc-850 text-zinc-300" : "bg-slate-50 hover:bg-slate-100 text-slate-700"}`}
                         >
                           {s.icon}
-                          <span>⚡ Aller à : {s.label}</span>
+                          <span>{t("⚡ Aller à :")} {s.label}</span>
                         </button>
                       ))}
 
@@ -11803,7 +11820,7 @@ const App = () => {
               {/* Premium Conversion Tag Badge */}
               {selectedTier === "gratuit" && (
                 <div className="absolute top-4 right-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-yellow-600 text-slate-950 font-black tracking-widest uppercase italic text-[7px] px-3 py-1.5 rounded-full shadow-lg border border-amber-300/40 animate-pulse flex items-center space-x-1.5 z-30">
-                  <span>🔒 CAMÉRA IA VERROUILLÉE - PASSER À BASIQUE</span>
+                  <span>🔒 {t("CAMÉRA IA VERROUILLÉE - PASSER À BASIQUE")}</span>
                 </div>
               )}
 
@@ -11861,7 +11878,7 @@ const App = () => {
 
               <div className="text-center relative z-10 space-y-3 max-w-xs px-2">
                 <span className="text-sm font-black uppercase tracking-[0.2em] italic text-emerald-400 font-sans">
-                  SCANNER IA (FACTURES)
+                  {t("SCANNER IA (FACTURES)")}
                 </span>
                 {/* Minimalist action pills */}
                 <div className="flex items-center justify-center gap-2 pt-1">
@@ -11887,7 +11904,7 @@ const App = () => {
                     className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 transition-all duration-200 group/pill active:scale-95"
                   >
                     <Camera size={14} className="text-emerald-400/70 group-hover/pill:text-emerald-400 transition-colors" />
-                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">Foto</span>
+                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">{t("Foto")}</span>
                   </button>
                   {/* Galerie */}
                   <button
@@ -11911,7 +11928,7 @@ const App = () => {
                     className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 transition-all duration-200 group/pill active:scale-95"
                   >
                     <ImageIcon size={14} className="text-emerald-400/70 group-hover/pill:text-emerald-400 transition-colors" />
-                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">Galerie</span>
+                    <span className="text-[8px] font-semibold uppercase tracking-widest text-zinc-400 group-hover/pill:text-emerald-400 transition-colors">{t("Galerie")}</span>
                   </button>
                   {/* Fichier PDF */}
                   <button
@@ -11969,10 +11986,10 @@ const App = () => {
               </span>
               <div>
                 <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-                  Répartition par catégorie
+                  {t("Répartition par catégorie")}
                 </h3>
                 <p className="text-[7.5px] font-black uppercase tracking-widest text-[#059669] dark:text-emerald-400 mt-1 leading-none">
-                  Répartition des dépenses réelles
+                  {t("Répartition des dépenses réelles")}
                 </p>
               </div>
             </div>
@@ -12267,7 +12284,7 @@ const App = () => {
                   <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${darkMode ? "text-cyan-400" : "text-cyan-600"
                     }`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse inline-block" />
-                    Sofi — Assistante IA
+                    {t("Sofi — Assistante IA")}
                   </p>
 
                   {/* Exact Phase 5 Quebec-FR text */}
@@ -12344,6 +12361,7 @@ const App = () => {
               setDispatcherSuccessToast={setDispatcherSuccessToast}
               playNotificationSound={playNotificationSound}
               setShowFiscalChat={setShowFiscalChat}
+              t={t}
             />
           )}
 
@@ -12680,10 +12698,10 @@ const App = () => {
 
                   <div className="space-y-1">
                     <span className="text-[9px] font-black tracking-widest uppercase italic text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                      Synchronisation active
+                      {t("Synchronisation active")}
                     </span>
                     <h3 className="text-xl font-black uppercase italic tracking-tighter mt-2">
-                      Configuration de Google Drive
+                      {t("Configuration de Google Drive")}
                     </h3>
                     <p className="text-[10px] text-slate-550 dark:text-zinc-400 leading-relaxed max-w-sm mx-auto">
                       Pour téléverser automatiquement vos documents scannés dans
@@ -20375,7 +20393,7 @@ const App = () => {
                             className={`flex-1 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border ${darkMode ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                           >
                             <Printer size={14} />
-                            <span>Imprimer</span>
+                            <span>{t("Imprimer")}</span>
                           </button>
                           <button
                             disabled={isSendingInvoice}

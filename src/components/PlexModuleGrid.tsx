@@ -47,6 +47,7 @@ interface PlexModuleGridProps {
   setDispatcherSuccessToast: (toast: { text: string; channel: string; customMessage: string }) => void;
   playNotificationSound: () => void;
   setShowFiscalChat: (show: boolean) => void;
+  t: (frText: string) => string;
 }
 
 // ── Profile color tokens — design_system_rules.md §2 ────────────────────────
@@ -86,6 +87,7 @@ export default function PlexModuleGrid({
   setDispatcherSuccessToast,
   playNotificationSound,
   setShowFiscalChat,
+  t,
 }: PlexModuleGridProps) {
 
   const rgb = PROFILE_RGB[activeProfile] ?? PROFILE_RGB.investisseur;
@@ -145,7 +147,7 @@ export default function PlexModuleGrid({
             <Receipt size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
-            Facturation
+            {t("Facturation")}
           </span>
         </button>
       )}
@@ -163,7 +165,7 @@ export default function PlexModuleGrid({
             <FileSpreadsheet size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
-            Tenue de Livres
+            {t("Tenue de Livres")}
           </span>
         </button>
       )}
@@ -181,7 +183,7 @@ export default function PlexModuleGrid({
             <Home size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
-            Bureau à domicile
+            {t("Bureau à domicile")}
           </span>
         </button>
       )}
@@ -199,7 +201,7 @@ export default function PlexModuleGrid({
             <Percent size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-tight">
-            Déclaration
+            {t("Déclaration")}
             <br />
             TPS / TVQ
           </span>
@@ -236,7 +238,7 @@ export default function PlexModuleGrid({
             )}
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter">
-            DocuLegal {isLocked && "🔒"}
+            {t("DocuLegal")} {isLocked && "🔒"}
           </span>
         </button>
       )}
@@ -254,9 +256,9 @@ export default function PlexModuleGrid({
             <Folder size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Dossiers
+            {t("Dossiers")}
             <br />
-            Fiscaux
+            {t("Fiscaux")}
           </span>
         </button>
       )}
@@ -274,9 +276,9 @@ export default function PlexModuleGrid({
             <Timer size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Heures &amp;
+            {t("Heures")} &amp;
             <br />
-            Paie
+            {t("Paie")}
           </span>
         </button>
       )}
@@ -294,9 +296,9 @@ export default function PlexModuleGrid({
             <Wallet size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Conciliation
+            {t("Conciliation")}
             <br />
-            Bancaire
+            {t("Bancaire")}
           </span>
         </button>
       )}
@@ -314,9 +316,9 @@ export default function PlexModuleGrid({
             <Building2 size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Gestion
+            {t("Gestion")}
             <br />
-            Immobilière
+            {t("Immobilière")}
           </span>
           {plexManagementProperties.length > 0 && (
             <div className="mt-2 space-y-1 w-full flex flex-col gap-1 items-start text-[8px] font-bold uppercase tracking-wider">
@@ -346,9 +348,9 @@ export default function PlexModuleGrid({
             <ShieldAlert size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Taxes &amp;
+            {t("Taxes")} &amp;
             <br />
-            Assurances
+            {t("Assurances")}
           </span>
         </button>
       )}
@@ -366,9 +368,9 @@ export default function PlexModuleGrid({
             <Scale size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Compte en
+            {t("Compte en")}
             <br />
-            Fidéicommis
+            {t("Fidéicommis")}
           </span>
           <span className="text-[7px] font-bold text-indigo-500/70 dark:text-indigo-400/60 uppercase tracking-wider">OACIQ</span>
         </button>
@@ -389,9 +391,9 @@ export default function PlexModuleGrid({
             <Users size={22} />
           </div>
           <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
-            Portefeuille
+            {t("Portefeuille")}
             <br />
-            Clients
+            {t("Clients")}
           </span>
           <span className="text-[7px] font-bold text-indigo-500/70 dark:text-indigo-400/60 uppercase tracking-wider">Multi-client</span>
         </button>
@@ -441,10 +443,10 @@ export default function PlexModuleGrid({
             </div>
 
             <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none mt-1">
-              ✨ Assistant IA {tier === "gratuit" && "🔒"}
+              ✨ {t("Assistant IA")} {tier === "gratuit" && "🔒"}
             </span>
             <p className="text-[7px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
-              Posez vos questions fiscales ou demandez de l'aide en direct !
+              {t("Posez vos questions fiscales ou demandez de l'aide en direct !")}
             </p>
           </button>
         </div>

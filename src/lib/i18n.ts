@@ -210,6 +210,44 @@ const translations: Record<string, Entry> = {
   "Annuler le téléversement": { ES: "Cancelar la carga", EN: "Cancel upload" },
   "Synchronisation active": { ES: "Sincronización activa", EN: "Active sync" },
   "Configuration de Google Drive": { ES: "Configuración de Google Drive", EN: "Google Drive setup" },
+
+  // ── PlexModuleGrid — tarjetas de módulos ──────────────────────────────
+  "Bureau à domicile": { ES: "Oficina en casa", EN: "Home office" },
+  "Déclaration": { ES: "Declaración", EN: "Declaration" },
+  "Dossiers": { ES: "Expedientes", EN: "Records" },
+  "Fiscaux": { ES: "Fiscales", EN: "Tax" },
+  "Heures": { ES: "Horas", EN: "Hours" },
+  "Paie": { ES: "Nómina", EN: "Payroll" },
+  "Bancaire": { ES: "Bancaria", EN: "Banking" },
+  "Gestion": { ES: "Gestión", EN: "Management" },
+  "Immobilière": { ES: "Inmobiliaria", EN: "Property" },
+  "Taxes": { ES: "Impuestos", EN: "Taxes" },
+  "Assurances": { ES: "Seguros", EN: "Insurance" },
+  "Compte en": { ES: "Cuenta en", EN: "Account in" },
+  "Fidéicommis": { ES: "Fideicomiso", EN: "Trust" },
+  "Portefeuille": { ES: "Cartera", EN: "Portfolio" },
+  "Assistant IA": { ES: "Asistente IA", EN: "AI Assistant" },
+  "Posez vos questions fiscales ou demandez de l'aide en direct !": {
+    ES: "¡Haga sus preguntas fiscales o pida ayuda en tiempo real!",
+    EN: "Ask your tax questions or get help in real time!",
+  },
+
+  // ── Dashboard — textos visibles ───────────────────────────────────────
+  "Foto": { ES: "Foto", EN: "Photo" },
+  "Galerie": { ES: "Galería", EN: "Gallery" },
+  "⚡ Aller à :": { ES: "⚡ Ir a:", EN: "⚡ Go to:" },
+  "Assistante IA Sofi": { ES: "Asistente IA Sofi", EN: "AI Assistant Sofi" },
+  "CAMÉRA IA VERROUILLÉE - PASSER À BASIQUE": {
+    ES: "CÁMARA IA BLOQUEADA - PASAR A BÁSICO",
+    EN: "AI CAMERA LOCKED - UPGRADE TO BASIC",
+  },
+
+  // ── Acciones comunes ───────────────────────────────────────────────────
+  "Ajouter une entreprise": { ES: "Agregar una empresa", EN: "Add a company" },
+  "Ajouter / Créer": { ES: "Agregar / Crear", EN: "Add / Create" },
+  "Ajouter maintenant": { ES: "Agregar ahora", EN: "Add now" },
+  "Chargement des données...": { ES: "Cargando datos...", EN: "Loading data..." },
+  "Enregistrer et continuer": { ES: "Guardar y continuar", EN: "Save and continue" },
 };
 
 /** Traduit `frText` vers `lang` — retombe toujours sur le français si la
