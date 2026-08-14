@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, PlusCircle, Trash2, X, FileText, Download, Search,
@@ -37,6 +37,7 @@ interface DossierFiscauxViewProps {
   /** Needed to look up this company's rented units for the Relevé 31 assistant below. */
   activeCompanyId: string;
   currentCompany?: any;
+  t: (frText: string) => string;
 }
 
 export default function DossierFiscauxView({ 
@@ -50,7 +51,8 @@ export default function DossierFiscauxView({
   setDepenses,
   setArchivesAnnuelles,
   activeCompanyId,
-  currentCompany
+  currentCompany,
+  t
 }: DossierFiscauxViewProps) {
   // Folder Navigation State
   const [currentYearFolder, setCurrentYearFolder] = useState<number | null>(null);
@@ -350,7 +352,7 @@ export default function DossierFiscauxView({
             className="bg-orange-500 text-white px-5 py-2.5 rounded-full text-[9px] font-black uppercase italic shadow-lg active:scale-95 hover:scale-102 transition-all flex items-center space-x-1.5"
           >
             <span className="text-[12px] leading-none mb-0.5">🔒</span>
-            <span>Clôturer l'année 2026</span>
+            <span>{t("Clôturer l'année 2026")}</span>
           </button>
           <button 
             onClick={() => setShowAddDocModal(true)}
@@ -358,7 +360,7 @@ export default function DossierFiscauxView({
             className="bg-[#059669] text-white px-5 py-2.5 rounded-full text-[9px] font-black uppercase italic shadow-lg active:scale-95 hover:scale-102 transition-all flex items-center space-x-1.5"
           >
             <Plus size={14} strokeWidth={3} />
-            <span>IMPORTER DOCUMENT</span>
+            <span>{t("IMPORTER DOCUMENT")}</span>
           </button>
         </div>
       </header>
@@ -371,7 +373,7 @@ export default function DossierFiscauxView({
               <Bell size={24} />
             </div>
             <p className="text-sm sm:text-base font-medium leading-tight">
-              <strong>⚠️ Rappel Important :</strong> N'oubliez pas de produire et transmettre les <strong>Relevés 31</strong> à vos locataires avant le 28 février.
+              <strong>⚠️ {t("Rappel Important :")}</strong> N'oubliez pas de produire et transmettre les <strong>Relevés 31</strong> à vos locataires avant le 28 février.
             </p>
           </div>
           <a
@@ -578,7 +580,7 @@ export default function DossierFiscauxView({
               ) : (
                 <>
                   <Download size={15} strokeWidth={2.5} />
-                  <span>Tout Télécharger (.ZIP)</span>
+                  <span>{t("Tout Télécharger (.ZIP)")}</span>
                 </>
               )}
             </button>
@@ -593,7 +595,7 @@ export default function DossierFiscauxView({
               className={`text-[9.5px] font-black uppercase tracking-wider flex items-center space-x-1 px-3.5 py-2 rounded-xl transition-all ${currentYearFolder === null ? 'bg-[#059669] text-white shadow-md' : 'text-[#059669] hover:bg-[#059669]/10'}`}
             >
               <Home size={11} className="mr-1" />
-              <span>Dossiers</span>
+              <span>{t("Dossiers")}</span>
             </button>
 
             {currentYearFolder !== null && (

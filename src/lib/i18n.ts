@@ -242,12 +242,24 @@ const translations: Record<string, Entry> = {
     EN: "AI CAMERA LOCKED - UPGRADE TO BASIC",
   },
 
+  // ── Menú Perfil y Configuración ────────────────────────────────────────
+  "Déconnexion": { ES: "Cerrar sesión", EN: "Log out" },
+  "Contactez le support": { ES: "Contactar soporte", EN: "Contact support" },
+  "Politique de confidentialité": { ES: "Política de privacidad", EN: "Privacy Policy" },
+  "Conditions d'utilisation": { ES: "Términos de servicio", EN: "Terms of Service" },
+  "Panneau d'administration": { ES: "Panel de administración", EN: "Admin panel" },
+  "Codes Bêta (testeur)": { ES: "Códigos Beta (probador)", EN: "Beta codes (tester)" },
+
   // ── Acciones comunes ───────────────────────────────────────────────────
   "Ajouter une entreprise": { ES: "Agregar una empresa", EN: "Add a company" },
   "Ajouter / Créer": { ES: "Agregar / Crear", EN: "Add / Create" },
   "Ajouter maintenant": { ES: "Agregar ahora", EN: "Add now" },
   "Chargement des données...": { ES: "Cargando datos...", EN: "Loading data..." },
   "Enregistrer et continuer": { ES: "Guardar y continuar", EN: "Save and continue" },
+  "Clôturer l'année 2026": { ES: "Cerrar el año 2026", EN: "Close year 2026" },
+  "IMPORTER DOCUMENT": { ES: "IMPORTAR DOCUMENTO", EN: "IMPORT DOCUMENT" },
+  "Tout Télécharger (.ZIP)": { ES: "Descargar todo (.ZIP)", EN: "Download all (.ZIP)" },
+  "Rappel Important :": { ES: "Recordatorio Importante :", EN: "Important Reminder :" }
 };
 
 /** Traduit `frText` vers `lang` — retombe toujours sur le français si la

@@ -1176,10 +1176,22 @@ const App = () => {
       return;
     }
     setIsSavingFinancing(true);
-    const dateStamp = financingScanForm.anneeFiscale
-      ? `${financingScanForm.anneeFiscale}-12-31`
-      : new Date().toISOString().split("T")[0];
-    const fournisseur = [financingScanForm.typeFinancement, financingScanForm.preteur].filter(Boolean).join(" — ") || "Financement";
+    // Was hardcoded to "{anneeFiscale}-12-31" regardless of when the entry
+    // was actually recorded — besides being confusing on its own (found via
+    // Daniel's report 2026-08-13: showed Dec 2026 while testing in August),
+    // it also silently hid the entry from the Dépenses tab, which filters
+    // by the currently-selected month: an entry saved today but dated
+    // December never matched whatever month was on screen. Using today's
+    // real date fixes both at once.
+    const dateStamp = new Date().toISOString().split("T")[0];
+    const soldeRestantNum = parseFloat(financingScanForm.soldeRestant);
+    // "Solde restant" has its own input in the form but was never written
+    // anywhere — captured, then silently dropped on save. There's no
+    // dedicated field for it on an expense entry (it's a balance, not a
+    // transaction amount), so it's folded into the description instead of
+    // being lost. Found via Daniel's report 2026-08-13.
+    const soldeSuffix = soldeRestantNum > 0 ? ` (Solde restant: ${soldeRestantNum.toFixed(2)} $)` : "";
+    const fournisseur = ([financingScanForm.typeFinancement, financingScanForm.preteur].filter(Boolean).join(" — ") || "Financement") + soldeSuffix;
     const newEntries: any[] = [];
     if (interets > 0) {
       newEntries.push({
@@ -3008,7 +3020,7 @@ const App = () => {
                   className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all bg-red-950/25 border-red-900/30 text-rose-400 hover:bg-red-950/40`}
                 >
                   <LogOut size={12} />
-                  <span>Déconnexion</span>
+                  <span>{t("Déconnexion")}</span>
                 </button>
               </div>
             </>
@@ -3550,7 +3562,7 @@ const App = () => {
                     }`}
                 >
                   <Mail size={12} />
-                  <span>Contactez le support</span>
+                  <span>{t("Contactez le support")}</span>
                 </a>
 
                 <div id="nav-legal-privacy" className="flex flex-col space-y-1 pt-2 border-t border-zinc-800/60 text-[8px] font-bold uppercase tracking-wider text-slate-400">
@@ -3560,7 +3572,7 @@ const App = () => {
                     className="hover:text-emerald-400 text-left transition-colors flex items-center gap-1.5 py-0.5"
                   >
                     <ShieldCheck size={11} className="text-emerald-400" />
-                    <span>Politique de confidentialité</span>
+                    <span>{t("Politique de confidentialité")}</span>
                   </button>
                   <button
                     type="button"
@@ -3568,7 +3580,7 @@ const App = () => {
                     className="hover:text-emerald-400 text-left transition-colors flex items-center gap-1.5 py-0.5"
                   >
                     <Lock size={11} className="text-blue-400" />
-                    <span>Conditions d'utilisation</span>
+                    <span>{t("Conditions d'utilisation")}</span>
                   </button>
                 </div>
 
@@ -3587,7 +3599,7 @@ const App = () => {
                       className={`w-full py-2 border border-transparent rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
                     >
                       <Shield size={12} />
-                      <span>Panneau d'administration</span>
+                      <span>{t("Panneau d'administration")}</span>
                     </button>
                   )}
                   {/* Accès délégué étroit — testeur QA sans le reste de SuperAdmin.
@@ -3603,7 +3615,7 @@ const App = () => {
                       className={`w-full py-2 border border-transparent rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
                     >
                       <Sparkles size={12} />
-                      <span>Codes Bêta (testeur)</span>
+                      <span>{t("Codes Bêta (testeur)")}</span>
                     </button>
                   )}
                   {isSuperAdmin && (
@@ -3634,7 +3646,7 @@ const App = () => {
                     className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "bg-red-950/25 border-red-900/30 text-rose-400 hover:bg-red-950/40" : "bg-[#FFF5F5] border-red-100 text-[#E53E3E] hover:bg-red-100/50"}`}
                   >
                     <LogOut size={12} />
-                    <span>Déconnexion</span>
+                    <span>{t("Déconnexion")}</span>
                   </button>
                 </div>
               </div>
@@ -6269,6 +6281,25 @@ const App = () => {
     }
 
     return new Promise<string>((resolve, reject) => {
+      // If the user closes the account-picker popup themselves (instead of
+      // completing or explicitly cancelling the consent flow), Google
+      // Identity Services' initTokenClient often never fires `callback` at
+      // all — no success, no error. Without this timeout the promise hangs
+      // forever, leaving exportStatus stuck on "loading" and the button
+      // permanently disabled until a page refresh. Found via Daniel's
+      // report 2026-08-13.
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("La fenêtre de connexion Google a été fermée ou n'a pas répondu. Réessayez."));
+      }, 60000);
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
       try {
         const tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CLIENT_ID,
@@ -6276,11 +6307,11 @@ const App = () => {
             "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
           callback: (resp: any) => {
             if (resp.error !== undefined) {
-              reject(
+              settle(() => reject(
                 new Error(
                   `Permission refusée ou échec: ${resp.error_description || resp.error}`,
                 ),
-              );
+              ));
               return;
             }
             if (resp.access_token) {
@@ -6298,21 +6329,21 @@ const App = () => {
                   access_token: resp.access_token,
                 });
               }
-              resolve(resp.access_token);
+              settle(() => resolve(resp.access_token));
             } else {
-              reject(
+              settle(() => reject(
                 new Error("Aucun jeton d'accès n'a été retourné par Google."),
-              );
+              ));
             }
           },
         });
         tokenClient.requestAccessToken({ prompt: "consent" });
       } catch (e: any) {
-        reject(
+        settle(() => reject(
           new Error(
             `Erreur lors de l'authentification Google OAuth : ${e.message || e}`,
           ),
-        );
+        ));
       }
     });
   };
@@ -9536,7 +9567,12 @@ const App = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setVista("pricing");
+                  // Same beta-mode dead end as the Plex version of this form
+                  // ("pricing" bounces straight back to "setup" — see the
+                  // useEffect near setSelectedTier("integral")) — fixed the
+                  // same way. Found via Daniel's report 2026-08-13.
+                  setEditingCompanyId(null);
+                  setVista("dashboard");
                   if (typeof playNotificationSound === "function") playNotificationSound();
                 }}
                 className={darkMode ? "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-all cursor-pointer border border-transparent order-2 sm:order-1" : "w-full sm:w-auto py-4 px-6 rounded-2xl text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer border border-transparent order-2 sm:order-1"}
@@ -9987,7 +10023,15 @@ const App = () => {
             <button
               type="button"
               onClick={() => {
-                setVista("pricing");
+                // "pricing" is a beta-mode dead end — a useEffect immediately
+                // bounces it straight back to "setup" (pricing is hidden
+                // during beta), so this used to just remount the same form
+                // from scratch, which looked like "Retour does nothing except
+                // scroll to the top." Goes to "dashboard" instead, matching
+                // the fix already used by this form's other back button.
+                // Found via Daniel's report 2026-08-13.
+                setEditingCompanyId(null);
+                setVista("dashboard");
                 if (typeof playNotificationSound === "function")
                   playNotificationSound();
               }}
@@ -18420,7 +18464,15 @@ const App = () => {
         <div
           className={`p-4 border-t space-y-3 ${darkMode ? "bg-black border-zinc-900" : "bg-white border-slate-200"}`}
         >
-          {exportStatus === "success" && lastSheetUrl && (
+          {/* This legacy "Exporter Sheets" flow reads itemsToExport from
+              tabReporte's banque/ventes/depenses state — it has nothing to
+              do with ComptableExportView's own date range or GIFI codes.
+              Left visible, a user on the "Export Comptable" tab could click
+              it expecting the GIFI-validated export and instead get an
+              empty/irrelevant sheet with no validation at all. Hidden for
+              that tab — ComptableExportView already has its own correct,
+              per-tab export buttons. Found via Daniel's report 2026-08-13. */}
+          {tabReporte !== "export_comptable" && exportStatus === "success" && lastSheetUrl && (
             <div
               className={`p-4 rounded-2xl border flex items-center justify-between animate-in slide-in-from-bottom-2 duration-500 ${darkMode ? "bg-emerald-950/20 border-emerald-900 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-[#059669]"}`}
             >
@@ -18441,6 +18493,7 @@ const App = () => {
             </div>
           )}
 
+          {tabReporte !== "export_comptable" && (
           <div className="flex gap-2">
             {tabReporte === "ventes" && (
               <></>
@@ -18466,6 +18519,7 @@ const App = () => {
               )}
             </button>
           </div>
+          )}
 
           {/* ── Blur Detection Modal ─────────────────────────────────────── */}
           {blurModal && (
@@ -21143,6 +21197,7 @@ const App = () => {
           darkMode={darkMode}
           setVista={setVista}
           playNotificationSound={playNotificationSound}
+          t={t}
           dossierFiles={dossierFiles}
           setDossierFiles={setDossierFiles}
           depenses={[...depenses, ...meubleExpensesForDossiers]}

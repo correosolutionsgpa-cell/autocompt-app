@@ -1414,14 +1414,23 @@ export default function ComptableExportView({
           {/* ── Content ── */}
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.12}}>
-              {tab==='journal'    &&<JournalTab/>}
-              {tab==='grandlivre' &&<GrandLivreTab/>}
-              {tab==='balance'    &&<BalanceTab/>}
-              {tab==='tvq'        &&<TVQTab/>}
-              {tab==='gifi'       &&<GifiTab/>}
-              {tab==='sources'    &&<SourcesTab/>}
-              {tab==='dpa'        && isComptable &&<DpaTab/>}
-              {tab==='t776'       && isComptable &&<T776Tab/>}
+              {/* Called as plain functions, not <XTab/> — each was defined
+                  as a nested component inside this render body, so a new
+                  function reference (and thus a new React "type") got
+                  created on every re-render, forcing React to fully
+                  unmount/remount the whole subtree each time. Invisible for
+                  read-only tabs, but it meant the GIFI code inputs lost
+                  focus after every single keystroke (gifiCodes state
+                  update -> parent re-render -> GifiTab redefined -> input
+                  remounted). Found via Daniel's report 2026-08-13. */}
+              {tab==='journal'    && JournalTab()}
+              {tab==='grandlivre' && GrandLivreTab()}
+              {tab==='balance'    && BalanceTab()}
+              {tab==='tvq'        && TVQTab()}
+              {tab==='gifi'       && GifiTab()}
+              {tab==='sources'    && SourcesTab()}
+              {tab==='dpa'        && isComptable && DpaTab()}
+              {tab==='t776'       && isComptable && T776Tab()}
             </motion.div>
           </AnimatePresence>
         </>
