@@ -952,6 +952,293 @@ function checkAddressAgainstProperties(
   return { matched: false };
 }
 
+// ── One card per private loan issued (Prêts Privés — Solutions GPA) ────────
+// Defined at module scope (not nested inside App's render body) on purpose —
+// a version of this nested inside App used to be recreated as a new function
+// on every App re-render, which meant React treated it as a brand-new
+// component type each time and remounted its whole subtree constantly,
+// wiping out whatever the user had just typed into its own inputs after a
+// single keystroke. Same root cause already found and fixed for
+// ComptableExportView's per-tab components — same fix here: a real, stable
+// top-level component instead.
+function LoanCard({
+  darkMode,
+  loan,
+  onSave,
+  onDelete,
+  playNotificationSound,
+}: {
+  darkMode: boolean;
+  loan: LoanIssuedDoc;
+  onSave: (updated: LoanIssuedDoc) => void;
+  onDelete: (loanId: string) => void;
+  playNotificationSound?: () => void;
+}) {
+  const [isEditingLentAmount, setIsEditingLentAmount] = useState(false);
+  const [lentAmountInput, setLentAmountInput] = useState(String(loan.montantInitial));
+  const [newRembMontant, setNewRembMontant] = useState("");
+  const [newRembDate, setNewRembDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newRembNote, setNewRembNote] = useState("");
+
+  const totalRembourse = loan.remboursements.reduce((sum, r) => sum + Number(r.montant), 0);
+  const soldeResiduel = loan.montantInitial - totalRembourse;
+  const pourcentRembourse = loan.montantInitial > 0 ? (totalRembourse / loan.montantInitial) * 100 : 0;
+
+  return (
+    <div
+      className={`p-6 rounded-[32px] border ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-4">
+        <div className="flex items-center space-x-3 text-left">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+            <Wallet size={20} />
+          </div>
+          <div>
+            <span className="text-[7.5px] font-black tracking-widest bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 rounded-full uppercase">
+              GPA Finances
+            </span>
+            <h3 className="text-sm font-black italic uppercase tracking-tighter mt-0.5">
+              Comptes à Recevoir & Prêts Actifs
+            </h3>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-black uppercase italic tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full inline-block">
+            Prêt Actif • {loan.emprunteur} ({loan.projet})
+          </span>
+          <button
+            type="button"
+            onClick={() => { if (confirm(`Supprimer le prêt à "${loan.emprunteur}" ? Cette action est irréversible.`)) onDelete(loan.id); }}
+            className="p-1.5 rounded-full text-rose-500 hover:bg-rose-500/10"
+            title="Supprimer ce prêt"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Totals Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}>
+          <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">Montant Prêté</span>
+          <div className="flex items-center space-x-2">
+            {isEditingLentAmount ? (
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  value={lentAmountInput}
+                  onChange={(e) => setLentAmountInput(e.target.value)}
+                  className={`px-2 py-1 rounded-lg text-xs font-black tracking-tight w-28 ${darkMode ? "bg-zinc-950 text-white" : "bg-white border border-slate-200 text-slate-900"}`}
+                />
+                <button
+                  onClick={() => {
+                    const val = parseFloat(lentAmountInput);
+                    if (!isNaN(val) && val >= 0) onSave({ ...loan, montantInitial: val });
+                    setIsEditingLentAmount(false);
+                    playNotificationSound?.();
+                  }}
+                  className="text-[9px] font-black uppercase text-emerald-600 hover:underline"
+                >
+                  OK
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="text-base font-black tracking-tight">{loan.montantInitial.toLocaleString("fr-CA")}$</span>
+                <button
+                  onClick={() => { setLentAmountInput(String(loan.montantInitial)); setIsEditingLentAmount(true); playNotificationSound?.(); }}
+                  className="text-[8px] font-black uppercase underline text-zinc-400 hover:text-indigo-500"
+                >
+                  Modifier
+                </button>
+              </>
+            )}
+          </div>
+          <p className="text-[7.5px] font-medium text-zinc-400 uppercase tracking-tight">{loan.projet}</p>
+        </div>
+
+        <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}>
+          <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400 font-bold">Total Remboursé</span>
+          <div><span className="text-base font-black text-[#059669] tracking-tight">{totalRembourse.toLocaleString("fr-CA")}$</span></div>
+          <p className="text-[7.5px] font-black text-[#059669] uppercase tracking-wider">{pourcentRembourse.toFixed(1)}% remboursé</p>
+        </div>
+
+        <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}>
+          <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">Solde Résiduel</span>
+          <div><span className={`text-base font-black tracking-tight ${soldeResiduel <= 0 ? "text-emerald-500" : "text-amber-500"}`}>{soldeResiduel.toLocaleString("fr-CA")}$</span></div>
+          <p className="text-[7.5px] font-medium text-zinc-400 uppercase tracking-tight">À recouvrer</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-left">
+        <div className="flex justify-between items-center text-[8px] font-black uppercase">
+          <span className="text-zinc-400">Progression du remboursement</span>
+          <span className="text-emerald-500">{pourcentRembourse.toFixed(1)}%</span>
+        </div>
+        <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-2 rounded-full overflow-hidden block">
+          <div className="bg-emerald-500 h-full rounded-full transition-all duration-350" style={{ width: `${Math.min(100, pourcentRembourse)}%` }} />
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-slate-100 dark:border-zinc-900 flex flex-col md:flex-row gap-6">
+        <div className="flex-1 space-y-3 text-left">
+          <h4 className="text-[10px] font-black uppercase italic tracking-widest text-indigo-500">Historique des Remboursements</h4>
+          {loan.remboursements.length === 0 ? (
+            <p className="text-[9px] font-medium text-zinc-400 italic">Aucun remboursement enregistré pour le moment.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-zinc-800">
+              <table className="w-full text-left text-[9px] font-semibold border-collapse">
+                <thead>
+                  <tr className={`text-[7px] uppercase font-black ${darkMode ? "text-zinc-500 bg-zinc-950/50" : "text-slate-400 bg-slate-50"}`}>
+                    <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3 text-right">Montant</th>
+                    <th className="py-2 px-3">Note / Justification</th>
+                    <th className="py-2 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+                  {loan.remboursements.map((remb) => (
+                    <tr key={remb.id} className={`${darkMode ? "bg-black hover:bg-zinc-900/50" : "bg-white hover:bg-slate-50"}`}>
+                      <td className="py-2.5 px-3 font-mono text-zinc-500">{remb.fecha}</td>
+                      <td className="py-2.5 px-3 text-right font-black text-emerald-600">{Number(remb.montant).toLocaleString("fr-CA")}$</td>
+                      <td className="py-2.5 px-3 text-zinc-400 max-w-[150px] truncate pb-2">{remb.note}</td>
+                      <td className="py-2.5 px-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm("Supprimer ce remboursement?")) {
+                              onSave({ ...loan, remboursements: loan.remboursements.filter((r) => r.id !== remb.id) });
+                              playNotificationSound?.();
+                            }
+                          }}
+                          className="text-rose-500 hover:underline uppercase text-[7px] font-black border-none bg-transparent cursor-pointer"
+                        >
+                          Supprimer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className={`p-4 rounded-3xl border md:w-[280px] shrink-0 space-y-3 text-left ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}>
+          <h4 className="text-[10px] font-black uppercase italic tracking-widest leading-none mt-1 text-emerald-600">Nouveau Remboursement</h4>
+          <div className="space-y-2">
+            <div>
+              <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">Montant ($)</label>
+              <input
+                type="number"
+                placeholder="Ex: 5000"
+                value={newRembMontant}
+                onChange={(e) => setNewRembMontant(e.target.value)}
+                className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
+              />
+            </div>
+            <div>
+              <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">Date</label>
+              <input
+                type="date"
+                value={newRembDate}
+                onChange={(e) => setNewRembDate(e.target.value)}
+                className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
+              />
+            </div>
+            <div>
+              <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">Note / Description</label>
+              <input
+                type="text"
+                placeholder="Ex: Remboursement étape 2"
+                value={newRembNote}
+                onChange={(e) => setNewRembNote(e.target.value)}
+                className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const amtVal = parseFloat(newRembMontant);
+                if (!amtVal || isNaN(amtVal) || amtVal <= 0) {
+                  alert("⚠️ Veuillez entrer un montant de remboursement valide.");
+                  return;
+                }
+                const newObj = { id: `remb-${Date.now()}`, fecha: newRembDate, montant: amtVal, note: newRembNote || "Remboursement direct" };
+                onSave({ ...loan, remboursements: [...loan.remboursements, newObj] });
+                setNewRembMontant("");
+                setNewRembNote("");
+                playNotificationSound?.();
+              }}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[8px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer border-none"
+            >
+              Confirmer l'ajout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Small inline form to create a new private loan (Prêts Privés) ──────────
+// Same module-scope-for-stable-local-state reasoning as LoanCard above.
+function NewLoanForm({
+  darkMode,
+  onCreate,
+}: {
+  darkMode: boolean;
+  onCreate: (draft: { emprunteur: string; projet: string; montantInitial: number }) => void;
+}) {
+  const [emprunteur, setEmprunteur] = useState("");
+  const [projet, setProjet] = useState("");
+  const [montant, setMontant] = useState("");
+
+  return (
+    <div className={`p-5 rounded-[28px] border space-y-3 text-left ${darkMode ? "bg-zinc-900/40 border-white/[0.08]" : "bg-slate-50/50 border-slate-200"}`}>
+      <h4 className="text-[10px] font-black uppercase italic tracking-widest text-indigo-500">+ Nouveau prêt privé</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <input
+          type="text"
+          placeholder="Emprunteur (ex: Achat Direct Inc., ou un tiers)"
+          value={emprunteur}
+          onChange={(e) => setEmprunteur(e.target.value)}
+          className={`px-3 py-2.5 rounded-xl text-[10px] font-bold outline-none border ${darkMode ? "bg-zinc-950 text-white border-zinc-800" : "bg-white border-slate-200"}`}
+        />
+        <input
+          type="text"
+          placeholder="Projet / motif"
+          value={projet}
+          onChange={(e) => setProjet(e.target.value)}
+          className={`px-3 py-2.5 rounded-xl text-[10px] font-bold outline-none border ${darkMode ? "bg-zinc-950 text-white border-zinc-800" : "bg-white border-slate-200"}`}
+        />
+        <input
+          type="number"
+          placeholder="Montant prêté ($)"
+          value={montant}
+          onChange={(e) => setMontant(e.target.value)}
+          className={`px-3 py-2.5 rounded-xl text-[10px] font-bold outline-none border ${darkMode ? "bg-zinc-950 text-white border-zinc-800" : "bg-white border-slate-200"}`}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const montantVal = parseFloat(montant);
+          if (!emprunteur.trim() || !montantVal || montantVal <= 0) {
+            alert("Veuillez indiquer l'emprunteur et un montant prêté valide.");
+            return;
+          }
+          onCreate({ emprunteur: emprunteur.trim(), projet: projet.trim() || "Prêt privé", montantInitial: montantVal });
+          setEmprunteur(""); setProjet(""); setMontant("");
+        }}
+        className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-wider"
+      >
+        Créer le prêt
+      </button>
+    </div>
+  );
+}
+
 const App = () => {
   // ── Public Signature Page detection (no auth required) ──
   const signToken = new URLSearchParams(window.location.search).get('sign');
@@ -5649,41 +5936,39 @@ const App = () => {
     dataService.fetchLoansIssued(uid, activeCompanyId).then(setLoansIssued).catch(console.error);
   }, [isSolutionsGPA, activeCompanyId]);
 
-  type PretAchatDirectShape = {
-    id?: string;
-    montantInitial: number;
-    projet: string;
-    emprunteur: string;
-    remboursements: Array<{ id: string; fecha: string; montant: number; note: string }>;
-  };
-  const pretAchatDirect: PretAchatDirectShape = loansIssued[0] || {
-    montantInitial: 150000,
-    projet: "Projet Flip",
-    emprunteur: "Achat Direct Inc.",
-    remboursements: [],
-  };
-  const setPretAchatDirect = (
-    updater: PretAchatDirectShape | ((prev: PretAchatDirectShape) => PretAchatDirectShape),
-  ) => {
+  // Saves any change to one loan (new repayment, edited amount, etc.) —
+  // shared by every <LoanCard>'s onSave prop.
+  const handleSaveLoan = (updated: LoanIssuedDoc) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    const updated = typeof updater === "function" ? updater(pretAchatDirect) : updater;
-    const withId = { ...updated, id: pretAchatDirect.id || `loan_${Date.now()}` };
-    setLoansIssued((prev) => (prev.length > 0 ? [{ ...prev[0], ...withId } as LoanIssuedDoc, ...prev.slice(1)] : [withId as LoanIssuedDoc]));
-    dataService
-      .saveLoanIssued(uid, {
-        ...withId,
-        companyId: activeCompanyId,
-        dateEmission: (loansIssued[0] as any)?.dateEmission || new Date().toISOString().split("T")[0],
-      })
-      .catch((err) => console.error("Failed to save loan:", err));
+    setLoansIssued((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    dataService.saveLoanIssued(uid, updated).catch((err) => console.error("Failed to save loan:", err));
   };
-
-  const [newRembMontant, setNewRembMontant] = useState("");
-  const [newRembDate, setNewRembDate] = useState("2026-05-23");
-  const [newRembNote, setNewRembNote] = useState("");
-  const [isEditingLentAmount, setIsEditingLentAmount] = useState(false);
-  const [lentAmountInput, setLentAmountInput] = useState("150000");
+  const handleDeleteLoan = (loanId: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setLoansIssued((prev) => prev.filter((l) => l.id !== loanId));
+    dataService.deleteLoanIssued(uid, loanId).catch((err) => console.error("Failed to delete loan:", err));
+    playNotificationSound();
+  };
+  const handleCreateLoan = (draft: { emprunteur: string; projet: string; montantInitial: number }) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const newLoan: LoanIssuedDoc = {
+      id: `loan_${Date.now()}`,
+      companyId: activeCompanyId,
+      montantInitial: draft.montantInitial,
+      emprunteur: draft.emprunteur,
+      projet: draft.projet,
+      dateEmission: new Date().toISOString().split("T")[0],
+      remboursements: [],
+      ownerId: uid,
+      createdAt: new Date().toISOString(),
+    };
+    setLoansIssued((prev) => [newLoan, ...prev]);
+    dataService.saveLoanIssued(uid, newLoan).catch((err) => console.error("Failed to create loan:", err));
+    playNotificationSound();
+  };
 
   const [showPretsPrivesModule, setShowPretsPrivesModule] = useState(true);
   const [showServicesHorsLoyer, setShowServicesHorsLoyer] = useState(false);
@@ -5700,293 +5985,19 @@ const App = () => {
     if (!isSolutionsGPA || tabReporte !== "ventes" || !showPretsPrivesModule)
       return null;
 
-    const totalRembourse = pretAchatDirect.remboursements.reduce(
-      (sum, r) => sum + Number(r.montant),
-      0,
-    );
-    const soldeResiduel = pretAchatDirect.montantInitial - totalRembourse;
-    const pourcentRembourse =
-      pretAchatDirect.montantInitial > 0
-        ? (totalRembourse / pretAchatDirect.montantInitial) * 100
-        : 0;
-
     return (
-      <div
-        id="prets-actifs-panel"
-        className={`m-6 p-6 rounded-[32px] border ${darkMode ? "bg-zinc-950 border-zinc-90 w-full bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-zinc-100" : "bg-white border-slate-200/80 text-slate-800"} shadow-lg text-left space-y-6 animate-in zoom-in-95 duration-200`}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-4">
-          <div className="flex items-center space-x-3 text-left">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-              <Wallet size={20} />
-            </div>
-            <div>
-              <span className="text-[7.5px] font-black tracking-widest bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 rounded-full uppercase">
-                GPA Finances
-              </span>
-              <h3 className="text-sm font-black italic uppercase tracking-tighter mt-0.5">
-                Comptes à Recevoir & Prêts Actifs
-              </h3>
-            </div>
-          </div>
-          <span className="text-[9px] font-black uppercase italic tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-550/10 px-3 py-1.5 rounded-full inline-block">
-            Prêt Actif • Achat Direct Inc. (Projet Flip)
-          </span>
-        </div>
-
-        {/* Totals Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Lent Amount */}
-          <div
-            className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-805" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}
-          >
-            <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">
-              Montant Prêté
-            </span>
-            <div className="flex items-center space-x-2">
-              {isEditingLentAmount ? (
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    value={lentAmountInput}
-                    onChange={(e) => setLentAmountInput(e.target.value)}
-                    className={`px-2 py-1 rounded-lg text-xs font-black tracking-tight w-28 ${darkMode ? "bg-zinc-950 text-white" : "bg-white border border-slate-200 text-slate-900"}`}
-                  />
-                  <button
-                    onClick={() => {
-                      const val = parseFloat(lentAmountInput);
-                      if (!isNaN(val) && val >= 0) {
-                        setPretAchatDirect((prev) => ({
-                          ...prev,
-                          montantInitial: val,
-                        }));
-                      }
-                      setIsEditingLentAmount(false);
-                      playNotificationSound();
-                    }}
-                    className="text-[9px] font-black uppercase text-emerald-600 hover:underline"
-                  >
-                    OK
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <span className="text-base font-black tracking-tight">
-                    {pretAchatDirect.montantInitial.toLocaleString("fr-CA")}$
-                  </span>
-                  <button
-                    onClick={() => {
-                      setLentAmountInput(
-                        String(pretAchatDirect.montantInitial),
-                      );
-                      setIsEditingLentAmount(true);
-                      playNotificationSound();
-                    }}
-                    className="text-[8px] font-black uppercase underline text-zinc-400 hover:text-indigo-500"
-                  >
-                    Modifier
-                  </button>
-                </>
-              )}
-            </div>
-            <p className="text-[7.5px] font-medium text-zinc-400 uppercase tracking-tight">
-              Financement Projet Flip standard
-            </p>
-          </div>
-
-          {/* Repaid Amount */}
-          <div
-            className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-805" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}
-          >
-            <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400 font-bold">
-              Total Remboursé
-            </span>
-            <div>
-              <span className="text-base font-black text-[#059669] tracking-tight">
-                {totalRembourse.toLocaleString("fr-CA")}$
-              </span>
-            </div>
-            <p className="text-[7.5px] font-black text-[#059669] uppercase tracking-wider">
-              {pourcentRembourse.toFixed(1)}% remboursé
-            </p>
-          </div>
-
-          {/* Remaining Balance */}
-          <div
-            className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-805" : "bg-slate-50/50 border-slate-100"} space-y-1.5 text-left`}
-          >
-            <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">
-              Solde Résiduel
-            </span>
-            <div>
-              <span
-                className={`text-base font-black tracking-tight ${soldeResiduel <= 0 ? "text-emerald-500" : "text-amber-500"}`}
-              >
-                {soldeResiduel.toLocaleString("fr-CA")}$
-              </span>
-            </div>
-            <p className="text-[7.5px] font-medium text-zinc-400 uppercase tracking-tight">
-              À recouvrer à la vente finale
-            </p>
-          </div>
-        </div>
-
-        {/* Repayment Progress and Form Toggle */}
-        <div className="space-y-2 text-left">
-          <div className="flex justify-between items-center text-[8px] font-black uppercase">
-            <span className="text-zinc-400">Progression du remboursement</span>
-            <span className="text-emerald-500">
-              {pourcentRembourse.toFixed(1)}%
-            </span>
-          </div>
-          <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-2 rounded-full overflow-hidden block">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-350"
-              style={{ width: `${Math.min(100, pourcentRembourse)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* List of repayments & add new repayment */}
-        <div className="pt-4 border-t border-slate-100 dark:border-zinc-900 flex flex-col md:flex-row gap-6">
-          {/* Table of repayments */}
-          <div className="flex-1 space-y-3 text-left">
-            <h4 className="text-[10px] font-black uppercase italic tracking-widest text-indigo-500">
-              Historique des Remboursements
-            </h4>
-            {pretAchatDirect.remboursements.length === 0 ? (
-              <p className="text-[9px] font-medium text-zinc-400 italic">
-                Aucun remboursement enregistré pour le moment.
-              </p>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-zinc-800">
-                <table className="w-full text-left text-[9px] font-semibold border-collapse">
-                  <thead>
-                    <tr
-                      className={`text-[7px] uppercase font-black ${darkMode ? "text-zinc-500 bg-zinc-950/50" : "text-slate-400 bg-slate-50"}`}
-                    >
-                      <th className="py-2 px-3">Date</th>
-                      <th className="py-2 px-3 text-right">Montant</th>
-                      <th className="py-2 px-3">Note / Justification</th>
-                      <th className="py-2 px-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-105 dark:divide-zinc-800">
-                    {pretAchatDirect.remboursements.map((remb) => (
-                      <tr
-                        key={remb.id}
-                        className={`${darkMode ? "bg-black hover:bg-zinc-900/50" : "bg-white hover:bg-slate-50"}`}
-                      >
-                        <td className="py-2.5 px-3 font-mono text-zinc-500">
-                          {remb.fecha}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-black text-emerald-600">
-                          {Number(remb.montant).toLocaleString("fr-CA")}$
-                        </td>
-                        <td className="py-2.5 px-3 text-zinc-400 max-w-[150px] truncate pb-2">
-                          {remb.note}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm("Supprimer ce remboursement?")) {
-                                setPretAchatDirect((prev) => ({
-                                  ...prev,
-                                  remboursements: prev.remboursements.filter(
-                                    (r) => r.id !== remb.id,
-                                  ),
-                                }));
-                                playNotificationSound();
-                              }
-                            }}
-                            className="text-rose-500 hover:underline uppercase text-[7px] font-black border-none bg-transparent cursor-pointer"
-                          >
-                            Supprimer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Form to add repayment */}
-          <div
-            className={`p-4 rounded-3xl border md:w-[280px] shrink-0 space-y-3 text-left ${darkMode ? "bg-zinc-900/60 border-zinc-805" : "bg-slate-50/50 border-slate-100"}`}
-          >
-            <h4 className="text-[10px] font-black uppercase italic tracking-widest leading-none mt-1 text-emerald-605">
-              Nouveau Remboursement
-            </h4>
-            <div className="space-y-2">
-              <div>
-                <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">
-                  Montant ($)
-                </label>
-                <input
-                  type="number"
-                  placeholder="Ex: 5000"
-                  value={newRembMontant}
-                  onChange={(e) => setNewRembMontant(e.target.value)}
-                  className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
-                />
-              </div>
-              <div>
-                <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={newRembDate}
-                  onChange={(e) => setNewRembDate(e.target.value)}
-                  className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
-                />
-              </div>
-              <div>
-                <label className="text-[7.5px] font-black uppercase text-zinc-400 block pl-1">
-                  Note / Description
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Remboursement étape 2"
-                  value={newRembNote}
-                  onChange={(e) => setNewRembNote(e.target.value)}
-                  className={`px-3 py-2 rounded-xl text-[9px] font-bold w-full outline-none ${darkMode ? "bg-zinc-950 text-white border border-zinc-800" : "bg-white border border-slate-200"}`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const amtVal = parseFloat(newRembMontant);
-                  if (!amtVal || isNaN(amtVal) || amtVal <= 0) {
-                    alert(
-                      "⚠️ Veuillez entrer un montant de remboursement valide.",
-                    );
-                    return;
-                  }
-                  const newObj = {
-                    id: `remb-${Date.now()}`,
-                    fecha: newRembDate,
-                    montant: amtVal,
-                    note: newRembNote || "Remboursement direct",
-                  };
-                  setPretAchatDirect((prev) => ({
-                    ...prev,
-                    remboursements: [...prev.remboursements, newObj],
-                  }));
-                  setNewRembMontant("");
-                  setNewRembNote("");
-                  playNotificationSound();
-                }}
-                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[8px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer border-none"
-              >
-                Confirmer l'ajout
-              </button>
-            </div>
-          </div>
-        </div>
+      <div id="prets-actifs-panel" className="w-full space-y-4">
+        {loansIssued.map((loan) => (
+          <LoanCard
+            key={loan.id}
+            darkMode={darkMode}
+            loan={loan}
+            onSave={handleSaveLoan}
+            onDelete={handleDeleteLoan}
+            playNotificationSound={playNotificationSound}
+          />
+        ))}
+        <NewLoanForm darkMode={darkMode} onCreate={handleCreateLoan} />
       </div>
     );
   };
@@ -17582,6 +17593,13 @@ const App = () => {
         <main className="p-0 overflow-hidden flex-1 flex flex-col">
           {tabReporte === "ventes" && (
             <div className="w-full flex flex-col space-y-6 pb-8 px-6 pt-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {/* Written, real (Firestore-backed) since 2026-08-01, but the
+                  function that renders it was never actually called anywhere
+                  — completely invisible despite working data underneath.
+                  Found 2026-08-13 while confirming Fabiola's real private-
+                  lending activity (Solutions GPA lending to Achat Direct or
+                  third parties) had somewhere to live. */}
+              {renderPretsActifsPanel()}
               <div className="flex justify-between items-center w-full">
                 <h4 className="text-[11px] font-black uppercase tracking-widest text-[#059669] text-left">
                   Registre des Revenus

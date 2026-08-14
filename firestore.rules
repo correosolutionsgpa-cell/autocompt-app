@@ -292,6 +292,16 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Was entirely missing — the collection existed in code (saveLoanIssued/
+    // fetchLoansIssued) and was already writing real data, but every read
+    // and write silently failed against the default-deny rule at the bottom
+    // of this file. Found 2026-08-13 while wiring up the Prêts Privés panel.
+    match /loansIssued/{loanId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /units/{unitId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();
