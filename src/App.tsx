@@ -2017,6 +2017,24 @@ const App = () => {
         ? (selectedProfile as ProfileId)
         : "investisseur"; // safe default: broadest Plex access
 
+  // The "PROFIL PLEX" dashboard badge used to show `userLevel` — a label
+  // captured ONCE during account signup and persisted to localStorage,
+  // never updated afterward. For a multi-company account it silently went
+  // stale the moment `activeProfile` (correctly per-company, see above)
+  // diverged from whatever the account's very first company was — showing
+  // e.g. "Gestion Immobilière" while looking at a company actually
+  // configured as Prospecteur. Found 2026-08-13: Fabiola couldn't find a
+  // module that WAS correctly granted, because the badge told her she was
+  // on the wrong profile to have it.
+  const PLEX_PROFILE_LABELS: Record<ProfileId, string> = {
+    prospecteur: "Prospecteur Immobilier",
+    investisseur: "Investisseur Immobilier",
+    flippeur: "Flippeur Immobilier",
+    gestionnaire: "Gestionnaire Immobilier",
+    syndicat: "Syndicat de Copropriété",
+    comptable: "Comptable",
+  };
+
   const handleUpdateModeGestion = async (mode: "autogestion" | "gestion_deleguee") => {
     if (!currentCompany?._companyDocId) return;
     setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, modeGestion: mode } : w)));
@@ -11219,7 +11237,7 @@ const App = () => {
               <div className="mt-1 max-w-full min-w-0">
                 {dashboardMode === "Plex" ? (
                   <span className="block text-[6px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded truncate">
-                    {t("PROFIL PLEX")} : {userLevel || "Travailleur autonome (Revenu)"}
+                    {t("PROFIL PLEX")} : {PLEX_PROFILE_LABELS[activeProfile] || userLevel || "Travailleur autonome (Revenu)"}
                   </span>
                 ) : (
                   <span className="block text-[6px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded truncate">
