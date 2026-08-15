@@ -188,6 +188,13 @@ export default function ComptableExportView({
   const [buildingExpenses, setBuildingExpenses] = useState<ExpenseDoc[]>([]);
   const [buildingInvoices, setBuildingInvoices] = useState<InvoiceDoc[]>([]);
   const [loadingBuildingData, setLoadingBuildingData] = useState(false);
+  // ── Vérification consolidée art. 1100(11) RIR — la DPA ne peut créer/
+  // augmenter une perte de location, calculée au niveau de TOUTE l'entreprise
+  // (tous les immeubles ensemble), pas immeuble par immeuble comme ccaAssets
+  // ci-dessus. Chargé séparément, seulement pour l'onglet DPA. ──
+  const [companyCcaAssets, setCompanyCcaAssets] = useState<CcaAssetDoc[]>([]);
+  const [companyBuildingExpenses, setCompanyBuildingExpenses] = useState<ExpenseDoc[]>([]);
+  const [companyBuildingInvoices, setCompanyBuildingInvoices] = useState<InvoiceDoc[]>([]);
 
   const isComptable = activeProfile === 'comptable';
   const visibleTabs = TABS.filter(t => !t.comptableOnly || isComptable);
@@ -227,6 +234,27 @@ export default function ComptableExportView({
       .catch(e => console.error('T776 data fetch failed:', e))
       .finally(() => setLoadingBuildingData(false));
   }, [selectedBuildingId, fiscalYear, tab]);
+
+  // Consolidated art. 1100(11) RIR check — every building of the company,
+  // not just the one selected above. Separate fetch so switching buildings
+  // in the picker doesn't need to re-fetch the whole company's data.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !companyId || tab !== 'dpa') return;
+    const buildingIds = new Set(properties.map(p => p.buildingId || p.id));
+    Promise.all([
+      dataService.fetchCcaAssetsForCompany(uid, companyId),
+      dataService.fetchExpenses(uid),
+      dataService.fetchInvoices(uid),
+    ])
+      .then(([assets, exp, inv]) => {
+        const inYear = (d: string) => (d || '').startsWith(fiscalYear);
+        setCompanyCcaAssets(assets.filter(a => a.fiscalYear === fiscalYear));
+        setCompanyBuildingExpenses(exp.filter(e => e.buildingId && buildingIds.has(e.buildingId) && inYear(e.fecha)));
+        setCompanyBuildingInvoices(inv.filter(i => i.buildingId && buildingIds.has(i.buildingId) && inYear(i.fecha)));
+      })
+      .catch(e => console.error('Consolidated DPA check fetch failed:', e));
+  }, [companyId, fiscalYear, tab, properties]);
 
   // ── Load GIFI mapping ────────────────────────────────────────────────────
   // Codes are never machine-guessed — the accountant assigns them once here
@@ -1116,6 +1144,18 @@ export default function ComptableExportView({
   const capitalExpensesForBuilding = buildingExpenses.filter(e => e.natureDepense === 'capitale');
   const capitalExpensesTotal = capitalExpensesForBuilding.reduce((s, e) => s + (e.total || 0), 0);
 
+  // ── Art. 1100(11) RIR — la DPA ne peut créer ni augmenter une perte de
+  // location, restriction évaluée au niveau consolidé de TOUTE l'entreprise
+  // (tous les immeubles), pas immeuble par immeuble. Référence seulement —
+  // n'empêche jamais de saisir/enregistrer "Réclamé cette année". ──
+  const companyNetBeforeCca =
+    companyBuildingInvoices.reduce((s, i) => s + (i.total || 0), 0) -
+    companyBuildingExpenses
+      .filter(e => e.cat !== 'Capital remboursé (non déductible)')
+      .reduce((s, e) => s + (e.total || 0), 0);
+  const companyCcaClaimed = companyCcaAssets.reduce((s, a) => s + (a.claimedThisYear || 0), 0);
+  const companyCcaExceedsIncome = companyCcaClaimed > 0 && companyCcaClaimed > Math.max(0, companyNetBeforeCca);
+
   const DpaTab = () => (
     <div className="space-y-4">
       <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-orange-500/5':'bg-orange-50/50'}`}>
@@ -1124,6 +1164,14 @@ export default function ComptableExportView({
           La DPA est <strong>facultative</strong> — « CCA maximale » n'est qu'un plafond de référence, jamais réclamé automatiquement. Le montant « Réclamé cette année » reste toujours votre choix : le maximiser n'est pas toujours optimal (ex. déclenche une récupération, ou gaspille de la marge une année à faible revenu). Outil de calcul, pas un avis fiscal — vérifiez indépendamment.
         </p>
       </div>
+      {companyCcaExceedsIncome && (
+        <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-rose-500/10':'bg-rose-50'}`}>
+          <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0"/>
+          <p className={`text-[10.5px] leading-relaxed ${D?'text-rose-300':'text-rose-700'}`}>
+            <strong>DPA réclamée pour toute l'entreprise ({fmtAmt(companyCcaClaimed)} $) dépasse le revenu net de location consolidé avant DPA ({fmtAmt(Math.max(0, companyNetBeforeCca))} $) — {properties.length} immeuble{properties.length>1?'s':''}, {fiscalYear}.</strong> L'art. 1100(11) RIR interdit d'utiliser la DPA pour créer ou augmenter une perte de location, au niveau de toute l'entreprise (pas seulement cet immeuble). Référence seulement — vérifiez avant de produire la déclaration, le montant « Réclamé » reste modifiable.
+          </p>
+        </div>
+      )}
       {(selectedPropertyForDpa?.valeurTerrain != null || selectedPropertyForDpa?.valeurBatiment != null || capitalExpensesTotal > 0) && (
         <div className={`${card} p-4 space-y-3`}>
           <p className={`text-[9px] font-black uppercase tracking-widest ${D?'text-zinc-500':'text-slate-400'}`}>Repères — saisis par le propriétaire, à reprendre manuellement ci-dessous si pertinent</p>

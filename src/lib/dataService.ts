@@ -3552,6 +3552,25 @@ export const dataService = {
     }
   },
 
+  /** All CCA rows across every building of the company — used to check the
+   *  art. 1100(11) RIR restriction (DPA cannot create/increase a net rental
+   *  loss), which applies at the CONSOLIDATED company level across all
+   *  buildings, not per building like fetchCcaAssets above. */
+  async fetchCcaAssetsForCompany(userId: string, companyId: string): Promise<CcaAssetDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'ccaAssets'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', companyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as CcaAssetDoc);
+    } catch (e) {
+      console.error('fetchCcaAssetsForCompany failed:', e);
+      return [];
+    }
+  },
+
   async saveCcaAsset(
     userId: string,
     data: Partial<CcaAssetDoc> & { companyId: string; buildingId: string; fiscalYear: string; ccaClass: string }
