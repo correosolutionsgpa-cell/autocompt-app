@@ -21,7 +21,7 @@ import {
   BookOpen, BarChart2, Scale, Receipt, Download, Loader2,
   ChevronLeft, ChevronRight, CheckCircle2, AlertCircle,
   Calendar, Filter, RefreshCw, FileText, Percent, Hash, Mail,
-  Building2, Plus, Trash2, Save, Info,
+  Building2, Plus, Trash2, Save, Info, Banknote,
 } from 'lucide-react';
 import { dataService, type InvoiceDoc, type ExpenseDoc, type PropertyDoc, type CcaAssetDoc } from '../lib/dataService';
 import { auth, db } from '../lib/firebase';
@@ -137,7 +137,7 @@ function chkPg(pdf: jsPDF, y: number, need=12): number {
 // §5 — Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi'|'sources'|'dpa'|'t776';
+type TabId = 'journal'|'grandlivre'|'balance'|'tvq'|'gifi'|'sources'|'dpa'|'t776'|'disposition';
 const PER = 25;
 const SOURCE_NON_CLASSE = 'Non classé';
 
@@ -153,6 +153,7 @@ const TABS: { id: TabId; label: string; short: string; icon: React.ReactNode; ac
   // pour ces deux-là).
   { id:'dpa'        as TabId, label:'Amortissement (DPA)',     short:'DPA',      icon:<Building2 size={14}/>, ac:'border-orange-500 text-orange-600',  comptableOnly: true },
   { id:'t776'       as TabId, label:'Rapport T776 / TP-128',   short:'T776',     icon:<FileText size={14}/>,  ac:'border-cyan-500 text-cyan-600',      comptableOnly: true },
+  { id:'disposition' as TabId, label:'Disposition d\'immeuble', short:'Disposition', icon:<Banknote size={14}/>, ac:'border-fuchsia-500 text-fuchsia-600', comptableOnly: true },
 ];
 
 export default function ComptableExportView({
@@ -195,6 +196,13 @@ export default function ComptableExportView({
   const [companyCcaAssets, setCompanyCcaAssets] = useState<CcaAssetDoc[]>([]);
   const [companyBuildingExpenses, setCompanyBuildingExpenses] = useState<ExpenseDoc[]>([]);
   const [companyBuildingInvoices, setCompanyBuildingInvoices] = useState<InvoiceDoc[]>([]);
+  // ── Calculateur de disposition — jamais sauvegardé (outil de calcul, comme
+  // "CCA maximale" au DpaTab), l'utilisateur note les résultats lui-même. ──
+  const [dispositionForm, setDispositionForm] = useState({
+    prixVenteTerrain: '', prixVenteBatiment: '',
+    fraisDispositionTerrain: '', fraisDispositionBatiment: '',
+    pbrTerrain: '', coutCapitalBatiment: '', fnaccActuelle: '',
+  });
 
   const isComptable = activeProfile === 'comptable';
   const visibleTabs = TABS.filter(t => !t.comptableOnly || isComptable);
@@ -1278,6 +1286,161 @@ export default function ComptableExportView({
     </div>
   );
 
+  // ── Disposition d'immeuble (Comptable only) — récupération, gain en capital
+  // et l'ajustement anti-évitement de l'art. 13(21.1) LIR (perte finale du
+  // bâtiment compensée par un gain en capital latent sur le terrain). Un
+  // calculateur, pas un formulaire persisté — même logique que "CCA maximale"
+  // au DpaTab : rien n'est écrit en base, l'utilisateur note le résultat
+  // avant de produire la déclaration. ──
+  const suggestedPbrTerrain = selectedPropertyForDpa?.valeurTerrain;
+  const suggestedCoutCapitalBatiment = selectedPropertyForDpa?.valeurBatiment;
+  const suggestedFnacc = ccaAssets.reduce((s, a) => s + ccaClosingUCC(a), 0);
+
+  const DispositionTab = () => {
+    const pv = {
+      terrain: parseFloat(dispositionForm.prixVenteTerrain) || 0,
+      batiment: parseFloat(dispositionForm.prixVenteBatiment) || 0,
+    };
+    const frais = {
+      terrain: parseFloat(dispositionForm.fraisDispositionTerrain) || 0,
+      batiment: parseFloat(dispositionForm.fraisDispositionBatiment) || 0,
+    };
+    const pbrTerrain = parseFloat(dispositionForm.pbrTerrain) || 0;
+    const coutCapitalBatiment = parseFloat(dispositionForm.coutCapitalBatiment) || 0;
+    const fnaccActuelle = parseFloat(dispositionForm.fnaccActuelle) || 0;
+
+    const produitNetTerrain = pv.terrain - frais.terrain;
+    const produitNetBatiment = pv.batiment - frais.batiment;
+
+    const gainTerrain = Math.max(0, produitNetTerrain - pbrTerrain);
+    const recapture = Math.max(0, Math.min(produitNetBatiment, coutCapitalBatiment) - fnaccActuelle);
+    const perteFinaleAvant = produitNetBatiment < fnaccActuelle && produitNetBatiment <= coutCapitalBatiment
+      ? fnaccActuelle - produitNetBatiment
+      : 0;
+    // Art. 13(21.1) LIR — la perte finale du bâtiment est réduite jusqu'à
+    // concurrence du gain en capital latent sur le terrain, pour empêcher de
+    // déduire une perte à 100 % ET de profiter du taux réduit sur le gain.
+    const ajustement1321 = Math.min(perteFinaleAvant, gainTerrain);
+    const perteFinaleApres = perteFinaleAvant - ajustement1321;
+    const gainBatiment = Math.max(0, produitNetBatiment - coutCapitalBatiment);
+
+    const gainCapitalTotal = gainTerrain + gainBatiment;
+    const gainImposable = gainCapitalTotal * (2 / 3);
+    const ajoutCDC = gainCapitalTotal * (1 / 3);
+
+    const hasInputs = pv.terrain > 0 || pv.batiment > 0;
+
+    return (
+      <div className="space-y-4">
+        <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-orange-500/5':'bg-orange-50/50'}`}>
+          <Info size={16} className="text-orange-500 mt-0.5 shrink-0"/>
+          <p className={`text-[10.5px] leading-relaxed ${D?'text-zinc-400':'text-slate-600'}`}>
+            Calculateur pour la vente d'un immeuble de location (tenue de longue date — pour un flip, voir le Calculateur de Flip). Récupération d'amortissement, gain en capital et l'ajustement de l'art. 13(21.1) LIR. Rien n'est sauvegardé ici : notez les résultats avant de quitter la page. Outil de calcul, pas un avis fiscal — vérifiez indépendamment.
+          </p>
+        </div>
+
+        <div className={`${card} p-4 space-y-4`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest ${D?'text-zinc-500':'text-slate-400'}`}>Produit de disposition — répartition terrain / bâtiment</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Prix de vente — terrain ($)</label>
+              <input type="number" value={dispositionForm.prixVenteTerrain} onChange={e=>setDispositionForm({...dispositionForm, prixVenteTerrain:e.target.value})} className={`${inp} w-full`}/>
+            </div>
+            <div>
+              <label className={lbl}>Prix de vente — bâtiment ($)</label>
+              <input type="number" value={dispositionForm.prixVenteBatiment} onChange={e=>setDispositionForm({...dispositionForm, prixVenteBatiment:e.target.value})} className={`${inp} w-full`}/>
+            </div>
+            <div>
+              <label className={lbl}>Frais de disposition — terrain ($)</label>
+              <input type="number" value={dispositionForm.fraisDispositionTerrain} onChange={e=>setDispositionForm({...dispositionForm, fraisDispositionTerrain:e.target.value})} className={`${inp} w-full`}/>
+            </div>
+            <div>
+              <label className={lbl}>Frais de disposition — bâtiment ($)</label>
+              <input type="number" value={dispositionForm.fraisDispositionBatiment} onChange={e=>setDispositionForm({...dispositionForm, fraisDispositionBatiment:e.target.value})} className={`${inp} w-full`}/>
+            </div>
+          </div>
+        </div>
+
+        <div className={`${card} p-4 space-y-4`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest ${D?'text-zinc-500':'text-slate-400'}`}>Base de calcul — PBR du terrain, coût en capital et FNACC du bâtiment</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className={lbl}>PBR du terrain ($)</label>
+              <input type="number" value={dispositionForm.pbrTerrain} onChange={e=>setDispositionForm({...dispositionForm, pbrTerrain:e.target.value})} className={`${inp} w-full`}/>
+              {suggestedPbrTerrain != null && String(suggestedPbrTerrain) !== dispositionForm.pbrTerrain && (
+                <button type="button" onClick={()=>setDispositionForm({...dispositionForm, pbrTerrain:String(suggestedPbrTerrain)})} className="mt-1 text-[8px] font-bold uppercase tracking-wider text-orange-500 hover:text-orange-600 text-left">
+                  ↳ Reprendre {fmtAmt(suggestedPbrTerrain)} $ (coût du terrain à la propriété)
+                </button>
+              )}
+            </div>
+            <div>
+              <label className={lbl}>Coût en capital d'origine — bâtiment ($)</label>
+              <input type="number" value={dispositionForm.coutCapitalBatiment} onChange={e=>setDispositionForm({...dispositionForm, coutCapitalBatiment:e.target.value})} className={`${inp} w-full`}/>
+              {suggestedCoutCapitalBatiment != null && String(suggestedCoutCapitalBatiment) !== dispositionForm.coutCapitalBatiment && (
+                <button type="button" onClick={()=>setDispositionForm({...dispositionForm, coutCapitalBatiment:String(suggestedCoutCapitalBatiment)})} className="mt-1 text-[8px] font-bold uppercase tracking-wider text-orange-500 hover:text-orange-600 text-left">
+                  ↳ Reprendre {fmtAmt(suggestedCoutCapitalBatiment)} $ (coût du bâtiment à la propriété)
+                </button>
+              )}
+            </div>
+            <div>
+              <label className={lbl}>FNACC actuelle — bâtiment ($)</label>
+              <input type="number" value={dispositionForm.fnaccActuelle} onChange={e=>setDispositionForm({...dispositionForm, fnaccActuelle:e.target.value})} className={`${inp} w-full`}/>
+              {suggestedFnacc > 0 && String(suggestedFnacc) !== dispositionForm.fnaccActuelle && (
+                <button type="button" onClick={()=>setDispositionForm({...dispositionForm, fnaccActuelle:String(suggestedFnacc)})} className="mt-1 text-[8px] font-bold uppercase tracking-wider text-orange-500 hover:text-orange-600 text-left">
+                  ↳ Reprendre {fmtAmt(suggestedFnacc)} $ (UCC fin d'année — onglet DPA, {fiscalYear})
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {hasInputs && (
+          <div className={`${card} p-5 space-y-4`}>
+            <p className={`text-[9px] font-black uppercase tracking-widest ${D?'text-zinc-500':'text-slate-400'}`}>Résultat</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={`p-3 rounded-2xl ${D?'bg-zinc-800/60':'bg-slate-50'}`}>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Récupération d'amortissement</p>
+                <p className="text-[15px] font-black text-rose-500">{fmtAmt(recapture)} $</p>
+                <p className={`text-[9px] ${D?'text-zinc-600':'text-slate-400'}`}>Imposable à 100 % comme revenu, pas comme gain en capital.</p>
+              </div>
+              <div className={`p-3 rounded-2xl ${D?'bg-zinc-800/60':'bg-slate-50'}`}>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Perte finale — bâtiment</p>
+                <p className="text-[15px] font-black text-rose-500">{fmtAmt(perteFinaleApres)} $</p>
+                {ajustement1321 > 0 && (
+                  <p className={`text-[9px] ${D?'text-amber-400':'text-amber-600'}`}>Réduite de {fmtAmt(ajustement1321)} $ par l'art. 13(21.1) — compensée par le gain en capital du terrain (perte avant ajustement : {fmtAmt(perteFinaleAvant)} $).</p>
+                )}
+              </div>
+              <div className={`p-3 rounded-2xl ${D?'bg-zinc-800/60':'bg-slate-50'}`}>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Gain en capital — terrain</p>
+                <p className="text-[15px] font-black text-emerald-500">{fmtAmt(gainTerrain)} $</p>
+              </div>
+              <div className={`p-3 rounded-2xl ${D?'bg-zinc-800/60':'bg-slate-50'}`}>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Gain en capital — bâtiment</p>
+                <p className="text-[15px] font-black text-emerald-500">{fmtAmt(gainBatiment)} $</p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-dashed border-slate-200 dark:border-zinc-800 flex flex-wrap gap-x-8 gap-y-2">
+              <div>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Gain en capital total</p>
+                <p className={`text-[13px] font-black ${D?'text-zinc-200':'text-slate-700'}`}>{fmtAmt(gainCapitalTotal)} $</p>
+              </div>
+              <div>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Portion imposable (2/3 — sociétés, depuis le 25 juin 2024)</p>
+                <p className={`text-[13px] font-black ${D?'text-zinc-200':'text-slate-700'}`}>{fmtAmt(gainImposable)} $</p>
+              </div>
+              <div>
+                <p className={`text-[9px] font-bold uppercase ${D?'text-zinc-500':'text-slate-400'}`}>Portion non imposable — à ajouter au CDC (1/3)</p>
+                <p className="text-[13px] font-black text-cyan-500">{fmtAmt(ajoutCDC)} $</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ── T776 / TP-128 (Comptable only) ──────────────────────────────────────────
   // Standard CRA T776/Revenu Québec TP-128 line groupings — mapped from the
   // SAME category labels already used in the expense-entry form (Gestion
@@ -1400,8 +1563,8 @@ export default function ComptableExportView({
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI, sources:expSources, dpa:()=>{}, t776:expT776};
-  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)', sources:'Sources PDF', dpa:'', t776:'Rapport T776 PDF'};
+  const expFn: Record<TabId,()=>void> = {journal:expJournal, grandlivre:expGrandLivre, balance:expBalance, tvq:expTVQ, gifi:expGIFI, sources:expSources, dpa:()=>{}, t776:expT776, disposition:()=>{}};
+  const expLbl: Record<TabId,string>  = {journal:'Journal PDF', grandlivre:'Grand Livre PDF', balance:'Balance PDF', tvq:'TPS/TVQ PDF', gifi:'Export GIFI (.csv)', sources:'Sources PDF', dpa:'', t776:'Rapport T776 PDF', disposition:''};
 
   return (
     <div className="space-y-5">
@@ -1416,7 +1579,7 @@ export default function ComptableExportView({
           <button onClick={load} disabled={loading} className={`p-2 rounded-xl border transition-all ${D?'border-zinc-700 hover:bg-zinc-800 text-zinc-400':'border-slate-200 hover:bg-slate-50 text-slate-500'}`}>
             <RefreshCw size={14} className={loading?'animate-spin':''}/>
           </button>
-          {tab !== 'dpa' && (
+          {tab !== 'dpa' && tab !== 'disposition' && (
             <button onClick={expFn[tab]} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
               <Download size={13}/>{expLbl[tab]}
             </button>
@@ -1443,7 +1606,7 @@ export default function ComptableExportView({
               <Download size={13}/>Sources .csv (détail)
             </button>
           )}
-          {tab !== 'dpa' && (
+          {tab !== 'dpa' && tab !== 'disposition' && (
             <button onClick={sendCurrentTabByEmail} disabled={sendingEmail} title="Envoyer ce rapport par courriel — vraiment expédié, pas simulé" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60">
               {sendingEmail ? <Loader2 size={13} className="animate-spin"/> : <Mail size={13}/>}
               Envoyer par courriel
@@ -1465,7 +1628,7 @@ export default function ComptableExportView({
 
       {/* ── Building/year selector — DPA + T776 are inherently per-building,
            unlike the other 6 tabs (company-wide). ── */}
-      {isComptable && (tab==='dpa'||tab==='t776') && (
+      {isComptable && (tab==='dpa'||tab==='t776'||tab==='disposition') && (
         <div className={`${card} p-4 flex items-center gap-4 flex-wrap`}>
           <Building2 size={14} className={D?'text-zinc-500':'text-slate-400'}/>
           <div>
@@ -1525,6 +1688,7 @@ export default function ComptableExportView({
               {tab==='sources'    && SourcesTab()}
               {tab==='dpa'        && isComptable && DpaTab()}
               {tab==='t776'       && isComptable && T776Tab()}
+              {tab==='disposition' && isComptable && DispositionTab()}
             </motion.div>
           </AnimatePresence>
         </>
