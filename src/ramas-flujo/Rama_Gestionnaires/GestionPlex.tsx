@@ -380,6 +380,46 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
           </div>
         )}
 
+        {/* ── Répartition terrain / bâtiment — le terrain ne s'amortit
+            jamais (art. 1101(1ac) RIR) et a besoin de son propre coût de
+            base ajusté, séparé du bâtiment (base de calcul de la DPA au
+            perfil Comptable). S.O.F.I. peut préremplir à partir du rôle
+            d'évaluation municipal ("Scanner le compte de taxes" ci-dessus),
+            mais la répartition réelle du prix d'achat reste toujours
+            modifiable/confirmée ici avant l'enregistrement. ── */}
+        <div className={`mb-4 p-4 rounded-2xl border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}>
+          <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+            Répartition terrain / bâtiment (facultatif)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block text-[8.5px] font-bold uppercase tracking-widest mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Coût du terrain ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Ex: 85000"
+                value={plexManagementForm.valeurTerrain ?? ""}
+                onChange={(e) => setPlexManagementForm({ ...plexManagementForm, valeurTerrain: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                className={`w-full p-3 rounded-xl text-xs font-bold border outline-none ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+              />
+            </div>
+            <div>
+              <label className={`block text-[8.5px] font-bold uppercase tracking-widest mb-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Coût du bâtiment ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Ex: 215000"
+                value={plexManagementForm.valeurBatiment ?? ""}
+                onChange={(e) => setPlexManagementForm({ ...plexManagementForm, valeurBatiment: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                className={`w-full p-3 rounded-xl text-xs font-bold border outline-none ${darkMode ? "bg-zinc-950 border-zinc-700 text-white" : "bg-white border-slate-200 text-slate-900"}`}
+              />
+            </div>
+          </div>
+          <p className={`text-[8px] font-semibold mt-2 ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+            Le terrain ne s'amortit jamais — cette répartition sert de référence pour le calcul de la DPA (perfil Comptable). Laissez vide si inconnu pour l'instant.
+          </p>
+        </div>
+
         <div className="space-y-4">
           {/* Type de location */}
           <div>
@@ -1205,6 +1245,8 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                               isContainer: isColoc,
                               fideicommisClientId: p.fideicommisClientId,
                               fideicommisClientName: p.fideicommisClientName,
+                              valeurTerrain: p.valeurTerrain,
+                              valeurBatiment: p.valeurBatiment,
                               units: formUnits.length > 0 ? formUnits : [
                                 { id: `unit_${Date.now()}`, buildingId: p.id, unitName: "Habitation 1", tenantName: "", monthlyRent: 0, isActive: true },
                               ],

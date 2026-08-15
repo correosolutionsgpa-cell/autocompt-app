@@ -1619,6 +1619,8 @@ const App = () => {
         p.locataire !== n.locataire ||
         p.adresse !== n.adresse ||
         p.fideicommisClientId !== n.fideicommisClientId ||
+        p.valeurTerrain !== n.valeurTerrain ||
+        p.valeurBatiment !== n.valeurBatiment ||
         JSON.stringify(p.units) !== JSON.stringify(n.units)
       );
     });
@@ -1636,6 +1638,8 @@ const App = () => {
           adresse: item.adresse,
           status: (item.status as 'Actif' | 'Vacant' | 'Archivé') || "Actif",
           ...(item.fideicommisClientId ? { fideicommisClientId: item.fideicommisClientId, fideicommisClientName: item.fideicommisClientName } : {}),
+          ...(item.valeurTerrain != null ? { valeurTerrain: item.valeurTerrain } : {}),
+          ...(item.valeurBatiment != null ? { valeurBatiment: item.valeurBatiment } : {}),
         });
         const resolvedPropId = saved.id || item.id;
 
@@ -18970,6 +18974,46 @@ const App = () => {
                           )}
                           <option value="Autre">Autre</option>
                         </select>
+                      </div>
+
+                      {/* ── Nature de la dépense — courante (déductible cette
+                          année) vs capitale (immobilisation, augmente le coût
+                          du bâtiment plutôt que d'être déduite tout de suite —
+                          base de calcul de la DPA au perfil Comptable). Jamais
+                          déduit automatiquement d'une catégorie: la même
+                          réparation peut être l'une ou l'autre selon le
+                          contexte, donc toujours un choix explicite ici. ── */}
+                      <div className="space-y-1 text-left">
+                        <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Nature de la dépense
+                        </label>
+                        <div className={`flex p-1 rounded-full border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-slate-50/50"}`}>
+                          {([
+                            { id: "courante", label: "Dépense courante" },
+                            { id: "capitale", label: "Amélioration capitale" },
+                          ] as const).map((opt) => {
+                            const active = (editingExpense.natureDepense || "courante") === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setEditingExpense({ ...editingExpense, natureDepense: opt.id })}
+                                className={`flex-1 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${
+                                  active
+                                    ? "bg-[#059669] text-white shadow"
+                                    : darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-slate-500 hover:text-slate-700"
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {editingExpense.natureDepense === "capitale" && (
+                          <p className="text-[8px] font-semibold text-amber-600 dark:text-amber-400 pl-1 pt-0.5">
+                            Augmente le coût du bâtiment (base DPA) plutôt que d'être déduite cette année — vérifiez avec votre comptable.
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-zinc-900/50">

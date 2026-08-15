@@ -132,6 +132,17 @@ export interface PropertyDoc {
   bookkeepingClientId?: string;
   /** Denormalised display name for fast render without a join. */
   bookkeepingClientName?: string;
+  // ── Répartition terrain / bâtiment (base DPA) ──
+  /** Coût du terrain, alloué à même le prix d'achat — le terrain ne
+   *  s'amortit JAMAIS (art. 1101(1ac) RIR), il a besoin de son propre
+   *  coût de base ajusté, séparé du bâtiment. Peut être préremplie par
+   *  S.O.F.I. à partir du rôle d'évaluation municipal, mais toujours
+   *  modifiable/confirmée par le propriétaire avant l'enregistrement —
+   *  jamais auto-sauvegardée silencieusement. */
+  valeurTerrain?: number;
+  /** Coût du bâtiment — base de calcul de la DPA/CCA (Classe 1, 4%) au
+   *  perfil Comptable. Même principe de confirmation que valeurTerrain. */
+  valeurBatiment?: number;
 }
 
 /**
@@ -294,6 +305,13 @@ export interface ExpenseDoc {
    *  "Accepter" button for entries already accepted, and to never
    *  double-create the same record on a repeat click. */
   mirroredFromSharedLedgerEntryId?: string;
+  /** 'capitale' = amélioration qui augmente le coût du bâtiment (immobilisation,
+   *  base de calcul de la DPA/CCA) plutôt que d'être déduite l'année courante.
+   *  Absent/'courante' (défaut) = dépense d'exploitation normale, déductible
+   *  cette année. Toujours un choix de l'utilisateur, jamais déduit automatiquement
+   *  d'une catégorie — la même réparation peut être courante ou capitale selon
+   *  le contexte (ex: remplacer un robinet vs refaire toute la plomberie). */
+  natureDepense?: 'courante' | 'capitale';
   ownerId: string;
   createdAt: string;
 }
