@@ -212,10 +212,11 @@ export default function ComptableExportView({
   // T776 needs raw revenue/expense docs (with buildingId) — the journal
   // entries loaded above for the other 6 tabs don't carry buildingId at all,
   // so this is a dedicated fetch, filtered client-side to this one building
-  // and fiscal year.
+  // and fiscal year. DPA also needs it now, to surface this year's expenses
+  // tagged natureDepense="capitale" as a reference for "Ajouts cette année".
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !selectedBuildingId || tab !== 't776') return;
+    if (!uid || !selectedBuildingId || !(tab === 't776' || tab === 'dpa')) return;
     setLoadingBuildingData(true);
     Promise.all([dataService.fetchExpenses(uid), dataService.fetchInvoices(uid)])
       .then(([exp, inv]) => {
@@ -1105,6 +1106,16 @@ export default function ComptableExportView({
     } catch (e) { console.error('deleteCcaAsset failed:', e); }
   };
 
+  // ── Repères DPA — alimentés par le propriétaire (Gestionnaire/Investisseur),
+  // jamais appliqués automatiquement ici : la répartition terrain/bâtiment
+  // (PropertyDoc.valeurTerrain/valeurBatiment) et les dépenses marquées
+  // "Amélioration capitale" (ExpenseDoc.natureDepense) cette année-ci ne
+  // sont que des suggestions — le comptable clique explicitement pour les
+  // reprendre dans une ligne DPA. ──
+  const selectedPropertyForDpa = properties.find(p => (p.buildingId || p.id) === selectedBuildingId);
+  const capitalExpensesForBuilding = buildingExpenses.filter(e => e.natureDepense === 'capitale');
+  const capitalExpensesTotal = capitalExpensesForBuilding.reduce((s, e) => s + (e.total || 0), 0);
+
   const DpaTab = () => (
     <div className="space-y-4">
       <div className={`${card} p-4 flex items-start gap-3 ${D?'bg-orange-500/5':'bg-orange-50/50'}`}>
@@ -1113,6 +1124,32 @@ export default function ComptableExportView({
           La DPA est <strong>facultative</strong> — « CCA maximale » n'est qu'un plafond de référence, jamais réclamé automatiquement. Le montant « Réclamé cette année » reste toujours votre choix : le maximiser n'est pas toujours optimal (ex. déclenche une récupération, ou gaspille de la marge une année à faible revenu). Outil de calcul, pas un avis fiscal — vérifiez indépendamment.
         </p>
       </div>
+      {(selectedPropertyForDpa?.valeurTerrain != null || selectedPropertyForDpa?.valeurBatiment != null || capitalExpensesTotal > 0) && (
+        <div className={`${card} p-4 space-y-3`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest ${D?'text-zinc-500':'text-slate-400'}`}>Repères — saisis par le propriétaire, à reprendre manuellement ci-dessous si pertinent</p>
+          {(selectedPropertyForDpa?.valeurTerrain != null || selectedPropertyForDpa?.valeurBatiment != null) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10.5px]">
+              <span className={D?'text-zinc-400':'text-slate-600'}>Coût du terrain : <strong>{fmtAmt(selectedPropertyForDpa?.valeurTerrain || 0)} $</strong> <span className="opacity-60">(non amortissable)</span></span>
+              <span className={D?'text-zinc-400':'text-slate-600'}>Coût du bâtiment : <strong>{fmtAmt(selectedPropertyForDpa?.valeurBatiment || 0)} $</strong> <span className="opacity-60">(base DPA)</span></span>
+            </div>
+          )}
+          {capitalExpensesTotal > 0 && (
+            <div className="pt-2 border-t border-dashed border-slate-200 dark:border-zinc-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className={`text-[10.5px] ${D?'text-zinc-400':'text-slate-600'}`}>Dépenses marquées « Amélioration capitale » — {fiscalYear} ({capitalExpensesForBuilding.length})</span>
+                <strong className="text-[11px] text-orange-500">{fmtAmt(capitalExpensesTotal)} $</strong>
+              </div>
+              <ul className="space-y-0.5">
+                {capitalExpensesForBuilding.map(e => (
+                  <li key={e.id} className={`text-[9.5px] flex justify-between ${D?'text-zinc-500':'text-slate-400'}`}>
+                    <span>{e.fecha} — {e.fournisseur}</span><span>{fmtAmt(e.total || 0)} $</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       {loadingCca ? (
         <div className="flex items-center justify-center py-10"><Loader2 size={20} className="animate-spin text-orange-500"/></div>
       ) : (
@@ -1146,6 +1183,15 @@ export default function ComptableExportView({
                 <div>
                   <label className={lbl}>Ajouts cette année ($)</label>
                   <input type="number" value={a.additionsThisYear} onChange={e=>updateCcaRow(a.id,{additionsThisYear:parseFloat(e.target.value)||0})} className={`${inp} w-full`}/>
+                  {capitalExpensesTotal > 0 && (
+                    <button
+                      type="button"
+                      onClick={()=>updateCcaRow(a.id,{additionsThisYear: capitalExpensesTotal})}
+                      className="mt-1 text-[8px] font-bold uppercase tracking-wider text-orange-500 hover:text-orange-600 text-left"
+                    >
+                      ↳ Suggérer {fmtAmt(capitalExpensesTotal)} $ (dépenses capitales)
+                    </button>
+                  )}
                 </div>
                 <div>
                   <label className={lbl}>Dispositions ($)</label>
