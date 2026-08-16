@@ -37,6 +37,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import jsPDF from "jspdf";
 import {
   ArrowLeft, Menu, Hammer, Plus, X, Loader2, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, Trash2, Edit3, Receipt, Home,
@@ -79,6 +80,169 @@ const daysBetween = (a: string, b: string) => {
   const ms = new Date(b).getTime() - new Date(a).getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
 };
+
+/**
+ * Rapport d'analyse complet d'un projet de flip — adresse, ARV, budget de
+ * rénovation détaillé, financement, possession réelle (Tenue de Livres),
+ * disposition, résultat, associés. Même gabarit visuel que les autres PDF
+ * de l'app (voir MandatDeGestionView.tsx: generateMandatPDF).
+ */
+function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], companyName: string): jsPDF {
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const W = 210;
+  const M = 18;
+  const TW = W - M * 2;
+  const amber: [number, number, number] = [217, 119, 6];
+  const lightAmber: [number, number, number] = [255, 247, 237];
+  const gray: [number, number, number] = [100, 100, 100];
+  const dark: [number, number, number] = [30, 30, 30];
+
+  let y = 0;
+  const nextPage = () => {
+    pdf.addPage();
+    y = 18;
+    pdf.setFillColor(...amber);
+    pdf.rect(0, 0, W, 8, "F");
+    pdf.setFontSize(6);
+    pdf.setTextColor(255, 240, 220);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("CALCULATEUR DE FLIP — ANALYSE DE PROJET", M, 5.5);
+    pdf.text(p.adresse, W - M, 5.5, { align: "right" });
+  };
+  const checkY = (needed = 12) => { if (y + needed > 270) nextPage(); };
+  const sectionHeader = (title: string) => {
+    checkY(14);
+    pdf.setFillColor(...lightAmber);
+    pdf.rect(M, y, TW, 8, "F");
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...amber);
+    pdf.text(title.toUpperCase(), M + 3, y + 5.5);
+    y += 12;
+  };
+  const row = (label: string, value: string, bold = false) => {
+    checkY(7);
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    pdf.setTextColor(...(bold ? dark : gray));
+    pdf.text(label, M + 2, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...dark);
+    pdf.text(value, W - M - 2, y, { align: "right" });
+    y += 6;
+  };
+
+  // ── En-tête ──
+  pdf.setFillColor(...amber);
+  pdf.rect(0, 0, W, 30, "F");
+  pdf.setFontSize(15);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(255, 255, 255);
+  pdf.text("Calculateur de Flip — Analyse de projet", M, 14);
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "normal");
+  pdf.text(p.adresse, M, 21);
+  pdf.text(companyName, M, 26);
+  y = 38;
+
+  const projectExpTotal = projectExpenses.reduce((s, d) => s + (d.total || 0), 0);
+  const prixRevente = p.statut === "vendu" ? (p.prixReventeReel || 0) : (p.prixReventeEstime || 0);
+  const fraisDisposition = (p.fraisNotaireVente || 0) + (p.fraisCourtier || 0);
+  const profit = prixRevente - p.prixAchat - (p.fraisAchat || 0) - projectExpTotal - fraisDisposition;
+  const endDate = p.statut === "vendu" && p.dateRevente ? p.dateRevente : new Date().toISOString().slice(0, 10);
+  const joursDetenus = daysBetween(p.dateAchat, endDate);
+  const isAntiFlip = joursDetenus < 365;
+  const coutPi2ParEtat = p.etatCondition === "mauvais" ? (p.coutPi2Mauvais ?? 120)
+    : p.etatCondition === "gout_du_jour" ? (p.coutPi2GoutDuJour ?? 60)
+    : (p.coutPi2Bon ?? 30);
+  const quickRenoEstimate = (p.nombreEtages || 0) * (p.pi2ParEtage || 0) * coutPi2ParEtat;
+  const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || quickRenoEstimate;
+  const moisDetenus = joursDetenus / 30.44;
+  const miseDeFondsTotal = p.prixAchat * (1 - (p.banqueFinancementPct || 0) / 100);
+  const montantFinanceBanque = p.prixAchat * (p.banqueFinancementPct || 0) / 100;
+  const interetBanque = montantFinanceBanque * (p.banqueTauxHypothecaire || 0) / 100 * (moisDetenus / 12);
+  const miseDeFondsFinanceeParPreteur = miseDeFondsTotal * (p.preteurPriveMiseDeFondsPct || 0) / 100;
+  const renosFinanceesParPreteur = coutRenovationReel * (p.preteurPriveRenosPct || 0) / 100;
+  const interetPreteurPrive = (miseDeFondsFinanceeParPreteur + renosFinanceesParPreteur) * (p.preteurPriveTauxAnnuel || 0) / 100 * (moisDetenus / 12);
+  const hasFinancingData = p.banqueFinancementPct != null || p.preteurPriveMiseDeFondsPct != null;
+  const investissementCashReel = hasFinancingData
+    ? (miseDeFondsTotal - miseDeFondsFinanceeParPreteur) + (coutRenovationReel - renosFinanceesParPreteur) + (p.fraisAchat || 0)
+    : p.prixAchat + (p.fraisAchat || 0);
+  const roiAllCash = investissementCashReel > 0 ? (profit / investissementCashReel) * 100 : 0;
+
+  sectionHeader("Acquisition");
+  row("Prix d'achat", fmtCAD(p.prixAchat));
+  if (p.fraisAchat) row("Frais d'achat (notaire, mutation, inspection...)", fmtCAD(p.fraisAchat));
+  row("Date d'achat", new Date(p.dateAchat).toLocaleDateString("fr-CA"));
+
+  if (p.arv || p.nombreEtages) {
+    sectionHeader("Analyse — valeur rénovée et estimation rapide");
+    if (p.arv) row("Valeur marchande une fois rénovée (ARV)", fmtCAD(p.arv));
+    if (p.nombreEtages) row("Nombre d'étages × pi² par étage", `${p.nombreEtages} × ${p.pi2ParEtage || 0} pi²`);
+    if (p.nombreEtages) row(`État : ${p.etatCondition === "mauvais" ? "mauvais état" : p.etatCondition === "gout_du_jour" ? "mis au goût du jour" : "bon état"} (${coutPi2ParEtat} $/pi²)`, fmtCAD(quickRenoEstimate));
+  }
+
+  if (p.renovationLineItems && p.renovationLineItems.length > 0) {
+    sectionHeader("Budget de rénovation détaillé");
+    p.renovationLineItems.forEach((it) => {
+      if (it.coutReel != null) row(it.categorie, fmtCAD(it.coutReel));
+    });
+    row("Total budget rénovation", fmtCAD(coutRenovationReel), true);
+  }
+
+  if (hasFinancingData) {
+    sectionHeader("Structure de financement");
+    if (p.banqueFinancementPct) row(`Banque — ${p.banqueFinancementPct}% @ ${p.banqueTauxHypothecaire || 0}%/an`, fmtCAD(interetBanque) + " intérêt réf.");
+    if (p.preteurPriveMiseDeFondsPct || p.preteurPriveRenosPct) row(`Prêteur privé @ ${p.preteurPriveTauxAnnuel || 0}%/an`, fmtCAD(interetPreteurPrive) + " intérêt réf.");
+  }
+
+  sectionHeader(`Possession réelle (${projectExpenses.length} dépense(s) — Tenue de Livres)`);
+  if (projectExpenses.length === 0) {
+    pdf.setFontSize(8); pdf.setFont("helvetica", "italic"); pdf.setTextColor(...gray);
+    pdf.text("Aucune dépense enregistrée pour cette adresse.", M + 2, y); y += 6;
+  } else {
+    projectExpenses.forEach((d) => row(`${d.fecha} — ${d.fournisseur || d.cat}`, fmtCAD(d.total || 0)));
+  }
+  row("Total possession", fmtCAD(projectExpTotal), true);
+
+  sectionHeader(`Disposition — ${p.statut === "vendu" ? "revente réelle" : "revente estimée"}`);
+  row("Prix de revente", fmtCAD(prixRevente));
+  if (fraisDisposition) row("Frais de disposition (notaire + courtier)", fmtCAD(fraisDisposition));
+
+  sectionHeader("Résultat");
+  row("Profit" + (p.statut !== "vendu" ? " (estimé)" : ""), fmtCAD(profit), true);
+  row("Marge sur prix d'achat", `${(p.prixAchat > 0 ? (profit / p.prixAchat) * 100 : 0).toFixed(1)}%`);
+  row("ROI All Cash", `${roiAllCash.toFixed(1)}%`, true);
+
+  if (p.associes && p.associes.length > 0) {
+    sectionHeader("Répartition entre associés");
+    const totalApports = p.associes.reduce((s, a) => s + a.apport, 0);
+    p.associes.forEach((a) => {
+      const pct = totalApports > 0 ? (a.apport / totalApports) * 100 : 0;
+      row(`${a.nom} — apport ${fmtCAD(a.apport)} (${pct.toFixed(1)}%)`, fmtCAD(profit * pct / 100));
+    });
+  }
+
+  if (isAntiFlip) {
+    checkY(20);
+    pdf.setFillColor(254, 226, 226);
+    pdf.rect(M, y, TW, 16, "F");
+    pdf.setFontSize(7.5);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(190, 30, 30);
+    pdf.text("⚠ RÈGLE ANTI-FLIP (ARC) — détention estimée à moins de 12 mois : le profit serait imposé", M + 3, y + 5);
+    pdf.text("à 100% comme revenu d'entreprise, sans exemption résidence principale. Confirmez avec votre comptable.", M + 3, y + 10);
+    y += 20;
+  }
+
+  checkY(12);
+  pdf.setFontSize(6.5);
+  pdf.setFont("helvetica", "italic");
+  pdf.setTextColor(...gray);
+  pdf.text("Outil de calcul, pas un avis fiscal — vérifiez indépendamment. Généré par AutoCompt le " + new Date().toLocaleDateString("fr-CA"), M, y);
+
+  return pdf;
+}
 
 export interface FlipCalculatorViewProps {
   darkMode: boolean;
@@ -398,6 +562,40 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
     }
   };
 
+  // ── Export PDF + sauvegarde Drive — même pattern que le reste de l'app
+  // (HeuresPaieView.tsx: vérifie la connexion, upload si connecté). ──
+  const handleGeneratePdf = async (p: FlipProjectDoc) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setGeneratingPdfId(p.id);
+    try {
+      const projectExp = projectExpensesFor(p.adresse);
+      const pdf = generateFlipPDF(p, projectExp, currentCompany?.nombre || "Entreprise");
+      const safeName = p.adresse.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 60);
+      const fileName = `Flip-${safeName}-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+      const driveOwnerId = currentCompany?.ownerId || uid;
+      const driveStatus = await getCompanyDriveConfig(activeCompanyId, driveOwnerId);
+      if (driveStatus?.connected) {
+        const base64 = pdf.output("datauristring").split(",")[1];
+        const result = await uploadDocumentToDrive(
+          activeCompanyId, driveOwnerId, base64, fileName,
+          "application/pdf", currentCompany?.nombre || "Entreprise", "Calculateur de Flip",
+        );
+        if (!result.success) {
+          console.error("[FlipCalculator] Drive upload failed:", result.error);
+          alert("Le PDF a été téléchargé, mais l'enregistrement dans Drive a échoué : " + (result.error || "erreur inconnue"));
+        }
+      }
+      pdf.save(fileName);
+      playNotificationSound?.();
+    } catch (err: any) {
+      alert("Erreur lors de la génération du PDF : " + (err?.message || err));
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-slate-950" : "bg-slate-50"}`}>
@@ -608,7 +806,10 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                   <button onClick={() => handleDelete(p)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all">
                     <Trash2 size={11} /> Supprimer
                   </button>
-                  <button onClick={() => toggleAnalysis(p)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-all ml-auto">
+                  <button onClick={() => handleGeneratePdf(p)} disabled={generatingPdfId === p.id} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500 hover:text-white disabled:opacity-60 transition-all ml-auto">
+                    {generatingPdfId === p.id ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />} PDF
+                  </button>
+                  <button onClick={() => toggleAnalysis(p)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-all">
                     <Calculator size={11} /> Analyse avancée {isAnalysisOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                   </button>
                 </div>
