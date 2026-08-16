@@ -292,6 +292,24 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Was entirely missing — the collection existed in code
+    // (fetchMeubleExpenses/fetchMeubleReservations, MeubleFinancialModule)
+    // and was already read on every login (Dossiers Fiscaux, TPS/TVQ
+    // collected), but every read silently failed against the default-deny
+    // rule at the bottom of this file. Found 2026-08-16 while investigating
+    // a separate bug report (Calculateur de Flip navigation).
+    match /meubleExpenses/{expenseId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    match /meubleReservations/{reservationId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     // Was entirely missing — the collection existed in code (saveLoanIssued/
     // fetchLoansIssued) and was already writing real data, but every read
     // and write silently failed against the default-deny rule at the bottom
