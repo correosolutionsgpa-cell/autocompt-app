@@ -5014,190 +5014,12 @@ const App = () => {
   const [currentCategoryFolder, setCurrentCategoryFolder] = useState<
     string | null
   >(null);
-  const [dossierFiles, setDossierFiles] = useState<FileItem[]>([
-    {
-      id: "df-1",
-      name: "2025-01-15_Assurance_SolutionsGPA_Duplessis.pdf",
-      year: 2025,
-      profile: "Solutions GPA",
-      category: "Assurances",
-      type: "pdf",
-      size: "245 KB",
-      date: "2025-01-15",
-      status: "Concilié",
-      provider: "Intact",
-    },
-    {
-      id: "df-2",
-      name: "2025-05-19_Bell_SolutionsGPA_Internet.pdf",
-      year: 2025,
-      profile: "Solutions GPA",
-      category: "Banque",
-      type: "pdf",
-      size: "124 KB",
-      date: "2025-05-19",
-      status: "Concilié",
-      provider: "Bell",
-    },
-    {
-      id: "df-3",
-      name: "2025-03-10_Desjardins_SolutionsGPA_Frais.pdf",
-      year: 2025,
-      profile: "Solutions GPA",
-      category: "Banque",
-      type: "pdf",
-      size: "82 KB",
-      date: "2025-03-10",
-      status: "Concilié",
-      provider: "Desjardins",
-    },
-    {
-      id: "df-4",
-      name: "2025-12-31_Taxes_SolutionsGPA_RevenuQuebec.pdf",
-      year: 2025,
-      profile: "Solutions GPA",
-      category: "Taxes",
-      type: "pdf",
-      size: "1.2 MB",
-      date: "2025-12-31",
-      status: "Concilié",
-      provider: "Revenu Québec",
-    },
-    {
-      id: "df-5",
-      name: "2025-06-15_Hydro_SolutionsGPA_Bureau.jpg",
-      year: 2025,
-      profile: "Solutions GPA",
-      category: "Fournisseurs",
-      type: "jpg",
-      size: "1.4 MB",
-      date: "2025-06-15",
-      status: "En attente",
-      provider: "Hydro-Québec",
-    },
-
-    {
-      id: "df-6",
-      name: "2025-02-01_Assurance_Triplex_Laval.pdf",
-      year: 2025,
-      profile: "Triplex",
-      category: "Assurances",
-      type: "pdf",
-      size: "310 KB",
-      date: "2025-02-01",
-      status: "Concilié",
-      provider: "Promutuel",
-    },
-    {
-      id: "df-7",
-      name: "2025-04-18_Municipal_Laval_Taxes.jpg",
-      year: 2025,
-      profile: "Triplex",
-      category: "Taxes",
-      type: "jpg",
-      size: "2.1 MB",
-      date: "2025-04-18",
-      status: "Concilié",
-      provider: "Ville de Laval",
-    },
-    {
-      id: "df-8",
-      name: "2025-07-22_Notaire_Triplex_Bail_Signe.pdf",
-      year: 2025,
-      profile: "Triplex",
-      category: "Légal",
-      type: "pdf",
-      size: "1.8 MB",
-      date: "2025-07-22",
-      status: "Concilié",
-      provider: "Notaire Tremblay",
-    },
-    {
-      id: "df-9",
-      name: "2025-10-05_HomeDepot_Triplex_Renovation_Thermostat.jpg",
-      year: 2025,
-      profile: "Triplex",
-      category: "Fournisseurs",
-      type: "jpg",
-      size: "890 KB",
-      date: "2025-10-05",
-      status: "En attente",
-      provider: "Home Depot",
-    },
-
-    {
-      id: "df-10",
-      name: "2026-01-20_Assurance_SolutionsGPA_2026.pdf",
-      year: 2026,
-      profile: "Solutions GPA",
-      category: "Assurances",
-      type: "pdf",
-      size: "256 KB",
-      date: "2026-01-20",
-      status: "Concilié",
-      provider: "Intact",
-    },
-    {
-      id: "df-11",
-      name: "2026-03-01_Videotron_SolutionsGPA_Internet.pdf",
-      year: 2026,
-      profile: "Solutions GPA",
-      category: "Banque",
-      type: "pdf",
-      size: "142 KB",
-      date: "2026-03-01",
-      status: "Concilié",
-      provider: "Vidéotron",
-    },
-    {
-      id: "df-12",
-      name: "2026-04-15_RevenuQuebec_AcompteProvisoire.pdf",
-      year: 2026,
-      profile: "Solutions GPA",
-      category: "Taxes",
-      type: "pdf",
-      size: "540 KB",
-      date: "2026-04-15",
-      status: "En attente",
-      provider: "Revenu Québec",
-    },
-    {
-      id: "df-13",
-      name: "2026-02-15_Assurance_Triplex_Renovation.pdf",
-      year: 2026,
-      profile: "Triplex",
-      category: "Assurances",
-      type: "pdf",
-      size: "298 KB",
-      date: "2026-02-15",
-      status: "Concilié",
-      provider: "Promutuel",
-    },
-    {
-      id: "df-14",
-      name: "2026-05-10_CityTax_Laval_Triplex2026.pdf",
-      year: 2026,
-      profile: "Triplex",
-      category: "Taxes",
-      type: "pdf",
-      size: "1.1 MB",
-      date: "2026-05-10",
-      status: "Concilié",
-      provider: "Ville de Laval",
-    },
-    {
-      id: "df-15",
-      name: "2026-05-19_HomeDepot_Triplex_Plomberie.jpg",
-      year: 2026,
-      profile: "Triplex",
-      category: "Fournisseurs",
-      type: "jpg",
-      size: "420 KB",
-      date: "2026-05-19",
-      status: "En attente",
-      provider: "Home Depot",
-    },
-  ]);
+  // Was seeded with 15 demo documents, never persisted to Firestore — adding
+  // or deleting a document only mutated this local state. Found 2026-08-16
+  // auditing Dossiers Fiscaux. Now populated by dataService.fetchDossierFiles
+  // at login (raw setter, same reasoning as _setDepenses) and kept in sync
+  // via the reconcileDossierFiles-wrapped setDossierFiles below.
+  const [dossierFiles, _setDossierFiles] = useState<FileItem[]>([]);
 
   const [showAddDocModal, setShowAddDocModal] = useState(false);
   const [newDocName, setNewDocName] = useState("");
@@ -5759,6 +5581,44 @@ const App = () => {
       return next;
     });
   };
+
+  // ── Dossiers Fiscaux — same reconcile-on-write pattern as depenses/historique
+  // above, so the 3 existing mutation points inside DossierFiscauxView.tsx
+  // (ajouter/supprimer/basculer Concilié) persist to Firestore transparently,
+  // with zero changes needed in that component. ──
+  const reconcileDossierFiles = async (prev: FileItem[], next: FileItem[]) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    const deleted = prev.filter((p) => !next.some((n) => n.id === p.id));
+    for (const item of deleted) {
+      if (item.id && typeof item.id === "string" && item.id.length > 5 && isNaN(Number(item.id))) {
+        try { await dataService.deleteDossierFile(userId, item.id); } catch (e) { console.error("deleteDossierFile failed:", e); }
+      }
+    }
+    const addedOrModified = next.filter((n) => {
+      const p = prev.find((x) => x.id === n.id);
+      if (!p) return true;
+      return p.status !== n.status || p.name !== n.name || p.category !== n.category || p.year !== n.year || p.profile !== n.profile;
+    });
+    for (const item of addedOrModified) {
+      try {
+        const saved = await dataService.saveDossierFile(userId, { ...item, companyId: activeCompanyId });
+        if (saved.id && saved.id !== item.id) {
+          _setDossierFiles((current) => current.map((c) => (c.id === item.id ? { ...c, id: saved.id } : c)));
+        }
+      } catch (err) {
+        console.error("Failed to save dossier file:", err);
+      }
+    }
+  };
+  const setDossierFiles = (value: FileItem[] | ((prev: FileItem[]) => FileItem[])) => {
+    _setDossierFiles((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      reconcileDossierFiles(prev, next);
+      return next;
+    });
+  };
+
   const [archivesAnnuelles, setArchivesAnnuelles] = useState<any[]>([]);
 
   // Excludes anything tagged with a buildingId — those belong to a specific
@@ -8445,6 +8305,11 @@ const App = () => {
           // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
           const invoices = await dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds);
           _setHistorique(invoices);
+
+          // Fetch Dossiers Fiscaux files — same raw-setter reasoning as
+          // depenses/historique above (already came from Firestore).
+          const dossierFilesFetched = await dataService.fetchDossierFiles(user.uid, collaboratorCompanyDocIds);
+          _setDossierFiles(dossierFilesFetched);
 
           // Fetch user's own DocuLegal document templates (private, per-account).
           dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));

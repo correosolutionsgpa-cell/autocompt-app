@@ -292,6 +292,26 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Was entirely missing — dossierFiles lived only in a useState seeded
+    // with 8 demo documents, never persisted. Found 2026-08-16 auditing
+    // Dossiers Fiscaux.
+    match /dossierFiscalFiles/{fileId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
+    // Preuve immuable qu'une année fiscale a été archivée (voir
+    // SealedFiscalYearDoc dans dataService.ts) — remplace l'ancien bouton
+    // "Clôturer l'année" qui supprimait silencieusement toutes les vraies
+    // dépenses via setDepenses([]). Jamais update/delete, même principe que
+    // sealedStatements ci-dessous.
+    match /sealedFiscalYears/{sealId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if false;
+    }
+
     // Was entirely missing — the collection existed in code
     // (fetchMeubleExpenses/fetchMeubleReservations, MeubleFinancialModule)
     // and was already read on every login (Dossiers Fiscaux, TPS/TVQ

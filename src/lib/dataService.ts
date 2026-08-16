@@ -526,6 +526,51 @@ export interface FlipRenovationItem {
   coutReel?: number;
 }
 
+// ── DossierFiscalFileDoc — Firestore `dossierFiscalFiles` collection ─────────
+/**
+ * Un document classé dans Dossiers Fiscaux (module universel, tous profils).
+ * Remplace un `useState` qui contenait 8 documents de démonstration jamais
+ * persistés — trouvé lors d'un audit du 16-ago-2026. Document ID:
+ * `{userId}_dossierfile_{id}`.
+ */
+export interface DossierFiscalFileDoc {
+  id: string;
+  companyId: string;
+  name: string;
+  year: number;
+  profile: string;
+  category: string;
+  type: 'pdf' | 'jpg';
+  size: string;
+  date: string;
+  status: 'Concilié' | 'En attente';
+  provider: string;
+  lien?: string | null;
+  ownerId: string;
+  createdAt: string;
+}
+
+// ── SealedFiscalYearDoc — Firestore `sealedFiscalYears` collection ───────────
+/**
+ * Preuve immuable qu'une année fiscale a été archivée depuis Dossiers
+ * Fiscaux — remplace l'ancien bouton "Clôturer l'année" qui supprimait
+ * silencieusement TOUTES les vraies dépenses de l'entreprise (appelait le
+ * setDepenses branché sur Firestore avec un tableau vide). Ne supprime plus
+ * rien : archive dans le Drive de l'entreprise (driveLink) et scelle un
+ * enregistrement immuable (règle Firestore `allow update, delete: if false`,
+ * même principe que SealedStatementDoc) — les données de l'année restent
+ * consultables en tout temps, seule la preuve d'archivage est ajoutée.
+ * Document ID: `{companyId}_seal_{year}`.
+ */
+export interface SealedFiscalYearDoc {
+  id: string;
+  companyId: string;
+  year: number;
+  sealedAt: string;
+  sealedByUid: string;
+  driveLink?: string;
+}
+
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
 /**
  * Configuration fiscale et opérationnelle d'une unité meublée.
@@ -3189,6 +3234,85 @@ export const dataService = {
   async deleteFlipProject(userId: string, flipId: string): Promise<void> {
     const docId = `${userId}_flip_${flipId}`;
     await deleteDoc(doc(db, 'flipProjects', docId));
+  },
+
+  // ── Dossiers Fiscaux — `dossierFiscalFiles` collection ───────────────────
+
+  async saveDossierFile(
+    userId: string,
+    file: Omit<DossierFiscalFileDoc, 'ownerId' | 'createdAt'>
+  ): Promise<DossierFiscalFileDoc> {
+    assertCanWrite();
+    const originalId = file.id || `dossierfile_${Date.now()}`;
+    const docId = `${userId}_dossierfile_${originalId}`;
+    const docCompanyId = `${userId}_company_${file.companyId}`;
+    const data: any = {
+      ...file,
+      id: docId,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    Object.keys(data).forEach((k) => {
+      if (data[k] === undefined) delete data[k];
+    });
+    await setDoc(doc(db, 'dossierFiscalFiles', docId), data);
+    return { ...data, id: originalId, companyId: file.companyId };
+  },
+
+  /** Fetch-all-companies-at-login shape, same as fetchExpenses/fetchInvoices —
+   *  dossierFiles has always been a single flat list filtered by "profile" in
+   *  the UI, not re-fetched per active company like FlipProjectDoc. */
+  async fetchDossierFiles(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<DossierFiscalFileDoc[]> {
+    try {
+      const docs = await fetchOwnedAndShared('dossierFiscalFiles', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
+        const data = d.data();
+        const idParts = data.companyId?.split('_company_');
+        const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
+        const docIdParts = d.id.split('_dossierfile_');
+        return { ...data, id: docIdParts.length > 1 ? docIdParts[1] : d.id, companyId: originalCompanyId } as DossierFiscalFileDoc;
+      });
+    } catch (e) {
+      console.error('fetchDossierFiles failed:', e);
+      return [];
+    }
+  },
+
+  async deleteDossierFile(userId: string, fileId: string): Promise<void> {
+    const docId = `${userId}_dossierfile_${fileId}`;
+    await deleteDoc(doc(db, 'dossierFiscalFiles', docId));
+  },
+
+  // ── Sceller une année fiscale — `sealedFiscalYears` collection ───────────
+  // Jamais update/delete (immuable dans firestore.rules), remplace la
+  // suppression silencieuse de l'ancien "Clôturer l'année".
+
+  async sealFiscalYear(
+    userId: string,
+    data: Omit<SealedFiscalYearDoc, 'id' | 'sealedAt' | 'sealedByUid'>
+  ): Promise<SealedFiscalYearDoc> {
+    assertCanWrite();
+    const docId = `${data.companyId}_seal_${data.year}`;
+    const full: SealedFiscalYearDoc = {
+      ...data,
+      id: docId,
+      sealedAt: new Date().toISOString(),
+      sealedByUid: userId,
+    };
+    await setDoc(doc(db, 'sealedFiscalYears', docId), full);
+    return full;
+  },
+
+  async fetchSealedFiscalYears(userId: string, companyId: string): Promise<SealedFiscalYearDoc[]> {
+    try {
+      const q = query(collection(db, 'sealedFiscalYears'), where('companyId', '==', companyId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as SealedFiscalYearDoc).sort((a, b) => b.year - a.year);
+    } catch (e) {
+      console.error('fetchSealedFiscalYears failed:', e);
+      return [];
+    }
   },
 
   /**

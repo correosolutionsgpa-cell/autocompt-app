@@ -9,6 +9,7 @@ import { auth } from '../lib/firebase';
 import { dataService } from '../lib/dataService';
 import type { PropertyDoc, UnitDoc } from '../lib/dataService';
 import { generateReleve31PDF } from '../lib/releve31Pdf';
+import { getCompanyDriveConfig, uploadDocumentToDrive } from '../lib/driveService';
 
 export interface FileItem {
   id: string;
@@ -79,6 +80,7 @@ export default function DossierFiscauxView({
   // Clôture Année State
   const [showClotureModal, setShowClotureModal] = useState(false);
   const [clotureToast, setClotureToast] = useState(false);
+  const [isClosingYear, setIsClosingYear] = useState(false);
 
   // ── Relevé 31 preparation assistant state ──────────────────────────────────
   const [releve31Year, setReleve31Year] = useState(() => new Date().getFullYear());
@@ -136,68 +138,97 @@ export default function DossierFiscauxView({
     playNotificationSound();
   };
 
-  const handleCloturerAnnee = () => {
-    // 1. Génération du CSV
-    const headers = ['Date', 'Catégorie', 'Propriété/Projet', 'Fournisseur/Description', 'Montant'];
-    const csvRows = [headers.join(',')];
+  // Ne supprime plus JAMAIS depenses/dossierFiles — trouvé 2026-08-16 que
+  // cette fonction appelait setDepenses([]) (le vrai setter branché sur
+  // Firestore), supprimant silencieusement TOUTES les dépenses réelles de
+  // l'entreprise, avec pour seule "archive" un état React local jamais lu
+  // nulle part et perdu au premier rechargement. Remplacé par : un archivage
+  // réel dans le Drive de l'entreprise + un scellage immuable de l'année
+  // (SealedFiscalYearDoc) — les données restent intactes et consultables en
+  // tout temps en sélectionnant l'année dans les dossiers.
+  const handleCloturerAnnee = async () => {
+    const uid = auth.currentUser?.uid;
+    const yearToClose = currentYearFolder || new Date().getFullYear();
+    setIsClosingYear(true);
+    try {
+      // 1. CSV des dépenses de l'année — export local, comme avant.
+      const headers = ['Date', 'Catégorie', 'Propriété/Projet', 'Fournisseur/Description', 'Montant'];
+      const csvRows = [headers.join(',')];
+      depenses.forEach((d) => {
+        const date = d.date || d.fecha || '';
+        const categorie = d.categorie || d.category || d.cat || '';
+        const propriete = d.adresse || d.propertyId || d.projet || '';
+        const description = d.professionnel || d.marchand || d.description || d.fournisseur || '';
+        const montant = d.montant !== undefined ? d.montant : (d.totalAmount !== undefined ? d.totalAmount : (d.total !== undefined ? d.total : 0));
+        const row = [
+          `"${date}"`, `"${categorie}"`, `"${propriete}"`,
+          `"${String(description).replace(/"/g, '""')}"`, `"${montant}"`,
+        ];
+        csvRows.push(row.join(','));
+      });
+      const csvContent = csvRows.join('\n');
+      const csvFileName = `AutoCompt_Export_Depenses_${yearToClose}.csv`;
+      const csvBlob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const csvUrl = URL.createObjectURL(csvBlob);
+      const csvLink = document.createElement('a');
+      csvLink.href = csvUrl;
+      csvLink.download = csvFileName;
+      document.body.appendChild(csvLink);
+      csvLink.click();
+      document.body.removeChild(csvLink);
+      URL.revokeObjectURL(csvUrl);
 
-    depenses.forEach(d => {
-      // Nettoyage et préparation des données pour le CSV (gestion des virgules, guillemets)
-      const date = d.date || '';
-      const categorie = d.categorie || d.category || '';
-      const propriete = d.adresse || d.propertyId || d.projet || '';
-      const description = d.professionnel || d.marchand || d.description || '';
-      const montant = d.montant !== undefined ? d.montant : (d.totalAmount !== undefined ? d.totalAmount : 0);
+      // 2. Index des documents fiscaux de l'année — métadonnées seulement
+      // (les fichiers eux-mêmes ne sont pas stockés binaire dans AutoCompt).
+      const filesThisYear = dossierFiles.filter((f) => f.year === yearToClose);
+      const indexRows = [['Nom du document', 'Fournisseur/Tiers', 'Catégorie', 'Statut', 'Date'].join(',')];
+      filesThisYear.forEach((f) => {
+        indexRows.push([`"${f.name}"`, `"${f.provider}"`, `"${f.category}"`, `"${f.status}"`, `"${f.date}"`].join(','));
+      });
+      const indexCsvContent = indexRows.join('\n');
 
-      const row = [
-        `"${date}"`,
-        `"${categorie}"`,
-        `"${propriete}"`,
-        `"${description.replace(/"/g, '""')}"`, // Échapper les guillemets existants
-        `"${montant}"`
-      ];
-      csvRows.push(row.join(','));
-    });
+      // 3. Archiver dans le Drive de l'entreprise, si connecté — n'ajoute
+      // jamais que des fichiers, aucune suppression.
+      let driveLink: string | undefined;
+      if (uid) {
+        try {
+          const driveOwnerId = currentCompany?.ownerId || uid;
+          const driveStatus = await getCompanyDriveConfig(activeCompanyId, driveOwnerId);
+          if (driveStatus?.connected) {
+            const BOM = '﻿'; // force Excel a lire le CSV en UTF-8
+            const toBase64 = (text: string) => btoa(unescape(encodeURIComponent(BOM + text)));
+            const depensesResult = await uploadDocumentToDrive(
+              activeCompanyId, driveOwnerId, toBase64(csvContent), csvFileName,
+              'text/csv', currentCompany?.nombre || 'Entreprise', `Archives ${yearToClose}`,
+            );
+            if (depensesResult.success) driveLink = depensesResult.webViewLink;
+            if (filesThisYear.length > 0) {
+              await uploadDocumentToDrive(
+                activeCompanyId, driveOwnerId, toBase64(indexCsvContent), `Index_Documents_Fiscaux_${yearToClose}.csv`,
+                'text/csv', currentCompany?.nombre || 'Entreprise', `Archives ${yearToClose}`,
+              );
+            }
+          }
+        } catch (e) {
+          console.error('[DossierFiscauxView] Drive archive failed (non-blocking):', e);
+        }
 
-    const csvContent = csvRows.join('\n');
-    // Ajout du BOM (Byte Order Mark) pour forcer Excel à lire en UTF-8
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    // Téléchargement programmé
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'AutoCompt_Export_Annuel_2026.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+        // 4. Sceller l'année — preuve immuable (jamais update/delete, voir
+        // firestore.rules), remplace l'ancienne "archive" locale perdue.
+        try {
+          await dataService.sealFiscalYear(uid, { companyId: activeCompanyId, year: yearToClose, driveLink });
+        } catch (e) {
+          console.error('[DossierFiscauxView] sealFiscalYear failed:', e);
+        }
+      }
 
-    // archiving logic
-    const nouveauArchive = {
-      id: `archive-${Date.now()}`,
-      dateArchivage: new Date().toISOString(),
-      annee: 2026,
-      depensesArchivees: [...depenses],
-      dossierFilesArchives: [...dossierFiles]
-    };
-    
-    // add to global archives
-    setArchivesAnnuelles(prev => [...prev, nouveauArchive]);
-    
-    // reset current state
-    setDepenses([]);
-    setDossierFiles([]);
-    
-    // notify and close
-    setShowClotureModal(false);
-    playNotificationSound();
-    
-    // toast
-    setClotureToast(true);
-    setTimeout(() => {
-      setClotureToast(false);
-    }, 4000);
+      setShowClotureModal(false);
+      playNotificationSound();
+      setClotureToast(true);
+      setTimeout(() => setClotureToast(false), 4000);
+    } finally {
+      setIsClosingYear(false);
+    }
   };
 
   // Standard categories
@@ -970,21 +1001,24 @@ export default function DossierFiscauxView({
                 Clôturer l'année comptable
               </h2>
               <p className={`text-sm font-medium mb-8 max-w-md ${darkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
-                Êtes-vous sûr de vouloir clôturer l'année comptable ? Cette action archivera toutes vos dépenses et reçus actuels dans un dossier historique, et remettra votre Tenue de livres à zéro pour la nouvelle année.
+                Cette action archive vos dépenses et documents de l'année dans le Drive de l'entreprise (CSV) et scelle l'année de façon permanente. <strong>Rien n'est supprimé</strong> — vos dépenses réelles restent intactes dans Tenue de Livres, et l'année reste consultable en tout temps en sélectionnant son dossier ici.
               </p>
-              
+
               <div className="flex items-center space-x-4 w-full">
-                <button 
+                <button
                   onClick={() => setShowClotureModal(false)}
-                  className={`flex-1 py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all ${darkMode ? 'bg-zinc-900 text-white hover:bg-zinc-800' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  disabled={isClosingYear}
+                  className={`flex-1 py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 ${darkMode ? 'bg-zinc-900 text-white hover:bg-zinc-800' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                 >
                   Annuler
                 </button>
-                <button 
+                <button
                   onClick={handleCloturerAnnee}
-                  className="flex-1 py-4 rounded-[24px] bg-orange-500 text-white text-xs font-black uppercase tracking-widest hover:bg-orange-600 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-all"
+                  disabled={isClosingYear}
+                  className="flex-1 py-4 rounded-[24px] bg-orange-500 text-white text-xs font-black uppercase tracking-widest hover:bg-orange-600 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
                 >
-                  Confirmer
+                  {isClosingYear ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {isClosingYear ? 'Archivage...' : 'Confirmer'}
                 </button>
               </div>
             </motion.div>
@@ -1279,9 +1313,9 @@ export default function DossierFiscauxView({
                 <ShieldCheck size={24} className="text-white" />
               </div>
               <div>
-                <h4 className="text-sm font-black italic uppercase tracking-tight">Nouvelle année prête</h4>
+                <h4 className="text-sm font-black italic uppercase tracking-tight">Année archivée</h4>
                 <p className="text-[11px] font-bold mt-1 text-emerald-100 leading-tight">
-                  ✨ L'année a été clôturée et archivée avec succès. Vos registres sont prêts pour la nouvelle année.
+                  ✨ Archivée dans votre Drive et scellée — aucune donnée n'a été supprimée, retrouvez-la en tout temps ici.
                 </p>
               </div>
               <button 
