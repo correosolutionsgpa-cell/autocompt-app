@@ -603,6 +603,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
   ) => {
     setIsGeneratingLink(true);
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${document.id.slice(0, 6)}`;
+    const uid = auth.currentUser?.uid;
 
     // URL payload: text-only (no images) to keep URL short and email-safe
     const urlPayload = {
@@ -620,6 +621,15 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
       customDocUrl: document.customDocUrl || '',
       pdfStorageUrl: pdfStorageUrl || '',
       signatureFields: signatureFields || [],
+      // So /api/finalize-signature-group can mark the legalDocuments entry
+      // "Signé" once everyone has signed — Syndicat documents live in a
+      // DIFFERENT collection (legalDocuments, not docuLegalDocs like
+      // Plex/Gestionnaire), so the server needs both which account owns it
+      // AND which collection/id-scheme to update. Without this, the document
+      // stayed "En attente" forever even after every party signed. Found
+      // 2026-08-16 auditing Syndicat.
+      docuLegalOwnerId: uid,
+      docuLegalCollection: 'legalDocuments' as const,
     };
 
     // Use URL-safe base64: replace +→-, /→_, strip trailing =
@@ -1034,6 +1044,7 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
     pdfStorageUrl: string,
     signers: { name: string; email: string }[],
   ) => {
+    const uid = auth.currentUser?.uid;
     const todayStr = new Date().toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
     const fileName = pdfEditorFile?.name?.replace(/\.pdf$/i, '') || 'Document PDF importé';
     const newDoc: LegalDocument = {
@@ -1086,6 +1097,10 @@ export default function SyndicatDocuLegal({ darkMode, companyName = "Solutions G
         signerIndex: i,
         totalSigners: signers.length,
         allSigners: signers.map((s) => ({ name: s.name, email: s.email })),
+        // Same fix as handleSendForSignature above — Syndicat documents live
+        // in legalDocuments, not docuLegalDocs.
+        docuLegalOwnerId: uid,
+        docuLegalCollection: 'legalDocuments' as const,
       };
       let b64 = '';
       try {

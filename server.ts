@@ -1774,15 +1774,24 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
       // 2026-08-13: Fabiola couldn't locate her completed document anywhere
       // in the app. docuLegalOwnerId is only present on documents created
       // after this fix; older ones can't be resolved and are skipped.
+      //
+      // Syndicat documents live in a DIFFERENT collection (legalDocuments,
+      // doc id "{uid}_legaldoc_{docId}") than Plex/Gestionnaire's docuLegalDocs
+      // ("{uid}_doculegal_{docId}") — docuLegalCollection tells us which one
+      // to update. Absent on older/Plex documents, defaults to docuLegalDocs.
+      // Found 2026-08-16: Syndicat's own signed documents never auto-marked
+      // "Signé" because this always wrote to the wrong collection.
       const docuLegalOwnerId = first.docuLegalOwnerId;
       if (docuLegalOwnerId) {
         try {
-          await db.collection("docuLegalDocs").doc(`${docuLegalOwnerId}_doculegal_${docId}`).set({
+          const collectionName = first.docuLegalCollection === "legalDocuments" ? "legalDocuments" : "docuLegalDocs";
+          const idSuffix = first.docuLegalCollection === "legalDocuments" ? "_legaldoc_" : "_doculegal_";
+          await db.collection(collectionName).doc(`${docuLegalOwnerId}${idSuffix}${docId}`).set({
             status: "Signé",
             ...(driveFileUrl ? { fileUrl: driveFileUrl } : {}),
           }, { merge: true });
         } catch (updateErr) {
-          console.error("[finalize-signature-group] docuLegalDocs status update failed:", updateErr);
+          console.error("[finalize-signature-group] docuLegal status update failed:", updateErr);
         }
       }
 
