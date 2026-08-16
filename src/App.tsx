@@ -2191,7 +2191,14 @@ const App = () => {
         // testant le nouveau canal Relevé de Gestion)
         "fideicommis", "portefeuille_client", "tenue_livres_immeuble", "mandat_gestion",
         // Comptable + Relevé de Gestion (nouveaux aujourd'hui)
-        "portefeuille_clients_comptable", "releves_gestion"
+        "portefeuille_clients_comptable", "releves_gestion",
+        // Manquaient ici aussi, même bug — un compte superadmin cliquant sur
+        // "Calculateur de Flip" était rebondi instantanément vers "dashboard"
+        // (aucune erreur console, juste vista réinitialisée) car la vue
+        // n'était jamais ajoutée à cette liste blanche au moment de sa
+        // construction (2026-08-13). Trouvé 2026-08-16 via rapport de bug de
+        // Fabiola. set-password/beta-code-admin avaient le même trou.
+        "flip_calculator", "set-password", "beta-code-admin"
       ];
       if (!internalViews.includes(vista) && vista !== "splash") {
         setActiveUser("SuperAdmin");
