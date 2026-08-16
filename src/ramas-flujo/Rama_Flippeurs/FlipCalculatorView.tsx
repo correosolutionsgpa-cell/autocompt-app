@@ -40,10 +40,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Menu, Hammer, Plus, X, Loader2, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, Trash2, Edit3, Receipt, Home,
+  ChevronDown, ChevronUp, Calculator, Percent, Users, Save, Download,
 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
-import type { FlipProjectDoc, ExpenseDoc } from "../../lib/dataService";
+import { getCompanyDriveConfig, uploadDocumentToDrive } from "../../lib/driveService";
+import type { FlipProjectDoc, FlipRenovationItem, ExpenseDoc } from "../../lib/dataService";
 
 // Same category strings as the main "Validation IA" expense form (App.tsx)
 // so an expense logged here reads identically everywhere else in the app.
@@ -100,6 +102,39 @@ const emptySellForm = { prixReventeReel: "", dateRevente: new Date().toISOString
 
 const emptyExpenseForm = { date: new Date().toISOString().slice(0, 10), description: "", montant: "", cat: HOLDING_CATEGORIES[0] };
 
+// ── Analyse avancée — panneau optionnel/repliable par projet, jamais requis
+// pour le flux simple (adresse/prix/frais/revente) ci-dessus. Un seul état
+// de formulaire couvre les 3 phases (ARV/ROI, budget détaillé, financement +
+// associés) pour rester cohérent — chaque phase construit sur la précédente.
+const RENOVATION_CATEGORIES = [
+  "Conditions générales", "Démo et conteneurs", "Excavation", "Fondation béton",
+  "Béton finition et crépi", "Maçonnerie", "Revêtement extérieur", "Toiture",
+  "Portes et fenêtres", "Aluminium, gouttières", "Patio, deck, balcon",
+  "Paysagement", "Rough menuiserie", "Isolation", "Porte de garage",
+  "Plomberie", "Électricité", "Ventilation, chauffage", "Gypse",
+  "Portes et moulures", "Plancher de bois", "Plancher autre", "Céramique",
+  "Plâtre", "Peinture", "Armoires et comptoirs", "Foyer", "Robinetterie",
+  "Luminaires", "Autre",
+];
+
+const emptyAnalysisForm = {
+  arv: "",
+  etatCondition: "bon" as "bon" | "gout_du_jour" | "mauvais",
+  nombreEtages: "",
+  pi2ParEtage: "",
+  coutPi2Bon: "30",
+  coutPi2GoutDuJour: "60",
+  coutPi2Mauvais: "120",
+  renovationLineItems: [] as FlipRenovationItem[],
+  banqueFinancementPct: "",
+  banqueTauxHypothecaire: "",
+  banqueAmortissementAns: "25",
+  preteurPriveMiseDeFondsPct: "",
+  preteurPriveRenosPct: "",
+  preteurPriveTauxAnnuel: "",
+  associes: [] as { nom: string; apport: number }[],
+};
+
 const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   darkMode, activeCompanyId, currentCompany, setVista, setIsSidebarOpen, WorkspaceSidebar,
   depenses, setDepenses, activeUser, playNotificationSound,
@@ -114,11 +149,16 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   const [sellForm, setSellForm] = useState(emptySellForm);
   const [expenseProjectId, setExpenseProjectId] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
+  const [expandedAnalysisId, setExpandedAnalysisId] = useState<string | null>(null);
+  const [analysisForm, setAnalysisForm] = useState(emptyAnalysisForm);
+  const [savingAnalysis, setSavingAnalysis] = useState(false);
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
 
   const glass = darkMode
     ? "bg-slate-900/40 border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)]"
     : "bg-white border-slate-200 shadow-sm";
   const inputCls = `w-full p-3 rounded-2xl text-[12px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`;
+  const inputClsSm = `w-full p-1.5 rounded-lg text-[10px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`;
 
   const load = useCallback(async () => {
     const uid = auth.currentUser?.uid;
@@ -249,6 +289,115 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
     playNotificationSound?.();
   };
 
+  // ── Analyse avancée (ARV, budget détaillé, financement, associés) ─────────
+  const toggleAnalysis = (p: FlipProjectDoc) => {
+    if (expandedAnalysisId === p.id) { setExpandedAnalysisId(null); return; }
+    setAnalysisForm({
+      arv: p.arv != null ? String(p.arv) : "",
+      etatCondition: p.etatCondition || "bon",
+      nombreEtages: p.nombreEtages != null ? String(p.nombreEtages) : "",
+      pi2ParEtage: p.pi2ParEtage != null ? String(p.pi2ParEtage) : "",
+      coutPi2Bon: p.coutPi2Bon != null ? String(p.coutPi2Bon) : "30",
+      coutPi2GoutDuJour: p.coutPi2GoutDuJour != null ? String(p.coutPi2GoutDuJour) : "60",
+      coutPi2Mauvais: p.coutPi2Mauvais != null ? String(p.coutPi2Mauvais) : "120",
+      renovationLineItems: p.renovationLineItems || [],
+      banqueFinancementPct: p.banqueFinancementPct != null ? String(p.banqueFinancementPct) : "",
+      banqueTauxHypothecaire: p.banqueTauxHypothecaire != null ? String(p.banqueTauxHypothecaire) : "",
+      banqueAmortissementAns: p.banqueAmortissementAns != null ? String(p.banqueAmortissementAns) : "25",
+      preteurPriveMiseDeFondsPct: p.preteurPriveMiseDeFondsPct != null ? String(p.preteurPriveMiseDeFondsPct) : "",
+      preteurPriveRenosPct: p.preteurPriveRenosPct != null ? String(p.preteurPriveRenosPct) : "",
+      preteurPriveTauxAnnuel: p.preteurPriveTauxAnnuel != null ? String(p.preteurPriveTauxAnnuel) : "",
+      associes: p.associes || [],
+    });
+    setExpandedAnalysisId(p.id);
+  };
+
+  // ── Budget de rénovation détaillé — un poste préréglé à la fois, jamais
+  // écrit dans Tenue de Livres (voir note du panneau) ──
+  const addRenovationCategory = (categorie: string) => {
+    if (analysisForm.renovationLineItems.some((it) => it.categorie === categorie)) return;
+    setAnalysisForm({
+      ...analysisForm,
+      renovationLineItems: [
+        ...analysisForm.renovationLineItems,
+        { id: `reno_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, categorie },
+      ],
+    });
+  };
+  const updateRenovationItem = (id: string, patch: Partial<FlipRenovationItem>) => {
+    setAnalysisForm({
+      ...analysisForm,
+      renovationLineItems: analysisForm.renovationLineItems.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+    });
+  };
+  const removeRenovationItem = (id: string) => {
+    setAnalysisForm({
+      ...analysisForm,
+      renovationLineItems: analysisForm.renovationLineItems.filter((it) => it.id !== id),
+    });
+  };
+
+  // ── Associés — liste libre nom + apport, jamais des champs codés en dur ──
+  const [associeDraft, setAssocieDraft] = useState({ nom: "", apport: "" });
+  const addAssocie = () => {
+    const apport = parseFloat(associeDraft.apport);
+    if (!associeDraft.nom.trim() || !apport || apport <= 0) return;
+    setAnalysisForm({
+      ...analysisForm,
+      associes: [...analysisForm.associes, { nom: associeDraft.nom.trim(), apport }],
+    });
+    setAssocieDraft({ nom: "", apport: "" });
+  };
+  const removeAssocie = (index: number) => {
+    setAnalysisForm({
+      ...analysisForm,
+      associes: analysisForm.associes.filter((_, i) => i !== index),
+    });
+  };
+
+  const handleSaveAnalysis = async (p: FlipProjectDoc) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setSavingAnalysis(true);
+    try {
+      const num = (s: string) => (s.trim() === "" ? undefined : parseFloat(s) || 0);
+      // Firestore rejette `undefined` même dans un objet imbriqué (saveFlipProject
+      // ne nettoie que les clés de premier niveau) — on nettoie chaque ligne ici.
+      const cleanLineItems = analysisForm.renovationLineItems.map((it) => {
+        const clean: any = { id: it.id, categorie: it.categorie };
+        if (it.soumission1 != null) clean.soumission1 = it.soumission1;
+        if (it.soumission2 != null) clean.soumission2 = it.soumission2;
+        if (it.soumission3 != null) clean.soumission3 = it.soumission3;
+        if (it.coutReel != null) clean.coutReel = it.coutReel;
+        return clean as FlipRenovationItem;
+      });
+      const saved = await dataService.saveFlipProject(uid, {
+        ...p,
+        arv: num(analysisForm.arv),
+        etatCondition: analysisForm.etatCondition,
+        nombreEtages: num(analysisForm.nombreEtages),
+        pi2ParEtage: num(analysisForm.pi2ParEtage),
+        coutPi2Bon: num(analysisForm.coutPi2Bon),
+        coutPi2GoutDuJour: num(analysisForm.coutPi2GoutDuJour),
+        coutPi2Mauvais: num(analysisForm.coutPi2Mauvais),
+        renovationLineItems: cleanLineItems,
+        banqueFinancementPct: num(analysisForm.banqueFinancementPct),
+        banqueTauxHypothecaire: num(analysisForm.banqueTauxHypothecaire),
+        banqueAmortissementAns: num(analysisForm.banqueAmortissementAns),
+        preteurPriveMiseDeFondsPct: num(analysisForm.preteurPriveMiseDeFondsPct),
+        preteurPriveRenosPct: num(analysisForm.preteurPriveRenosPct),
+        preteurPriveTauxAnnuel: num(analysisForm.preteurPriveTauxAnnuel),
+        associes: analysisForm.associes,
+      });
+      setProjects((prev) => prev.map((x) => (x.id === p.id ? saved : x)));
+      playNotificationSound?.();
+    } catch (err: any) {
+      alert("Erreur lors de l'enregistrement de l'analyse : " + (err?.message || err));
+    } finally {
+      setSavingAnalysis(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-slate-950" : "bg-slate-50"}`}>
@@ -361,6 +510,34 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
           const isAntiFlip = joursDetenus < 365;
           const profitable = profit >= 0;
 
+          // ── Analyse avancée — approximations avant que le financement réel
+          // (Phase 3) ne soit rempli : l'investissement cash suppose tout
+          // payé comptant, à raffiner une fois banque/prêteur privé saisis.
+          const coutPi2ParEtat = p.etatCondition === "mauvais" ? (p.coutPi2Mauvais ?? 120)
+            : p.etatCondition === "gout_du_jour" ? (p.coutPi2GoutDuJour ?? 60)
+            : (p.coutPi2Bon ?? 30);
+          const quickRenoEstimate = (p.nombreEtages || 0) * (p.pi2ParEtage || 0) * coutPi2ParEtat;
+
+          // ── Structure de financement — banque + prêteur privé, séparés pour
+          // la mise de fonds et pour les rénovations (un flip combine souvent
+          // les deux). Intérêt approximé sur la période de possession réelle,
+          // sans amortissement (raisonnable pour quelques mois de détention).
+          const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || quickRenoEstimate;
+          const moisDetenus = joursDetenus / 30.44;
+          const miseDeFondsTotal = p.prixAchat * (1 - (p.banqueFinancementPct || 0) / 100);
+          const montantFinanceBanque = p.prixAchat * (p.banqueFinancementPct || 0) / 100;
+          const interetBanque = montantFinanceBanque * (p.banqueTauxHypothecaire || 0) / 100 * (moisDetenus / 12);
+          const miseDeFondsFinanceeParPreteur = miseDeFondsTotal * (p.preteurPriveMiseDeFondsPct || 0) / 100;
+          const renosFinanceesParPreteur = coutRenovationReel * (p.preteurPriveRenosPct || 0) / 100;
+          const interetPreteurPrive = (miseDeFondsFinanceeParPreteur + renosFinanceesParPreteur) * (p.preteurPriveTauxAnnuel || 0) / 100 * (moisDetenus / 12);
+          const interetTotalReference = interetBanque + interetPreteurPrive;
+          const hasFinancingData = p.banqueFinancementPct != null || p.preteurPriveMiseDeFondsPct != null;
+          const investissementCashReel = hasFinancingData
+            ? (miseDeFondsTotal - miseDeFondsFinanceeParPreteur) + (coutRenovationReel - renosFinanceesParPreteur) + (p.fraisAchat || 0)
+            : p.prixAchat + (p.fraisAchat || 0);
+          const roiAllCash = investissementCashReel > 0 ? (profit / investissementCashReel) * 100 : 0;
+          const isAnalysisOpen = expandedAnalysisId === p.id;
+
           return (
             <div key={p.id} className={`rounded-[24px] border overflow-hidden ${glass}`}>
               <div className="p-5 space-y-3">
@@ -431,6 +608,9 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                   <button onClick={() => handleDelete(p)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all">
                     <Trash2 size={11} /> Supprimer
                   </button>
+                  <button onClick={() => toggleAnalysis(p)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-all ml-auto">
+                    <Calculator size={11} /> Analyse avancée {isAnalysisOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  </button>
                 </div>
 
                 {/* Quick holding-cost expense form — reno, taxes, insurance, interest... */}
@@ -487,6 +667,216 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                         Annuler
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Analyse avancée — repliable, jamais requise pour l'usage courant */}
+                {isAnalysisOpen && (
+                  <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-2">
+                      <Calculator size={13} className="text-amber-500" />
+                      <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Analyse avancée — planification seulement, ne modifie jamais Tenue de Livres</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Valeur marchande rénovée (ARV) ($)</label>
+                        <input type="number" value={analysisForm.arv} onChange={(e) => setAnalysisForm({ ...analysisForm, arv: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Nombre d'étages</label>
+                        <input type="number" value={analysisForm.nombreEtages} onChange={(e) => setAnalysisForm({ ...analysisForm, nombreEtages: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Pi² par étage</label>
+                        <input type="number" value={analysisForm.pi2ParEtage} onChange={(e) => setAnalysisForm({ ...analysisForm, pi2ParEtage: e.target.value })} className={inputCls} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">État de la propriété</label>
+                      <div className={`flex p-1 rounded-full border ${darkMode ? "border-zinc-800 bg-zinc-900/30" : "border-slate-200 bg-white"}`}>
+                        {([
+                          { id: "bon", label: "Bon état" },
+                          { id: "gout_du_jour", label: "Mis au goût du jour" },
+                          { id: "mauvais", label: "Mauvais état" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setAnalysisForm({ ...analysisForm, etatCondition: opt.id })}
+                            className={`flex-1 py-1.5 rounded-full text-[7.5px] font-black uppercase tracking-wider transition-all ${analysisForm.etatCondition === opt.id ? "bg-amber-500 text-white" : darkMode ? "text-zinc-400" : "text-slate-500"}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">$/pi² — bon état</label>
+                        <input type="number" value={analysisForm.coutPi2Bon} onChange={(e) => setAnalysisForm({ ...analysisForm, coutPi2Bon: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">$/pi² — goût du jour</label>
+                        <input type="number" value={analysisForm.coutPi2GoutDuJour} onChange={(e) => setAnalysisForm({ ...analysisForm, coutPi2GoutDuJour: e.target.value })} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">$/pi² — mauvais état</label>
+                        <input type="number" value={analysisForm.coutPi2Mauvais} onChange={(e) => setAnalysisForm({ ...analysisForm, coutPi2Mauvais: e.target.value })} className={inputCls} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className={`p-3 rounded-2xl border ${glass}`}>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Estimation rapide de rénovation</p>
+                        <p className="text-[13px] font-black mt-0.5">{fmtCAD(quickRenoEstimate)}</p>
+                        <p className="text-[7px] font-bold text-slate-400 mt-0.5">Référence — voir le budget détaillé si besoin</p>
+                      </div>
+                      <div className={`p-3 rounded-2xl border ${roiAllCash >= 0 ? "border-emerald-500/30" : "border-rose-500/30"} ${glass}`}>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Percent size={9} /> ROI All Cash</p>
+                        <p className={`text-[13px] font-black mt-0.5 ${roiAllCash >= 0 ? "text-emerald-500" : "text-rose-500"}`}>{roiAllCash.toFixed(1)}%</p>
+                      </div>
+                    </div>
+
+                    {/* Budget de rénovation détaillé — jusqu'à 3 soumissions par poste */}
+                    <div className="space-y-2 pt-3 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Budget de rénovation détaillé — jamais écrit dans Tenue de Livres</p>
+                      {analysisForm.renovationLineItems.length > 0 && (
+                        <div className="space-y-2">
+                          {analysisForm.renovationLineItems.map((it) => (
+                            <div key={it.id} className={`p-2.5 rounded-xl border space-y-1.5 ${glass}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[9px] font-black uppercase tracking-wider truncate">{it.categorie}</span>
+                                <button onClick={() => removeRenovationItem(it.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {(["soumission1", "soumission2", "soumission3"] as const).map((key, i) => (
+                                  <div key={key} className="space-y-0.5">
+                                    <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">Soum. {i + 1}</label>
+                                    <input
+                                      type="number"
+                                      value={it[key] ?? ""}
+                                      onChange={(e) => updateRenovationItem(it.id, { [key]: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
+                                      className={inputClsSm}
+                                    />
+                                  </div>
+                                ))}
+                                <div className="space-y-0.5">
+                                  <label className="text-[6.5px] font-bold uppercase tracking-wider text-amber-500">Coût réel</label>
+                                  <input
+                                    type="number"
+                                    value={it.coutReel ?? ""}
+                                    onChange={(e) => updateRenovationItem(it.id, { coutReel: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
+                                    className={`${inputClsSm} border-amber-400`}
+                                  />
+                                </div>
+                              </div>
+                              {it.coutReel == null && (it.soumission1 != null || it.soumission2 != null || it.soumission3 != null) && (
+                                <div className="flex gap-2 flex-wrap">
+                                  {([["soumission1", it.soumission1], ["soumission2", it.soumission2], ["soumission3", it.soumission3]] as const).map(([key, val]) => val != null && (
+                                    <button key={key} type="button" onClick={() => updateRenovationItem(it.id, { coutReel: val })} className="text-[7px] font-bold uppercase tracking-wider text-amber-500 hover:text-amber-600">
+                                      ↳ Utiliser {fmtCAD(val)}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {RENOVATION_CATEGORIES.filter((c) => !analysisForm.renovationLineItems.some((it) => it.categorie === c)).map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => addRenovationCategory(c)}
+                            className={`px-2 py-1 rounded-lg text-[7px] font-bold uppercase tracking-wider border transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-800" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+                          >
+                            + {c}
+                          </button>
+                        ))}
+                      </div>
+                      {analysisForm.renovationLineItems.length > 0 && (
+                        <div className={`p-3 rounded-2xl border ${glass} flex items-center justify-between`}>
+                          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Total budget rénovation (coûts réels)</span>
+                          <span className="text-[13px] font-black text-amber-600">
+                            {fmtCAD(analysisForm.renovationLineItems.reduce((s, it) => s + (it.coutReel ?? 0), 0))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Structure de financement */}
+                    <div className="space-y-2 pt-3 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Structure de financement — référence pour compléter les dépenses de possession à la main</p>
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">% financé par la banque</label>
+                          <input type="number" value={analysisForm.banqueFinancementPct} onChange={(e) => setAnalysisForm({ ...analysisForm, banqueFinancementPct: e.target.value })} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">Taux hypothécaire (%)</label>
+                          <input type="number" value={analysisForm.banqueTauxHypothecaire} onChange={(e) => setAnalysisForm({ ...analysisForm, banqueTauxHypothecaire: e.target.value })} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">Amortissement (ans)</label>
+                          <input type="number" value={analysisForm.banqueAmortissementAns} onChange={(e) => setAnalysisForm({ ...analysisForm, banqueAmortissementAns: e.target.value })} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">% mise de fonds — prêteur privé</label>
+                          <input type="number" value={analysisForm.preteurPriveMiseDeFondsPct} onChange={(e) => setAnalysisForm({ ...analysisForm, preteurPriveMiseDeFondsPct: e.target.value })} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">% rénos — prêteur privé</label>
+                          <input type="number" value={analysisForm.preteurPriveRenosPct} onChange={(e) => setAnalysisForm({ ...analysisForm, preteurPriveRenosPct: e.target.value })} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">Taux annuel prêteur privé (%)</label>
+                          <input type="number" value={analysisForm.preteurPriveTauxAnnuel} onChange={(e) => setAnalysisForm({ ...analysisForm, preteurPriveTauxAnnuel: e.target.value })} className={inputClsSm} />
+                        </div>
+                      </div>
+                      {hasFinancingData && (
+                        <div className={`p-3 rounded-2xl border ${glass} flex items-center justify-between`}>
+                          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Intérêt de référence — banque + prêteur privé ({moisDetenus.toFixed(1)} mois)</span>
+                          <span className="text-[13px] font-black text-amber-600">{fmtCAD(interetTotalReference)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Associés */}
+                    <div className="space-y-2 pt-3 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Users size={10} /> Associés — répartition du profit selon l'apport</p>
+                      {analysisForm.associes.length > 0 && (
+                        <div className="space-y-1.5">
+                          {analysisForm.associes.map((a, i) => {
+                            const totalApports = analysisForm.associes.reduce((s, x) => s + x.apport, 0);
+                            const pct = totalApports > 0 ? (a.apport / totalApports) * 100 : 0;
+                            return (
+                              <div key={i} className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${glass}`}>
+                                <div className="min-w-0">
+                                  <p className="text-[9px] font-black truncate">{a.nom}</p>
+                                  <p className="text-[7.5px] font-bold text-slate-400">Apport {fmtCAD(a.apport)} · {pct.toFixed(1)}% · profit {fmtCAD(profit * pct / 100)}</p>
+                                </div>
+                                <button onClick={() => removeAssocie(i)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input placeholder="Nom" value={associeDraft.nom} onChange={(e) => setAssocieDraft({ ...associeDraft, nom: e.target.value })} className={`${inputClsSm} flex-1`} />
+                        <input type="number" placeholder="Apport ($)" value={associeDraft.apport} onChange={(e) => setAssocieDraft({ ...associeDraft, apport: e.target.value })} className={`${inputClsSm} w-28`} />
+                        <button type="button" onClick={addAssocie} className="px-3 rounded-lg text-[8px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all shrink-0">
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <button onClick={() => handleSaveAnalysis(p)} disabled={savingAnalysis} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5">
+                      {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer l'analyse
+                    </button>
                   </div>
                 )}
               </div>

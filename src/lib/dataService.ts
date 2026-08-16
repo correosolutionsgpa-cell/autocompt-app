@@ -448,8 +448,56 @@ export interface FlipProjectDoc {
   fraisCourtier?: number;     // commission du courtier qui vend la propriété
   statut: 'en_cours' | 'vendu';
   notes?: string;
+  // ── Analyse avancée (optionnelle) — inspirée d'une feuille de calcul de
+  // formation immobilière que Fabiola utilise déjà pour un projet réel.
+  // Tous les champs ci-dessous sont facultatifs et n'affectent jamais le
+  // flux simple existant (adresse/prix/frais/revente) — ils vivent dans un
+  // panneau "Analyse avancée" repliable, jamais obligatoire.
+  /** Valeur marchande une fois rénovée (ARV) — base de l'analyse avant achat. */
+  arv?: number;
+  etatCondition?: 'bon' | 'gout_du_jour' | 'mauvais';
+  nombreEtages?: number;
+  pi2ParEtage?: number;
+  /** $/pi² par état — préremplis à 30/60/120 (valeurs de référence de la
+   *  feuille source) mais toujours modifiables, jamais figés en dur. */
+  coutPi2Bon?: number;
+  coutPi2GoutDuJour?: number;
+  coutPi2Mauvais?: number;
+  /** Budget de rénovation détaillé — poste par poste, jusqu'à 3 soumissions
+   *  comparées + le coût réel retenu. Purement un outil de planification :
+   *  n'écrit jamais dans Tenue de Livres (seul "+ Dépense de possession"
+   *  crée de vraies dépenses) — même principe que "CCA maximale" au DpaTab. */
+  renovationLineItems?: FlipRenovationItem[];
+  /** Structure de financement — banque + prêteur privé, taux distincts pour
+   *  la mise de fonds et pour les rénovations (un flip combine souvent les
+   *  deux sources). Sert à calculer un intérêt de référence pour la période
+   *  de possession, jamais auto-écrit dans Tenue de Livres non plus. */
+  banqueFinancementPct?: number;
+  banqueTauxHypothecaire?: number;
+  banqueAmortissementAns?: number;
+  preteurPriveMiseDeFondsPct?: number;
+  preteurPriveRenosPct?: number;
+  preteurPriveTauxAnnuel?: number;
+  /** Répartition entre associés — liste libre (nom + apport $), jamais des
+   *  champs codés en dur pour un projet ou un utilisateur en particulier. */
+  associes?: { nom: string; apport: number }[];
   ownerId: string;
   createdAt: string;
+}
+
+/** Une ligne du budget de rénovation détaillé d'un FlipProjectDoc — voir
+ *  FlipProjectDoc.renovationLineItems ci-dessus. */
+export interface FlipRenovationItem {
+  id: string;
+  /** Poste de travaux — preset (Plomberie, Électricité, Toiture...) ou texte
+   *  libre pour un poste non prévu dans la liste. */
+  categorie: string;
+  soumission1?: number;
+  soumission2?: number;
+  soumission3?: number;
+  /** Ce qui compte réellement dans le total du budget une fois choisi —
+   *  distinct des 3 soumissions, qui restent visibles pour comparaison. */
+  coutReel?: number;
 }
 
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
