@@ -481,6 +481,32 @@ export interface FlipProjectDoc {
   /** Répartition entre associés — liste libre (nom + apport $), jamais des
    *  champs codés en dur pour un projet ou un utilisateur en particulier. */
   associes?: { nom: string; apport: number }[];
+  /** Durée de possession ESTIMÉE (mois) — distincte des jours réellement
+   *  écoulés entre dateAchat et aujourd'hui/dateRevente : sert à évaluer la
+   *  rentabilité AVANT même d'acheter, quand aucune vraie dépense n'existe
+   *  encore dans Tenue de Livres. */
+  possessionMoisEstime?: number;
+  /** Coûts fixes de possession — saisis en montant MENSUEL, multipliés par
+   *  possessionMoisEstime pour l'estimation rapide de rentabilité. Purement
+   *  indicatif : n'écrit jamais dans Tenue de Livres, contrairement à
+   *  "+ Dépense de possession" qui reste la seule vraie source de dépenses. */
+  coutsFixesMensuels?: {
+    taxesMunicipales?: number;
+    taxesScolaires?: number;
+    electricite?: number;
+    assurances?: number;
+    deneigement?: number;
+    fraisCondo?: number;
+    entretien?: number;
+    /** Revenu de location pendant la possession, s'il y a lieu — vient EN
+     *  DÉDUCTION du coût total (réduit le coût de possession estimé). */
+    loyer?: number;
+  };
+  /** % de commission du courtier appliqué à l'ARV (ou au prix de revente
+   *  estimé) pour estimer les frais de vente AVANT d'avoir un vrai acheteur —
+   *  distinct de fraisCourtier ci-dessus, qui lui n'est rempli qu'à la vente
+   *  réelle. */
+  commissionCourtierPctEstime?: number;
   ownerId: string;
   createdAt: string;
 }

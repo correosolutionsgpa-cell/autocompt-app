@@ -169,6 +169,17 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
     ? (miseDeFondsTotal - miseDeFondsFinanceeParPreteur) + (coutRenovationReel - renosFinanceesParPreteur) + (p.fraisAchat || 0)
     : p.prixAchat + (p.fraisAchat || 0);
   const roiAllCash = investissementCashReel > 0 ? (profit / investissementCashReel) * 100 : 0;
+  const interetTotalReference = interetBanque + interetPreteurPrive;
+  const coutsFixesMensuelTotal = (p.coutsFixesMensuels?.taxesMunicipales || 0)
+    + (p.coutsFixesMensuels?.taxesScolaires || 0) + (p.coutsFixesMensuels?.electricite || 0)
+    + (p.coutsFixesMensuels?.assurances || 0) + (p.coutsFixesMensuels?.deneigement || 0)
+    + (p.coutsFixesMensuels?.fraisCondo || 0) + (p.coutsFixesMensuels?.entretien || 0)
+    - (p.coutsFixesMensuels?.loyer || 0);
+  const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
+  const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;
+  const reventeEstimeePourFaisabilite = p.arv || p.prixReventeEstime || 0;
+  const commissionEstimee = reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
+  const profitPotentiel = reventeEstimeePourFaisabilite - (p.prixAchat + (p.fraisAchat || 0)) - coutRenovationReel - coutsFixesPeriodeEstimes - interetTotalReference - commissionEstimee;
 
   sectionHeader("Acquisition");
   row("Prix d'achat", fmtCAD(p.prixAchat));
@@ -213,6 +224,14 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
   row("Profit" + (p.statut !== "vendu" ? " (estimé)" : ""), fmtCAD(profit), true);
   row("Marge sur prix d'achat", `${(p.prixAchat > 0 ? (profit / p.prixAchat) * 100 : 0).toFixed(1)}%`);
   row("ROI All Cash", `${roiAllCash.toFixed(1)}%`, true);
+
+  if (reventeEstimeePourFaisabilite > 0) {
+    sectionHeader("Profit potentiel — calculette de faisabilité");
+    row("Base (ARV ou prix de revente estimé)", fmtCAD(reventeEstimeePourFaisabilite));
+    row(`Coûts fixes de possession (${moisPotentiel.toFixed(1)} mois)`, fmtCAD(coutsFixesPeriodeEstimes));
+    row("Commission de vente estimée", fmtCAD(commissionEstimee));
+    row("Profit potentiel", fmtCAD(profitPotentiel), true);
+  }
 
   if (p.associes && p.associes.length > 0) {
     sectionHeader("Répartition entre associés");
@@ -297,7 +316,27 @@ const emptyAnalysisForm = {
   preteurPriveRenosPct: "",
   preteurPriveTauxAnnuel: "",
   associes: [] as { nom: string; apport: number }[],
+  possessionMoisEstime: "",
+  coutsFixesMensuels: {
+    taxesMunicipales: "", taxesScolaires: "", electricite: "", assurances: "",
+    deneigement: "", fraisCondo: "", entretien: "", loyer: "",
+  },
+  commissionCourtierPctEstime: "4",
 };
+
+// ── Coûts fixes de possession — estimation rapide (montant MENSUEL, calcul
+// automatique de la période complète) pour évaluer la rentabilité AVANT
+// d'avoir de vraies dépenses dans Tenue de Livres. ──
+const COUTS_FIXES_LABELS: { key: keyof typeof emptyAnalysisForm.coutsFixesMensuels; label: string }[] = [
+  { key: "taxesMunicipales", label: "Taxes municipales" },
+  { key: "taxesScolaires", label: "Taxes scolaires" },
+  { key: "electricite", label: "Électricité" },
+  { key: "assurances", label: "Assurances" },
+  { key: "deneigement", label: "Déneigement" },
+  { key: "fraisCondo", label: "Frais de condo" },
+  { key: "entretien", label: "Entretien" },
+  { key: "loyer", label: "Loyer perçu (déduit du coût)" },
+];
 
 const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   darkMode, activeCompanyId, currentCompany, setVista, setIsSidebarOpen, WorkspaceSidebar,
@@ -472,6 +511,18 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
       preteurPriveRenosPct: p.preteurPriveRenosPct != null ? String(p.preteurPriveRenosPct) : "",
       preteurPriveTauxAnnuel: p.preteurPriveTauxAnnuel != null ? String(p.preteurPriveTauxAnnuel) : "",
       associes: p.associes || [],
+      possessionMoisEstime: p.possessionMoisEstime != null ? String(p.possessionMoisEstime) : "",
+      coutsFixesMensuels: {
+        taxesMunicipales: p.coutsFixesMensuels?.taxesMunicipales != null ? String(p.coutsFixesMensuels.taxesMunicipales) : "",
+        taxesScolaires: p.coutsFixesMensuels?.taxesScolaires != null ? String(p.coutsFixesMensuels.taxesScolaires) : "",
+        electricite: p.coutsFixesMensuels?.electricite != null ? String(p.coutsFixesMensuels.electricite) : "",
+        assurances: p.coutsFixesMensuels?.assurances != null ? String(p.coutsFixesMensuels.assurances) : "",
+        deneigement: p.coutsFixesMensuels?.deneigement != null ? String(p.coutsFixesMensuels.deneigement) : "",
+        fraisCondo: p.coutsFixesMensuels?.fraisCondo != null ? String(p.coutsFixesMensuels.fraisCondo) : "",
+        entretien: p.coutsFixesMensuels?.entretien != null ? String(p.coutsFixesMensuels.entretien) : "",
+        loyer: p.coutsFixesMensuels?.loyer != null ? String(p.coutsFixesMensuels.loyer) : "",
+      },
+      commissionCourtierPctEstime: p.commissionCourtierPctEstime != null ? String(p.commissionCourtierPctEstime) : "4",
     });
     setExpandedAnalysisId(p.id);
   };
@@ -535,6 +586,12 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         if (it.coutReel != null) clean.coutReel = it.coutReel;
         return clean as FlipRenovationItem;
       });
+      // Même règle pour l'objet imbriqué des coûts fixes mensuels.
+      const cleanCoutsFixes: any = {};
+      COUTS_FIXES_LABELS.forEach(({ key }) => {
+        const v = num(analysisForm.coutsFixesMensuels[key]);
+        if (v != null) cleanCoutsFixes[key] = v;
+      });
       const saved = await dataService.saveFlipProject(uid, {
         ...p,
         arv: num(analysisForm.arv),
@@ -552,6 +609,9 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         preteurPriveRenosPct: num(analysisForm.preteurPriveRenosPct),
         preteurPriveTauxAnnuel: num(analysisForm.preteurPriveTauxAnnuel),
         associes: analysisForm.associes,
+        possessionMoisEstime: num(analysisForm.possessionMoisEstime),
+        coutsFixesMensuels: Object.keys(cleanCoutsFixes).length > 0 ? cleanCoutsFixes : undefined,
+        commissionCourtierPctEstime: num(analysisForm.commissionCourtierPctEstime),
       });
       setProjects((prev) => prev.map((x) => (x.id === p.id ? saved : x)));
       playNotificationSound?.();
@@ -734,6 +794,31 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
             ? (miseDeFondsTotal - miseDeFondsFinanceeParPreteur) + (coutRenovationReel - renosFinanceesParPreteur) + (p.fraisAchat || 0)
             : p.prixAchat + (p.fraisAchat || 0);
           const roiAllCash = investissementCashReel > 0 ? (profit / investissementCashReel) * 100 : 0;
+
+          // ── Profit potentiel — calculette de faisabilité complète, à partir
+          // de coûts SAISIS À LA MAIN (pas de vraies dépenses requises) : sert
+          // à évaluer un projet AVANT même de l'acheter. Distinct du "Profit"
+          // ci-dessus, qui lui vient des vraies dépenses de Tenue de Livres. ──
+          const coutsFixesMensuelTotal = (p.coutsFixesMensuels?.taxesMunicipales || 0)
+            + (p.coutsFixesMensuels?.taxesScolaires || 0)
+            + (p.coutsFixesMensuels?.electricite || 0)
+            + (p.coutsFixesMensuels?.assurances || 0)
+            + (p.coutsFixesMensuels?.deneigement || 0)
+            + (p.coutsFixesMensuels?.fraisCondo || 0)
+            + (p.coutsFixesMensuels?.entretien || 0)
+            - (p.coutsFixesMensuels?.loyer || 0);
+          const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
+          const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;
+          const reventeEstimeePourFaisabilite = p.arv || p.prixReventeEstime || 0;
+          const commissionEstimee = reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
+          const hasFeasibilityData = reventeEstimeePourFaisabilite > 0;
+          const profitPotentiel = reventeEstimeePourFaisabilite
+            - (p.prixAchat + (p.fraisAchat || 0))
+            - coutRenovationReel
+            - coutsFixesPeriodeEstimes
+            - interetTotalReference
+            - commissionEstimee;
+
           const isAnalysisOpen = expandedAnalysisId === p.id;
 
           return (
@@ -1074,6 +1159,50 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                         </button>
                       </div>
                     </div>
+
+                    {/* Coûts fixes de possession — estimation rapide, saisie à la main */}
+                    <div className="space-y-2 pt-3 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Coûts fixes de possession — montants MENSUELS, pour évaluer la rentabilité avant même d'acheter</p>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">Durée de possession estimée (mois)</label>
+                          <input type="number" value={analysisForm.possessionMoisEstime} onChange={(e) => setAnalysisForm({ ...analysisForm, possessionMoisEstime: e.target.value })} placeholder={joursDetenus > 0 ? `${(joursDetenus / 30.44).toFixed(1)} (réel)` : ""} className={inputClsSm} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">% commission courtier estimée (revente)</label>
+                          <input type="number" value={analysisForm.commissionCourtierPctEstime} onChange={(e) => setAnalysisForm({ ...analysisForm, commissionCourtierPctEstime: e.target.value })} className={inputClsSm} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {COUTS_FIXES_LABELS.map(({ key, label }) => (
+                          <div key={key} className="space-y-1">
+                            <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">{label} ($/mois)</label>
+                            <input
+                              type="number"
+                              value={analysisForm.coutsFixesMensuels[key]}
+                              onChange={(e) => setAnalysisForm({ ...analysisForm, coutsFixesMensuels: { ...analysisForm.coutsFixesMensuels, [key]: e.target.value } })}
+                              className={inputClsSm}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Profit potentiel — résultat final de la calculette de faisabilité */}
+                    {hasFeasibilityData && (
+                      <div className={`p-4 rounded-2xl border-2 ${profitPotentiel >= 0 ? "border-emerald-500/40" : "border-rose-500/40"} ${glass}`}>
+                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                          {profitPotentiel >= 0 ? <TrendingUp size={10} className="text-emerald-500" /> : <TrendingDown size={10} className="text-rose-500" />}
+                          Profit potentiel — ARV/revente estimée moins tous les coûts saisis ci-dessus
+                        </p>
+                        <p className={`text-[22px] font-black mt-1 ${profitPotentiel >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                          {fmtCAD(profitPotentiel)}
+                        </p>
+                        <p className="text-[7.5px] font-bold text-slate-400 mt-1">
+                          Sur {moisPotentiel.toFixed(1)} mois de possession — {reventeEstimeePourFaisabilite === (p.arv || 0) ? "ARV" : "prix de revente estimé"} {fmtCAD(reventeEstimeePourFaisabilite)}, rénovation {fmtCAD(coutRenovationReel)}, coûts fixes {fmtCAD(coutsFixesPeriodeEstimes)}, intérêts {fmtCAD(interetTotalReference)}, commission estimée {fmtCAD(commissionEstimee)}.
+                        </p>
+                      </div>
+                    )}
 
                     <button onClick={() => handleSaveAnalysis(p)} disabled={savingAnalysis} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5">
                       {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer l'analyse
