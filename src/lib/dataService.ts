@@ -601,6 +601,21 @@ export interface SyndicBudgetDoc {
   createdAt: string;
 }
 
+// ── CategoryFiscalRuleDoc — Firestore `categoryFiscalRules` collection ───────
+/**
+ * Règles de déduction fiscale par catégorie de dépense, configurées par
+ * l'utilisateur — remplace `customDossiers`, une table figée en dur dans
+ * App.tsx (ids "1"-"5" propres au compte de Fabiola, jamais éditable). Un
+ * document par companyId. Document ID: `{companyId}_fiscalrules`.
+ */
+export interface CategoryFiscalRuleDoc {
+  id: string;
+  companyId: string;
+  rules: { categoryName: string; rule: 'full' | 'half' | 'mileage' | 'homeoffice' }[];
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MandatGestionDoc — Firestore `mandatsGestion` collection ─────────────────
 /**
  * Résumé d'un mandat de gestion OACIQ envoyé à un propriétaire — le PDF
@@ -3395,6 +3410,33 @@ export const dataService = {
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'syndicBudgets', docId), full, { merge: true });
+    return full;
+  },
+
+  async fetchCategoryFiscalRules(companyId: string): Promise<CategoryFiscalRuleDoc | null> {
+    try {
+      const docId = `${companyId}_fiscalrules`;
+      const snap = await getDoc(doc(db, 'categoryFiscalRules', docId));
+      return snap.exists() ? (snap.data() as CategoryFiscalRuleDoc) : null;
+    } catch (e) {
+      console.error('fetchCategoryFiscalRules failed:', e);
+      return null;
+    }
+  },
+
+  async saveCategoryFiscalRules(
+    userId: string,
+    data: Omit<CategoryFiscalRuleDoc, 'id' | 'ownerId' | 'createdAt'>
+  ): Promise<CategoryFiscalRuleDoc> {
+    assertCanWrite();
+    const docId = `${data.companyId}_fiscalrules`;
+    const full: CategoryFiscalRuleDoc = {
+      ...data,
+      id: docId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'categoryFiscalRules', docId), full, { merge: true });
     return full;
   },
 

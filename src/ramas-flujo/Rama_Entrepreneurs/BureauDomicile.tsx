@@ -560,6 +560,13 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
                       return;
                     }
 
+                    // NOTE (2026-08-16): bakes porcBureau into the stored
+                    // dollar total at write time, independent of
+                    // categoryFiscalRules (src/lib/fiscalRules.ts) — dormant
+                    // double-count risk if a rule's categoryName ever exactly
+                    // matches this expense's category. Out of scope for the
+                    // 2026-08-16 categoryFiscalRules refactor (audit point
+                    // #8); flagged for Fabiola.
                     const deductibleAmount = parseFloat(
                       (amount * porcBureau).toFixed(2),
                     );

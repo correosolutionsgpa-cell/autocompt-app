@@ -13,12 +13,23 @@
  * Mandato de integridad contable (Golden Rule §2):
  *   NO modificar la lógica de cálculo fiscal, los filtros de período
  *   ni el mapeo de filas del grand livre.
+ *
+ * Excepción documentée (2026-08-16) : le calcul de `processedReportExpenses`
+ * était une COPIE dérivée du même calcul dans App.tsx (`processedDepenses`),
+ * jamais tenue à jour — elle ignorait complètement le kilométrage
+ * (`porcVehicule` n'était même pas une prop), le cas capital non-déductible,
+ * la proration Plex par type de propriété, et le split associés. Remplacé
+ * par un appel à la même fonction pure (`applyFiscalRate`, src/lib/fiscalRules.ts)
+ * qu'App.tsx — ceci RESTAURE l'intention originale de la Golden Rule (un seul
+ * calcul, jamais deux copies qui dérivent), ce n'est pas un changement de
+ * logique fiscale.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { UnitDoc } from "../../lib/dataService";
+import { applyFiscalRate, VEHICLE_EXPENSE_CATS, type CategoryFiscalRuleEntry } from "../../lib/fiscalRules";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -83,7 +94,7 @@ export interface RapportComptableProps {
   historique: any[];
   depenses: any[];
   bankTransactions: any[];
-  customDossiers: Record<string, any[]>;
+  categoryFiscalRules: Record<string, CategoryFiscalRuleEntry[]>;
   buildingWideCats: string[];
   partnerData: Record<string, any>;
   partnersPct: Record<string, number>;
@@ -99,6 +110,7 @@ export interface RapportComptableProps {
   selectedMonth: number;
   activeCompanyId: string;
   porcBureau: number;
+  porcVehicule: number;
 
   // UI dropdowns (états globaux)
   showPeriodDropdown: boolean;
@@ -214,7 +226,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
   historique,
   depenses,
   bankTransactions,
-  customDossiers,
+  categoryFiscalRules,
   buildingWideCats,
   partnerData,
   partnersPct,
@@ -228,6 +240,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
   selectedMonth,
   activeCompanyId,
   porcBureau,
+  porcVehicule,
   showPeriodDropdown,
   setShowPeriodDropdown,
   showProfileDropdown,
@@ -367,26 +380,30 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
       0,
     );
 
-    const processedReportExpenses = periodFilteredExpenses.map((d) => {
-      const companyFolders = customDossiers[profileId] || [];
-      const matchingFolder = companyFolders.find((f) => f.name === d.cat);
-      const dossierRule = matchingFolder ? matchingFolder.rule : "full";
-
-      let fiscalRate = 1.0;
-      if (profileId === "3") {
-        const isBuildingWide = buildingWideCats.includes(d.cat);
-        fiscalRate = isBuildingWide ? 0.666 : 1.0;
-      } else {
-        if (dossierRule === "half") fiscalRate = 0.5;
-        else if (dossierRule === "homeoffice") fiscalRate = porcBureau;
-      }
-
-      return {
-        ...d,
-        deductibleTps: (d.tps || 0) * fiscalRate,
-        deductibleTvq: (d.tvq || 0) * fiscalRate,
-      };
-    });
+    // Ce rapport peut afficher une AUTRE entreprise que activeCompanyId
+    // (selectedRapportProfile) — même logique isPlex/activePct qu'App.tsx,
+    // mais scopée sur profileId/profileSelected plutôt que activeCompanyId/
+    // currentCompany.
+    const isPlexProfile =
+      profileId === "3" ||
+      profileSelected?.industry?.includes("Plex") ||
+      profileSelected?.industry?.includes("Immobilier");
+    const fiscalRuleCtx = {
+      rules: categoryFiscalRules[profileId] || [],
+      buildingWideCats,
+      vehicleExpenseCats: VEHICLE_EXPENSE_CATS,
+      isPlex: isPlexProfile,
+      propertyType: profileSelected?.propertyType,
+      porcBureau,
+      porcVehicule,
+      activePct:
+        profileSelected?.partnersPct?.[activeUser] ??
+        profileSelected?.ownerPercentage ??
+        50,
+    };
+    const processedReportExpenses = periodFilteredExpenses.map((d) =>
+      applyFiscalRate(d, fiscalRuleCtx)
+    );
 
     const tpsPayee = processedReportExpenses.reduce(
       (a, b) => a + b.deductibleTps,

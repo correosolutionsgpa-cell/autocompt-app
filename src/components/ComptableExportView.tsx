@@ -1445,6 +1445,12 @@ export default function ComptableExportView({
   // Standard CRA T776/Revenu Québec TP-128 line groupings — mapped from the
   // SAME category labels already used in the expense-entry form (Gestion
   // Plex/App.tsx), never a second, separately-maintained category list.
+  //
+  // NOTE (2026-08-16): rate-blind by design today — sums raw e.total per
+  // category, never applies any categoryFiscalRules rate (full/half/mileage/
+  // homeoffice — see src/lib/fiscalRules.ts). Out of scope for the
+  // 2026-08-16 categoryFiscalRules refactor (audit point #8); flagged for
+  // Fabiola as a separate follow-up.
   const T776_GROUPS: { label: string; cats: string[] }[] = [
     { label: 'Assurances', cats: ['Assurances'] },
     { label: 'Intérêts et frais bancaires', cats: ['Intérêts hypothécaires', 'Intérêts de financement'] },

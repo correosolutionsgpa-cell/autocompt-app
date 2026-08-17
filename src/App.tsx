@@ -100,6 +100,7 @@ import {
 
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
 import DossierFiscauxView, { FileItem } from "./components/DossierFiscauxView";
+import CategoryFiscalRulesModal from "./components/CategoryFiscalRulesModal";
 import MesRelevesGestion from "./components/MesRelevesGestion";
 import { HeuresPaieView } from "./components/HeuresPaieView";
 import SyndicatDashboard from "./components/SyndicatDashboard";
@@ -128,6 +129,7 @@ import { SofiPresence } from "./components/SofiPresence";
 import SyndicModuleGrid from "./components/SyndicModuleGrid";
 import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
 import { computeVehicleBusinessRate } from "./lib/vehicleRateService";
+import { applyFiscalRate, VEHICLE_EXPENSE_CATS, type CategoryFiscalRuleEntry, type FiscalRule } from "./lib/fiscalRules";
 import { getInvoiceFontStack } from "./lib/invoiceTemplates";
 import { extractDataFromImage } from "./lib/gemini";
 import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
@@ -4962,9 +4964,19 @@ const App = () => {
   }, [currentUserEmail]);
 
   // --- GESTIONNAIRE DE DOSSIERS FISCAUX ---
-  const [customDossiers, setCustomDossiers] = useState<
-    Record<string, { name: string; rule: string }[]>
-  >({
+  // ── Pont de migration (ajouté 2026-08-16) ──────────────────────────────────
+  // Ces 5 entreprises réelles de Fabiola dépendaient de cette table figée en
+  // dur pour un calcul TPS/TVQ correct, avant que les règles soient persistées
+  // dans Firestore (collection `categoryFiscalRules`). Utilisée UNIQUEMENT en
+  // repli quand aucun document Firestore n'existe encore pour une entreprise
+  // donnée (voir l'effet ci-dessous), pour que le passage au nouveau système
+  // ne remette pas silencieusement tout le monde à "full" (100%) le jour du
+  // déploiement. À ressaisir via l'écran "Configurer les règles fiscales",
+  // puis cette constante (et le repli qui la lit) pourront être supprimés.
+  const LEGACY_HARDCODED_FISCAL_RULES: Record<
+    string,
+    { name: string; rule: string }[]
+  > = {
     "1": [
       { name: "Frais d'Agence", rule: "full" },
       { name: "Publicité / VistaPrint", rule: "full" },
@@ -4992,17 +5004,32 @@ const App = () => {
       { name: "Achat de Matériaux", rule: "full" },
       { name: "Outils & Équipement", rule: "full" },
     ],
-  });
+  };
 
-  const [showAddDossierModal, setShowAddDossierModal] = useState(false);
-  const [newDossierName, setNewDossierName] = useState("");
-  const [newDossierRule, setNewDossierRule] = useState("full");
-  const [selectedDossierForEntry, setSelectedDossierForEntry] = useState<{
-    name: string;
-    rule: string;
-  } | null>(null);
-  const [quickEntryAmount, setQuickEntryAmount] = useState("");
-  const [quickEntryVendor, setQuickEntryVendor] = useState("");
+  const [categoryFiscalRules, setCategoryFiscalRules] = useState<
+    Record<string, CategoryFiscalRuleEntry[]>
+  >({});
+  const [showFiscalRulesModal, setShowFiscalRulesModal] = useState(false);
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    let cancelled = false;
+    dataService.fetchCategoryFiscalRules(activeCompanyId).then((saved) => {
+      if (cancelled) return;
+      if (saved) {
+        setCategoryFiscalRules((prev) => ({ ...prev, [activeCompanyId]: saved.rules }));
+      } else if (LEGACY_HARDCODED_FISCAL_RULES[activeCompanyId]) {
+        setCategoryFiscalRules((prev) => ({
+          ...prev,
+          [activeCompanyId]: LEGACY_HARDCODED_FISCAL_RULES[activeCompanyId].map(
+            (f) => ({ categoryName: f.name, rule: f.rule as FiscalRule })
+          ),
+        }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompanyId]);
 
   // --- REGIONS & DOSSIERS FISCAUX (HIERARCHICAL REVOLUTION) ---
   const [currentYearFolder, setCurrentYearFolder] = useState<number | null>(
@@ -5987,17 +6014,6 @@ const App = () => {
   // KilometrageGPS. Tout est persisté sur le véhicule via partnerData (Firestore).
   const porcVehicule = computeVehicleBusinessRate(partnerData?.vehicles?.[0]);
 
-  // ── Catégories véhicule TP-80 / T2125 — aucune configuration manuelle requise ─
-  // Ces catégories déclenchent automatiquement le pro-rata d'utilisation
-  // professionnelle du véhicule, sans dépendre des dossiers personnalisés.
-  const VEHICLE_EXPENSE_CATS = new Set([
-    "Essence / Carburant",
-    "Entretien Véhicule",
-    "Assurance auto",
-    "Déplacements / Automobile",
-    "Immatriculation / Permis",
-  ]);
-
   const currentParadas = partnerData[activeUser]?.paradas || [""];
 
   const buildingWideCats = [
@@ -6045,73 +6061,26 @@ const App = () => {
     };
   });
 
-  const processedDepenses = filteredDepensesByMonth.map((d) => {
-    // Determine the rule for this expense based on its category matching a dossier
-    const companyFolders = customDossiers[activeCompanyId] || [];
-    const matchingFolder = companyFolders.find((f) => f.name === d.cat);
-    const dossierRule = matchingFolder ? matchingFolder.rule : "full";
-
-    // Base deduction factor
-    let fiscalRate = 1.0;
-
-    // Principal/capital repaid on a mortgage/margin/loan is a debt repayment,
-    // not a fiscal expense — never deductible, regardless of any other rule
-    // below (Plex building-wide split, home office, mileage, etc.). Only the
-    // interest portion (its own category, "Intérêts de financement") is
-    // deductible; this one exists purely for cash-flow visibility.
-    if (d.cat === "Capital remboursé (non déductible)") {
-      fiscalRate = 0;
-    } else if (isPlex) {
-      // Logic for Plex (ID '3')
-      const isBuildingWide = buildingWideCats.includes(d.cat);
-      const propType = currentCompany?.propertyType || "Triplex";
-      let propFactor = 0.666;
-      if (propType === "Duplex") propFactor = 0.5;
-      else if (propType === "Triplex") propFactor = 0.666;
-      else if (propType === "Quadruplex" || propType === "Quadruplex (4plex)")
-        propFactor = 0.75;
-      else if (propType === "Multi-logement") propFactor = 1.0;
-
-      fiscalRate = isBuildingWide ? propFactor : 1.0;
-    } else {
-      // Logic for Commercial Profiles
-      if (dossierRule === "half") {
-        fiscalRate = 0.5;
-      } else if (dossierRule === "homeoffice") {
-        fiscalRate = porcBureau;
-      } else if (dossierRule === "mileage" || VEHICLE_EXPENSE_CATS.has(d.cat)) {
-        // Quebec pro-rata: Business KM / Total KM driven this year.
-        // Triggered automatically by VEHICLE_EXPENSE_CATS — no manual dossier config required.
-        // Uses permanently-stamped tauxApplique if available (protects historical records).
-        const frozenRate = d.tauxApplique != null ? d.tauxApplique / 100 : null;
-        fiscalRate = frozenRate ?? (porcVehicule > 0 ? porcVehicule : 1.0);
-      }
-      // 'full' stays at 1.0
-    }
-
-    const activePct =
-      currentCompany?.partnersPct?.[activeUser] ??
-      currentCompany?.ownerPercentage ??
-      50;
-
-    const isMileage = dossierRule === "mileage";
-
-    return {
-      ...d,
-      deductionRate: fiscalRate,
-      deductibleSubtotal:
-        d.subtotal * fiscalRate * (isPlex ? activePct / 100 : 1),
-      deductibleTps: d.tps * fiscalRate * (isPlex ? activePct / 100 : 1),
-      deductibleTvq: d.tvq * fiscalRate * (isPlex ? activePct / 100 : 1),
-      deductibleTotal: d.total * fiscalRate * (isPlex ? activePct / 100 : 1),
-      partnerSplit: d.total * fiscalRate * (isPlex ? activePct / 100 : 1),
-      // Stamp vehicle rate badge (mirrors tauxApplique used for home office)
-      ...(isMileage && porcVehicule > 0 ? {
-        tauxApplique: Number((porcVehicule * 100).toFixed(1)),
-        vehicleRateApplied: true,
-      } : {}),
-    };
-  });
+  // Seule source de vérité : src/lib/fiscalRules.ts — voir aussi
+  // RapportComptable.tsx, qui appelle la même fonction sur ses propres
+  // dépenses filtrées plutôt que de recevoir ce tableau déjà calculé (il peut
+  // afficher une AUTRE entreprise que activeCompanyId, avec son propre filtre
+  // de période).
+  const processedDepenses = filteredDepensesByMonth.map((d) =>
+    applyFiscalRate(d, {
+      rules: categoryFiscalRules[activeCompanyId] || [],
+      buildingWideCats,
+      vehicleExpenseCats: VEHICLE_EXPENSE_CATS,
+      isPlex,
+      propertyType: currentCompany?.propertyType,
+      porcBureau,
+      porcVehicule,
+      activePct:
+        currentCompany?.partnersPct?.[activeUser] ??
+        currentCompany?.ownerPercentage ??
+        50,
+    })
+  );
 
   const tpsPerçue = processedHistorique.reduce((a, b) => a + b.tps, 0);
   const tvqPerçue = processedHistorique.reduce((a, b) => a + b.tvq, 0);
@@ -6125,6 +6094,10 @@ const App = () => {
     if (isNaN(base)) return;
 
     // Pro-rated calculation: we store the pro-rated net into subtotal
+    // NOTE (2026-08-16): bakes porcBureau into the stored dollar total at
+    // write time, independent of categoryFiscalRules — see the same note on
+    // isHomeOffice above (OCR flow). Out of scope for the 2026-08-16
+    // categoryFiscalRules refactor (audit point #8); flagged for Fabiola.
     const subtotal = base * porcBureau;
     const tps = subtotal * (userProfile.tpsRate / 100);
     const tvq = subtotal * (userProfile.tvqRate / 100);
@@ -6861,6 +6834,11 @@ const App = () => {
         // ── End S.O.F.I. Matcher ──────────────────────────────────────────────
 
         // Deductible calculations for Bureau à domicile rule
+        // NOTE (2026-08-16): bakes porcBureau into the stored dollar total at
+        // write time, independent of categoryFiscalRules (src/lib/fiscalRules.ts)
+        // — dormant double-count risk if a rule's categoryName ever exactly
+        // matches "Bureau à domicile". Out of scope for the 2026-08-16
+        // categoryFiscalRules refactor (audit point #8); flagged for Fabiola.
         const isHomeOffice = finalCatMapped === "Bureau à domicile";
         const homeOfficeRate = porcBureau > 0 ? porcBureau : 0.10;
 
@@ -21191,6 +21169,7 @@ const App = () => {
           setArchivesAnnuelles={setArchivesAnnuelles}
           activeCompanyId={activeCompanyId}
           currentCompany={currentCompany}
+          onOpenFiscalRulesModal={() => setShowFiscalRulesModal(true)}
           sidebarToggle={
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -21199,6 +21178,14 @@ const App = () => {
               <Menu size={18} />
             </button>
           }
+        />
+        <CategoryFiscalRulesModal
+          show={showFiscalRulesModal}
+          onClose={() => setShowFiscalRulesModal(false)}
+          darkMode={darkMode}
+          activeCompanyId={activeCompanyId}
+          rules={categoryFiscalRules[activeCompanyId] || []}
+          onSaved={(rules) => setCategoryFiscalRules((prev) => ({ ...prev, [activeCompanyId]: rules }))}
         />
       </div>
     );
@@ -21536,7 +21523,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         historique={historique}
         depenses={depenses}
         bankTransactions={bankTransactions}
-        customDossiers={customDossiers}
+        categoryFiscalRules={categoryFiscalRules}
         buildingWideCats={buildingWideCats}
         partnerData={partnerData}
         partnersPct={partnersPct}
@@ -21550,6 +21537,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         selectedMonth={selectedMonth}
         activeCompanyId={activeCompanyId}
         porcBureau={porcBureau}
+        porcVehicule={porcVehicule}
         showPeriodDropdown={showPeriodDropdown}
         setShowPeriodDropdown={setShowPeriodDropdown}
         showProfileDropdown={showProfileDropdown}

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, PlusCircle, Trash2, X, FileText, Download, Search,
   Folder, FolderOpen, ChevronRight, Zap, ShieldCheck, Eye, Upload, Plus, FileSearch, FileQuestion, Home, Bell,
-  FileDown, Loader2, AlertTriangle
+  FileDown, Loader2, AlertTriangle, Settings2
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { dataService } from '../lib/dataService';
@@ -39,12 +39,16 @@ interface DossierFiscauxViewProps {
   activeCompanyId: string;
   currentCompany?: any;
   t: (frText: string) => string;
+  /** Ouvre le modal "Configurer les règles fiscales des catégories" (rendu
+   *  dans App.tsx — voir CategoryFiscalRulesModal.tsx) — l'état des règles
+   *  est partagé avec Rapport Comptable, donc gardé au niveau App.tsx. */
+  onOpenFiscalRulesModal: () => void;
 }
 
-export default function DossierFiscauxView({ 
-  darkMode, 
-  setVista, 
-  playNotificationSound, 
+export default function DossierFiscauxView({
+  darkMode,
+  setVista,
+  playNotificationSound,
   sidebarToggle,
   dossierFiles,
   setDossierFiles,
@@ -53,7 +57,8 @@ export default function DossierFiscauxView({
   setArchivesAnnuelles,
   activeCompanyId,
   currentCompany,
-  t
+  t,
+  onOpenFiscalRulesModal
 }: DossierFiscauxViewProps) {
   // Folder Navigation State
   const [currentYearFolder, setCurrentYearFolder] = useState<number | null>(null);
@@ -377,7 +382,15 @@ export default function DossierFiscauxView({
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <button 
+          <button
+            onClick={onOpenFiscalRulesModal}
+            id="button-dossier-fiscal-rules"
+            title={t("Configurer les règles fiscales des catégories")}
+            className={`p-2.5 rounded-full transition-all active:scale-95 ${darkMode ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}
+          >
+            <Settings2 size={18} />
+          </button>
+          <button
             onClick={() => setShowClotureModal(true)}
             id="button-dossier-cloture"
             className="bg-orange-500 text-white px-5 py-2.5 rounded-full text-[9px] font-black uppercase italic shadow-lg active:scale-95 hover:scale-102 transition-all flex items-center space-x-1.5"

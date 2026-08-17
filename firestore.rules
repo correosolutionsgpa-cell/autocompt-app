@@ -332,6 +332,14 @@ service cloud.firestore {
       allow delete: if isOwnerDoc();
     }
 
+    // Règles de déduction fiscale par catégorie (voir CategoryFiscalRuleDoc) —
+    // remplace `customDossiers`, une table figée en dur dans App.tsx.
+    match /categoryFiscalRules/{ruleDocId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create, update: if isOwnerWrite();
+      allow delete: if isOwnerDoc();
+    }
+
     // Was entirely missing — the collection existed in code
     // (fetchMeubleExpenses/fetchMeubleReservations, MeubleFinancialModule)
     // and was already read on every login (Dossiers Fiscaux, TPS/TVQ
