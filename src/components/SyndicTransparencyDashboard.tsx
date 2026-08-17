@@ -54,10 +54,12 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
   const [categories, setCategories] = useState<{ nom: string; budget: number }[]>(DEFAULT_CATEGORIES);
   const [fondsPrevoyance, setFondsPrevoyance] = useState(0);
   const [fondsOperationInitial, setFondsOperationInitial] = useState(0);
-  const [editForm, setEditForm] = useState<{ categories: { nom: string; budget: string }[]; fondsPrevoyance: string; fondsOperationInitial: string }>({
+  const [cotisationAnnuelle, setCotisationAnnuelle] = useState(0);
+  const [editForm, setEditForm] = useState<{ categories: { nom: string; budget: string }[]; fondsPrevoyance: string; fondsOperationInitial: string; cotisationAnnuelle: string }>({
     categories: DEFAULT_CATEGORIES.map((c) => ({ nom: c.nom, budget: '' })),
     fondsPrevoyance: '',
     fondsOperationInitial: '',
+    cotisationAnnuelle: '',
   });
 
   const loadBudget = useCallback(async () => {
@@ -69,6 +71,7 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
         setCategories(saved.categories);
         setFondsPrevoyance(saved.fondsPrevoyance);
         setFondsOperationInitial(saved.fondsOperationInitial);
+        setCotisationAnnuelle(saved.cotisationAnnuelleFondsPrevoyance || 0);
       }
     } catch (e) {
       console.error('[SyndicTransparencyDashboard] fetchSyndicBudget failed:', e);
@@ -83,6 +86,7 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
       categories: categories.map((c) => ({ nom: c.nom, budget: c.budget ? String(c.budget) : '' })),
       fondsPrevoyance: fondsPrevoyance ? String(fondsPrevoyance) : '',
       fondsOperationInitial: fondsOperationInitial ? String(fondsOperationInitial) : '',
+      cotisationAnnuelle: cotisationAnnuelle ? String(cotisationAnnuelle) : '',
     });
     setShowBudgetModal(true);
   };
@@ -101,10 +105,12 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
         categories: cleanCategories,
         fondsPrevoyance: parseFloat(editForm.fondsPrevoyance) || 0,
         fondsOperationInitial: parseFloat(editForm.fondsOperationInitial) || 0,
+        cotisationAnnuelleFondsPrevoyance: parseFloat(editForm.cotisationAnnuelle) || 0,
       });
       setCategories(saved.categories);
       setFondsPrevoyance(saved.fondsPrevoyance);
       setFondsOperationInitial(saved.fondsOperationInitial);
+      setCotisationAnnuelle(saved.cotisationAnnuelleFondsPrevoyance || 0);
       setShowBudgetModal(false);
     } catch (e) {
       console.error('[SyndicTransparencyDashboard] saveSyndicBudget failed:', e);
@@ -375,6 +381,15 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
                   type="number"
                   value={editForm.fondsOperationInitial}
                   onChange={(e) => setEditForm({ ...editForm, fondsOperationInitial: e.target.value })}
+                  className="w-full p-2.5 rounded-xl text-[11px] font-bold border outline-none bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Cotisation annuelle au fonds de prévoyance ($) — utilisée pour la projection 10 ans (Loi 16)</label>
+                <input
+                  type="number"
+                  value={editForm.cotisationAnnuelle}
+                  onChange={(e) => setEditForm({ ...editForm, cotisationAnnuelle: e.target.value })}
                   className="w-full p-2.5 rounded-xl text-[11px] font-bold border outline-none bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white"
                 />
               </div>

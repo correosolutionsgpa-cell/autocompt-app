@@ -592,6 +592,11 @@ export interface SyndicBudgetDoc {
    *  à l'affichage, exactement comme avant, mais à partir d'une vraie
    *  valeur configurée plutôt que du 14 500 $ figé en dur. */
   fondsOperationInitial: number;
+  /** Cotisation annuelle versée au fonds de prévoyance — alimente la
+   *  projection 10 ans de SyndicLoi16View.tsx, qui utilisait avant un
+   *  320 000 $ / 35 000 $ figé en dur affiché sur le Certificat de Transfert
+   *  (document légal remis aux acheteurs/notaires) pour TOUTE copropriété. */
+  cotisationAnnuelleFondsPrevoyance?: number;
   ownerId: string;
   createdAt: string;
 }

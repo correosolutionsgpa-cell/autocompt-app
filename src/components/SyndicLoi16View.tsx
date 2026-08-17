@@ -27,6 +27,7 @@ import {
 import jsPDF from 'jspdf';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, onSnapshot, query, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { dataService } from '../lib/dataService';
 
 interface BuildingComponent {
   id: string;
@@ -67,14 +68,27 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
 
   const isReadOnly = userRole === 'coproprietaire';
 
-  // Seed default items if empty
-  const defaultComponents: Omit<BuildingComponent, 'id'>[] = [
-    { name: 'Toiture - Membrane élastomère', condition: 'Correct', lastInspection: '2024-05-12', nextReplacementYear: 2031, estimatedCost: 35000 },
-    { name: 'Ascenseur hydraulique', condition: 'Excellent', lastInspection: '2025-01-10', nextReplacementYear: 2038, estimatedCost: 45000 },
-    { name: 'Façade extérieure & Maçonnerie', condition: 'Critique', lastInspection: '2023-09-15', nextReplacementYear: 2027, estimatedCost: 18000 },
-    { name: 'Chauffage Central commun', condition: 'Correct', lastInspection: '2024-11-20', nextReplacementYear: 2029, estimatedCost: 22000 },
-    { name: 'Conduites de Plomberie', condition: 'Excellent', lastInspection: '2022-08-05', nextReplacementYear: 2035, estimatedCost: 15000 }
-  ];
+  // Fonds de prévoyance réel (configuré par le conseil dans Tableau de
+  // Transparence → Configurer le budget) — remplace un 320 000 $ / 35 000 $
+  // figé en dur qui s'affichait pour TOUTE copropriété, y compris sur le
+  // Certificat de Transfert PDF remis aux acheteurs et notaires. Trouvé à
+  // l'audit du 16-ago-2026 (point #7).
+  const currentYear = new Date().getFullYear();
+  const [isLoadingBudget, setIsLoadingBudget] = useState(true);
+  const [fondsPrevoyanceReel, setFondsPrevoyanceReel] = useState(0);
+  const [cotisationAnnuelleReelle, setCotisationAnnuelleReelle] = useState(0);
+  useEffect(() => {
+    if (!activeCompanyId) { setIsLoadingBudget(false); return; }
+    setIsLoadingBudget(true);
+    dataService.fetchSyndicBudget(activeCompanyId, currentYear)
+      .then((saved) => {
+        setFondsPrevoyanceReel(saved?.fondsPrevoyance || 0);
+        setCotisationAnnuelleReelle(saved?.cotisationAnnuelleFondsPrevoyance || 0);
+      })
+      .catch((e) => console.error('[SyndicLoi16View] fetchSyndicBudget failed:', e))
+      .finally(() => setIsLoadingBudget(false));
+  }, [activeCompanyId, currentYear]);
+  const isFondsConfigured = fondsPrevoyanceReel > 0 || cotisationAnnuelleReelle > 0;
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -92,41 +106,30 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
       where('ownerId', '==', userId)
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
+    // Was auto-seeding 5 plausible-looking fake components (Toiture,
+    // Ascenseur, Façade...) straight into Firestore as if real, for any
+    // syndicat account with an empty carnet — the exact "convincing fake
+    // data is actively dangerous" trap flagged elsewhere in this app,
+    // except this one feeds a legal Loi 16 compliance PDF. Now shows a
+    // genuine empty state instead (see below) and never writes anything
+    // the conseil didn't actually enter.
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched: BuildingComponent[] = [];
       snapshot.forEach((doc) => {
         fetched.push({ id: doc.id, ...doc.data() } as BuildingComponent);
       });
-
-      // If empty, auto-seed default items
-      if (fetched.length === 0 && !isReadOnly) {
-        for (const def of defaultComponents) {
-          try {
-            await addDoc(collection(db, 'maintenance_components'), {
-              ...def,
-              companyId: activeCompanyId,
-              ownerId: userId,
-              createdAt: new Date().toISOString()
-            });
-          } catch (err) {
-            console.error('Error seeding default component:', err);
-          }
-        }
-      } else {
-        // Sort components by next replacement year
-        fetched.sort((a, b) => a.nextReplacementYear - b.nextReplacementYear);
-        setComponents(fetched);
-        if (fetched.length > 0) {
-          // Select the first one by default so the premium select design is immediately visible
-          setSelectedId((prev) => prev || fetched[0].id);
-        }
+      fetched.sort((a, b) => a.nextReplacementYear - b.nextReplacementYear);
+      setComponents(fetched);
+      if (fetched.length > 0) {
+        // Select the first one by default so the premium select design is immediately visible
+        setSelectedId((prev) => prev || fetched[0].id);
       }
     }, (error) => {
       console.error("Firestore onSnapshot error in SyndicLoi16View:", error);
     });
 
     return () => unsubscribe();
-  }, [activeCompanyId, isReadOnly]);
+  }, [activeCompanyId]);
 
   const handleAddComponent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,13 +177,14 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
     }
   };
 
-  // 10-Year Projections calculations
-  const currentYear = new Date().getFullYear();
+  // 10-Year Projections calculations — à partir du fonds de prévoyance réel
+  // configuré par le conseil (Tableau de Transparence), plus une cotisation
+  // annuelle à 0 $ tant qu'elle n'a pas été configurée.
   const projectionYears = Array.from({ length: 10 }, (_, i) => currentYear + i);
   const inflationRate = 0.035; // 3.5%
 
-  let accumulatedReserve = 320000.00; // Starting reserve matching mockup scale
-  const annualContribution = 35000.00; // Plan contribution
+  let accumulatedReserve = fondsPrevoyanceReel;
+  const annualContribution = cotisationAnnuelleReelle;
 
   const financialData = projectionYears.map((year) => {
     // Sum planned expenses in this year
@@ -233,7 +237,12 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
       docPdf.setFont('Helvetica', 'normal');
       docPdf.text(`Généré le : ${new Date().toLocaleDateString('fr-CA')}`, 15, 63);
       docPdf.text(`Statut global de conformité : CONFORME (Étude valide - Exercice Fiscal ${currentYear})`, 15, 69);
-      docPdf.text(`Solde actuel du fonds de prévoyance : 320 000.00 $`, 15, 75);
+      docPdf.text(
+        isFondsConfigured
+          ? `Solde actuel du fonds de prévoyance : ${fondsPrevoyanceReel.toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
+          : `Solde du fonds de prévoyance : non configuré — voir Tableau de Transparence`,
+        15, 75
+      );
 
       // Section 2: Carnet d'entretien
       docPdf.setFontSize(14);
@@ -565,10 +574,14 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     {filteredComponents.length === 0 ? (
                       <div className="text-center py-12 rounded-[24px] border border-dashed border-slate-200 dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-900/10 p-6">
                         <span className="text-[10px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-widest">
-                          Aucun composant trouvé
+                          {components.length === 0 ? 'Carnet d\'entretien vide' : 'Aucun composant trouvé'}
                         </span>
                         <p className="text-[8.5px] text-slate-400 dark:text-zinc-500 mt-1 font-semibold normal-case">
-                          Modifiez vos critères de recherche ou réinitialisez les filtres.
+                          {components.length === 0
+                            ? (isReadOnly
+                                ? "Le conseil d'administration n'a pas encore ajouté de composant."
+                                : 'Ajoutez le premier composant (toiture, ascenseur, façade...) avec le bouton + ci-dessus.')
+                            : 'Modifiez vos critères de recherche ou réinitialisez les filtres.'}
                         </p>
                       </div>
                     ) : (
@@ -728,8 +741,15 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
 
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-850 flex justify-between text-[9px] font-black uppercase">
               <span className="text-slate-400 dark:text-zinc-500">Solde Actuel :</span>
-              <span className="text-slate-900 dark:text-zinc-150">320 000,00 $</span>
+              <span className="text-slate-900 dark:text-zinc-150">
+                {isLoadingBudget ? '…' : `${fondsPrevoyanceReel.toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`}
+              </span>
             </div>
+            {!isLoadingBudget && !isFondsConfigured && (
+              <p className="mt-2 text-[8.5px] font-bold text-amber-600 dark:text-amber-400 normal-case leading-relaxed">
+                Fonds de prévoyance non configuré — configurez-le dans Tableau de Transparence pour une projection réelle.
+              </p>
+            )}
           </div>
 
           {/* PDF Generate Card */}
