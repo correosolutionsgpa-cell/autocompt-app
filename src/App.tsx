@@ -3630,8 +3630,14 @@ const App = () => {
                 </AnimatePresence>
               </div>
 
-              {/* DYNAMIC CO-OPERATION OPERATOR SWITCH (Achat Direct ONLY) */}
-              {activeCompanyId === "2" && (
+              {/* DYNAMIC CO-OPERATION OPERATOR SWITCH — was hardcoded to
+                  `activeCompanyId === "2"` (Fabiola's own AchatDirect id)
+                  with two literal buttons "Fabiola"/"Natalia", so it never
+                  appeared for any other company and only ever switched
+                  between her own team's names. Now shows whenever the active
+                  company has more than one real partner (`partners`, loaded
+                  from `empresa.partners`), with one button per partner. */}
+              {partners.length > 1 && (
                 <div
                   className="p-4 border-b border-slate-100 dark:border-zinc-900/60"
                 >
@@ -3641,24 +3647,18 @@ const App = () => {
                     </span>
 
                     <div className="flex bg-slate-100 dark:bg-zinc-900 border border-slate-200/40 dark:border-zinc-800/60 p-1 rounded-full items-center transition-all shadow-inner justify-between">
-                      <button
-                        onClick={() => {
-                          setActiveUser("Fabiola");
-                          playNotificationSound();
-                        }}
-                        className={`flex-1 py-1.5 rounded-full text-[8.5px] font-black uppercase italic tracking-wider transition-all duration-300 ${activeUser === "Fabiola" ? "bg-[#059669] text-white shadow-md shadow-emerald-900/15" : "text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"}`}
-                      >
-                        Fabiola
-                      </button>
-                      <button
-                        onClick={() => {
-                          setActiveUser("Natalia");
-                          playNotificationSound();
-                        }}
-                        className={`flex-1 py-1.5 rounded-full text-[8.5px] font-black uppercase italic tracking-wider transition-all duration-300 ${activeUser === "Natalia" ? "bg-[#059669] text-white shadow-md shadow-emerald-900/15" : "text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"}`}
-                      >
-                        Natalia
-                      </button>
+                      {partners.map((partnerName) => (
+                        <button
+                          key={partnerName}
+                          onClick={() => {
+                            setActiveUser(partnerName);
+                            playNotificationSound();
+                          }}
+                          className={`flex-1 py-1.5 rounded-full text-[8.5px] font-black uppercase italic tracking-wider transition-all duration-300 ${activeUser === partnerName ? "bg-[#059669] text-white shadow-md shadow-emerald-900/15" : "text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"}`}
+                        >
+                          {partnerName}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -5922,39 +5922,14 @@ const App = () => {
     { companyId: "3", desc: "Loyer Unité 2", amt: 1100.0, date: "2026-05-01" },
   ]);
 
-  const [partnerData, _setPartnerData] = useState<any>({
-    Fabiola: {
-      homeOffice: {
-        aireTotale: 1000,
-        aireBureau: 150,
-        hydro: 0,
-        assurance: 0,
-        internet: 0,
-        taxesMuni: 0,
-        active: true,
-      },
-      vehicle: {
-        model: "Tesla Model 3",
-        kmInitial: 0,
-        kmFinal: 0,
-        mileageLogs: [],
-      },
-      paradas: [""],
-    },
-    Natalia: {
-      homeOffice: {
-        aireTotale: 1200,
-        aireBureau: 200,
-        hydro: 0,
-        assurance: 0,
-        internet: 0,
-        taxesMuni: 0,
-        active: true,
-      },
-      vehicle: { model: "Audi Q5", kmInitial: 0, kmFinal: 0, mileageLogs: [] },
-      paradas: [""],
-    },
-  });
+  // Was seeded with fake demo partners "Fabiola"/"Natalia" (home office areas,
+  // Tesla Model 3 / Audi Q5) — leaked as literal displayed data for any
+  // brand-new account before `empresa.partnerData` loads and overrides it
+  // (same flash-of-wrong-identity bug already fixed for `activeUser`/
+  // `partners` above). Neutral empty default now; the real value hydrates
+  // from Firestore moments after auth (see `_setPartnerData(empresa.partnerData
+  // || {})` in the sync effect below).
+  const [partnerData, _setPartnerData] = useState<any>({});
   // Wrapped setter — persists GPS mileage logs and Bureau à Domicile settings
   // to the company document in Firestore (as `partnerData`), instead of only
   // living in local state. Loading partnerData FROM an already-fetched company
@@ -17159,7 +17134,11 @@ const App = () => {
           {(() => {
             let activeTabs = ["ventes", "taxes", "banque", "resume", "grand_livre", "export_comptable"];
             if (getEffectiveTier() === "pro_multi" || getEffectiveTier() === "integral" || getEffectiveTier() === "superadmin") {
-              if (activeUser === "Fabiola") {
+              // Was gated on `activeUser === "Fabiola"` (a literal name match,
+              // not a role check) — meant the Paie tab could only ever appear
+              // for her own account, regardless of who actually owns/admins
+              // the company. Real check: is this uid the company's owner.
+              if (currentCompany?.ownerId === auth.currentUser?.uid) {
                 activeTabs = ["ventes", "taxes", "paie", "banque", "resume", "grand_livre", "export_comptable"];
               }
             }
@@ -18104,7 +18083,7 @@ const App = () => {
             </div>
           )}
 
-          {tabReporte === "paie" && activeUser !== "Fabiola" && (
+          {tabReporte === "paie" && currentCompany?.ownerId !== auth.currentUser?.uid && (
             <div className="w-full flex flex-col items-center justify-center space-y-4 p-12 text-center">
               <Lock size={48} className={`mb-2 ${darkMode ? "text-zinc-700" : "text-slate-300"}`} />
               <h3 className={`text-sm font-black tracking-widest uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Accès Restreint</h3>
@@ -18114,7 +18093,7 @@ const App = () => {
             </div>
           )}
 
-          {tabReporte === "paie" && activeUser === "Fabiola" && (
+          {tabReporte === "paie" && currentCompany?.ownerId === auth.currentUser?.uid && (
             <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
               <HeuresPaieView
                 paieRecords={paieRecords}
