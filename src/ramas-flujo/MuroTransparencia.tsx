@@ -5,7 +5,10 @@
  * Extraído de: src/App.tsx (L22350–L22405) — Fase 3 del desmantelamiento modular
  *
  * Nota arquitectónica (Golden Rule §1 + §3 Universal Modules):
- *   Componente presentacional PURO — sin useState propios.
+ *   Este wrapper es un componente presentacional puro — sin useState propios.
+ *   SyndicTransparencyDashboard (le composant qu'il enveloppe) gère lui-même
+ *   sa configuration de budget (dataService.fetchSyndicBudget/saveSyndicBudget)
+ *   depuis le 2026-08-16 — remplace des valeurs figées en dur.
  *   Accessible para múltiples perfiles según rbacConfig.ts:
  *     • Investisseur Immobilier (modo Autogestion — lectura)
  *     • Syndicat de Copropriété (transparencia a co-propietarios)

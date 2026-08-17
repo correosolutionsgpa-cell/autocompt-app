@@ -312,6 +312,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Budget annuel + fonds du Syndicat (voir SyndicBudgetDoc) — remplace des
+    // valeurs figées en dur dans SyndicTransparencyDashboard.tsx.
+    match /syndicBudgets/{budgetId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create, update: if isOwnerWrite();
+      allow delete: if isOwnerDoc();
+    }
+
     // Was entirely missing — the collection existed in code
     // (fetchMeubleExpenses/fetchMeubleReservations, MeubleFinancialModule)
     // and was already read on every login (Dossiers Fiscaux, TPS/TVQ

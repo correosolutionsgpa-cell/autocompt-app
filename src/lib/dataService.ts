@@ -571,6 +571,31 @@ export interface SealedFiscalYearDoc {
   driveLink?: string;
 }
 
+// ── SyndicBudgetDoc — Firestore `syndicBudgets` collection ───────────────────
+/**
+ * Budget annuel + soldes des fonds d'un syndicat de copropriété, configurés
+ * par le conseil d'administration — remplace des valeurs qui étaient figées
+ * en dur dans SyndicTransparencyDashboard.tsx (budget par poste, fonds de
+ * prévoyance, solde de départ du fonds d'opération). Un document par
+ * (companyId, year). Document ID: `{companyId}_syndicbudget_{year}`.
+ */
+export interface SyndicBudgetDoc {
+  id: string;
+  companyId: string;
+  year: number;
+  /** Postes budgétaires libres — nom + montant prévu, comparé aux dépenses
+   *  réelles de Tenue de Livres dont la catégorie contient ce nom (même
+   *  logique de correspondance que l'ancien getActualSpend). */
+  categories: { nom: string; budget: number }[];
+  fondsPrevoyance: number;
+  /** Solde de départ de l'exercice — les dépenses réelles en sont déduites
+   *  à l'affichage, exactement comme avant, mais à partir d'une vraie
+   *  valeur configurée plutôt que du 14 500 $ figé en dur. */
+  fondsOperationInitial: number;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
 /**
  * Configuration fiscale et opérationnelle d'une unité meublée.
@@ -3313,6 +3338,37 @@ export const dataService = {
       console.error('fetchSealedFiscalYears failed:', e);
       return [];
     }
+  },
+
+  // ── Budget annuel du Syndicat — `syndicBudgets` collection ───────────────
+  // Un doc par (companyId, year), upsert. Remplace les valeurs figées en dur
+  // dans SyndicTransparencyDashboard.tsx (budget par poste, fonds).
+
+  async fetchSyndicBudget(companyId: string, year: number): Promise<SyndicBudgetDoc | null> {
+    try {
+      const docId = `${companyId}_syndicbudget_${year}`;
+      const snap = await getDoc(doc(db, 'syndicBudgets', docId));
+      return snap.exists() ? (snap.data() as SyndicBudgetDoc) : null;
+    } catch (e) {
+      console.error('fetchSyndicBudget failed:', e);
+      return null;
+    }
+  },
+
+  async saveSyndicBudget(
+    userId: string,
+    data: Omit<SyndicBudgetDoc, 'id' | 'ownerId' | 'createdAt'>
+  ): Promise<SyndicBudgetDoc> {
+    assertCanWrite();
+    const docId = `${data.companyId}_syndicbudget_${data.year}`;
+    const full: SyndicBudgetDoc = {
+      ...data,
+      id: docId,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'syndicBudgets', docId), full, { merge: true });
+    return full;
   },
 
   /**
