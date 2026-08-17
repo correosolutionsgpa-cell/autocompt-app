@@ -14,7 +14,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import {
@@ -38,8 +38,9 @@ import {
   Menu,
   Check,
 } from "lucide-react";
-import { db, auth } from "../../lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { auth } from "../../lib/firebase";
+import { dataService, type MandatGestionDoc } from "../../lib/dataService";
+import { getCompanyDriveConfig, uploadDocumentToDrive } from "../../lib/driveService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -546,6 +547,28 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [sendEmail, setSendEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState("");
+
+  // ── Mandats déjà envoyés — jusqu'ici jamais relus nulle part une fois
+  // envoyés, ni même sauvegardés avec succès (règle Firestore manquante,
+  // trouvé 2026-08-16). ──
+  const [showMandatsList, setShowMandatsList] = useState(false);
+  const [mandatsEnvoyes, setMandatsEnvoyes] = useState<MandatGestionDoc[]>([]);
+  const [isLoadingMandats, setIsLoadingMandats] = useState(false);
+
+  const loadMandatsEnvoyes = useCallback(async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    setIsLoadingMandats(true);
+    try {
+      setMandatsEnvoyes(await dataService.fetchMandatsGestion(uid, activeCompanyId));
+    } catch (e) {
+      console.error("[mandat] fetchMandatsGestion failed:", e);
+    } finally {
+      setIsLoadingMandats(false);
+    }
+  }, [activeCompanyId]);
+  useEffect(() => { loadMandatsEnvoyes(); }, [loadMandatsEnvoyes]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     parties: true,
     proprietes: true,
@@ -589,31 +612,14 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
     const email = sendEmail || form.proprietaireEmail;
     if (!email) return;
     setIsSending(true);
+    setSendError("");
     try {
       const pdf = generateMandatPDF(form);
       const pdfBase64 = pdf.output("datauristring").split(",")[1];
 
-      // Save record to Firestore
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        const id = `${uid}_mandat_${Date.now()}`;
-        await setDoc(doc(db, "mandatsGestion", id), {
-          id,
-          companyId: activeCompanyId,
-          proprietaireName: form.proprietaireName,
-          proprietaireEmail: email,
-          gestionnaireName: form.gestionnaireName,
-          dateDebut: form.dateDebut,
-          dateFin: form.dateFin,
-          tauxHonoraires: form.tauxHonoraires,
-          statut: "envoyé",
-          ownerId: uid,
-          createdAt: new Date().toISOString(),
-        });
-      }
-
-      // Send via API
-      await fetch("/api/send-mandat-gestion", {
+      // Send via API first — the owner receiving the mandate matters more
+      // than the local record, so a Firestore hiccup below never blocks it.
+      const resp = await fetch("/api/send-mandat-gestion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -627,11 +633,50 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
           pdfBase64,
         }),
       });
+      if (!resp.ok) throw new Error(`Échec de l'envoi du courriel (${resp.status})`);
+
+      // Save record + archive the PDF in Drive — best-effort, never blocks
+      // the confirmation above (the owner already has the mandate either way).
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        try {
+          let driveLink: string | undefined;
+          const driveOwnerId = currentCompany?.ownerId || uid;
+          const driveStatus = await getCompanyDriveConfig(activeCompanyId, driveOwnerId);
+          if (driveStatus?.connected) {
+            const safeName = form.proprietaireName.replace(/\s+/g, "-") || "Proprietaire";
+            const uploadResult = await uploadDocumentToDrive(
+              activeCompanyId, driveOwnerId, pdfBase64, `Mandat-Gestion-${safeName}.pdf`,
+              "application/pdf", currentCompany?.nombre || "Entreprise", "Mandats de Gestion",
+            );
+            if (uploadResult.success) driveLink = uploadResult.webViewLink;
+          }
+          const id = `${uid}_mandat_${Date.now()}`;
+          const saved = await dataService.saveMandatGestion(uid, {
+            id,
+            companyId: activeCompanyId,
+            proprietaireName: form.proprietaireName,
+            proprietaireEmail: email,
+            gestionnaireName: form.gestionnaireName,
+            dateDebut: form.dateDebut,
+            dateFin: form.dateFin,
+            tauxHonoraires: form.tauxHonoraires,
+            statut: "envoyé",
+            driveLink,
+          });
+          setMandatsEnvoyes((prev) => [saved, ...prev]);
+        } catch (persistErr) {
+          // The owner already received the mandate by email — this only
+          // means it won't show up in "Mandats déjà envoyés" below.
+          console.error("[mandat] saveMandatGestion/Drive failed (non-blocking):", persistErr);
+        }
+      }
 
       setSent(true);
       playNotificationSound?.();
-    } catch (e) {
+    } catch (e: any) {
       console.error("[mandat] send error:", e);
+      setSendError(e?.message || "L'envoi a échoué. Vérifiez votre connexion et réessayez.");
     } finally {
       setIsSending(false);
     }
@@ -716,9 +761,52 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
             </div>
           ))}
         </div>
+        <button
+          onClick={() => setShowMandatsList(v => !v)}
+          className={`px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all ${
+            showMandatsList
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-900" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+          }`}
+        >
+          <FileText size={12} />
+          Envoyés {mandatsEnvoyes.length > 0 ? `(${mandatsEnvoyes.length})` : ""}
+        </button>
       </header>
 
       <main className="flex-1 p-4 md:p-6 max-w-3xl mx-auto w-full space-y-3">
+
+        {/* ── Mandats déjà envoyés ─────────────────────────────────────── */}
+        {showMandatsList && (
+          <div className={`p-5 rounded-[24px] border space-y-3 ${glass}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Mandats déjà envoyés</span>
+              {isLoadingMandats && <Loader2 size={13} className="animate-spin text-indigo-400" />}
+            </div>
+            {!isLoadingMandats && mandatsEnvoyes.length === 0 && (
+              <p className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Aucun mandat envoyé pour cette entreprise pour l'instant.</p>
+            )}
+            {mandatsEnvoyes.map(m => (
+              <div key={m.id} className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${darkMode ? "border-zinc-800 bg-zinc-900/20" : "border-slate-100 bg-slate-50"}`}>
+                <div className="min-w-0">
+                  <p className="text-[12px] font-bold truncate">{m.proprietaireName}</p>
+                  <p className={`text-[10px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{m.proprietaireEmail} · {m.dateDebut} → {m.dateFin} · {m.tauxHonoraires}%</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {m.driveLink && (
+                    <a href={m.driveLink} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-600" title="Ouvrir dans Drive">
+                      <FileText size={14} />
+                    </a>
+                  )}
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+                    {m.statut}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
 
           {/* ── STEP 1: FORMULAIRE ──────────────────────────────────────── */}
@@ -1011,6 +1099,12 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                     <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                     <p className="text-[10px] font-medium">Le mandat est envoyé avec le PDF joint. Pour une signature électronique avec valeur légale complète, importez ensuite le mandat dans <strong>DocuLegal</strong> via l'onglet Contrats.</p>
                   </div>
+                  {sendError && (
+                    <div className={`p-3 rounded-2xl border flex items-start gap-2 ${darkMode ? "bg-rose-900/10 border-rose-500/30 text-rose-400" : "bg-rose-50 border-rose-200 text-rose-700"}`}>
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      <p className="text-[10px] font-medium">{sendError}</p>
+                    </div>
+                  )}
                   <div className="flex gap-3">
                     <button onClick={() => setStep("preview")} className={`flex-1 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest ${darkMode ? "border-zinc-700" : "border-slate-200"}`}>
                       <ArrowLeft size={13} className="inline mr-1" />Retour

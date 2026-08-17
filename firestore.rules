@@ -286,6 +286,18 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Was entirely missing — every "Envoyer le mandat" click silently failed
+    // at the setDoc call (permission denied), which threw out of the whole
+    // try/catch BEFORE the email-send fetch ran — so the owner never even
+    // received the mandate, with no error shown to the gestionnaire. Found
+    // 2026-08-16 auditing "Mandat de Gestion ne montre pas les mandats déjà
+    // envoyés" — the actual root cause was worse than the report itself.
+    match /mandatsGestion/{mandatId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create, update: if isOwnerWrite();
+      allow delete: if isOwnerDoc();
+    }
+
     match /flipProjects/{flipId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();

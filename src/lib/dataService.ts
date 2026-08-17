@@ -596,6 +596,28 @@ export interface SyndicBudgetDoc {
   createdAt: string;
 }
 
+// ── MandatGestionDoc — Firestore `mandatsGestion` collection ─────────────────
+/**
+ * Résumé d'un mandat de gestion OACIQ envoyé à un propriétaire — le PDF
+ * complet part par courriel (voir MandatDeGestionView.tsx), mais un lien
+ * Drive est conservé ici pour pouvoir le consulter à nouveau depuis la
+ * liste "Mandats déjà envoyés". Document ID: `{ownerId}_mandat_{timestamp}`.
+ */
+export interface MandatGestionDoc {
+  id: string;
+  companyId: string;
+  proprietaireName: string;
+  proprietaireEmail: string;
+  gestionnaireName: string;
+  dateDebut: string;
+  dateFin: string;
+  tauxHonoraires: string;
+  statut: 'envoyé' | 'signé';
+  driveLink?: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MeubleUnitConfigDoc — Firestore `meubleUnitConfigs` collection ────────────
 /**
  * Configuration fiscale et opérationnelle d'une unité meublée.
@@ -3368,6 +3390,43 @@ export const dataService = {
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'syndicBudgets', docId), full, { merge: true });
+    return full;
+  },
+
+  // ── Mandats de Gestion — `mandatsGestion` collection ──────────────────────
+  // La collection existait déjà et était écrite depuis MandatDeGestionView.tsx,
+  // mais sans règle Firestore (setDoc échouait silencieusement — aucun mandat
+  // n'a jamais pu être envoyé) et sans jamais être relue nulle part. Trouvé
+  // 2026-08-16.
+
+  async fetchMandatsGestion(userId: string, companyId: string): Promise<MandatGestionDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'mandatsGestion'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', companyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs
+        .map((d) => d.data() as MandatGestionDoc)
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    } catch (e) {
+      console.error('fetchMandatsGestion failed:', e);
+      return [];
+    }
+  },
+
+  async saveMandatGestion(
+    userId: string,
+    data: Omit<MandatGestionDoc, 'ownerId' | 'createdAt'>
+  ): Promise<MandatGestionDoc> {
+    assertCanWrite();
+    const full: MandatGestionDoc = {
+      ...data,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'mandatsGestion', data.id), full);
     return full;
   },
 
