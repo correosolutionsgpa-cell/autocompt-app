@@ -276,43 +276,40 @@ export default function DossierFiscauxView({
     return matchesSearch;
   });
 
-  // ZIP download simulation
+  // Export CSV réel de l'index des documents (nom/fournisseur/catégorie/
+  // statut/date/lien Drive) — remplace une ancienne simulation qui affichait
+  // une fausse barre de progression et téléchargeait un simple fichier texte
+  // renommé en ".zip", avec un message prétendant qu'une archive avait été
+  // "générée du côté serveur" (jamais vrai — AutoCompt ne stocke pas les
+  // fichiers eux-mêmes en binaire, seulement leurs métadonnées + un lien
+  // Drive optionnel). Un vrai ZIP contenant les documents eux-mêmes
+  // demanderait de télécharger chaque fichier binaire depuis Drive côté
+  // serveur, hors de portée de ce correctif.
   const handleZipDownload = () => {
     const yearToDownload = currentYearFolder || 2026;
-    setZipDownloadState({ isDownloading: true, progress: 5 });
+    setZipDownloadState({ isDownloading: true, progress: 0 });
 
-    const interval = setInterval(() => {
-      setZipDownloadState(prev => {
-        if (prev.progress >= 100) {
-          clearInterval(interval);
-          const filesInYear = dossierFiles.filter(f => f.year === yearToDownload);
-          const manifestContent = `AutoCompt Secure Drive Export Manifest\n` +
-            `====================================\n` +
-            `Dossier Annuel: Année ${yearToDownload}\n` +
-            `Généré le: ${new Date().toLocaleDateString('fr-CA')} à ${new Date().toLocaleTimeString('fr-CA')}\n` +
-            `Statut: Fichiers de comptabilité vérifiés\n` +
-            `Total Fichiers Compilés: ${filesInYear.length}\n\n` +
-            `--- DOSSIER DES ARCHIVES FISCALES ---\n` +
-            filesInYear.map((f, i) => `${i + 1}. [${f.status}] ${f.name} - ${f.size} (Tiers: ${f.provider})`).join('\n') +
-            `\n\nFin du fichier exporté.`;
+    const filesInYear = dossierFiles.filter(f => f.year === yearToDownload);
+    const BOM = '﻿';
+    const headers = ['Nom du document', 'Fournisseur/Tiers', 'Catégorie', 'Statut', 'Date', 'Lien Drive'];
+    const rows = [headers.join(',')];
+    filesInYear.forEach((f) => {
+      rows.push([`"${f.name}"`, `"${f.provider}"`, `"${f.category}"`, `"${f.status}"`, `"${f.date}"`, `"${f.lien || ''}"`].join(','));
+    });
+    const csvContent = BOM + rows.join('\n');
 
-          const blob = new Blob([manifestContent], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `AutoCompt_Export_Documents_Annee_${yearToDownload}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          
-          playNotificationSound();
-          alert(`L'archive ZIP "AutoCompt_Export_Documents_Annee_${yearToDownload}.zip" a été générée du côté serveur et téléchargée avec succès. Elle comprend ${filesInYear.length} justificatifs fiscaux.`);
-          return { isDownloading: false, progress: 0 };
-        }
-        return { ...prev, progress: prev.progress + 25 };
-      });
-    }, 300);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AutoCompt_Index_Documents_Annee_${yearToDownload}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    playNotificationSound();
+    setZipDownloadState({ isDownloading: false, progress: 0 });
   };
 
   // Add document handler
@@ -619,12 +616,12 @@ export default function DossierFiscauxView({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <span>ZIP CRÉATION - {zipDownloadState.progress}%</span>
+                  <span>Génération...</span>
                 </>
               ) : (
                 <>
                   <Download size={15} strokeWidth={2.5} />
-                  <span>{t("Tout Télécharger (.ZIP)")}</span>
+                  <span>{t("Exporter l'index (.CSV)")}</span>
                 </>
               )}
             </button>
