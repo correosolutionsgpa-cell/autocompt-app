@@ -52,6 +52,7 @@ import {
   Image as ImageIcon,
   Type,
   MousePointer2,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   Filter,
@@ -2106,6 +2107,10 @@ const App = () => {
     }
   };
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  // Was missing entirely — Tenue de Livres only ever filtered by month
+  // (0-11), so e.g. "Janvier" mixed January 2025 and January 2026 receipts
+  // together with no way to tell them apart. Found 2026-08-16.
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   // Which dashboard shell (Plex vs Syndic) the active company opens into.
@@ -6038,7 +6043,8 @@ const App = () => {
       // expense saved the same day as the bug's own root cause.
       const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
       const month = isoMatch ? Number(isoMatch[2]) - 1 : new Date(dateStr).getMonth();
-      return month === selectedMonth;
+      const year = isoMatch ? Number(isoMatch[1]) : new Date(dateStr).getFullYear();
+      return month === selectedMonth && year === selectedYear;
     });
 
   const filteredHistoriqueByMonth = filterBySelectedMonth(filteredHistorique);
@@ -7671,7 +7677,7 @@ const App = () => {
         link.setAttribute("href", url);
         link.setAttribute(
           "download",
-          `AutoCompt_${tabReporte}_${currentCompany?.nombre}_${selectedMonth + 1}.csv`,
+          `AutoCompt_${tabReporte}_${currentCompany?.nombre}_${selectedYear}-${selectedMonth + 1}.csv`,
         );
         document.body.appendChild(link);
         link.click();
@@ -17046,6 +17052,25 @@ const App = () => {
             Tenue de Livres
           </h2>
           <div className="flex items-center space-x-3">
+            <div className={`flex items-center rounded-2xl overflow-hidden ${darkMode ? "bg-zinc-900 border border-zinc-800" : "bg-white border border-slate-200 shadow-sm"}`}>
+              <button
+                onClick={() => setSelectedYear((y) => y - 1)}
+                className={`px-2.5 py-3 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+                aria-label="Année précédente"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className={`text-[10px] font-black tabular-nums ${darkMode ? "text-emerald-400" : "text-[#059669]"}`}>
+                {selectedYear}
+              </span>
+              <button
+                onClick={() => setSelectedYear((y) => y + 1)}
+                className={`px-2.5 py-3 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+                aria-label="Année suivante"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
             <div className="relative">
               <button
                 onClick={() => setShowMonthPicker(!showMonthPicker)}
