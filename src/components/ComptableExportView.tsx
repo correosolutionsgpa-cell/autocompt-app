@@ -24,6 +24,7 @@ import {
   Building2, Plus, Trash2, Save, Info, Banknote,
 } from 'lucide-react';
 import { dataService, type InvoiceDoc, type ExpenseDoc, type PropertyDoc, type CcaAssetDoc } from '../lib/dataService';
+import type { CategoryFiscalRuleEntry } from '../lib/fiscalRules';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -203,6 +204,25 @@ export default function ComptableExportView({
     fraisDispositionTerrain: '', fraisDispositionBatiment: '',
     pbrTerrain: '', coutCapitalBatiment: '', fnaccActuelle: '',
   });
+
+  // ── Règles fiscales par catégorie (voir src/lib/fiscalRules.ts) — le T776
+  // sommait avant les montants bruts sans jamais tenir compte de ces règles.
+  // Note : "homeoffice"/"mileage" ne peuvent pas être résolus correctement
+  // ici (ce composant n'a pas accès au taux d'utilisation réel du client
+  // pour son bureau à domicile/véhicule, seulement à companyId) — traités
+  // comme "full" (aucun changement par rapport à avant), "half" et le
+  // remboursement de capital non-déductible SONT corrigés.
+  const [categoryFiscalRules, setCategoryFiscalRules] = useState<CategoryFiscalRuleEntry[]>([]);
+  useEffect(() => {
+    if (!companyId || tab !== 't776') return;
+    dataService.fetchCategoryFiscalRules(companyId)
+      .then((doc) => setCategoryFiscalRules(doc?.rules || []))
+      .catch((e) => console.error('[ComptableExportView] fetchCategoryFiscalRules failed:', e));
+  }, [companyId, tab]);
+  const t776RateForCat = (cat: string): number => {
+    const rule = categoryFiscalRules.find((r) => r.categoryName === cat)?.rule;
+    return rule === 'half' ? 0.5 : 1.0;
+  };
 
   const isComptable = activeProfile === 'comptable';
   const visibleTabs = TABS.filter(t => !t.comptableOnly || isComptable);
@@ -1468,11 +1488,11 @@ export default function ComptableExportView({
   const t776Revenue = buildingInvoices.reduce((s, i) => s + (i.total || 0), 0);
   const t776Rows = T776_GROUPS.map(g => ({
     label: g.label,
-    amount: buildingExpenses.filter(e => g.cats.includes(e.cat)).reduce((s, e) => s + (e.total || 0), 0),
+    amount: buildingExpenses.filter(e => g.cats.includes(e.cat)).reduce((s, e) => s + (e.total || 0) * t776RateForCat(e.cat), 0),
   }));
   const t776UnmappedTotal = buildingExpenses
     .filter(e => !NON_DEDUCTIBLE_CATS.includes(e.cat) && !T776_GROUPS.some(g => g.cats.includes(e.cat)))
-    .reduce((s, e) => s + (e.total || 0), 0);
+    .reduce((s, e) => s + (e.total || 0) * t776RateForCat(e.cat), 0);
   const t776NonDeductibleTotal = buildingExpenses.filter(e => NON_DEDUCTIBLE_CATS.includes(e.cat)).reduce((s, e) => s + (e.total || 0), 0);
   const t776TotalExpenses = t776Rows.reduce((s, r) => s + r.amount, 0) + t776UnmappedTotal;
   const t776NetBeforeCca = t776Revenue - t776TotalExpenses;
