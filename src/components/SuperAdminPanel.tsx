@@ -393,6 +393,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [platformInvoices, setPlatformInvoices] = useState<PlatformInvoiceDoc[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [companiesByOwner, setCompaniesByOwner] = useState<Record<string, OwnedCompany[]>>({});
+  const [signedDocsByOwner, setSignedDocsByOwner] = useState<Record<string, number>>({});
 
   const D = darkMode;
 
@@ -439,6 +440,32 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       }
     };
     loadCompanies();
+  }, [refreshTick]);
+
+  // Real signed-document count (DocuLegal registry) — `docsSignedCount` on
+  // AdminUser was read from users/{uid}.docsSignedCount, a field nothing in
+  // the app ever writes (only present in SAMPLE_USERS demo data), so the
+  // registry always showed 0 real signatures regardless of how many
+  // contracts were actually signed. The real signed documents live in
+  // `pendingSignatures` (status: 'signed'), keyed by the company owner's
+  // uid via `ownerId` — see PublicSignaturePage.tsx. Docs created before
+  // 2026-08-12 predate the ownerId field and are grouped under '' (shown
+  // as "Compte inconnu (document créé avant août 2026)").
+  useEffect(() => {
+    const loadSignedDocs = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'pendingSignatures'), where('status', '==', 'signed')));
+        const grouped: Record<string, number> = {};
+        snap.docs.forEach(d => {
+          const ownerId = d.data()?.ownerId || '';
+          grouped[ownerId] = (grouped[ownerId] || 0) + 1;
+        });
+        setSignedDocsByOwner(grouped);
+      } catch {
+        // Fails silently for non-superadmin accounts, same as the other panels.
+      }
+    };
+    loadSignedDocs();
   }, [refreshTick]);
 
   // Load AI usage events (only once the tab has been opened — `read` is
@@ -655,7 +682,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const arr = mrr * 12;
   const betaUsers = users.filter(u => u.plan === 'beta' || u.status === 'beta');
   const cancelledUsers = users.filter(u => u.status === 'cancelled');
-  const totalDocsSigned = users.reduce((sum, u) => sum + (u.docsSignedCount || 0), 0);
+  const totalDocsSigned = Object.values(signedDocsByOwner).reduce((sum, n) => sum + n, 0);
 
   const planBreakdown = Object.entries(PLAN_CONFIG).map(([plan, conf]) => ({
     plan: plan as Plan,
@@ -1165,23 +1192,33 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
         📋 Registre DocuLegal — Documents signés
       </h3>
       <div className="space-y-3">
-        {users.filter(u => (u.docsSignedCount || 0) > 0).map(u => (
-          <div key={u.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-black text-white">{(u.name || u.email || '?')[0]}</span>
-            </div>
-            <div className="flex-1">
-              <p className={`text-[12px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{u.name}</p>
-              <p className={`text-[10px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.company}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'} text-center`}>
-                <p className="text-[16px] font-black">{u.docsSignedCount}</p>
-                <p className={`text-[8px] font-bold uppercase tracking-wider`}>docs signés</p>
+        {Object.entries(signedDocsByOwner).sort((a, b) => b[1] - a[1]).map(([ownerId, count]) => {
+          const u = users.find(usr => usr.id === ownerId);
+          const label = ownerId === '' ? 'Compte inconnu (document créé avant août 2026)' : (u?.name || u?.email || ownerId);
+          const sub = ownerId === '' ? '' : (u ? ((companiesByOwner[ownerId] || []).map(c => c.nombre).join(', ') || u.email) : '');
+          return (
+            <div key={ownerId || 'inconnu'} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-black text-white">{label[0].toUpperCase()}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[12px] font-bold truncate ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{label}</p>
+                {sub && <p className={`text-[10px] truncate ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{sub}</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'} text-center`}>
+                  <p className="text-[16px] font-black">{count}</p>
+                  <p className={`text-[8px] font-bold uppercase tracking-wider`}>docs signés</p>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+        {Object.keys(signedDocsByOwner).length === 0 && (
+          <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'} text-center py-6`}>
+            Aucun document signé pour l'instant.
+          </p>
+        )}
         <div className={`mt-4 p-4 rounded-2xl ${D ? 'bg-zinc-900/50 border-zinc-800' : 'bg-emerald-50/50 border-emerald-100'} border text-center`}>
           <p className={`text-[11px] font-bold ${D ? 'text-zinc-400' : 'text-emerald-700'}`}>
             Total: <strong>{totalDocsSigned}</strong> documents signés via DocuLegal · Registre en temps réel depuis Firestore
@@ -1605,7 +1642,7 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                   return top.length === 0 ? 'Aucune donnée' : top.map(([v, c]) => `${v} (${c})`).join(', ');
                 })(),
               },
-              { label: 'Docs signés', value: `${selectedUser.docsSignedCount || 0}` },
+              { label: 'Docs signés', value: `${signedDocsByOwner[selectedUser.id] || 0}` },
             ].map(r => (
               <div key={r.label} className={`flex justify-between items-center py-2 border-b ${D ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{r.label}</span>
