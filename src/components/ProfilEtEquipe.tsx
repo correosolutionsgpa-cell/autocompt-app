@@ -53,7 +53,7 @@ const DropboxIcon = () => (
 export interface TeamInvite {
   id: string;
   invitedEmail: string;
-  status: "pending" | "accepted";
+  status: "pending" | "accepted" | "declined";
   createdAt: string;
 }
 

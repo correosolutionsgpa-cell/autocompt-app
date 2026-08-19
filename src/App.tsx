@@ -161,6 +161,7 @@ import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type L
 import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
+import { usePendingInvites } from "./lib/PendingInvitesContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, GoogleAuthProvider, signInWithPopup, updatePassword, sendPasswordResetEmail, type ConfirmationResult } from "firebase/auth";
 import { doc, getDoc, getDocFromServer, setDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -2088,6 +2089,20 @@ const App = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
+  // Invite review UI lives in PendingInvitesContext/GlobalPendingInvitesHost
+  // (mounted in main.tsx, like ToastContext) — App.tsx has 37+ early-return
+  // vista screens with no shared wrapper, so local modal state here would
+  // only ever render on whichever vista happened to be active at accept time.
+  const { setPendingInvites, lastAcceptedAt } = usePendingInvites();
+  // Accepting happens in GlobalPendingInvitesHost (outside this component's
+  // tree) — this refetches listaEmpresas so the newly-shared company shows
+  // up here without requiring a full reload.
+  useEffect(() => {
+    if (!lastAcceptedAt) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    dataService.fetchWorkspaces(uid).then(setListaEmpresas);
+  }, [lastAcceptedAt]);
   // "Notre Équipe" (ProfilEtEquipe) used to show two hardcoded fake
   // collaborators and a form that only wrote to local state — no real
   // invite was ever sent or access granted. Found 2026-08-13. Real list of
@@ -8229,19 +8244,16 @@ const App = () => {
           // Fetch user's dynamic workspace list
           let workspaces = await dataService.fetchWorkspaces(user.uid);
 
-          // Real invite flow: auto-accept any pending invite addressed to this
-          // email (the owner already deliberately entered it — joining needs
-          // no further confirmation beyond logging in). Re-fetch afterward so
-          // the newly-shared company shows up immediately.
+          // Real invite flow: surface any pending invite addressed to this
+          // email via GlobalPendingInvitesHost — used to auto-accept silently
+          // on every login, with no way for the invitee to say no. Found
+          // 2026-08-18 via Daniel's QA report.
           if (user.email) {
             try {
               const pendingInvites = await dataService.fetchPendingInvitesForEmail(user.email);
-              if (pendingInvites.length > 0) {
-                await Promise.all(pendingInvites.map((invite) => dataService.acceptCompanyInvite(user.uid, invite)));
-                workspaces = await dataService.fetchWorkspaces(user.uid);
-              }
+              if (pendingInvites.length > 0) setPendingInvites(pendingInvites);
             } catch (err) {
-              console.error("Failed to process pending company invites:", err);
+              console.error("Failed to fetch pending company invites:", err);
             }
           }
 

@@ -5,20 +5,25 @@ import './index.css'
 import { FiscalProvider } from './lib/FiscalContext.tsx'
 import { ToastProvider } from './lib/ToastContext.tsx'
 import { GlobalToastHost } from './components/GlobalToastHost.tsx'
+import { PendingInvitesProvider } from './lib/PendingInvitesContext.tsx'
+import { GlobalPendingInvitesHost } from './components/GlobalPendingInvitesHost.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>
-      <FiscalProvider>
-        <div className="flex flex-col min-h-screen">
-          <main className="flex-grow">
-            <App />
-          </main>
-          <footer className="w-full text-center p-3 mt-auto">
-            <p className="text-[10px] font-medium text-slate-500/80 drop-shadow-sm">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
-          </footer>
-        </div>
-      </FiscalProvider>
+      <PendingInvitesProvider>
+        <FiscalProvider>
+          <div className="flex flex-col min-h-screen">
+            <main className="flex-grow">
+              <App />
+            </main>
+            <footer className="w-full text-center p-3 mt-auto">
+              <p className="text-[10px] font-medium text-slate-500/80 drop-shadow-sm">© 2026 AutoCompt Solutions. Tous droits réservés.</p>
+            </footer>
+          </div>
+        </FiscalProvider>
+        <GlobalPendingInvitesHost />
+      </PendingInvitesProvider>
       <GlobalToastHost />
     </ToastProvider>
   </StrictMode>,

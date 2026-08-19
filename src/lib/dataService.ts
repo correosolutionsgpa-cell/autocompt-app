@@ -809,7 +809,7 @@ export interface CompanyInviteDoc {
   invitedEmail: string;
   invitedByUid: string;
   invitedByName: string;
-  status: 'pending' | 'accepted';
+  status: 'pending' | 'accepted' | 'declined';
   createdAt: string;
   invitedUid?: string;     // set once accepted — needed to revoke collaboratorUIDs later
 }
@@ -1737,6 +1737,16 @@ export const dataService = {
     // an accepted invite granted access to, revoking it later had nothing to
     // remove from collaboratorUIDs. Needed for revokeCompanyInvite below.
     await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted', invitedUid: userId });
+  },
+
+  /**
+   * Declines a pending invite — never touches collaboratorUIDs (nothing was
+   * ever granted). Added 2026-08-18: invites used to be accepted silently
+   * and automatically on every login with no way to say no — see
+   * PendingInvitesModal in App.tsx.
+   */
+  async declineCompanyInvite(invite: CompanyInviteDoc): Promise<void> {
+    await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'declined' });
   },
 
   /** All invites (pending + accepted) ever sent for this company — the real
