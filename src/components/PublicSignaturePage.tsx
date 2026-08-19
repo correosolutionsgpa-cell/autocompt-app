@@ -776,6 +776,17 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       }
       setDriveUploadResult(driveResult);
 
+      // Persist the actual signed PDF's link back onto this doc — without
+      // this, driveResult only ever lived in local component state, so
+      // nobody could open the real signed copy again later (e.g. from
+      // SuperAdminPanel's DocuLegal registry, which showed a doc count but
+      // no way to view any of them). Best-effort, never blocks the flow.
+      if (driveResult.success && driveResult.webViewLink) {
+        try {
+          await setDoc(doc(db, 'pendingSignatures', token), { signedPdfUrl: driveResult.webViewLink }, { merge: true });
+        } catch {}
+      }
+
       setEmailDelivered(emailResult);
       setIsDone(true);
     } catch (e) {

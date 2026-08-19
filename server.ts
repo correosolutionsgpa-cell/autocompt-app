@@ -1767,6 +1767,20 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
         }
       }
 
+      // Persist the final signed PDF's link onto every signer's own
+      // pendingSignatures doc too (not just the owner's docuLegalDocs entry
+      // below) — SuperAdminPanel's DocuLegal registry reads pendingSignatures
+      // directly and had no way to open the actual signed file.
+      if (driveFileUrl) {
+        for (const d of signedDocs) {
+          try {
+            await d.ref.set({ signedPdfUrl: driveFileUrl }, { merge: true });
+          } catch (linkErr) {
+            console.error("[finalize-signature-group] signedPdfUrl persist failed:", linkErr);
+          }
+        }
+      }
+
       // ── Mark the document "Signé" in the app's own DocuLegal list ────────
       // Without this, the document stayed "En attente" in the app forever
       // even after every party had signed and the final PDF was emailed —

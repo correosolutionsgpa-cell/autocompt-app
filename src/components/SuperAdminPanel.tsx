@@ -393,7 +393,8 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [platformInvoices, setPlatformInvoices] = useState<PlatformInvoiceDoc[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [companiesByOwner, setCompaniesByOwner] = useState<Record<string, OwnedCompany[]>>({});
-  const [signedDocsByOwner, setSignedDocsByOwner] = useState<Record<string, number>>({});
+  const [signedDocsByOwner, setSignedDocsByOwner] = useState<Record<string, { docTitle: string; url: string; createdAt: string }[]>>({});
+  const [expandedSignedOwner, setExpandedSignedOwner] = useState<string | null>(null);
 
   const D = darkMode;
 
@@ -455,10 +456,17 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
     const loadSignedDocs = async () => {
       try {
         const snap = await getDocs(query(collection(db, 'pendingSignatures'), where('status', '==', 'signed')));
-        const grouped: Record<string, number> = {};
+        const grouped: Record<string, { docTitle: string; url: string; createdAt: string }[]> = {};
         snap.docs.forEach(d => {
-          const ownerId = d.data()?.ownerId || '';
-          grouped[ownerId] = (grouped[ownerId] || 0) + 1;
+          const data = d.data();
+          const ownerId = data?.ownerId || '';
+          // Prefer the actual signed copy (persisted after Drive upload —
+          // see PublicSignaturePage.tsx / finalize-signature-group); older
+          // documents signed before that fix only have the original
+          // (unsigned) document link, which is still better than nothing.
+          const url = data?.signedPdfUrl || data?.customDocUrl || data?.pdfStorageUrl || '';
+          if (!grouped[ownerId]) grouped[ownerId] = [];
+          grouped[ownerId].push({ docTitle: data?.docTitle || 'Document sans titre', url, createdAt: data?.clientSignedAt || data?.createdAt || '' });
         });
         setSignedDocsByOwner(grouped);
       } catch {
@@ -682,7 +690,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const arr = mrr * 12;
   const betaUsers = users.filter(u => u.plan === 'beta' || u.status === 'beta');
   const cancelledUsers = users.filter(u => u.status === 'cancelled');
-  const totalDocsSigned = Object.values(signedDocsByOwner).reduce((sum, n) => sum + n, 0);
+  const totalDocsSigned = Object.values(signedDocsByOwner).reduce((sum, docs) => sum + docs.length, 0);
 
   const planBreakdown = Object.entries(PLAN_CONFIG).map(([plan, conf]) => ({
     plan: plan as Plan,
@@ -1192,25 +1200,53 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
         📋 Registre DocuLegal — Documents signés
       </h3>
       <div className="space-y-3">
-        {Object.entries(signedDocsByOwner).sort((a, b) => b[1] - a[1]).map(([ownerId, count]) => {
+        {Object.entries(signedDocsByOwner).sort((a, b) => b[1].length - a[1].length).map(([ownerId, docs]) => {
           const u = users.find(usr => usr.id === ownerId);
           const label = ownerId === '' ? 'Compte inconnu (document créé avant août 2026)' : (u?.name || u?.email || ownerId);
           const sub = ownerId === '' ? '' : (u ? ((companiesByOwner[ownerId] || []).map(c => c.nombre).join(', ') || u.email) : '');
+          const isOpen = expandedSignedOwner === ownerId;
           return (
-            <div key={ownerId || 'inconnu'} className={`flex items-center gap-4 p-4 rounded-2xl border ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-black text-white">{label[0].toUpperCase()}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-[12px] font-bold truncate ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{label}</p>
-                {sub && <p className={`text-[10px] truncate ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{sub}</p>}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'} text-center`}>
-                  <p className="text-[16px] font-black">{count}</p>
-                  <p className={`text-[8px] font-bold uppercase tracking-wider`}>docs signés</p>
+            <div key={ownerId || 'inconnu'} className={`rounded-2xl border overflow-hidden ${D ? 'border-zinc-800 bg-zinc-900/30' : 'border-slate-100 bg-slate-50/50'}`}>
+              <button
+                type="button"
+                onClick={() => setExpandedSignedOwner(isOpen ? null : ownerId)}
+                className="w-full flex items-center gap-4 p-4 text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-black text-white">{label[0].toUpperCase()}</span>
                 </div>
-              </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[12px] font-bold truncate ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{label}</p>
+                  {sub && <p className={`text-[10px] truncate ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{sub}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`px-3 py-1.5 rounded-xl ${D ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'} text-center`}>
+                    <p className="text-[16px] font-black">{docs.length}</p>
+                    <p className={`text-[8px] font-bold uppercase tracking-wider`}>docs signés</p>
+                  </div>
+                  <ChevronDown size={14} className={`shrink-0 transition-transform ${D ? 'text-zinc-500' : 'text-slate-400'} ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+              {isOpen && (
+                <div className={`px-4 pb-4 space-y-1.5 border-t ${D ? 'border-zinc-800' : 'border-slate-100'}`}>
+                  {docs.map((doc, i) => (
+                    <div key={i} className={`flex items-center justify-between gap-3 px-3 py-2 mt-1.5 rounded-xl ${D ? 'bg-zinc-900/50' : 'bg-white'}`}>
+                      <div className="min-w-0">
+                        <p className={`text-[11px] font-semibold truncate ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{doc.docTitle}</p>
+                        {doc.createdAt && <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{new Date(doc.createdAt).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' })}</p>}
+                      </div>
+                      {doc.url ? (
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                          className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${D ? 'bg-teal-500/15 text-teal-400 hover:bg-teal-500/25' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}>
+                          <Eye size={11} /> Voir
+                        </a>
+                      ) : (
+                        <span className={`shrink-0 text-[9px] font-bold ${D ? 'text-zinc-600' : 'text-slate-300'}`}>Lien indisponible</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -1642,7 +1678,7 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                   return top.length === 0 ? 'Aucune donnée' : top.map(([v, c]) => `${v} (${c})`).join(', ');
                 })(),
               },
-              { label: 'Docs signés', value: `${signedDocsByOwner[selectedUser.id] || 0}` },
+              { label: 'Docs signés', value: `${(signedDocsByOwner[selectedUser.id] || []).length}` },
             ].map(r => (
               <div key={r.label} className={`flex justify-between items-center py-2 border-b ${D ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{r.label}</span>
