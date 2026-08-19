@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, Users, TrendingUp, DollarSign, FileText, Shield,
@@ -311,6 +311,61 @@ function generateInvoicePDF(user: AdminUser, invoiceNumber: string, adminName: s
   pdf.text('AutoCompt © Gestions Solutions G.PA INC. — NEQ: 1179999900 — TPS: 75385 8620 RT 0001 — TVQ: 12 3186 5353 TQ 0001', W / 2, 291, { align: 'center' });
 
   return pdf;
+}
+
+// ─── Filter dropdown — replaces the native <select> filters (AutoCompt's UI
+// never uses the browser's own select styling; button + panel everywhere).
+function FilterDropdown<T extends string>({
+  value, options, onChange, darkMode,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  darkMode: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+  const current = options.find(o => o.value === value);
+  const D = darkMode;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-wider transition-colors ${
+          D ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+        }`}
+      >
+        {current?.label}
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className={`absolute z-20 mt-1.5 min-w-full w-max max-h-64 overflow-y-auto rounded-2xl border shadow-lg py-1 ${D ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'}`}>
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                o.value === value
+                  ? (D ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+                  : (D ? 'text-zinc-300 hover:bg-zinc-800' : 'text-slate-600 hover:bg-slate-50')
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -754,16 +809,18 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
             placeholder="Rechercher utilisateur, email, entreprise..."
             className={`bg-transparent text-[11px] font-medium flex-1 outline-none ${D ? 'placeholder-zinc-600' : 'placeholder-slate-400'}`} />
         </div>
-        <select value={filterPlan} onChange={e => setFilterPlan(e.target.value as Plan | 'all')}
-          className={`px-3 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-wider outline-none ${D ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-          <option value="all">Tous les forfaits</option>
-          {Object.entries(PLAN_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UserStatus | 'all')}
-          className={`px-3 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-wider outline-none ${D ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-          <option value="all">Tous les statuts</option>
-          {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
+        <FilterDropdown<Plan | 'all'>
+          value={filterPlan}
+          onChange={setFilterPlan}
+          darkMode={D}
+          options={[{ value: 'all', label: 'Tous les forfaits' }, ...Object.entries(PLAN_CONFIG).map(([k, v]) => ({ value: k as Plan, label: v.label }))]}
+        />
+        <FilterDropdown<UserStatus | 'all'>
+          value={filterStatus}
+          onChange={setFilterStatus}
+          darkMode={D}
+          options={[{ value: 'all', label: 'Tous les statuts' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k as UserStatus, label: v.label }))]}
+        />
         <span className={`text-[9px] font-bold ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{filteredUsers.length} résultats</span>
       </div>
 
