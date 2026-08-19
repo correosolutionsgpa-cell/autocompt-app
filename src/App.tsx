@@ -3480,8 +3480,20 @@ const App = () => {
                                           : workspace.id}
                                   </span>
                                 </div>
+                                {/* Was `workspace.googleEmail || currentUserEmail` unconditionally —
+                                    for a collaborator workspace (not owned by the viewer),
+                                    `googleEmail` is empty so this fell back to the VIEWER'S OWN
+                                    email, displayed as if it belonged to the other person's
+                                    company. Found 2026-08-18 via Daniel's QA report: two test
+                                    accounts that both happened to name their onboarding company
+                                    "Daniel Borges" looked like "the same account duplicated" in
+                                    this list — because both the company name AND this identity
+                                    line showed his own name/email even for the collaborator
+                                    entry he'd just gained access to. */}
                                 <span className="text-[7.5px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest block mt-1.5 truncate">
-                                  {workspace.googleEmail || currentUserEmail || "—"}
+                                  {isOwnWorkspace
+                                    ? (workspace.googleEmail || currentUserEmail || "—")
+                                    : `Collaborateur · ${workspace.userProfile?.nom || workspace.nombre || "—"}`}
                                 </span>
                                 <span className="text-[6.5px] text-[#059669] dark:text-emerald-400 uppercase font-black tracking-widest mt-1 block leading-none">
                                   🔒 Drive: /
