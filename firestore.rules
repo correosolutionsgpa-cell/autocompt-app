@@ -343,6 +343,14 @@ service cloud.firestore {
       allow delete: if isOwnerDoc();
     }
 
+    // Échéances fiscales saisies manuellement (voir FiscalDeadlineDoc) —
+    // remplace un avis figé en dur ("dans 5 jours") dans App.tsx.
+    match /fiscalDeadlines/{deadlineId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create, update: if isOwnerWrite();
+      allow delete: if isOwnerDoc();
+    }
+
     // Was entirely missing — the collection existed in code
     // (fetchMeubleExpenses/fetchMeubleReservations, MeubleFinancialModule)
     // and was already read on every login (Dossiers Fiscaux, TPS/TVQ

@@ -601,6 +601,28 @@ export interface SyndicBudgetDoc {
   createdAt: string;
 }
 
+// ── FiscalDeadlineDoc — Firestore `fiscalDeadlines` collection ───────────────
+/**
+ * Échéance fiscale entrée manuellement par l'utilisateur (déclaration TPS/
+ * TVQ, impôt sur le revenu, ou autre) — remplace un avis figé en dur dans
+ * App.tsx qui affichait toujours "dans 5 jours" peu importe la date réelle.
+ * L'app ne calcule jamais elle-même une date à partir de règles fiscales
+ * (année d'exercice, fréquence de déclaration) — décision explicite de
+ * Fabiola, pour ne jamais risquer une date subtilement fausse. Un document
+ * par échéance. Document ID: `{ownerId}_deadline_{timestamp}`.
+ */
+export interface FiscalDeadlineDoc {
+  id: string;
+  companyId: string;
+  type: 'tps_tvq' | 'impot_revenu' | 'autre';
+  label: string;
+  /** "YYYY-MM-DD", saisie manuelle — jamais recalculée automatiquement. */
+  dueDate: string;
+  recurrence: 'aucune' | 'mensuelle' | 'trimestrielle' | 'annuelle';
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── CategoryFiscalRuleDoc — Firestore `categoryFiscalRules` collection ───────
 /**
  * Règles de déduction fiscale par catégorie de dépense, configurées par
@@ -1747,6 +1769,43 @@ export const dataService = {
    */
   async declineCompanyInvite(invite: CompanyInviteDoc): Promise<void> {
     await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'declined' });
+  },
+
+  // ── Échéances fiscales — `fiscalDeadlines` collection ─────────────────────
+
+  async fetchFiscalDeadlines(userId: string, companyId: string): Promise<FiscalDeadlineDoc[]> {
+    try {
+      const q = query(
+        collection(db, 'fiscalDeadlines'),
+        where('ownerId', '==', userId),
+        where('companyId', '==', companyId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as FiscalDeadlineDoc);
+    } catch (e) {
+      console.error('fetchFiscalDeadlines failed:', e);
+      return [];
+    }
+  },
+
+  async saveFiscalDeadline(
+    userId: string,
+    data: Omit<FiscalDeadlineDoc, 'id' | 'ownerId' | 'createdAt'> & { id?: string }
+  ): Promise<FiscalDeadlineDoc> {
+    assertCanWrite();
+    const id = data.id || `${userId}_deadline_${Date.now()}`;
+    const full: FiscalDeadlineDoc = {
+      ...data,
+      id,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'fiscalDeadlines', id), full, { merge: true });
+    return full;
+  },
+
+  async deleteFiscalDeadline(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'fiscalDeadlines', id));
   },
 
   /** All invites (pending + accepted) ever sent for this company — the real

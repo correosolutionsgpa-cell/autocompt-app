@@ -55,6 +55,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Settings2,
   Filter,
   Send,
   ExternalLink,
@@ -102,6 +103,8 @@ import {
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
 import DossierFiscauxView, { FileItem } from "./components/DossierFiscauxView";
 import CategoryFiscalRulesModal from "./components/CategoryFiscalRulesModal";
+import FiscalDeadlinesModal from "./components/FiscalDeadlinesModal";
+import { getMostUrgentDeadline } from "./lib/fiscalDeadlines";
 import MesRelevesGestion from "./components/MesRelevesGestion";
 import { HeuresPaieView } from "./components/HeuresPaieView";
 import SyndicatCotisations from "./components/SyndicatCotisations";
@@ -157,7 +160,7 @@ import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc, type CompanyInviteDoc } from "./lib/dataService";
+import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc, type CompanyInviteDoc, type FiscalDeadlineDoc } from "./lib/dataService";
 import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
@@ -5059,6 +5062,16 @@ const App = () => {
     return () => {
       cancelled = true;
     };
+  }, [activeCompanyId]);
+
+  // ── Échéances fiscales — saisies manuellement, voir FiscalDeadlineDoc.
+  // Remplace un avis figé en dur ("dans 5 jours") dans Tenue de Livres.
+  const [fiscalDeadlines, setFiscalDeadlines] = useState<FiscalDeadlineDoc[]>([]);
+  const [showFiscalDeadlinesModal, setShowFiscalDeadlinesModal] = useState(false);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    dataService.fetchFiscalDeadlines(uid, activeCompanyId).then(setFiscalDeadlines);
   }, [activeCompanyId]);
 
   // --- REGIONS & DOSSIERS FISCAUX (HIERARCHICAL REVOLUTION) ---
@@ -17142,16 +17155,56 @@ const App = () => {
         </header>
 
         <div className="flex flex-col space-y-4 pt-4 px-4">
-          {/* Alerta de Vencimiento Legal */}
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-            <div className="flex items-center space-x-3">
-              <AlertTriangle className="text-amber-500" size={18} />
-              <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
-                ⚠️ Échéance fiscale proche : Remise TPS/TVQ trimestrielle (dans 5 jours)
-              </span>
-            </div>
-          </div>
+          {/* Was a fixed banner claiming "dans 5 jours" no matter the real
+              date — replaced with a real countdown from échéances the user
+              enters themselves (never auto-calculated from fiscal rules).
+              Found 2026-08-19 (Fabiola, before starting her real 2025 tax
+              prep). */}
+          {(() => {
+            const urgent = getMostUrgentDeadline(fiscalDeadlines);
+            const tone = !urgent
+              ? "neutral"
+              : urgent.isOverdue
+              ? "overdue"
+              : urgent.daysUntil <= 14
+              ? "soon"
+              : "ok";
+            const toneClasses = {
+              neutral: "bg-slate-50 dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400",
+              overdue: "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400",
+              soon: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400",
+              ok: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-400",
+            }[tone];
+            const label = !urgent
+              ? "Aucune échéance fiscale configurée — cliquez pour en ajouter une."
+              : urgent.isOverdue
+              ? `⚠️ ${urgent.deadline.label} — en retard de ${Math.abs(urgent.daysUntil)} jour${Math.abs(urgent.daysUntil) > 1 ? "s" : ""} !`
+              : urgent.daysUntil === 0
+              ? `⚠️ ${urgent.deadline.label} — c'est aujourd'hui !`
+              : `⚠️ ${urgent.deadline.label} — dans ${urgent.daysUntil} jour${urgent.daysUntil > 1 ? "s" : ""}`;
+            return (
+              <button
+                onClick={() => setShowFiscalDeadlinesModal(true)}
+                className={`w-full text-left rounded-2xl p-4 flex items-center justify-between shadow-sm border transition-all hover:opacity-90 ${toneClasses}`}
+              >
+                <div className="flex items-center space-x-3">
+                  <AlertTriangle size={18} />
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">{label}</span>
+                </div>
+                <Settings2 size={14} className="shrink-0" />
+              </button>
+            );
+          })()}
         </div>
+        <FiscalDeadlinesModal
+          show={showFiscalDeadlinesModal}
+          onClose={() => setShowFiscalDeadlinesModal(false)}
+          darkMode={darkMode}
+          activeCompanyId={activeCompanyId}
+          deadlines={fiscalDeadlines}
+          onSaved={(d) => setFiscalDeadlines((prev) => [d, ...prev.filter((x) => x.id !== d.id)])}
+          onDeleted={(id) => setFiscalDeadlines((prev) => prev.filter((x) => x.id !== id))}
+        />
 
         <div
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-100 shadow-sm shadow-emerald-900/5"}`}
