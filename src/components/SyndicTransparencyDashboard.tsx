@@ -260,6 +260,21 @@ export default function SyndicTransparencyDashboard({ depenses, activeCompanyId 
           </div>
         )}
 
+        {/* Was ambiguous whether "0 $ / no green bars" meant the feature was
+            broken or simply meant no matching expenses exist yet — found
+            2026-08-18 via Daniel's QA report (budget was configured fine,
+            "Réel" stayed at 0 $ because the test account genuinely had zero
+            expenses recorded in Tenue de Livres, which is correct behavior,
+            just confusing without this note). */}
+        {!isLoadingBudget && isBudgetConfigured && totalActual === 0 && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/40 border border-slate-200 dark:border-zinc-800 flex items-start gap-2.5 text-left">
+            <AlertCircle size={14} className="text-slate-400 shrink-0 mt-0.5" />
+            <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 leading-relaxed">
+              « Réel » reflète les dépenses déjà enregistrées dans Tenue de Livres avec une catégorie correspondant à un de vos postes budgétaires — aucune trouvée pour {currentYear} pour l'instant, donc les barres vertes n'apparaissent pas encore.
+            </p>
+          </div>
+        )}
+
         {/* Recharts Bar Chart */}
         <div className="h-[320px] w-full mt-4">
           <ResponsiveContainer width="100%" height="100%">
