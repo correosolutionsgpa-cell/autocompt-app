@@ -518,6 +518,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Module usage events — one doc per screen (`vista`) visit, powers
+    // SuperAdmin's "quel module utilisent-ils le plus" visibility. Same
+    // pattern as aiUsageEvents: any signed-in user logs their own events,
+    // only SuperAdmin reads the aggregate, events are immutable.
+    match /moduleUsageEvents/{eventId} {
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow read: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
     // Platform invoices — AutoCompt's own SaaS billing (sequential numbering),
     // and the counter doc backing it. SuperAdmin-only in both directions:
     // only Fabiola issues invoices, so no client ever needs to write these.

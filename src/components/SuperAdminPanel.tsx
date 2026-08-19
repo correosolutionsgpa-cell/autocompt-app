@@ -119,6 +119,14 @@ function formatLastActive(lastActive?: string): string {
   return new Date(lastActive).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** "En ligne maintenant" — App.tsx pings lastActive every 90s while the tab
+ *  stays open and visible; a gap under 3 min tolerates one missed heartbeat
+ *  (e.g. a brief network hiccup) without falsely showing offline. */
+function isOnlineNow(lastActive?: string): boolean {
+  if (!lastActive) return false;
+  return Date.now() - new Date(lastActive).getTime() < 3 * 60 * 1000;
+}
+
 /**
  * Real `users/{uid}` docs never had `name`/`plan`/`status`/`company`/`mrr` —
  * this whole AdminUser shape was designed against a schema no signup path
@@ -325,6 +333,8 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [refreshTick, setRefreshTick] = useState(0);
   const [aiEvents, setAiEvents] = useState<{ profile: string; feature: string; userEmail?: string; createdAt: string }[]>([]);
   const [loadingAiEvents, setLoadingAiEvents] = useState(false);
+  const [moduleEvents, setModuleEvents] = useState<{ ownerId: string; vista: string; userEmail?: string; createdAt: string }[]>([]);
+  const [loadingModuleEvents, setLoadingModuleEvents] = useState(false);
   const [platformInvoices, setPlatformInvoices] = useState<PlatformInvoiceDoc[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [companiesByOwner, setCompaniesByOwner] = useState<Record<string, OwnedCompany[]>>({});
@@ -393,6 +403,25 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       }
     };
     loadAiEvents();
+  }, [activeTab, refreshTick]);
+
+  // Load module usage events (which screens accounts actually visit) — only
+  // needed on 'ia' (top modules chart) and 'users' (per-account top modules
+  // in the detail modal), same lazy-load reasoning as aiEvents above.
+  useEffect(() => {
+    if (activeTab !== 'ia' && activeTab !== 'users') return;
+    const loadModuleEvents = async () => {
+      setLoadingModuleEvents(true);
+      try {
+        const snap = await getDocs(collection(db, 'moduleUsageEvents'));
+        setModuleEvents(snap.docs.map(d => d.data() as { ownerId: string; vista: string; userEmail?: string; createdAt: string }));
+      } catch {
+        // Rules will reject this for non-superadmin accounts — fail silently.
+      } finally {
+        setLoadingModuleEvents(false);
+      }
+    };
+    loadModuleEvents();
   }, [activeTab, refreshTick]);
 
   // Load the platform invoice history (SuperAdmin-only, per firestore.rules).
@@ -760,11 +789,19 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                     className={`border-b last:border-0 ${D ? 'border-zinc-800/50 hover:bg-zinc-900/40' : 'border-slate-50 hover:bg-slate-50/80'} transition-colors`}>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-black text-white">{displayName[0].toUpperCase()}</span>
+                        <div className="relative shrink-0">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
+                            <span className="text-[10px] font-black text-white">{displayName[0].toUpperCase()}</span>
+                          </div>
+                          {isOnlineNow(u.lastActive) && (
+                            <span title="En ligne maintenant" className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 ${D ? 'border-zinc-950' : 'border-white'}`} />
+                          )}
                         </div>
                         <div>
-                          <p className={`text-[11px] font-bold ${D ? 'text-zinc-200' : 'text-slate-800'}`}>{displayName}</p>
+                          <p className={`text-[11px] font-bold flex items-center gap-1.5 ${D ? 'text-zinc-200' : 'text-slate-800'}`}>
+                            {displayName}
+                            {isOnlineNow(u.lastActive) && <span className="text-[8px] font-black uppercase tracking-wider text-emerald-500">● En ligne</span>}
+                          </p>
                           <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.email}</p>
                           <p className={`text-[9px] ${u.phone ? (D ? 'text-emerald-500' : 'text-emerald-600') : (D ? 'text-zinc-600' : 'text-slate-300')}`}>
                             {u.phone || 'Téléphone non vérifié'}
@@ -1098,13 +1135,9 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
   );
 
   // ── Tab: AI usage — cost tracking per profile ───────────────────────────────
-  const PROFILE_LABELS: Record<string, string> = {
-    prospecteur: 'Prospecteur',
-    investisseur: 'Investisseur',
-    flippeur: 'Flippeur',
-    gestionnaire: 'Gestionnaire',
-    syndicat: 'Syndicat',
-  };
+  // (Reuses the module-level PROFILE_LABELS declared with AdminUser above —
+  // used to declare a second, narrower copy here that silently shadowed it
+  // and was missing "comptable".)
   // Gemini 2.5 Flash rate ($0.30 / $2.50 per 1M tokens) × an average receipt
   // scan (~1500 input tokens for the image + prompt, ~200 output tokens).
   // Rough estimate only — no real token count is logged per call.
@@ -1128,8 +1161,45 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
 
     const total = aiEvents.length;
 
+    const byModule = Object.entries(
+      moduleEvents.reduce((acc, e) => {
+        acc[e.vista] = (acc[e.vista] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    const moduleTotal = moduleEvents.length;
+
     return (
       <div className="space-y-5">
+        <div className={card}>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className={`text-[10px] font-black uppercase tracking-widest ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
+              📊 Modules les plus utilisés — toutes les visites d'écran
+            </h3>
+            <button onClick={() => setRefreshTick(t => t + 1)} className={`p-2 rounded-lg ${D ? 'hover:bg-zinc-800' : 'hover:bg-slate-100'}`}>
+              <RefreshCw size={14} className={loadingModuleEvents ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          {moduleTotal === 0 && !loadingModuleEvents && (
+            <p className={`text-[11px] ${D ? 'text-zinc-500' : 'text-slate-400'} text-center py-6`}>
+              Aucune visite enregistrée pour l'instant — le suivi a démarré le 19 août 2026, seules les visites depuis cette date apparaissent ici.
+            </p>
+          )}
+          {moduleTotal > 0 && (
+            <div className="space-y-2">
+              {byModule.map(([mVista, count]) => (
+                <div key={mVista} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl ${D ? 'bg-zinc-900/30' : 'bg-slate-50/50'}`}>
+                  <span className={`text-[11px] font-semibold flex-1 truncate ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{mVista}</span>
+                  <div className={`h-1.5 rounded-full flex-1 max-w-[160px] overflow-hidden ${D ? 'bg-zinc-800' : 'bg-slate-100'}`}>
+                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.max(4, (count / byModule[0][1]) * 100)}%` }} />
+                  </div>
+                  <span className={`text-[10px] font-black shrink-0 ${D ? 'text-zinc-400' : 'text-slate-500'}`}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className={card}>
           <div className="flex items-center justify-between mb-5">
             <h3 className={`text-[10px] font-black uppercase tracking-widest ${D ? 'text-zinc-400' : 'text-slate-400'}`}>
@@ -1465,7 +1535,19 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
               },
               { label: 'Ville', value: selectedUser.city || '—' },
               { label: 'Membre depuis', value: new Date(selectedUser.since).toLocaleDateString('fr-CA', { day: '2-digit', month: 'long', year: 'numeric' }) },
-              { label: 'Dernière connexion', value: formatLastActive(selectedUser.lastActive) },
+              { label: 'Dernière connexion', value: isOnlineNow(selectedUser.lastActive) ? '🟢 En ligne maintenant' : formatLastActive(selectedUser.lastActive) },
+              {
+                label: 'Modules les plus utilisés',
+                value: (() => {
+                  const top = Object.entries(
+                    moduleEvents.filter(e => e.ownerId === selectedUser.id).reduce((acc, e) => {
+                      acc[e.vista] = (acc[e.vista] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                  ).sort((a, b) => b[1] - a[1]).slice(0, 3);
+                  return top.length === 0 ? 'Aucune donnée' : top.map(([v, c]) => `${v} (${c})`).join(', ');
+                })(),
+              },
               { label: 'Docs signés', value: `${selectedUser.docsSignedCount || 0}` },
             ].map(r => (
               <div key={r.label} className={`flex justify-between items-center py-2 border-b ${D ? 'border-zinc-800' : 'border-slate-100'}`}>

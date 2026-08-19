@@ -2257,6 +2257,28 @@ export const dataService = {
     }
   },
 
+  // ── Module usage events — which screens each account actually uses
+  // (SuperAdmin visibility request, 2026-08-19) ───────────────────────────
+
+  /**
+   * Fire-and-forget log of one screen (`vista`) visit. Same non-blocking
+   * pattern as logAiUsageEvent — a logging failure must never affect
+   * navigation.
+   */
+  async logModuleUsageEvent(userId: string, data: { vista: string; profile?: string; userEmail?: string }): Promise<void> {
+    try {
+      await addDoc(collection(db, 'moduleUsageEvents'), {
+        ownerId: userId,
+        userEmail: data.userEmail || '',
+        vista: data.vista,
+        profile: data.profile || '',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('logModuleUsageEvent failed (non-blocking):', e);
+    }
+  },
+
   // ── Platform invoices — sequential numbering (SuperAdmin "Facturation") ────
 
   /**

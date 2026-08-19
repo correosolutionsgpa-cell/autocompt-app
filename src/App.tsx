@@ -5088,6 +5088,46 @@ const App = () => {
     dataService.fetchFiscalDeadlines(uid, activeCompanyId).then(setFiscalDeadlines);
   }, [activeCompanyId]);
 
+  // ── Présence "en ligne maintenant" — heartbeat périodique pendant que
+  // l'onglet reste ouvert, pour que SuperAdminPanel distingue une connexion
+  // récente d'une session réellement active en ce moment (2026-08-19).
+  // lastActive était déjà tamponné une seule fois au login (onAuthStateChanged) —
+  // insuffisant pour savoir si le compte est TOUJOURS connecté maintenant.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const stamp = () => {
+      if (document.visibilityState !== 'visible') return;
+      setDoc(doc(db, 'users', uid), { lastActive: new Date().toISOString() }, { merge: true }).catch(() => {});
+    };
+    stamp();
+    const interval = setInterval(stamp, 90000);
+    document.addEventListener('visibilitychange', stamp);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', stamp);
+    };
+  }, [currentUserEmail]);
+
+  // ── Usage des modules — quel écran chaque compte visite le plus, pour
+  // SuperAdminPanel (demande de Fabiola, 2026-08-19). Ignore les écrans qui
+  // ne sont pas de vrais modules (auth, onboarding, marketing) pour ne pas
+  // polluer les statistiques avec du bruit sans intérêt métier.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    const NON_MODULE_VISTAS = [
+      'splash', 'login', 'setup', 'sofi-onboarding', 'phone-verify', 'welcome',
+      'level_selection', 'pricing', 'rental_model', 'benefits', 'portal',
+      'politique-de-confidentialite', 'conditions-d-utilisation',
+    ];
+    if (!uid || NON_MODULE_VISTAS.includes(vista)) return;
+    dataService.logModuleUsageEvent(uid, {
+      vista,
+      profile: selectedProfile || undefined,
+      userEmail: currentUserEmail || undefined,
+    });
+  }, [vista]);
+
   // --- REGIONS & DOSSIERS FISCAUX (HIERARCHICAL REVOLUTION) ---
   const [currentYearFolder, setCurrentYearFolder] = useState<number | null>(
     null,
