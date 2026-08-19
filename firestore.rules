@@ -89,7 +89,11 @@ service cloud.firestore {
     }
 
     match /companies/{companyId} {
-      allow read: if isOwnerDoc() || isCollaboratorDoc();
+      // isSuperAdmin() added so SuperAdminPanel can list every company ever
+      // created (including ones created from a beta code Fabiola didn't
+      // personally generate) — before this, the panel's own Firestore query
+      // silently returned only companies Fabiola owns/collaborates on.
+      allow read: if isOwnerDoc() || isCollaboratorDoc() || isSuperAdmin();
       allow create: if isOwnerWrite();
       allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId);
       allow delete: if isOwnerDoc();

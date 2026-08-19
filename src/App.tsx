@@ -2395,8 +2395,22 @@ const App = () => {
   const saveActiveCompanyField = async (uid: string, field: Record<string, any>) => {
     if (currentCompany?._companyDocId && currentCompany.ownerId && currentCompany.ownerId !== uid) {
       await setDoc(doc(db, "companies", currentCompany._companyDocId), field, { merge: true });
-    } else {
+    } else if (currentCompany?.ownerId === uid) {
       await dataService.saveWorkspace(uid, { id: activeCompanyId, ...field });
+    } else {
+      // Neither branch above could positively confirm ownership — most
+      // likely `currentCompany` (derived from listaEmpresas.find(...))
+      // hadn't loaded/resolved yet for this exact activeCompanyId. The old
+      // unconditional fallback here assumed "not a confirmed collaborator
+      // write ⇒ must be my own company", which silently created a brand
+      // new phantom company under the caller's own uid reusing someone
+      // else's short id the moment that assumption was wrong — found
+      // 2026-08-19: Natalia (collaborator on AchatDirect) ended up with a
+      // second, colliding "custom-1786467309978" under her own account,
+      // breaking AchatDirect access for her (same failure mode already
+      // documented above from 2026-08-11, different trigger). Fail closed
+      // instead of guessing.
+      console.error("[saveActiveCompanyField] Could not confirm ownership of activeCompanyId — refusing to write to avoid creating a duplicate company.", { uid, activeCompanyId, currentCompany });
     }
   };
 
@@ -8148,8 +8162,12 @@ const App = () => {
           // this (found 2026-08-10: Daniel's beta-tester account redeemed a
           // code but never showed up searchable in the Users tab). Best-effort,
           // never blocks login if it fails. Runs AFTER the read now (see above).
+          // lastActive stamped here too (added 2026-08-19) — SuperAdminPanel's
+          // AdminUser.lastActive already read this field, but nothing ever
+          // wrote it, so "dernière connexion" was always blank for every
+          // real account.
           if (user.email) {
-            setDoc(userDocRef, { email: user.email }, { merge: true }).catch(() => {});
+            setDoc(userDocRef, { email: user.email, lastActive: new Date().toISOString() }, { merge: true }).catch(() => {});
           }
           if (userDoc.exists()) {
             const userData = userDoc.data();

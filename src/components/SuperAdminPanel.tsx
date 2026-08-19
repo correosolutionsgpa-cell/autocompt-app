@@ -57,9 +57,27 @@ interface AdminUser {
    *  beta code per profile. Toggle here writes the full profile list to
    *  users/{uid}.unlockedProfiles, same field SettingsView already reads. */
   unlockedProfiles?: string[];
+  /** Profile chosen at onboarding (users/{uid}.selectedProfile) — shown so
+   *  Fabiola can see what each account actually uses without opening it. */
+  selectedProfile?: string;
 }
 
 const ALL_PROFILE_IDS = ["prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable"];
+
+const PROFILE_LABELS: Record<string, string> = {
+  prospecteur: "Prospecteur Immobilier",
+  investisseur: "Investisseur Immobilier",
+  flippeur: "Flippeur Immobilier",
+  gestionnaire: "Gestionnaire Immobilier",
+  syndicat: "Syndicat de Copropriété",
+  comptable: "Comptable",
+};
+
+interface OwnedCompany {
+  id: string;
+  nombre: string;
+  companyProfile?: string;
+}
 
 interface SuperAdminPanelProps {
   darkMode: boolean;
@@ -84,6 +102,21 @@ function trialDaysLeft(u: { trialStartDate?: string; trialValidDays?: number }):
   const validDays = u.trialValidDays ?? 30;
   const daysElapsed = (Date.now() - new Date(u.trialStartDate).getTime()) / 86400000;
   return Math.max(0, Math.ceil(validDays - daysElapsed));
+}
+
+/** Relative "dernière connexion" label. lastActive is only stamped starting
+ *  2026-08-19 — accounts that haven't logged in since have no value yet. */
+function formatLastActive(lastActive?: string): string {
+  if (!lastActive) return 'Jamais (avant le suivi)';
+  const ms = Date.now() - new Date(lastActive).getTime();
+  const minutes = ms / 60000;
+  if (minutes < 1) return "À l'instant";
+  if (minutes < 60) return `Il y a ${Math.floor(minutes)} min`;
+  const hours = minutes / 60;
+  if (hours < 24) return `Il y a ${Math.floor(hours)} h`;
+  const days = hours / 24;
+  if (days < 30) return `Il y a ${Math.floor(days)} j`;
+  return new Date(lastActive).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /**
@@ -121,6 +154,7 @@ function mapFirestoreUserToAdminUser(uid: string, data: any): AdminUser {
     canGenerateBetaCodes: data?.canGenerateBetaCodes,
     driveEnabled: data?.driveEnabled,
     unlockedProfiles: data?.unlockedProfiles,
+    selectedProfile: data?.selectedProfile,
   };
 }
 
@@ -293,6 +327,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [loadingAiEvents, setLoadingAiEvents] = useState(false);
   const [platformInvoices, setPlatformInvoices] = useState<PlatformInvoiceDoc[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [companiesByOwner, setCompaniesByOwner] = useState<Record<string, OwnedCompany[]>>({});
 
   const D = darkMode;
 
@@ -314,6 +349,31 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       }
     };
     loadUsers();
+  }, [refreshTick]);
+
+  // Every company ever created, grouped by ownerId — including companies
+  // created from a beta code Fabiola didn't personally generate (e.g. a
+  // second company an already-activated account spun up on its own). Needs
+  // firestore.rules' companies read to allow isSuperAdmin(); without that
+  // this query silently returns only companies Fabiola herself owns.
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'companies'));
+        const grouped: Record<string, OwnedCompany[]> = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const ownerId = data?.ownerId;
+          if (!ownerId) return;
+          if (!grouped[ownerId]) grouped[ownerId] = [];
+          grouped[ownerId].push({ id: d.id, nombre: data?.nombre || data?.companyName || '(sans nom)', companyProfile: data?.companyProfile });
+        });
+        setCompaniesByOwner(grouped);
+      } catch {
+        // Rules will reject this for non-superadmin accounts — fail silently.
+      }
+    };
+    loadCompanies();
   }, [refreshTick]);
 
   // Load AI usage events (only once the tab has been opened — `read` is
@@ -684,7 +744,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
           <table className="w-full">
             <thead>
               <tr className={`border-b ${D ? 'border-zinc-800 bg-zinc-950/50' : 'border-slate-100 bg-slate-50'}`}>
-                {['Utilisateur', 'Entreprise', 'Forfait', 'Statut', 'Essai', 'Depuis', 'MRR', 'Actions'].map(h => (
+                {['Utilisateur', 'Entreprises créées', 'Profil actif', 'Forfait', 'Statut', 'Essai', 'Depuis', 'Dernière connexion', 'MRR', 'Actions'].map(h => (
                   <th key={h} className={`px-5 py-3.5 text-left text-[9px] font-black uppercase tracking-widest ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{h}</th>
                 ))}
               </tr>
@@ -713,8 +773,26 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className={`text-[11px] font-semibold ${D ? 'text-zinc-300' : 'text-slate-700'}`}>{u.company || '—'}</p>
-                      <p className={`text-[9px] ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{u.industry}</p>
+                      {(() => {
+                        const owned = companiesByOwner[u.id] || [];
+                        if (owned.length === 0) {
+                          return <p className={`text-[10px] ${D ? 'text-zinc-600' : 'text-slate-300'}`}>Aucune</p>;
+                        }
+                        return (
+                          <div className="space-y-0.5">
+                            {owned.map(c => (
+                              <p key={c.id} className={`text-[10px] font-semibold ${D ? 'text-zinc-300' : 'text-slate-700'}`}>
+                                {c.nombre}{c.companyProfile ? <span className={D ? 'text-zinc-500' : 'text-slate-400'}> · {PROFILE_LABELS[c.companyProfile] || c.companyProfile}</span> : null}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <p className={`text-[10px] font-semibold ${D ? 'text-zinc-300' : 'text-slate-700'}`}>
+                        {(u.selectedProfile && PROFILE_LABELS[u.selectedProfile]) || '—'}
+                      </p>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg ${planConf.bg} ${planConf.color}`}>
@@ -754,6 +832,11 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                         {u.since || u.createdAt
                           ? new Date(u.since || u.createdAt).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' })
                           : '—'}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <p className={`text-[10px] font-semibold ${D ? 'text-zinc-400' : 'text-slate-600'}`}>
+                        {formatLastActive(u.lastActive)}
                       </p>
                     </td>
                     <td className="px-5 py-3.5">
@@ -1373,10 +1456,16 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
           </div>
           <div className="space-y-3">
             {[
-              { label: 'Entreprise', value: selectedUser.company },
-              { label: 'Secteur', value: selectedUser.industry },
+              { label: 'Profil actif', value: (selectedUser.selectedProfile && PROFILE_LABELS[selectedUser.selectedProfile]) || '—' },
+              {
+                label: 'Entreprises créées',
+                value: (companiesByOwner[selectedUser.id] || []).length === 0
+                  ? 'Aucune'
+                  : (companiesByOwner[selectedUser.id] || []).map(c => c.nombre + (c.companyProfile ? ` (${PROFILE_LABELS[c.companyProfile] || c.companyProfile})` : '')).join(', '),
+              },
               { label: 'Ville', value: selectedUser.city || '—' },
               { label: 'Membre depuis', value: new Date(selectedUser.since).toLocaleDateString('fr-CA', { day: '2-digit', month: 'long', year: 'numeric' }) },
+              { label: 'Dernière connexion', value: formatLastActive(selectedUser.lastActive) },
               { label: 'Docs signés', value: `${selectedUser.docsSignedCount || 0}` },
             ].map(r => (
               <div key={r.label} className={`flex justify-between items-center py-2 border-b ${D ? 'border-zinc-800' : 'border-slate-100'}`}>
