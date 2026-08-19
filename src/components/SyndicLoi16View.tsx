@@ -5,8 +5,9 @@ import {
   TrendingUp, 
   FileCheck2, 
   Plus, 
-  Trash2, 
-  Calendar, 
+  Trash2,
+  Pencil,
+  Calendar,
   DollarSign, 
   AlertTriangle, 
   Download,
@@ -48,6 +49,10 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
   const [activeTab, setActiveTab] = useState<'carnet' | 'finance'>('carnet');
   const [components, setComponents] = useState<BuildingComponent[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  // null = adding a new component, otherwise the id of the one being edited.
+  // Was add-only — no way to fix a typo'd cost/date/année without deleting
+  // and re-creating it. Found 2026-08-18 via Daniel's QA report.
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'condition' | 'year'>('year');
@@ -131,7 +136,26 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
     return () => unsubscribe();
   }, [activeCompanyId]);
 
-  const handleAddComponent = async (e: React.FormEvent) => {
+  const resetComponentForm = () => {
+    setCompName('');
+    setCompCondition('Excellent');
+    setCompLastInspection('');
+    setCompNextYear(new Date().getFullYear() + 5);
+    setCompCost('');
+    setEditingComponentId(null);
+  };
+
+  const handleOpenEdit = (c: BuildingComponent) => {
+    setEditingComponentId(c.id);
+    setCompName(c.name);
+    setCompCondition(c.condition);
+    setCompLastInspection(c.lastInspection);
+    setCompNextYear(c.nextReplacementYear);
+    setCompCost(String(c.estimatedCost));
+    setShowAddModal(true);
+  };
+
+  const handleSaveComponent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!compName || !compCost) return;
 
@@ -142,26 +166,29 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
         return;
       }
 
-      await addDoc(collection(db, 'maintenance_components'), {
+      const payload = {
         name: compName,
         condition: compCondition,
         lastInspection: compLastInspection || new Date().toISOString().split('T')[0],
         nextReplacementYear: Number(compNextYear),
         estimatedCost: Number(compCost),
-        companyId: activeCompanyId,
-        ownerId: userId,
-        createdAt: new Date().toISOString()
-      });
+      };
 
-      // Reset form
-      setCompName('');
-      setCompCondition('Excellent');
-      setCompLastInspection('');
-      setCompNextYear(new Date().getFullYear() + 5);
-      setCompCost('');
+      if (editingComponentId) {
+        await updateDoc(doc(db, 'maintenance_components', editingComponentId), payload);
+      } else {
+        await addDoc(collection(db, 'maintenance_components'), {
+          ...payload,
+          companyId: activeCompanyId,
+          ownerId: userId,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      resetComponentForm();
       setShowAddModal(false);
     } catch (err) {
-      console.error('Error adding component: ', err);
+      console.error('Error saving component: ', err);
       alert("Erreur lors de l'enregistrement : " + (err instanceof Error ? err.message : String(err)));
     }
   };
@@ -301,7 +328,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               
               {!isReadOnly && (
                 <button
-                  onClick={() => setShowAddModal(true)}
+                  onClick={() => { resetComponentForm(); setShowAddModal(true); }}
                   className="p-3 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-555 text-white rounded-2xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 shadow-md shadow-violet-500/20"
                 >
                   <Plus size={16} />
@@ -652,7 +679,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                           </div>
 
                           {/* Inspection Info */}
-                          <div className="col-span-4 text-center flex flex-col items-center justify-center">
+                          <div className="col-span-3 text-center flex flex-col items-center justify-center">
                             <span className="text-[10.5px] font-black text-slate-800 dark:text-zinc-100">
                               {c.condition === 'Critique' ? 'Imminent' : c.lastInspection}
                             </span>
@@ -664,18 +691,30 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                           </div>
 
                           {/* Actions */}
-                          <div className="col-span-1 flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="col-span-2 flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                             {!isReadOnly && (
-                              <button
-                                onClick={() => handleDeleteComponent(c.id)}
-                                className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
-                                  darkMode
-                                    ? 'bg-zinc-800/80 text-zinc-400 hover:text-rose-450 hover:bg-zinc-700'
-                                    : 'bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-slate-200'
-                                )}
-                              >
-                                <Trash2 size={12} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenEdit(c)}
+                                  className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
+                                    darkMode
+                                      ? 'bg-zinc-800/80 text-zinc-400 hover:text-violet-400 hover:bg-zinc-700'
+                                      : 'bg-slate-100 text-slate-500 hover:text-violet-600 hover:bg-slate-200'
+                                  )}
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteComponent(c.id)}
+                                  className={"p-2 rounded-xl transition-all border-none cursor-pointer " + (
+                                    darkMode
+                                      ? 'bg-zinc-800/80 text-zinc-400 hover:text-rose-450 hover:bg-zinc-700'
+                                      : 'bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-slate-200'
+                                  )}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </motion.div>
@@ -788,10 +827,10 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
               className={"w-full max-w-md p-6 rounded-[32px] border " + (darkMode ? 'bg-zinc-900 border-zinc-850 text-white' : 'bg-white border-slate-200 text-slate-900') + " shadow-2xl text-left"}
             >
               <h3 className="text-base font-black uppercase italic tracking-tight mb-4">
-                Ajouter un composant
+                {editingComponentId ? 'Modifier le composant' : 'Ajouter un composant'}
               </h3>
 
-              <form onSubmit={handleAddComponent} className="space-y-4">
+              <form onSubmit={handleSaveComponent} className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-slate-400">Nom du composant</label>
                   <input
@@ -857,7 +896,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => { resetComponentForm(); setShowAddModal(false); }}
                     className="flex-grow py-3.5 rounded-2xl text-[9.5px] font-black uppercase border border-slate-250 dark:border-zinc-800 bg-transparent text-slate-400 cursor-pointer"
                   >
                     Annuler
@@ -866,7 +905,7 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                     type="submit"
                     className="flex-grow py-3.5 rounded-2xl text-[9.5px] font-black uppercase text-white bg-violet-600 border-none cursor-pointer"
                   >
-                    Ajouter
+                    {editingComponentId ? 'Enregistrer' : 'Ajouter'}
                   </button>
                 </div>
               </form>

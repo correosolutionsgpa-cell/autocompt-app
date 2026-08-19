@@ -773,6 +773,12 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const glass = darkMode
     ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
     : "bg-white border-slate-200";
+  // bg/shadow only, no border-color utility — for buttons that need their own
+  // colored border instead of glass's default, without two conflicting
+  // border-color classes at equal CSS specificity.
+  const glassNoBorder = darkMode
+    ? "bg-slate-900/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+    : "bg-white";
 
   const inputCls = `w-full px-4 py-3 rounded-2xl border text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100 placeholder-zinc-600" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`;
 
@@ -881,24 +887,28 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     ))}
                   </div>
 
-                  {/* Quick actions */}
+                  {/* Quick actions — border-2 + a persistent tinted border (not just on
+                      hover) so these read as clickable actions, distinct from the plain
+                      `glass`-bordered KPI/info cards above and below them. Found
+                      2026-08-18 via Daniel's QA report: the identical border made the
+                      two hard to tell apart at a glance. */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <button onClick={() => setActiveTab("depots")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-emerald-400/50 ${glass}`}>
+                    <button onClick={() => setActiveTab("depots")} className={`p-4 rounded-[24px] border-2 border-emerald-500/30 hover:border-emerald-400/60 flex flex-col items-start gap-2 text-left transition-all ${glassNoBorder}`}>
                       <ArrowDownCircle size={18} className="text-emerald-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest">Nouveau dépôt</span>
                     </button>
-                    <button onClick={() => setActiveTab("retraits")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-rose-400/50 ${glass}`}>
+                    <button onClick={() => setActiveTab("retraits")} className={`p-4 rounded-[24px] border-2 border-rose-500/30 hover:border-rose-400/60 flex flex-col items-start gap-2 text-left transition-all ${glassNoBorder}`}>
                       <ArrowUpCircle size={18} className="text-rose-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest">Nouveau retrait</span>
                     </button>
-                    <button onClick={() => setVista("portefeuille_client")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-violet-400/50 ${glass}`}>
+                    <button onClick={() => setVista("portefeuille_client")} className={`p-4 rounded-[24px] border-2 border-violet-500/30 hover:border-violet-400/60 flex flex-col items-start gap-2 text-left transition-all ${glassNoBorder}`}>
                       <Building2 size={18} className="text-violet-500" />
                       <div>
                         <span className="text-[10px] font-black uppercase tracking-widest block">Portefeuille</span>
                         <span className={`text-[8px] font-bold uppercase tracking-wider ${darkMode ? "text-violet-400/60" : "text-violet-500/60"}`}>Par client</span>
                       </div>
                     </button>
-                    <button onClick={() => setVista("mandat_gestion")} className={`p-4 rounded-[24px] border flex flex-col items-start gap-2 text-left transition-all hover:border-indigo-400/50 ${glass}`}>
+                    <button onClick={() => setVista("mandat_gestion")} className={`p-4 rounded-[24px] border-2 border-indigo-500/30 hover:border-indigo-400/60 flex flex-col items-start gap-2 text-left transition-all ${glassNoBorder}`}>
                       <FileText size={18} className="text-indigo-500" />
                       <div>
                         <span className="text-[10px] font-black uppercase tracking-widest block">Mandat de Gestion</span>
