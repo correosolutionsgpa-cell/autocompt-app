@@ -548,6 +548,9 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
   const [sendEmail, setSendEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState("");
+  // Non-blocking — the email already sent successfully by the time this can
+  // fire, so it's a heads-up, not an error the user needs to act on.
+  const [persistWarning, setPersistWarning] = useState("");
 
   // ── Mandats déjà envoyés — jusqu'ici jamais relus nulle part une fois
   // envoyés, ni même sauvegardés avec succès (règle Firestore manquante,
@@ -613,6 +616,7 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
     if (!email) return;
     setIsSending(true);
     setSendError("");
+    setPersistWarning("");
     try {
       const pdf = generateMandatPDF(form);
       const pdfBase64 = pdf.output("datauristring").split(",")[1];
@@ -667,8 +671,11 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
           setMandatsEnvoyes((prev) => [saved, ...prev]);
         } catch (persistErr) {
           // The owner already received the mandate by email — this only
-          // means it won't show up in "Mandats déjà envoyés" below.
+          // means it won't show up in "Mandats déjà envoyés" below. Was
+          // silent (console.error only) — surfaced now so it's never a
+          // total silent failure (found 2026-08-18 via Daniel's QA report).
           console.error("[mandat] saveMandatGestion/Drive failed (non-blocking):", persistErr);
+          setPersistWarning("Le courriel a bien été envoyé, mais ce mandat n'a pas pu être enregistré dans \"Mandats envoyés\" — vous pouvez le renvoyer au propriétaire si besoin, il ne sera simplement pas listé ici.");
         }
       }
 
@@ -1070,6 +1077,12 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                   <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                     Le mandat de gestion a été envoyé à <strong>{sendEmail || form.proprietaireEmail}</strong>. Le propriétaire recevra un email avec le PDF attaché.
                   </p>
+                  {persistWarning && (
+                    <div className={`mt-4 p-3 rounded-2xl border flex items-start gap-2 text-left ${darkMode ? "bg-amber-900/10 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      <p className="text-[10px] font-medium">{persistWarning}</p>
+                    </div>
+                  )}
                   <div className="flex gap-3 mt-6">
                     <button onClick={() => { setStep("form"); setSent(false); setForm(defaultForm(adminName, adminEmail)); }} className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">
                       Nouveau mandat

@@ -3473,6 +3473,14 @@ export const dataService = {
       ownerId: userId,
       createdAt: new Date().toISOString(),
     };
+    // Firestore rejects the WHOLE write if any field is literally `undefined`
+    // (not missing, not null) — `driveLink` is optional and callers without
+    // Drive connected pass it as `undefined`. Found 2026-08-18 via Daniel's QA
+    // report: the email sent fine but the mandate silently never saved, so it
+    // never showed up in "Mandats envoyés" — this write was failing every
+    // time Drive wasn't connected, caught only by a non-blocking try/catch
+    // upstream that logged to console and nothing else.
+    Object.keys(full).forEach((k) => { if ((full as any)[k] === undefined) delete (full as any)[k]; });
     await setDoc(doc(db, 'mandatsGestion', data.id), full);
     return full;
   },
