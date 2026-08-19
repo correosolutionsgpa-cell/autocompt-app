@@ -125,7 +125,13 @@ export default function DossierFiscauxView({
     const updated = { ...unit, ...patch };
     setReleve31Rows((prev) => prev.map((r) => (r.unit.id === unit.id ? { ...r, unit: updated } : r)));
     try {
-      await dataService.saveUnit(uid, updated);
+      // Firestore rejects the whole write if any field is literally
+      // `undefined` — selecting "À confirmer" (residencePrincipale reset to
+      // unknown) would otherwise silently fail. Strip before saving; the
+      // local optimistic state above already shows the reset immediately.
+      const toSave = { ...updated } as any;
+      Object.keys(toSave).forEach((k) => { if (toSave[k] === undefined) delete toSave[k]; });
+      await dataService.saveUnit(uid, toSave);
     } catch (e) {
       console.error('[DossierFiscauxView] saveUnit (Relevé 31 field) error:', e);
     }
@@ -441,16 +447,26 @@ export default function DossierFiscauxView({
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none mt-1">Prépare les données par unité louée — pas une transmission officielle</p>
               </div>
             </div>
-            <select
-              value={releve31Year}
-              onChange={(e) => setReleve31Year(parseInt(e.target.value, 10))}
-              className={`text-[11px] font-bold rounded-xl px-3 py-2 border outline-none ${darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-200" : "bg-white border-slate-200"}`}
-            >
+            <div className={`inline-flex rounded-xl border p-0.5 ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-slate-200"}`}>
               {[0, 1, 2].map((offset) => {
                 const y = new Date().getFullYear() - offset;
-                return <option key={y} value={y}>{y}</option>;
+                const isSelected = releve31Year === y;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setReleve31Year(y)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                      isSelected
+                        ? "bg-indigo-600 text-white"
+                        : darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {y}
+                  </button>
+                );
               })}
-            </select>
+            </div>
           </div>
 
           {releve31Loading ? (
@@ -500,15 +516,29 @@ export default function DossierFiscauxView({
                         </div>
                         <div className="space-y-1">
                           <label className="text-[8px] font-black uppercase text-slate-400">Résidence principale au 31 déc.</label>
-                          <select
-                            value={unit.residencePrincipale === undefined ? "" : unit.residencePrincipale ? "oui" : "non"}
-                            onChange={(e) => handleUpdateReleve31Field(unit, { residencePrincipale: e.target.value === "oui" })}
-                            className={`w-full px-3 py-2 rounded-lg text-[11px] border outline-none ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                          >
-                            <option value="">À confirmer</option>
-                            <option value="oui">Oui</option>
-                            <option value="non">Non</option>
-                          </select>
+                          <div className={`flex rounded-lg border p-0.5 ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-slate-200"}`}>
+                            {([
+                              { value: undefined, label: "À confirmer" },
+                              { value: true, label: "Oui" },
+                              { value: false, label: "Non" },
+                            ] as const).map((opt) => {
+                              const isSelected = unit.residencePrincipale === opt.value;
+                              return (
+                                <button
+                                  key={opt.label}
+                                  type="button"
+                                  onClick={() => handleUpdateReleve31Field(unit, { residencePrincipale: opt.value })}
+                                  className={`flex-1 px-2 py-1.5 rounded-md text-[10px] font-bold transition-all ${
+                                    isSelected
+                                      ? "bg-indigo-600 text-white"
+                                      : darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-slate-500 hover:text-slate-800"
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}
