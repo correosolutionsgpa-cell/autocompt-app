@@ -13767,45 +13767,13 @@ const App = () => {
       (d) => d.companyId === activeCompanyId,
     );
 
-    // ── RBAC: Document category whitelist per profile (.cursorrules §2) ──────
-    // Defines which document categories are VISIBLE in the DocuLegal module.
-    // Any cat NOT in this set is hidden — the underlying data is never deleted.
-    const DOCULEGAL_ALLOWED_CATS: Record<typeof activeProfile, string[]> = {
-      prospecteur: [
-        "Promesses d'Achat",
-        "Cessions de Promesse d'Achat",
-        "Contrats de Sous-traitance",
-      ],
-      flippeur: [
-        "Promesses d'Achat",
-        "Contrats de Sous-traitance",
-        "Permis RBQ & Assurances",
-        "Soumissions de Projet",
-        "Documents Légaux",
-      ],
-      gestionnaire: [
-        "Contrats de Gestion",
-        "Promesses d'Achat",
-        "Baux de Clients",
-        "Documents Corporatifs",
-      ],
-      investisseur: [
-        "Promesses d'Achat",
-        "Ententes de Confidentialité",
-        "Contrats de Partenariat",
-        "Documents Notariés",
-      ],
-      syndicat: [
-        "Contrats & Résolutions",
-        "Documents Syndicat",
-      ],
-      comptable: [
-        "Ententes de Confidentialité",
-        "Documents Corporatifs",
-        "Contrats de Partenariat",
-      ],
-    };
-    const allowedCats = DOCULEGAL_ALLOWED_CATS[activeProfile] ?? [];
+    // ── RBAC: Document category whitelist per profile ────────────────────────
+    // Reuses `folders` (défini plus haut, switch(activeProfile), seule source
+    // fiable) au lieu d'une deuxième liste dupliquée : les deux avaient dérivé
+    // avec le temps (ex. "Contrats de Gestion" manquant/en trop selon la liste),
+    // ce qui causait une fuite de documents entre profils. Voir plus bas pour
+    // la comparaison exacte (plus de correspondance par sous-chaîne).
+    const allowedCats = folders;
 
     // ── RBAC: Smart template whitelist per profile ────────────────────────────
     // "Bail Résidentiel" and "NDA" are NOT in the Prospecteur allowed set.
@@ -13824,13 +13792,14 @@ const App = () => {
     });
 
     // ── RBAC: Apply category filter to company documents ─────────────────────
+    // Comparaison EXACTE (pas de sous-chaîne) : une correspondance par simple
+    // "premier mot" laissait passer par ex. "Contrats de Gestion" (gestionnaire)
+    // dans la vue d'un profil prospecteur, puisque les deux commencent par
+    // "Contrats". Bug réel signalé le 20-08-2026 (Natalia, entreprise AchatDirect).
     const rbacCompanyDocs = companyDocs.filter((d) => {
       if (allowedCats.length === 0) return true;
-      // Match by exact cat name OR by keyword inclusion for legacy entries
-      return allowedCats.some((cat) =>
-        d.cat?.toLowerCase().includes(cat.toLowerCase().split(" ")[0]) ||
-        cat.toLowerCase().includes((d.cat ?? "").toLowerCase().split(" ")[0])
-      );
+      const dCat = (d.cat ?? "").trim().toLowerCase();
+      return allowedCats.some((cat) => cat.trim().toLowerCase() === dCat);
     });
 
     // Filter of folder specific doc lists
