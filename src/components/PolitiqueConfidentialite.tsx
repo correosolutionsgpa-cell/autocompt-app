@@ -53,7 +53,7 @@ export const PolitiqueConfidentialite: React.FC<Props> = ({ onBack, darkMode = t
           Politique de confidentialité
         </h1>
         <p className={`text-sm sm:text-base mb-8 ${darkMode ? "text-slate-400" : "text-slate-600"}`}>
-          Dernière mise à jour : <strong>23 juillet 2026</strong> · Entrée en vigueur immédiate
+          Dernière mise à jour : <strong>20 août 2026</strong> · Entrée en vigueur immédiate
         </p>
 
         {/* Highlights Grid */}
@@ -186,6 +186,21 @@ export const PolitiqueConfidentialite: React.FC<Props> = ({ onBack, darkMode = t
             <p className="text-xs text-slate-400 mt-2">
               Ces documents sont conservés uniquement pendant la durée nécessaire aux fins prévues et selon les obligations légales de conservation de documents comptables de Revenu Québec et de l'ARC (minimum 6 ans).
             </p>
+          </section>
+
+          {/* AI processing (Sofi) */}
+          <section className="space-y-3">
+            <h2 className="text-xl font-bold text-emerald-400 flex items-center gap-2">
+              <ShieldCheck size={20} />
+              4.1 Traitement par intelligence artificielle (Sofi)
+            </h2>
+            <p>
+              Sofi, l'assistant intelligent d'AutoCompt, utilise l'API Gemini de Google pour lire vos reçus et factures numérisés (reconnaissance de texte, catégorisation suggérée) et pour répondre à vos questions dans le clavardage. Ce traitement implique la transmission du contenu de vos documents (ou de votre question) à Google, à titre de sous-traitant technique, dans le seul but de vous fournir cette fonctionnalité.
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 pl-2 text-slate-300 text-xs sm:text-sm">
+              <li>Vous confirmez toujours vous-même les données extraites avant qu'elles ne soient enregistrées — Sofi ne sauvegarde jamais une donnée automatiquement.</li>
+              <li>Google traite ces données selon ses propres conditions d'utilisation de l'API Gemini, en vigueur au moment de la transmission.</li>
+            </ul>
           </section>
 
           {/* No Sale Guarantee */}
