@@ -76,3 +76,35 @@ export function getMostUrgentDeadline(deadlines: FiscalDeadlineDoc[], today: Dat
   const upcoming = computed.sort((a, b) => a.daysUntil - b.daysUntil);
   return upcoming[0];
 }
+
+export interface TpsTvqThresholdAlert {
+  tone: 'amber' | 'rose';
+  message: string;
+}
+
+/**
+ * Alerte "approche du seuil de 30 000 $" pour le Gestionnaire non-inscrit à
+ * la TPS/TVQ — approximation simple des ventes taxables sur 12 mois glissants
+ * (le calcul officiel ARC/RQ porte sur 4 trimestres consécutifs). Ne renvoie
+ * rien si déjà inscrit ("oui") : le module est alors visible sur le dashboard,
+ * plus besoin d'avertir.
+ */
+export function getTpsTvqThresholdAlert(
+  totalVentes12Mois: number,
+  tpsTvqRegistered: 'oui' | 'non' | 'en_cours' | null | undefined,
+): TpsTvqThresholdAlert | null {
+  if (tpsTvqRegistered === 'oui') return null;
+  if (totalVentes12Mois >= 30000) {
+    return {
+      tone: 'rose',
+      message: `⚠️ Ventes des 12 derniers mois : ${totalVentes12Mois.toLocaleString('fr-CA', { maximumFractionDigits: 0 })} $ — l'inscription à la TPS/TVQ est obligatoire dès 30 000 $.`,
+    };
+  }
+  if (totalVentes12Mois >= 27000) {
+    return {
+      tone: 'amber',
+      message: `Ventes des 12 derniers mois : ${totalVentes12Mois.toLocaleString('fr-CA', { maximumFractionDigits: 0 })} $ — vous approchez du seuil de 30 000 $ qui rend l'inscription à la TPS/TVQ obligatoire.`,
+    };
+  }
+  return null;
+}

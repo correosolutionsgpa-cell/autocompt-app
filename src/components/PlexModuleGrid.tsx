@@ -49,6 +49,10 @@ interface PlexModuleGridProps {
   playNotificationSound: () => void;
   setShowFiscalChat: (show: boolean) => void;
   t: (frText: string) => string;
+  /** Inscription TPS/TVQ de l'entreprise active (Gestionnaire uniquement) —
+   *  débloque la carte TPS/TVQ même si "tps_tvq" n'est pas dans son RBAC
+   *  statique, quand la réponse est "oui" ou "en_cours". */
+  tpsTvqRegistered?: "oui" | "non" | "en_cours" | null;
 }
 
 // ── Profile color tokens — design_system_rules.md §2 ────────────────────────
@@ -89,6 +93,7 @@ export default function PlexModuleGrid({
   playNotificationSound,
   setShowFiscalChat,
   t,
+  tpsTvqRegistered,
 }: PlexModuleGridProps) {
 
   const rgb = PROFILE_RGB[activeProfile] ?? PROFILE_RGB.investisseur;
@@ -127,6 +132,13 @@ export default function PlexModuleGrid({
   } as React.CSSProperties;
   const can = (moduleId: Parameters<typeof hasAccess>[1]) =>
     hasAccess(activeProfile, moduleId);
+  // "tps_tvq" n'est pas dans le RBAC statique du Gestionnaire (voir
+  // rbacConfig.ts) puisque ça dépend de l'entreprise, pas du profil — cet
+  // override par entreprise débloque la carte quand elle a répondu "oui" ou
+  // "en_cours" à la question d'inscription (Paramètres ou onboarding).
+  const canTpsTvq =
+    can("tps_tvq") ||
+    (activeProfile === "gestionnaire" && (tpsTvqRegistered === "oui" || tpsTvqRegistered === "en_cours"));
 
   // ── Icon container per §7 — static glass badge, NO solid fills ───────────
   const iconBadge = (colorBg: string, colorText: string) =>
@@ -189,8 +201,8 @@ export default function PlexModuleGrid({
         </button>
       )}
 
-      {/* TPS / TVQ — prospecteur, flippeur */}
-      {can("tps_tvq") && (
+      {/* TPS / TVQ — prospecteur, flippeur, investisseur ; gestionnaire si inscrit */}
+      {canTpsTvq && (
         <button
           onClick={() => setVista("taxes")}
           className={cardBase}

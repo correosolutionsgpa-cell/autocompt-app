@@ -346,6 +346,25 @@ const QUESTIONS: Record<OnboardingProfile, OnboardingQuestion[]> = {
 
   // ── D. Gestionnaire — T3 / Bare Trust ────────────────────────────────────────
   gestionnaire: [
+    // Même question que Prospecteur (id identique "tps_tvq_registered") —
+    // les honoraires de gestion sont un revenu taxable. La réponse est
+    // persistée sur le doc `companies` via App.tsx onComplete si une
+    // entreprise existe déjà, sinon éditable plus tard dans Paramètres.
+    {
+      id: "tps_tvq_registered",
+      type: "single_choice",
+      titleFR: "Êtes-vous inscrit aux fichiers de la TPS/TVQ ?",
+      titleEN: "Are you registered for GST/QST taxes?",
+      titleES: "¿Estás inscrito en los archivos fiscales de GST/QST?",
+      subtitleFR: "Obligatoire si vos revenus mondiaux taxables dépassent 30 000 $ par trimestre civil ou sur 4 trimestres.",
+      subtitleEN: "Mandatory if your taxable global income exceeds $30,000 per civil quarter or over 4 quarters.",
+      subtitleES: "Obligatorio si tus ingresos imponibles superan los 30,000 $ por trimestre civil o en 4 trimestres.",
+      options: [
+        { value: "oui",      labelFR: "Oui, compte actif",      labelEN: "Yes, active account",      labelES: "Sí, cuenta activa" },
+        { value: "non",      labelFR: "Non",                    labelEN: "No",                        labelES: "No"                 },
+        { value: "en_cours", labelFR: "En cours d'inscription", labelEN: "Registration in progress", labelES: "En proceso"          },
+      ],
+    },
     {
       id: "compte_fiducie",
       type: "single_choice",

@@ -105,7 +105,7 @@ import StyledSelect from "./components/ui/StyledSelect";
 import type { FileItem } from "./components/DossierFiscauxView";
 import CategoryFiscalRulesModal from "./components/CategoryFiscalRulesModal";
 import FiscalDeadlinesModal from "./components/FiscalDeadlinesModal";
-import { getMostUrgentDeadline } from "./lib/fiscalDeadlines";
+import { getMostUrgentDeadline, getTpsTvqThresholdAlert } from "./lib/fiscalDeadlines";
 import { HeuresPaieView } from "./components/HeuresPaieView";
 import LivreDeSociete from "./components/LivreDeSociete";
 import type { SignatureField } from "./components/DocuLegalPdfEditor";
@@ -2392,6 +2392,19 @@ const App = () => {
     }
   };
 
+  // Same pattern as handleUpdateModeGestion — determines whether the
+  // Gestionnaire's TPS/TVQ module shows on the dashboard for THIS company,
+  // and whether the 30 000 $ threshold alert runs (see Tenue de Livres).
+  const handleUpdateTpsTvqRegistered = async (value: "oui" | "non" | "en_cours") => {
+    if (!currentCompany?._companyDocId) return;
+    setListaEmpresas((prev) => prev.map((w) => (w.id === activeCompanyId ? { ...w, tpsTvqRegistered: value } : w)));
+    try {
+      await setDoc(doc(db, "companies", currentCompany._companyDocId), { tpsTvqRegistered: value }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save tpsTvqRegistered:", err);
+    }
+  };
+
   // Collaborators on a shared company must never save through
   // dataService.saveWorkspace(uid, {id: activeCompanyId, ...}) — that
   // function always mints `${uid}_company_${id}` and stamps ownerId,
@@ -3278,6 +3291,12 @@ const App = () => {
     const plexNavItemsFiltered = plexNavItems.filter((item) => {
       const moduleId = PLEX_ITEM_RBAC[item.id];
       if (moduleId === null || moduleId === undefined) return true; // always-on
+      if (moduleId === "tps_tvq" && sidebarProfile === "gestionnaire") {
+        // Pas dans le RBAC statique du Gestionnaire — dépend de l'inscription
+        // TPS/TVQ de CETTE entreprise (voir handleUpdateTpsTvqRegistered).
+        const tpsTvqRegistered = currentCompany?.tpsTvqRegistered;
+        return tpsTvqRegistered === "oui" || tpsTvqRegistered === "en_cours";
+      }
       return hasAccess(sidebarProfile, moduleId);
     });
 
@@ -5526,10 +5545,26 @@ const App = () => {
         // diagnostic-only, not a real error.
         console.error("[Invoice Drive Archive] STEP 1 — activeCompanyId:", activeCompanyId, "| driveOwnerId:", driveOwnerId, "| driveStatus:", driveStatus);
         if (driveStatus?.connected) {
+          // Gestionnaire : range sous Client/Édifice quand la facture est
+          // liée à un édifice géré pour un client (voir Partie B du plan
+          // Drive 2026-08-20) — sinon comportement inchangé (dossier plat).
+          let driveClientName: string | undefined;
+          let driveBuildingName: string | undefined;
+          if (activeProfile === "gestionnaire" && fac.buildingId) {
+            const prop = plexManagementProperties.find(
+              (p: any) => (p.buildingId || p.id) === fac.buildingId
+            );
+            if (prop?.fideicommisClientId) {
+              const client = fideicommisClients.find((c) => c.id === prop.fideicommisClientId);
+              driveClientName = client?.nom || prop.fideicommisClientName;
+              driveBuildingName = prop.adresse;
+            }
+          }
           const driveResult = await uploadDocumentToDrive(
             activeCompanyId, driveOwnerId, pdfBase64,
             `${(fac.tipoDoc || "Facture").replace(/[^a-z0-9]/gi, "_")}-${fac.id}.pdf`,
             "application/pdf", currentCompany?.nombre || "Entreprise", "Entrées",
+            driveClientName, driveBuildingName,
           );
           console.error("[Invoice Drive Archive] STEP 2 — upload result:", driveResult);
         } else {
@@ -8654,6 +8689,21 @@ const App = () => {
             if (auth.currentUser?.email) localStorage.setItem("autocompt_cached_email", auth.currentUser.email);
             if (answers) {
               localStorage.setItem("autocompt_onboarding_answers", JSON.stringify(answers));
+            }
+            // Best-effort: this onboarding can run before any company exists
+            // yet, so Paramètres (handleUpdateTpsTvqRegistered) stays the
+            // reliable place to set/change this later — this is a shortcut,
+            // not the only path.
+            if (
+              profile === "gestionnaire" &&
+              answers?.["tps_tvq_registered"] &&
+              currentCompany?._companyDocId
+            ) {
+              setDoc(
+                doc(db, "companies", currentCompany._companyDocId),
+                { tpsTvqRegistered: answers["tps_tvq_registered"] },
+                { merge: true },
+              ).catch((err) => console.error("Failed to persist tpsTvqRegistered from onboarding:", err));
             }
             setSelectedProfile(profile);
             setActiveLang(lang);
@@ -12485,6 +12535,7 @@ const App = () => {
               playNotificationSound={playNotificationSound}
               setShowFiscalChat={setShowFiscalChat}
               t={t}
+              tpsTvqRegistered={currentCompany?.tpsTvqRegistered}
             />
           )}
 
@@ -17294,6 +17345,27 @@ const App = () => {
               </button>
             );
           })()}
+          {/* Alerte TPS/TVQ — Gestionnaire non-inscrit uniquement. Basée sur
+              les ventes des 12 derniers mois glissants (approximation simple
+              des 4 trimestres ARC/RQ). Ajouté 2026-08-20. */}
+          {activeProfile === "gestionnaire" && currentCompany?.tpsTvqRegistered !== "oui" && (() => {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 365);
+            const totalVentes12Mois = filteredHistorique
+              .filter((h) => h.fecha && new Date(h.fecha) >= cutoff)
+              .reduce((a, b) => a + (b.subtotal || 0), 0);
+            const alert = getTpsTvqThresholdAlert(totalVentes12Mois, currentCompany?.tpsTvqRegistered);
+            if (!alert) return null;
+            const toneClasses = alert.tone === "rose"
+              ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400"
+              : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400";
+            return (
+              <div className={`w-full text-left rounded-2xl p-4 flex items-center space-x-3 shadow-sm border ${toneClasses}`}>
+                <AlertTriangle size={18} className="shrink-0" />
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">{alert.message}</span>
+              </div>
+            );
+          })()}
         </div>
         <FiscalDeadlinesModal
           show={showFiscalDeadlinesModal}
@@ -21990,6 +22062,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         onUpdateCompanyProfile={handleUpdateCompanyProfile}
         modeGestion={currentCompany?.modeGestion}
         onUpdateModeGestion={handleUpdateModeGestion}
+        tpsTvqRegistered={currentCompany?.tpsTvqRegistered}
+        onUpdateTpsTvqRegistered={handleUpdateTpsTvqRegistered}
       />
     );
   }

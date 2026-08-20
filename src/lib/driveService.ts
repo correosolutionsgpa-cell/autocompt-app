@@ -183,13 +183,15 @@ export async function uploadDocumentToDrive(
   mimeType: string,
   companyName: string,
   category: string = 'Recibos',
+  clientName?: string,
+  buildingName?: string,
 ): Promise<DriveUploadResult> {
   try {
     const headers = await authHeader();
     const resp = await fetch('/api/drive/upload', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId, ownerId, fileName, mimeType, base64Data, companyName, category }),
+      body: JSON.stringify({ companyId, ownerId, fileName, mimeType, base64Data, companyName, category, clientName, buildingName }),
     });
     const data = await resp.json();
     if (!resp.ok || !data.success) {

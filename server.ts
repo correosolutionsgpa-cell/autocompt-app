@@ -2307,7 +2307,7 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
       const auth = await verifyRequestAuth(req.headers.authorization);
       if (!auth) return res.status(401).json({ success: false, error: "Non authentifié" });
 
-      const { companyId, ownerId, fileName, mimeType, base64Data, companyName, category, year } = req.body;
+      const { companyId, ownerId, fileName, mimeType, base64Data, companyName, category, year, clientName, buildingName } = req.body;
       if (!companyId || !ownerId || !fileName || !base64Data) {
         return res.status(400).json({ success: false, error: "companyId, ownerId, fileName et base64Data sont requis" });
       }
@@ -2329,7 +2329,7 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
         return res.status(400).json({ success: false, error: "reconnect_required", message: "L'accès Google Drive a été révoqué. Reconnectez le Drive de cette entreprise." });
       }
 
-      const folderId = await resolveCompanyDriveFolder(accessToken, companyName, category, year);
+      const folderId = await resolveCompanyDriveFolder(accessToken, companyName, category, year, clientName, buildingName);
       const file = await uploadBase64ToDrive(accessToken, folderId, fileName, mimeType, base64Data);
 
       return res.json({ success: true, fileId: file.id, webViewLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view` });

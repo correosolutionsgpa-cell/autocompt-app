@@ -122,17 +122,33 @@ export async function getOrCreateDriveFolderServer(
   return created.id;
 }
 
-/** Resolves /AutoCompt/[Année]/[Compagnie]/[Catégorie], creating any missing folder. */
+/**
+ * Resolves /AutoCompt/[Année]/[Compagnie]/[Catégorie], creating any missing
+ * folder. When `clientName` is provided (Gestionnaire, document lié à un
+ * client géré), insère /[Client]/[Édifice] avant la catégorie :
+ * /AutoCompt/[Année]/[Compagnie]/[Client]/[Édifice]/[Catégorie]. Chaque
+ * niveau est résolu par NOM (recherche puis création) — aucun ID de dossier
+ * n'est jamais stocké, donc rien à migrer pour les documents déjà téléversés
+ * dans la structure plate.
+ */
 export async function resolveCompanyDriveFolder(
   accessToken: string,
   companyName: string,
   category: string,
   year?: string,
+  clientName?: string,
+  buildingName?: string,
 ): Promise<string> {
   const autoComptFolderId = await getOrCreateDriveFolderServer(AUTOCOMPT_ROOT_FOLDER_NAME, 'root', accessToken);
   const yearFolderId = await getOrCreateDriveFolderServer(year || new Date().getFullYear().toString(), autoComptFolderId, accessToken);
-  const companyFolderId = await getOrCreateDriveFolderServer(companyName || 'Entreprise', yearFolderId, accessToken);
-  return getOrCreateDriveFolderServer(category || 'Recibos', companyFolderId, accessToken);
+  let parentFolderId = await getOrCreateDriveFolderServer(companyName || 'Entreprise', yearFolderId, accessToken);
+  if (clientName) {
+    parentFolderId = await getOrCreateDriveFolderServer(clientName, parentFolderId, accessToken);
+    if (buildingName) {
+      parentFolderId = await getOrCreateDriveFolderServer(buildingName, parentFolderId, accessToken);
+    }
+  }
+  return getOrCreateDriveFolderServer(category || 'Recibos', parentFolderId, accessToken);
 }
 
 export async function uploadBase64ToDrive(

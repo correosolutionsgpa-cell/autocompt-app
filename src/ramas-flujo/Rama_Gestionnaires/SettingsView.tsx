@@ -144,6 +144,11 @@ export interface SettingsViewProps {
   // cette entreprise, peu importe le profil du compte.
   modeGestion?: "autogestion" | "gestion_deleguee" | null;
   onUpdateModeGestion?: (mode: "autogestion" | "gestion_deleguee") => void;
+  /** Inscription TPS/TVQ de CETTE entreprise (Gestionnaire uniquement) —
+   *  détermine si le module TPS/TVQ apparaît sur le dashboard et si l'alerte
+   *  de seuil (30 000 $) s'affiche dans Tenue de Livres. */
+  tpsTvqRegistered?: "oui" | "non" | "en_cours" | null;
+  onUpdateTpsTvqRegistered?: (value: "oui" | "non" | "en_cours") => void;
 }
 
 // Custom neon padlock — hand-drawn SVG instead of Fabiola's raster
@@ -276,6 +281,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateCompanyProfile,
   modeGestion,
   onUpdateModeGestion,
+  tpsTvqRegistered,
+  onUpdateTpsTvqRegistered,
 }) => {
   const { toastDurationMs, setToastDurationMs } = useToast();
   // Version bêta : un seul profil actif par compte — le clic sur un profil
@@ -623,6 +630,57 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             {(modeGestion || "autogestion") === "gestion_deleguee" && (
               <p className={`text-[10px] font-medium mt-3 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                 Cette entreprise affichera l'expérience Investisseur (sans Heures & Paie ni gestion opérationnelle des baux), peu importe votre profil de compte.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Inscription TPS/TVQ — Gestionnaire uniquement. Les honoraires de
+            gestion sont un revenu taxable ; le module TPS/TVQ ne s'affiche
+            sur le dashboard que si l'entreprise est inscrite (ou en cours),
+            et l'alerte de seuil (30 000 $) dans Tenue de Livres ne s'affiche
+            que si "Non". Ajouté 2026-08-20 (audit du profil Gestionnaire). */}
+        {dashboardMode !== "Syndic" && onUpdateTpsTvqRegistered &&
+          (companyProfile || selectedProfile) === "gestionnaire" && (
+          <div className={`p-6 rounded-[32px] border shadow-sm ${darkMode ? "bg-zinc-950 border-zinc-900" : "bg-white border-slate-100"}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`p-2 rounded-xl ${darkMode ? "bg-indigo-950/40 text-indigo-400" : "bg-indigo-50 text-indigo-600"}`}>
+                <Building2 size={16} />
+              </span>
+              <div>
+                <h3 className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+                  Inscription TPS/TVQ — {companyName || "cette entreprise"}
+                </h3>
+                <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                  Détermine si le module TPS/TVQ apparaît sur le dashboard
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {([
+                { id: "oui" as const, label: "Oui, compte actif" },
+                { id: "en_cours" as const, label: "En cours d'inscription" },
+                { id: "non" as const, label: "Non" },
+              ]).map((opt) => {
+                const isActive = tpsTvqRegistered === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => onUpdateTpsTvqRegistered(opt.id)}
+                    className={`p-3 rounded-2xl border text-left text-xs font-bold transition-all ${
+                      isActive
+                        ? (darkMode ? "border-indigo-500 bg-indigo-500/10 text-indigo-300" : "border-indigo-500 bg-indigo-50 text-indigo-700")
+                        : (darkMode ? "border-zinc-800 text-zinc-400 hover:border-zinc-700" : "border-slate-200 text-slate-600 hover:border-slate-300")
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {tpsTvqRegistered !== "oui" && (
+              <p className={`text-[10px] font-medium mt-3 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Inscription obligatoire dès que vos ventes taxables dépassent 30 000 $ sur 4 trimestres — Tenue de Livres vous avertira à l'approche de ce seuil.
               </p>
             )}
           </div>
