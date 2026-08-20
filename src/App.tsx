@@ -2971,6 +2971,11 @@ const App = () => {
     description: "",
     precioUnitario: 0,
     isTaxable: true,
+    // Was hardcoded to new Date() at emission time with no way to change it —
+    // an invoice for work done last week always came out dated today. Also
+    // silently overwrote the original date on every edit of an existing
+    // invoice. Found 2026-08-20 via Fabiola.
+    fecha: new Date().toISOString().split("T")[0],
   });
 
   // --- PERFIL Y CONFIGURACIÓN ---
@@ -5218,6 +5223,7 @@ const App = () => {
       description: "",
       precioUnitario: 0,
       isTaxable: true,
+      fecha: fac.fecha || new Date().toISOString().split("T")[0],
     });
 
     if (fac.items) {
@@ -20787,6 +20793,20 @@ const App = () => {
                         </button>
                       </div>
 
+                      <div className="mt-4">
+                        <label
+                          className={`text-[8px] font-black uppercase italic ml-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
+                        >
+                          Date
+                        </label>
+                        <input
+                          type="date"
+                          value={newInvoiceData.fecha}
+                          onChange={(e) => setNewInvoiceData({ ...newInvoiceData, fecha: e.target.value })}
+                          className={`w-full p-4 rounded-2xl text-sm font-bold outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
+                        />
+                      </div>
+
                       {newInvoiceData.isNouveauClient && (
                         <div
                           className={`p-6 rounded-[32px] border space-y-4 animate-in slide-in-from-top duration-300 mt-4 ${darkMode ? "bg-emerald-950/20 border-emerald-900" : "bg-emerald-50/50 border-emerald-100"}`}
@@ -21067,7 +21087,7 @@ const App = () => {
                                   companyId: activeCompanyId,
                                   cliente: finalClientName,
                                   email: finalClientEmail,
-                                  fecha: new Date().toISOString().split("T")[0],
+                                  fecha: newInvoiceData.fecha || new Date().toISOString().split("T")[0],
                                   subtotal,
                                   tps,
                                   tvq,
@@ -21135,6 +21155,7 @@ const App = () => {
                                   description: "",
                                   precioUnitario: 0,
                                   isTaxable: true,
+                                  fecha: new Date().toISOString().split("T")[0],
                                 });
                               }}
                               style={{ backgroundColor: userProfile.color || "#059669" }}
