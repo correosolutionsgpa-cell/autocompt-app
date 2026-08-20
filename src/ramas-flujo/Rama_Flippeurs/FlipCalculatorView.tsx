@@ -11,11 +11,11 @@
  * TROIS composantes, toutes nécessaires pour un profit réel (pas juste
  * "prix de vente moins prix d'achat"), corrigé 2026-08-13 par Fabiola:
  *   1. Coût d'acquisition — notaire, taxe de mutation ("bienvenue"),
- *      inspection, arpenteur, évaluation, frais de dossier (prêteur). Saisis
- *      en 6 champs séparés (re-itemisés 2026-08-20 à la demande de Fabiola —
- *      étaient un seul montant fraisAchat avant), sommés automatiquement
- *      dans fraisAchat à l'enregistrement pour ne pas casser les calculs
- *      existants (profit, mise de fonds, faisabilité...) qui le lisent déjà.
+ *      inspection, arpenteur, évaluation, frais de dossier (prêteur).
+ *      Brièvement saisi en 6 champs séparés (2026-08-20), puis remplacé le
+ *      même jour par un calcul automatique (5% du prix d'achat, estimation
+ *      de Fabiola) — plus de saisie manuelle du tout, stocké dans fraisAchat
+ *      comme avant pour ne rien casser côté profit/mise de fonds/faisabilité.
  *   2. Frais de possession — TOUT ce qui est dépensé pendant que le bien est
  *      détenu : rénovation, taxes foncières, assurances, intérêts
  *      hypothécaires/de financement, électricité, entretien. Lus directement
@@ -188,18 +188,7 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
 
   sectionHeader("Coût d'Acquisition");
   row("Prix d'achat", fmtCAD(p.prixAchat));
-  const hasItemizedAcquisitionCosts = !!(p.fraisNotaireAchat || p.taxeMutation || p.fraisInspection || p.fraisArpenteur || p.fraisEvaluation || p.fraisDossierPreteur);
-  if (hasItemizedAcquisitionCosts) {
-    if (p.fraisNotaireAchat) row("Notaire", fmtCAD(p.fraisNotaireAchat));
-    if (p.taxeMutation) row("Taxe de mutation", fmtCAD(p.taxeMutation));
-    if (p.fraisInspection) row("Inspection", fmtCAD(p.fraisInspection));
-    if (p.fraisArpenteur) row("Arpenteur", fmtCAD(p.fraisArpenteur));
-    if (p.fraisEvaluation) row("Évaluation", fmtCAD(p.fraisEvaluation));
-    if (p.fraisDossierPreteur) row("Frais de dossier (prêteur)", fmtCAD(p.fraisDossierPreteur));
-  } else if (p.fraisAchat) {
-    // Projet créé avant le 2026-08-20 — pas de détail par poste, juste le total.
-    row("Frais d'achat (notaire, mutation, inspection...)", fmtCAD(p.fraisAchat));
-  }
+  if (p.fraisAchat) row("Coût d'acquisition (notaire, mutation, inspection...)", fmtCAD(p.fraisAchat));
   row("Date d'achat", new Date(p.dateAchat).toLocaleDateString("fr-CA"));
 
   if (p.arv || p.nombreEtages) {
@@ -292,11 +281,13 @@ export interface FlipCalculatorViewProps {
   playNotificationSound?: () => void;
 }
 
+/** Estimation de Fabiola pour le coût d'acquisition (notaire, taxe de
+ *  mutation, inspection, arpenteur, évaluation, frais de dossier) — calculé
+ *  automatiquement, plus de saisie manuelle poste par poste. */
+const TAUX_COUT_ACQUISITION = 0.05;
+
 const emptyForm = {
   adresse: "", dateAchat: new Date().toISOString().slice(0, 10), prixAchat: "",
-  // Coût d'acquisition, itemisé — sommés dans fraisAchat à l'enregistrement.
-  fraisNotaireAchat: "", taxeMutation: "", fraisInspection: "",
-  fraisArpenteur: "", fraisEvaluation: "", fraisDossierPreteur: "",
   prixReventeEstime: "", notes: "",
 };
 
@@ -414,33 +405,18 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
     setIsSaving(true);
     try {
       const existing = editingId ? projects.find((p) => p.id === editingId) : null;
-      // Coût d'acquisition — 6 champs saisis séparément, sommés ici dans
-      // fraisAchat pour que profit/mise de fonds/faisabilité (qui le lisent
-      // déjà comme un seul montant) continuent de fonctionner sans y toucher.
-      const fraisNotaireAchat = form.fraisNotaireAchat ? parseFloat(form.fraisNotaireAchat) : 0;
-      const taxeMutation = form.taxeMutation ? parseFloat(form.taxeMutation) : 0;
-      const fraisInspection = form.fraisInspection ? parseFloat(form.fraisInspection) : 0;
-      const fraisArpenteur = form.fraisArpenteur ? parseFloat(form.fraisArpenteur) : 0;
-      const fraisEvaluation = form.fraisEvaluation ? parseFloat(form.fraisEvaluation) : 0;
-      const fraisDossierPreteur = form.fraisDossierPreteur ? parseFloat(form.fraisDossierPreteur) : 0;
-      const fraisAchatItemise = fraisNotaireAchat + taxeMutation + fraisInspection + fraisArpenteur + fraisEvaluation + fraisDossierPreteur;
-      // Un projet créé avant le 2026-08-20 n'a qu'un fraisAchat global, sans
-      // détail par poste — si aucun des 6 champs n'a été touché, on garde ce
-      // montant existant tel quel au lieu de l'écraser à 0/undefined.
-      const fraisAchatTotal = fraisAchatItemise || existing?.fraisAchat;
+      const prixAchatNum = parseFloat(form.prixAchat) || 0;
+      // Coût d'acquisition (notaire, taxe de mutation, inspection, arpenteur,
+      // évaluation, frais de dossier) — calculé automatiquement à 5% du prix
+      // d'achat, plus de saisie manuelle poste par poste.
+      const fraisAchatTotal = prixAchatNum * TAUX_COUT_ACQUISITION;
       const saved = await dataService.saveFlipProject(uid, {
         id: editingId || `flip_${Date.now()}`,
         companyId: activeCompanyId,
         adresse: form.adresse.trim(),
         dateAchat: form.dateAchat,
-        prixAchat: parseFloat(form.prixAchat) || 0,
+        prixAchat: prixAchatNum,
         fraisAchat: fraisAchatTotal || undefined,
-        fraisNotaireAchat: fraisNotaireAchat || undefined,
-        taxeMutation: taxeMutation || undefined,
-        fraisInspection: fraisInspection || undefined,
-        fraisArpenteur: fraisArpenteur || undefined,
-        fraisEvaluation: fraisEvaluation || undefined,
-        fraisDossierPreteur: fraisDossierPreteur || undefined,
         prixReventeEstime: form.prixReventeEstime ? parseFloat(form.prixReventeEstime) : undefined,
         notes: form.notes || undefined,
         statut: existing?.statut || "en_cours",
@@ -462,15 +438,6 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   const handleEdit = (p: FlipProjectDoc) => {
     setForm({
       adresse: p.adresse, dateAchat: p.dateAchat, prixAchat: String(p.prixAchat),
-      // Projets créés avant le 2026-08-20 n'ont qu'un fraisAchat global, pas
-      // de détail par poste — ces champs restent vides pour eux (le total
-      // reste affiché ailleurs), rien n'est deviné/réparti au hasard.
-      fraisNotaireAchat: p.fraisNotaireAchat ? String(p.fraisNotaireAchat) : "",
-      taxeMutation: p.taxeMutation ? String(p.taxeMutation) : "",
-      fraisInspection: p.fraisInspection ? String(p.fraisInspection) : "",
-      fraisArpenteur: p.fraisArpenteur ? String(p.fraisArpenteur) : "",
-      fraisEvaluation: p.fraisEvaluation ? String(p.fraisEvaluation) : "",
-      fraisDossierPreteur: p.fraisDossierPreteur ? String(p.fraisDossierPreteur) : "",
       prixReventeEstime: p.prixReventeEstime ? String(p.prixReventeEstime) : "",
       notes: p.notes || "",
     });
@@ -786,34 +753,12 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 space-y-3">
-              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Coût d'acquisition</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Notaire ($)</label>
-                  <input type="number" value={form.fraisNotaireAchat} onChange={(e) => setForm({ ...form, fraisNotaireAchat: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Taxe de mutation ($)</label>
-                  <input type="number" value={form.taxeMutation} onChange={(e) => setForm({ ...form, taxeMutation: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Inspection ($)</label>
-                  <input type="number" value={form.fraisInspection} onChange={(e) => setForm({ ...form, fraisInspection: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Arpenteur ($)</label>
-                  <input type="number" value={form.fraisArpenteur} onChange={(e) => setForm({ ...form, fraisArpenteur: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Évaluation ($)</label>
-                  <input type="number" value={form.fraisEvaluation} onChange={(e) => setForm({ ...form, fraisEvaluation: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Frais de dossier (prêteur) ($)</label>
-                  <input type="number" value={form.fraisDossierPreteur} onChange={(e) => setForm({ ...form, fraisDossierPreteur: e.target.value })} placeholder="0.00" className={inputCls} />
-                </div>
+            <div className={`p-4 rounded-2xl border flex items-center justify-between ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Coût d'acquisition (estimé)</p>
+                <p className="text-[7px] font-medium text-slate-400 mt-0.5">Notaire, taxe de mutation, inspection, arpenteur, évaluation, frais de dossier — {(TAUX_COUT_ACQUISITION * 100).toFixed(0)}% du prix d'achat, calculé automatiquement</p>
               </div>
+              <p className={`text-sm font-black shrink-0 ml-3 ${darkMode ? "text-zinc-100" : "text-slate-900"}`}>{fmtCAD((parseFloat(form.prixAchat) || 0) * TAUX_COUT_ACQUISITION)}</p>
             </div>
 
             <div className="space-y-1">

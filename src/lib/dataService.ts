@@ -432,21 +432,14 @@ export interface FlipProjectDoc {
   adresse: string;
   dateAchat: string;
   prixAchat: number;
-  // Fees layered on top of the purchase price itself — was one lump sum
-  // (see the 6 itemized fields below), summed into this total whenever
-  // the form is saved. Kept as its own field so older projects saved
-  // before the 2026-08-20 re-itemization, and every calculation that
-  // already reads fraisAchat as one number (profit, mise de fonds,
-  // faisabilité), keep working unchanged.
+  // Fees layered on top of the purchase price itself (notaire, taxe de
+  // mutation, inspection, arpenteur, évaluation, frais de dossier) — was
+  // itemized into 6 manual fields for a few hours on 2026-08-20, replaced
+  // the same day by an automatic estimate (5% of prixAchat, TAUX_COUT_
+  // ACQUISITION in FlipCalculatorView.tsx) at Fabiola's request. Kept as
+  // one field so profit/mise de fonds/faisabilité — which already read it
+  // as a single number — never needed to change.
   fraisAchat?: number;
-  /** Coût d'acquisition, itemisé (re-itemisé 2026-08-20 à la demande de
-   *  Fabiola — étaient fusionnés dans fraisAchat seul avant). */
-  fraisNotaireAchat?: number;
-  taxeMutation?: number;
-  fraisInspection?: number;
-  fraisArpenteur?: number;
-  fraisEvaluation?: number;
-  fraisDossierPreteur?: number;
   prixReventeEstime?: number;
   // Set only once the flip actually sells — switches the project from
   // "estimation" to "résultat réel" everywhere it's displayed.
