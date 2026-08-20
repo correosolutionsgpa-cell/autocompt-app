@@ -3065,7 +3065,10 @@ const App = () => {
     const uid = auth.currentUser?.uid;
     if (!uid || !activeCompanyId) return;
     saveActiveCompanyField(uid, { clientes })
-      .catch((err) => console.error("Failed to save clientes:", err));
+      .catch((err) => {
+        console.error("Failed to save clientes:", err);
+        alert("Erreur : les changements à la Banque de Clients n'ont pas pu être enregistrés. Vérifiez votre connexion et réessayez.");
+      });
   }, [clientes]);
 
   const handleLogout = async () => {

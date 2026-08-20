@@ -87,6 +87,24 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/companyInvites/$(companyId + '_invite_' + request.auth.token.email)) &&
         get(/databases/$(database)/documents/companyInvites/$(companyId + '_invite_' + request.auth.token.email)).data.status == 'pending';
     }
+    // A collaborator (business partner, not the owner) editing shared
+    // operational data that lives directly on the company doc — clientes
+    // (Banque de Clients), userProfile, modeGestion, companyProfile,
+    // matchFideicommisInConciliation, comptableInfo, etc. (App.tsx's
+    // saveActiveCompanyField and related handlers). Before this, ANY
+    // collaborator write to the company doc was silently rejected (only
+    // isAcceptingOwnInvite's narrow collaboratorUIDs-only update was
+    // allowed) — found 2026-08-20: Natalia deleting/adding clients in
+    // AchatDirect's Banque de Clients appeared to work locally but never
+    // actually persisted, since saveActiveCompanyField's error was only
+    // logged to the console, never shown to her. ownerId and
+    // collaboratorUIDs stay off-limits to a collaborator — those remain
+    // owner-controlled (or go through isAcceptingOwnInvite specifically).
+    function isCollaboratorUpdate() {
+      return isSignedIn() &&
+        request.auth.uid in resource.data.get('collaboratorUIDs', []) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerId', 'collaboratorUIDs']);
+    }
 
     match /companies/{companyId} {
       // isSuperAdmin() added so SuperAdminPanel can list every company ever
@@ -95,7 +113,7 @@ service cloud.firestore {
       // silently returned only companies Fabiola owns/collaborates on.
       allow read: if isOwnerDoc() || isCollaboratorDoc() || isSuperAdmin();
       allow create: if isOwnerWrite();
-      allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId);
+      allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId) || isCollaboratorUpdate();
       allow delete: if isOwnerDoc();
     }
 
