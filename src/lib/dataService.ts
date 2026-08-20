@@ -432,11 +432,21 @@ export interface FlipProjectDoc {
   adresse: string;
   dateAchat: string;
   prixAchat: number;
-  // Fees layered on top of the purchase price itself (notaire, taxe de
-  // bienvenue/mutation, inspection...) — kept as one lump sum rather than
-  // itemized, matching how "frais annexes" is casually tracked by a real
-  // flipper rather than forcing a full sub-ledger for an MVP.
+  // Fees layered on top of the purchase price itself — was one lump sum
+  // (see the 6 itemized fields below), summed into this total whenever
+  // the form is saved. Kept as its own field so older projects saved
+  // before the 2026-08-20 re-itemization, and every calculation that
+  // already reads fraisAchat as one number (profit, mise de fonds,
+  // faisabilité), keep working unchanged.
   fraisAchat?: number;
+  /** Coût d'acquisition, itemisé (re-itemisé 2026-08-20 à la demande de
+   *  Fabiola — étaient fusionnés dans fraisAchat seul avant). */
+  fraisNotaireAchat?: number;
+  taxeMutation?: number;
+  fraisInspection?: number;
+  fraisArpenteur?: number;
+  fraisEvaluation?: number;
+  fraisDossierPreteur?: number;
   prixReventeEstime?: number;
   // Set only once the flip actually sells — switches the project from
   // "estimation" to "résultat réel" everywhere it's displayed.
