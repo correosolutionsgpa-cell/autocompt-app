@@ -19994,11 +19994,11 @@ const App = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setSubVistaFactura("clients")}
-              title="Banque de Clients — ajouter ou modifier un client (courriel, adresse, NEQ)"
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase italic tracking-wide transition-all ${subVistaFactura === "clients" ? "bg-[#059669] text-white shadow-lg" : darkMode ? "bg-zinc-900 text-zinc-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:text-slate-900"}`}
+              title="Banque de Clients — enregistrez un client une fois, puis réutilisez-le sur n'importe quelle facture future"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase italic tracking-wide transition-all ${subVistaFactura === "clients" ? "bg-[#059669] border-[#059669] text-white shadow-lg" : darkMode ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"}`}
             >
               <Users size={16} />
-              <span>Clients</span>
+              <span>Clients récurrents</span>
             </button>
           </div>
         </header>
