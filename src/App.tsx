@@ -49,6 +49,7 @@ import {
   Search,
   Printer,
   Mail,
+  MessageCircle,
   Image as ImageIcon,
   Type,
   MousePointer2,
@@ -3967,17 +3968,38 @@ const App = () => {
                   </span>
                 </p>
 
-                {/* BOUTON DE SUPPORT CONTACT DIRECT */}
-                <a
-                  href="mailto:support@autocompt.ca"
-                  className={`w-full py-2 border rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
-                    ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
-                    : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
-                    }`}
-                >
-                  <Mail size={12} />
-                  <span>{t("Contactez le support")}</span>
-                </a>
+                {/* BOUTON DE SUPPORT CONTACT DIRECT — courriel + WhatsApp. Le
+                    numéro WhatsApp est celui de Fabiola pour l'instant;
+                    celui de Daniel (contractuel, pas employé direct) est en
+                    attente de l'avis de son avocate avant d'être ajouté ici
+                    — voir memory project_comptable_pricing_strategy pour le
+                    contexte de cette distinction employé/contractuel. */}
+                <div className="w-full flex items-center gap-1.5">
+                  <a
+                    href="mailto:support@autocompt.ca"
+                    className={`flex-1 py-2 border rounded-xl flex items-center justify-center space-x-1.5 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
+                      ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
+                      : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
+                      }`}
+                  >
+                    <Mail size={12} />
+                    <span>{t("Courriel")}</span>
+                  </a>
+                  <a
+                    href={`https://wa.me/15146597218?text=${encodeURIComponent(
+                      `Bonjour AutoCompt, je signale un problème.\nCompte : ${currentUserEmail || "?"}\nEntreprise : ${currentCompany?.nombre || "?"}\n\nDescription : `
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex-1 py-2 border rounded-xl flex items-center justify-center space-x-1.5 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode
+                      ? "bg-zinc-900/40 hover:bg-zinc-900 border-zinc-800 text-teal-400 hover:border-zinc-700 hover:text-teal-300 shadow-sm"
+                      : "bg-emerald-50/50 hover:bg-emerald-50 border-emerald-100 text-[#059669] hover:text-emerald-800 shadow-sm"
+                      }`}
+                  >
+                    <MessageCircle size={12} />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
 
                 <div id="nav-legal-privacy" className="flex flex-col space-y-1 pt-2 border-t border-zinc-800/60 text-[8px] font-bold uppercase tracking-wider text-slate-400">
                   <button
