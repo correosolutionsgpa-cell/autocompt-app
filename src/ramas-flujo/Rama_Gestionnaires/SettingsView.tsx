@@ -13,6 +13,7 @@
  */
 
 import React, { useState } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import SyndicSettingsPanel from "../../components/SyndicSettingsPanel";
 import WorkspaceDriveSettings from "../../components/WorkspaceDriveSettings";
 import sofiAvatar from "../../assets/sofi/sofimediocuerpoblanco.png";
@@ -1483,15 +1484,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <select
+                      <StyledSelect
+                        darkMode={darkMode}
                         value={v.usageType || "hybride"}
-                        onChange={(e) => handleChangeVehicleUsage(v.id, e.target.value as "travail" | "personnel" | "hybride")}
-                        className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full border outline-none cursor-pointer ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-white border-slate-200 text-slate-600"}`}
-                      >
-                        <option value="travail">Travail seulement</option>
-                        <option value="hybride">Mixte (travail + perso)</option>
-                        <option value="personnel">Personnel seulement</option>
-                      </select>
+                        onChange={(v2) => handleChangeVehicleUsage(v.id, v2 as "travail" | "personnel" | "hybride")}
+                        options={[
+                          { value: "travail", label: "Travail seulement" },
+                          { value: "hybride", label: "Mixte (travail + perso)" },
+                          { value: "personnel", label: "Personnel seulement" },
+                        ]}
+                      />
                       <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
                         {formatVehicleRate(computeVehicleBusinessRate(v))} déductible
                       </span>

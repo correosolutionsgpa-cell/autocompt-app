@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import StyledSelect from './ui/StyledSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wrench, 
@@ -846,15 +847,16 @@ export default function SyndicLoi16View({ darkMode, userRole, activeCompanyId }:
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[8px] font-black uppercase text-slate-400">État de condition</label>
-                    <select
+                    <StyledSelect
+                      darkMode={darkMode}
                       value={compCondition}
-                      onChange={(e) => setCompCondition(e.target.value as any)}
-                      className="w-full p-3.5 rounded-2xl text-[10px] font-bold border outline-none bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800"
-                    >
-                      <option value="Excellent">Excellent</option>
-                      <option value="Correct">Correct</option>
-                      <option value="Critique">Critique</option>
-                    </select>
+                      onChange={(v) => setCompCondition(v as any)}
+                      options={[
+                        { value: "Excellent", label: "Excellent" },
+                        { value: "Correct", label: "Correct" },
+                        { value: "Critique", label: "Critique" },
+                      ]}
+                    />
                   </div>
 
                   <div className="space-y-1">

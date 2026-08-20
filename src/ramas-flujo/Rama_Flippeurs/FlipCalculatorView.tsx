@@ -37,6 +37,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import jsPDF from "jspdf";
 import {
   ArrowLeft, Menu, Hammer, Plus, X, Loader2, TrendingUp, TrendingDown,
@@ -905,9 +906,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
                       Enregistré dans Tenue de Livres, lié à cette adresse
                     </p>
-                    <select value={expenseForm.cat} onChange={(e) => setExpenseForm({ ...expenseForm, cat: e.target.value })} className={inputCls}>
-                      {HOLDING_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <StyledSelect darkMode={darkMode} value={expenseForm.cat} onChange={(v) => setExpenseForm({ ...expenseForm, cat: v })}
+                      options={HOLDING_CATEGORIES.map((c) => ({ value: c, label: c }))} />
                     <div className="grid grid-cols-2 gap-2.5">
                       <input type="date" value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} className={inputCls} />
                       <input type="number" placeholder="Montant total ($)" value={expenseForm.montant} onChange={(e) => setExpenseForm({ ...expenseForm, montant: e.target.value })} className={inputCls} />

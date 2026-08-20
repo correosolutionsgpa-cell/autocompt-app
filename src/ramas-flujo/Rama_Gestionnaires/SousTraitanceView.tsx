@@ -17,6 +17,7 @@
  */
 
 import React from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -278,10 +279,10 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                   <label className="text-[9px] font-black uppercase tracking-wider text-slate-450 dark:text-zinc-500">
                     Type de Paiement <span className="text-emerald-500">*</span>
                   </label>
-                  <select
+                  <StyledSelect
+                    darkMode={darkMode}
                     value={subfTypePaiement}
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onChange={(val) => {
                       setSubfTypePaiement(val);
                       if (
                         val === "Paiement sans facture - Travailleur autonome"
@@ -289,15 +290,11 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
                         setSubfIsTaxable(false);
                       }
                     }}
-                    className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-1 focus:ring-[#059669] ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-slate-50 border-slate-205"}`}
-                  >
-                    <option value="Facture Officielle">
-                      Facture Officielle
-                    </option>
-                    <option value="Paiement sans facture - Travailleur autonome">
-                      Paiement sans facture - Travailleur autonome
-                    </option>
-                  </select>
+                    options={[
+                      { value: "Facture Officielle", label: "Facture Officielle" },
+                      { value: "Paiement sans facture - Travailleur autonome", label: "Paiement sans facture - Travailleur autonome" },
+                    ]}
+                  />
                 </div>
 
                 {/* MONTANT (HORS TAXES) */}

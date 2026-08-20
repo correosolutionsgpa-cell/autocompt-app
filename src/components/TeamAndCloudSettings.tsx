@@ -11,6 +11,7 @@
  */
 
 import React, { useRef, useState } from "react";
+import StyledSelect from "./ui/StyledSelect";
 import {
   Camera, Building2, Hash, HardHat,
   Cloud, Info, Mail, ChevronDown,
@@ -410,19 +411,12 @@ export default function TeamAndCloudSettings({ darkMode = true }: TeamAndCloudSe
                 <label htmlFor="tcs-invite-role" className={`text-[10px] font-bold ${D ? "text-zinc-400" : "text-slate-500"}`}>
                   Rôle attribué
                 </label>
-                <div className="relative">
-                  <select
-                    id="tcs-invite-role"
-                    value={inviteRole}
-                    onChange={e => setInviteRole(e.target.value)}
-                    className={`${inputBase} appearance-none pr-9 cursor-pointer`}
-                  >
-                    {ROLE_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} className={`absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${D ? "text-zinc-500" : "text-slate-400"}`} />
-                </div>
+                <StyledSelect
+                  darkMode={D}
+                  value={inviteRole}
+                  onChange={setInviteRole}
+                  options={ROLE_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+                />
               </div>
 
               {/* Validation error */}

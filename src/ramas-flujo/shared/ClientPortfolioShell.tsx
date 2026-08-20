@@ -21,6 +21,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -330,14 +331,15 @@ function ClientPortfolioShellInner<
         {/* ── Right panel: selected client detail ──────────────────────────── */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
           <div className="lg:hidden">
-            <select
+            <StyledSelect
+              darkMode={darkMode}
               value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className={`w-full px-4 py-3 rounded-2xl border text-sm font-bold outline-none ${darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-slate-200"}`}
-            >
-              <option value="">— Sélectionner un client —</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
-            </select>
+              onChange={setSelectedClientId}
+              options={[
+                { value: "", label: "— Sélectionner un client —" },
+                ...clients.map((c) => ({ value: c.id, label: c.nom })),
+              ]}
+            />
           </div>
 
           {!selected ? (
