@@ -101,65 +101,76 @@ import {
 } from "lucide-react";
 
 import StyledSelect from "./components/ui/StyledSelect";
-import TaxesAssurancesView from "./components/TaxesAssurancesView";
-import DossierFiscauxView, { FileItem } from "./components/DossierFiscauxView";
+import type { FileItem } from "./components/DossierFiscauxView";
 import CategoryFiscalRulesModal from "./components/CategoryFiscalRulesModal";
 import FiscalDeadlinesModal from "./components/FiscalDeadlinesModal";
 import { getMostUrgentDeadline } from "./lib/fiscalDeadlines";
-import MesRelevesGestion from "./components/MesRelevesGestion";
 import { HeuresPaieView } from "./components/HeuresPaieView";
-import SyndicatCotisations from "./components/SyndicatCotisations";
 import LivreDeSociete from "./components/LivreDeSociete";
-import SyndicatDocuLegal from "./components/SyndicatDocuLegal";
-import SyndicTransparencyDashboard from "./components/SyndicTransparencyDashboard";
-import SyndicAiReporter from "./components/SyndicAiReporter";
-import SyndicLoi16View from "./components/SyndicLoi16View";
-import PublicSignaturePage from "./components/PublicSignaturePage";
-import DocuLegalPdfEditor, { type SignatureField } from "./components/DocuLegalPdfEditor";
-import SuperAdminPanel from "./components/SuperAdminPanel";
-import BetaCodeAdminView from "./components/BetaCodeAdminView";
-import WorkspaceDriveSettings from "./components/WorkspaceDriveSettings";
+import type { SignatureField } from "./components/DocuLegalPdfEditor";
 import { PolitiqueConfidentialite } from "./components/PolitiqueConfidentialite";
 import { ConditionsUtilisation } from "./components/ConditionsUtilisation";
 import { SiteFooter } from "./components/SiteFooter";
 import { NotFound404 } from "./components/NotFound404";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
-import MeubleFinancialModule from "./components/MeubleFinancialModule";
-import ComptableExportView from "./components/ComptableExportView";
-import SofiOnboarding from "./components/SofiOnboarding";
-import ProfilEtEquipe from "./components/ProfilEtEquipe";
 import { SofiPresence } from "./components/SofiPresence";
-import SyndicModuleGrid from "./components/SyndicModuleGrid";
-import KilometrageGPS from "./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS";
 import { computeVehicleBusinessRate } from "./lib/vehicleRateService";
 import { applyFiscalRate, VEHICLE_EXPENSE_CATS, type CategoryFiscalRuleEntry, type FiscalRule } from "./lib/fiscalRules";
 import { getInvoiceFontStack } from "./lib/invoiceTemplates";
 import { extractDataFromImage } from "./lib/gemini";
-import BureauDomicile from "./ramas-flujo/Rama_Entrepreneurs/BureauDomicile";
-import MuroTransparencia from "./ramas-flujo/MuroTransparencia";
-import GestionCotisations from "./ramas-flujo/Rama_Syndicats/GestionCotisations";
-import MuroCommunication from "./ramas-flujo/Rama_Syndicats/MuroCommunication";
-import ConformiteLoi16 from "./ramas-flujo/Rama_Syndicats/ConformiteLoi16";
-import RapportSyndicAI from "./ramas-flujo/Rama_Syndicats/RapportSyndicAI";
-import GestionPlex from "./ramas-flujo/Rama_Gestionnaires/GestionPlex";
-import RapportTaxes from "./ramas-flujo/Rama_Gestionnaires/RapportTaxes";
-import RapportComptable from "./ramas-flujo/Rama_Gestionnaires/RapportComptable";
-import BanqueSyncView from "./ramas-flujo/Rama_Gestionnaires/BanqueSyncView";
-import SousTraitanceView from "./ramas-flujo/Rama_Gestionnaires/SousTraitanceView";
-import FlipCalculatorView from "./ramas-flujo/Rama_Flippeurs/FlipCalculatorView";
-import HeuresPaieShell from "./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell";
-import CompteFideicommis from "./ramas-flujo/Rama_Gestionnaires/CompteFideicommis";
-import MandatDeGestionView from "./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView";
-import PortefeuilleClientView from "./ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView";
-import PortefeuilleClientsComptableView from "./ramas-flujo/Rama_Comptables/PortefeuilleClientsComptableView";
-import TenueLivresImmeubleView from "./ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView";
-
-import SettingsView from "./ramas-flujo/Rama_Gestionnaires/SettingsView";
-import ContratsDLShell from "./ramas-flujo/Rama_Gestionnaires/ContratsDLShell";
 import ReceiptPreviewModal from "./components/modals/ReceiptPreviewModal";
 import CorporatifModal from "./components/modals/CorporatifModal";
 import TrialExpiredModal, { TRIAL_EXTENSION_FORM_URL } from "./components/modals/TrialExpiredModal";
 import PlexModuleGrid from "./components/PlexModuleGrid";
+
+// ── Code-split, lazily-loaded screens ───────────────────────────────────────
+// App.tsx statically imported every one of its 30+ view components, so the
+// production bundle was a single ~4.9MB chunk regardless of which profile/
+// screen an account ever actually visits (a Flippeur's session paid for
+// GestionPlex, Syndicat's DocuLegal, SuperAdmin's whole panel, etc.). These
+// are the biggest and/or least-frequently-visited ones — loaded on demand
+// instead. One <Suspense> boundary around <App/> itself (main.tsx) catches
+// suspension no matter which of App's 37+ vista early-returns is rendering,
+// so no per-screen wrapping is needed here.
+const TaxesAssurancesView = React.lazy(() => import("./components/TaxesAssurancesView"));
+const DossierFiscauxView = React.lazy(() => import("./components/DossierFiscauxView"));
+const MesRelevesGestion = React.lazy(() => import("./components/MesRelevesGestion"));
+const SyndicatCotisations = React.lazy(() => import("./components/SyndicatCotisations"));
+const SyndicatDocuLegal = React.lazy(() => import("./components/SyndicatDocuLegal"));
+const SyndicTransparencyDashboard = React.lazy(() => import("./components/SyndicTransparencyDashboard"));
+const SyndicAiReporter = React.lazy(() => import("./components/SyndicAiReporter"));
+const SyndicLoi16View = React.lazy(() => import("./components/SyndicLoi16View"));
+const PublicSignaturePage = React.lazy(() => import("./components/PublicSignaturePage"));
+const DocuLegalPdfEditor = React.lazy(() => import("./components/DocuLegalPdfEditor"));
+const SuperAdminPanel = React.lazy(() => import("./components/SuperAdminPanel"));
+const BetaCodeAdminView = React.lazy(() => import("./components/BetaCodeAdminView"));
+const WorkspaceDriveSettings = React.lazy(() => import("./components/WorkspaceDriveSettings"));
+const MeubleFinancialModule = React.lazy(() => import("./components/MeubleFinancialModule"));
+const ComptableExportView = React.lazy(() => import("./components/ComptableExportView"));
+const SofiOnboarding = React.lazy(() => import("./components/SofiOnboarding"));
+const ProfilEtEquipe = React.lazy(() => import("./components/ProfilEtEquipe"));
+const SyndicModuleGrid = React.lazy(() => import("./components/SyndicModuleGrid"));
+const KilometrageGPS = React.lazy(() => import("./ramas-flujo/Rama_Entrepreneurs/KilometrageGPS"));
+const BureauDomicile = React.lazy(() => import("./ramas-flujo/Rama_Entrepreneurs/BureauDomicile"));
+const MuroTransparencia = React.lazy(() => import("./ramas-flujo/MuroTransparencia"));
+const GestionCotisations = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/GestionCotisations"));
+const MuroCommunication = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/MuroCommunication"));
+const ConformiteLoi16 = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/ConformiteLoi16"));
+const RapportSyndicAI = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/RapportSyndicAI"));
+const GestionPlex = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/GestionPlex"));
+const RapportTaxes = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/RapportTaxes"));
+const RapportComptable = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/RapportComptable"));
+const BanqueSyncView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/BanqueSyncView"));
+const SousTraitanceView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/SousTraitanceView"));
+const FlipCalculatorView = React.lazy(() => import("./ramas-flujo/Rama_Flippeurs/FlipCalculatorView"));
+const HeuresPaieShell = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/HeuresPaieShell"));
+const CompteFideicommis = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/CompteFideicommis"));
+const MandatDeGestionView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/MandatDeGestionView"));
+const PortefeuilleClientView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/PortefeuilleClientView"));
+const PortefeuilleClientsComptableView = React.lazy(() => import("./ramas-flujo/Rama_Comptables/PortefeuilleClientsComptableView"));
+const TenueLivresImmeubleView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView"));
+const SettingsView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/SettingsView"));
+const ContratsDLShell = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/ContratsDLShell"));
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc, type CompanyInviteDoc, type FiscalDeadlineDoc } from "./lib/dataService";
 import { tr } from "./lib/i18n";
