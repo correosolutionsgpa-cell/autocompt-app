@@ -54,6 +54,7 @@ export interface RapportTaxesProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
 
   // Composants App passés en prop
@@ -80,6 +81,7 @@ const RapportTaxes: React.FC<RapportTaxesProps> = ({
   activeCompanyId,
   currentCompany,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
   LogoPrincipal,
@@ -113,7 +115,7 @@ const RapportTaxes: React.FC<RapportTaxesProps> = ({
           <Menu size={18} />
         </button>
         <button
-          onClick={() => setVista("dashboard")}
+          onClick={goBack}
           className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
         >
           <ArrowLeft size={28} />

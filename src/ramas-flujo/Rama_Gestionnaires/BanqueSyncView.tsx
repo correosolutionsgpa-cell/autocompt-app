@@ -80,6 +80,7 @@ export interface BanqueSyncViewProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
 
   // Composant App
@@ -134,6 +135,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   getEffectiveTier,
   playNotificationSound,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
   matchFideicommisInConciliation,
@@ -200,7 +202,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
               <Menu size={18} />
             </button>
             <button
-              onClick={() => setVista("dashboard")}
+              onClick={goBack}
               className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
             >
               <ArrowLeft size={24} />

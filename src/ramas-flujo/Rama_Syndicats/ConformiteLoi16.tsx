@@ -26,6 +26,7 @@ export interface ConformiteLoi16Props {
   userRole: string;
   activeCompanyId: string;
   setVista: (vista: string) => void;
+  goBack: () => void;
   WorkspaceSidebar: React.ComponentType;
 }
 
@@ -37,6 +38,7 @@ const ConformiteLoi16: React.FC<ConformiteLoi16Props> = ({
   userRole,
   activeCompanyId,
   setVista,
+  goBack,
   WorkspaceSidebar,
 }) => (
   <div
@@ -49,7 +51,7 @@ const ConformiteLoi16: React.FC<ConformiteLoi16Props> = ({
     >
       <div className="flex items-center space-x-3">
         <button
-          onClick={() => setVista("dashboard")}
+          onClick={goBack}
           className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}
         >
           <ArrowLeft size={20} />

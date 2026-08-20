@@ -19,6 +19,7 @@ export interface GestionCotisationsProps {
   adminRole: string;
   adminPhoto: string;
   setVista: (vista: string) => void;
+  goBack: () => void;
   WorkspaceSidebar: React.ComponentType;
   companyId: string;
 }
@@ -29,6 +30,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
   adminRole,
   adminPhoto,
   setVista,
+  goBack,
   WorkspaceSidebar,
   companyId,
 }) => (
@@ -49,7 +51,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
     >
       <div className="flex items-center space-x-3">
         <button
-          onClick={() => setVista("dashboard")}
+          onClick={goBack}
           className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}
         >
           <ArrowLeft size={20} />

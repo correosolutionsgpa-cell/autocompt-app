@@ -65,6 +65,7 @@ export interface GestionPlexProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   /** Opens this building's own separate ledger (TenueLivresImmeubleView) —
    *  previously reachable only from Portefeuille Clients (Gestionnaire/
@@ -107,6 +108,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   setExpandedDoors,
   setShowLimitModal,
   setVista,
+  goBack,
   setIsSidebarOpen,
   onOpenBuildingLedger,
   WorkspaceSidebar,
@@ -168,7 +170,7 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
         <Menu size={18} />
       </button>
       <button
-        onClick={() => setVista("dashboard")}
+        onClick={goBack}
         className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
       >
         <ArrowLeft />

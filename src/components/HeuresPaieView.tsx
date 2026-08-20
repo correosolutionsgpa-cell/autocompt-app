@@ -14,6 +14,7 @@ interface HeuresPaieViewProps {
   currentCompany: { nombre: string; id: string; ownerId?: string } | null;
   playNotificationSound?: () => void;
   setVista: (v: string) => void;
+  goBack: () => void;
   setAutonomeExpenses: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
@@ -25,6 +26,7 @@ export const HeuresPaieView: React.FC<HeuresPaieViewProps> = ({
   currentCompany,
   playNotificationSound,
   setVista,
+  goBack,
   setAutonomeExpenses
 }) => {
   const t = {
@@ -398,8 +400,8 @@ export const HeuresPaieView: React.FC<HeuresPaieViewProps> = ({
 
   return (
     <div className={`w-full flex flex-col space-y-6 ${darkMode ? "text-zinc-100" : "text-slate-900"} max-w-4xl mx-auto p-4 md:p-6`}>
-      <button 
-        onClick={() => setVista('dashboard')} 
+      <button
+        onClick={goBack}
         className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 transition-colors font-medium text-sm mb-6"
       >
         <ArrowLeft className="w-4 h-4" />

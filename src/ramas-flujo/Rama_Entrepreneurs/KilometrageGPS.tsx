@@ -128,6 +128,7 @@ export interface KilometrageGPSProps {
 
   // App setters
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   setDepenses: (fn: (prev: any[]) => any[]) => void;
   setPartnerData: (data: PartnerDataMap | ((prev: PartnerDataMap) => PartnerDataMap)) => void;
@@ -148,6 +149,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   partnerData,
   dashboardMode,
   setVista,
+  goBack,
   setIsSidebarOpen,
   setDepenses,
   setPartnerData,
@@ -380,7 +382,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           style={{ borderTop: `4px solid ${darkMode ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.3)"}` }}
         >
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 md:hidden mr-1"><Menu size={18} /></button>
-          <button onClick={() => setVista("dashboard")} className={`p-2 ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><ArrowLeft /></button>
+          <button onClick={goBack} className={`p-2 ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><ArrowLeft /></button>
           <div className="flex-1">
             <h2 className="font-black uppercase italic tracking-tighter text-lg">Kilométrage GPS</h2>
           </div>
@@ -424,7 +426,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           <Menu size={18} />
         </button>
         <button
-          onClick={() => setVista("dashboard")}
+          onClick={goBack}
           className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
         >
           <ArrowLeft />

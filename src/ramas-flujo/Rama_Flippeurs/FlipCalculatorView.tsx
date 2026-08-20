@@ -273,6 +273,9 @@ export interface FlipCalculatorViewProps {
   activeCompanyId: string;
   currentCompany: any;
   setVista: (v: string) => void;
+  /** Pops the real navigation history (App.tsx) instead of always landing
+   *  on the dashboard — see the goBack() comment there for context. */
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
   depenses: ExpenseDoc[];
@@ -354,7 +357,7 @@ const COUTS_FIXES_LABELS: { key: keyof typeof emptyAnalysisForm.coutsFixesMensue
 ];
 
 const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
-  darkMode, activeCompanyId, currentCompany, setVista, setIsSidebarOpen, WorkspaceSidebar,
+  darkMode, activeCompanyId, currentCompany, setVista, goBack, setIsSidebarOpen, WorkspaceSidebar,
   depenses, setDepenses, activeUser, playNotificationSound,
 }) => {
   const [projects, setProjects] = useState<FlipProjectDoc[]>([]);
@@ -699,7 +702,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white md:hidden">
           <Menu size={18} />
         </button>
-        <button onClick={() => setVista("dashboard")} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
+        <button onClick={goBack} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
           <ArrowLeft size={20} />
         </button>
         <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-500">

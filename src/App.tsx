@@ -8590,7 +8590,7 @@ const App = () => {
   if (vista === "politique-de-confidentialite") {
     return (
       <div className="min-h-screen flex flex-col">
-        <PolitiqueConfidentialite onBack={() => setVista("dashboard")} darkMode={darkMode} />
+        <PolitiqueConfidentialite onBack={goBack} darkMode={darkMode} />
         <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
@@ -8599,7 +8599,7 @@ const App = () => {
   if (vista === "conditions-d-utilisation") {
     return (
       <div className="min-h-screen flex flex-col">
-        <ConditionsUtilisation onBack={() => setVista("dashboard")} darkMode={darkMode} />
+        <ConditionsUtilisation onBack={goBack} darkMode={darkMode} />
         <SiteFooter darkMode={darkMode} onNavigate={(v) => setVista(v)} />
       </div>
     );
@@ -10324,7 +10324,7 @@ const App = () => {
     return (
       <SuperAdminPanel
         darkMode={darkMode}
-        onBack={() => setVista("dashboard")}
+        onBack={goBack}
         adminName="Fabiola Beatriz"
         adminEmail={currentUserEmail ?? ""}
       />
@@ -10338,7 +10338,7 @@ const App = () => {
     return (
       <BetaCodeAdminView
         darkMode={darkMode}
-        onBack={() => setVista("dashboard")}
+        onBack={goBack}
         onLogout={handleLogout}
       />
     );
@@ -14044,7 +14044,7 @@ const App = () => {
                 } else if (selectedDocuFolder !== null) {
                   setSelectedDocuFolder(null);
                 } else {
-                  setVista("dashboard");
+                  goBack();
                 }
                 playNotificationSound();
               }}
@@ -18312,6 +18312,7 @@ const App = () => {
                 currentCompany={currentCompany}
                 playNotificationSound={playNotificationSound}
                 setVista={setVista}
+                goBack={goBack}
                 setAutonomeExpenses={setAutonomeExpenses}
               />
             </div>
@@ -19885,6 +19886,7 @@ const App = () => {
         partnerData={partnerData}
         dashboardMode={dashboardMode}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         setDepenses={setDepenses}
         setPartnerData={setPartnerData}
@@ -21411,6 +21413,7 @@ const App = () => {
         <DossierFiscauxView
           darkMode={darkMode}
           setVista={setVista}
+          goBack={goBack}
           playNotificationSound={playNotificationSound}
           t={t}
           dossierFiles={dossierFiles}
@@ -21627,6 +21630,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setExpandedDoors={setExpandedDoors}
         setShowLimitModal={setShowLimitModal}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         onOpenBuildingLedger={(buildingId: string) => {
           setSelectedLedgerBuildingId(buildingId);
@@ -21692,6 +21696,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         filteredDepenses={filteredDepenses}
         porcBureau={porcBureau}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         setPartnerData={setPartnerData}
         setListaEmpresas={setListaEmpresas}
@@ -21757,6 +21762,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         activeCompanyId={activeCompanyId}
         currentCompany={currentCompany}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         LogoPrincipal={LogoPrincipal}
@@ -21887,6 +21893,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         getEffectiveTier={getEffectiveTier}
         playNotificationSound={playNotificationSound}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         matchFideicommisInConciliation={matchFideicommisInConciliation}
@@ -21928,6 +21935,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setDepenses={setDepenses}
         playNotificationSound={playNotificationSound}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
       />
@@ -21945,6 +21953,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setAutonomeExpenses={setAutonomeExpenses}
         playNotificationSound={playNotificationSound}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
       />
@@ -21958,6 +21967,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         activeCompanyId={activeCompanyId}
         currentCompany={currentCompany}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         depenses={depenses}
@@ -21997,6 +22007,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         setShowSettingsTour={setShowSettingsTour}
         playNotificationSound={playNotificationSound}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
         dashboardMode={dashboardMode}
         companyId={activeCompanyId}
@@ -22029,6 +22040,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         currentCompany={currentCompany}
         currentUserEmail={currentUserEmail}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
       />
     );
@@ -22047,6 +22059,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminName={adminName}
         adminEmail={adminEmail}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         playNotificationSound={playNotificationSound}
@@ -22086,6 +22099,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminEmail={adminEmail}
         setSelectedLedgerBuildingId={setSelectedLedgerBuildingId}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
       />
@@ -22105,6 +22119,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminEmail={adminEmail}
         setSelectedLedgerBuildingId={setSelectedLedgerBuildingId}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
       />
@@ -22143,6 +22158,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminRole={adminRole}
         adminPhoto={adminPhoto}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
       />
     );
@@ -22157,6 +22173,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminRole={adminRole}
         adminPhoto={adminPhoto}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
         companyId={activeCompanyId}
       />
@@ -22172,6 +22189,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminRole={adminRole}
         adminPhoto={adminPhoto}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
         companyId={activeCompanyId}
       />
@@ -22189,6 +22207,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         userRole={userRole}
         activeCompanyId={activeCompanyId}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
       />
     );
@@ -22206,6 +22225,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminPhoto={adminPhoto}
         companyName={currentCompany?.nombre || "Solutions GPA Inc."}
         setVista={setVista}
+        goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
       />
     );

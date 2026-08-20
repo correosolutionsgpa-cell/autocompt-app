@@ -29,6 +29,7 @@ export interface FileItem {
 interface DossierFiscauxViewProps {
   darkMode: boolean;
   setVista: (vista: string) => void;
+  goBack: () => void;
   playNotificationSound: () => void;
   sidebarToggle?: React.ReactNode;
   dossierFiles: FileItem[];
@@ -49,6 +50,7 @@ interface DossierFiscauxViewProps {
 export default function DossierFiscauxView({
   darkMode,
   setVista,
+  goBack,
   playNotificationSound,
   sidebarToggle,
   dossierFiles,
@@ -377,7 +379,7 @@ export default function DossierFiscauxView({
       <header className={`${darkMode ? 'bg-zinc-950 border-zinc-950 shadow-xl' : 'bg-white border-slate-200 shadow-sm'} px-6 py-5 border-b flex items-center justify-between text-left`}>
         <div className="flex items-center space-x-3">
           {sidebarToggle}
-          <button onClick={() => setVista('dashboard')} className={`p-2 rounded-xl transition-all active:scale-95 ${darkMode ? 'text-zinc-500 hover:text-white hover:bg-zinc-900' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`} id="back-to-dashboard-dossier">
+          <button onClick={goBack} className={`p-2 rounded-xl transition-all active:scale-95 ${darkMode ? 'text-zinc-500 hover:text-white hover:bg-zinc-900' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`} id="back-to-dashboard-dossier">
             <ArrowLeft size={24} />
           </button>
           <div>

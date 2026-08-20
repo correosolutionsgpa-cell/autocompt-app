@@ -104,6 +104,7 @@ export interface SettingsViewProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
 
   // Composant App
   WorkspaceSidebar: React.ComponentType;
@@ -261,6 +262,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   setShowSettingsTour,
   playNotificationSound,
   setVista,
+  goBack,
   WorkspaceSidebar,
   dashboardMode,
   companyId,
@@ -448,7 +450,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       )}
       <header className={`${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"} px-6 py-4 border-b shadow-sm sticky top-0 z-50 flex items-center justify-between`}>
         <div className="flex items-center space-x-3">
-          <button onClick={() => setVista("dashboard")} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+          <button onClick={goBack} className={`p-2 rounded-xl transition-colors ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
             <ArrowLeft size={20} />
           </button>
           <div className="text-left">

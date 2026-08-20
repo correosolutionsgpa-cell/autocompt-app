@@ -46,6 +46,7 @@ export interface PortefeuilleClientsComptableViewProps {
   adminEmail: string;
   setSelectedLedgerBuildingId: (id: string) => void;
   setVista: (v: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
 }
@@ -103,6 +104,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
   adminEmail,
   setSelectedLedgerBuildingId,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
 }) => {
@@ -361,7 +363,7 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
         title="Portefeuille Clients"
         subtitle="Tenue de livres par client"
         headerIcon={<Briefcase size={20} />}
-        backVista="dashboard"
+        goBack={goBack}
         accentColor="blue"
         fetchClients={dataService.fetchClients}
         fetchExtra={fetchExtra}

@@ -85,8 +85,9 @@ export interface ClientPortfolioShellProps<
   title: string;
   subtitle: string;
   headerIcon: React.ReactNode;
-  /** Back-arrow target. */
-  backVista: string;
+  /** Pops the real navigation history (App.tsx) instead of always landing
+   *  on a hardcoded destination — see the goBack() comment there for context. */
+  goBack: () => void;
   /** Tailwind color name used for icons/accents — defaults to "indigo" (the
    *  color the gestionnaire portfolio already used). */
   accentColor?: string;
@@ -147,7 +148,7 @@ function ClientPortfolioShellInner<
   title,
   subtitle,
   headerIcon,
-  backVista,
+  goBack,
   accentColor = "indigo",
   fetchClients,
   fetchExtra,
@@ -265,7 +266,7 @@ function ClientPortfolioShellInner<
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white md:hidden">
           <Menu size={18} />
         </button>
-        <button onClick={() => setVista(backVista)} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
+        <button onClick={goBack} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
           <ArrowLeft size={20} />
         </button>
         <div className={`p-2.5 rounded-2xl bg-${accentColor}-500/10 text-${accentColor}-500`}>

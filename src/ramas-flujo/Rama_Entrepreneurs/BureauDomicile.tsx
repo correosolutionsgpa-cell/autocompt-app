@@ -98,6 +98,7 @@ export interface BureauDomicileProps {
 
   // Callbacks App
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   setPartnerData: (fn: (prev: any) => any) => void;
   setListaEmpresas: (fn: (prev: Empresa[]) => Empresa[]) => void;
@@ -121,6 +122,7 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
   filteredDepenses,
   porcBureau,
   setVista,
+  goBack,
   setIsSidebarOpen,
   setPartnerData,
   setListaEmpresas,
@@ -192,7 +194,7 @@ const BureauDomicile: React.FC<BureauDomicileProps> = ({
           <Menu size={18} />
         </button>
         <button
-          onClick={() => setVista("dashboard")}
+          onClick={goBack}
           className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
         >
           <ArrowLeft />

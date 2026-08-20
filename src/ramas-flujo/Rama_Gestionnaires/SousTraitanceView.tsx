@@ -74,6 +74,7 @@ export interface SousTraitanceViewProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
 
   // Composant App
@@ -109,6 +110,7 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
   setDepenses,
   playNotificationSound,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
 }) => {
@@ -131,7 +133,7 @@ const SousTraitanceView: React.FC<SousTraitanceViewProps> = ({
               <Menu size={18} />
             </button>
             <button
-              onClick={() => setVista("dashboard")}
+              onClick={goBack}
               className={`p-2 transition-colors rounded-xl transition-all ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"}`}
             >
               <ArrowLeft size={24} />

@@ -423,6 +423,7 @@ export interface PortefeuilleClientViewProps {
   /** Sets which building's ledger to open when navigating to "tenue_livres_immeuble" */
   setSelectedLedgerBuildingId: (id: string) => void;
   setVista: (v: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
 }
@@ -465,6 +466,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
   preSelectedClientId,
   setSelectedLedgerBuildingId,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
 }) => {
@@ -556,7 +558,7 @@ const PortefeuilleClientView: React.FC<PortefeuilleClientViewProps> = ({
       title="Portefeuille par Client"
       subtitle="Tenue de livres par propriétaire-client"
       headerIcon={<Building2 size={20} />}
-      backVista="fideicommis"
+      goBack={goBack}
       accentColor="indigo"
       fetchClients={dataService.fetchFideicommisClients}
       fetchExtra={fetchExtra}

@@ -42,6 +42,7 @@ export interface HeuresPaieShellProps {
 
   // Navigation
   setVista: (vista: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
 
   // Composant App
@@ -59,6 +60,7 @@ const HeuresPaieShell: React.FC<HeuresPaieShellProps> = ({
   setAutonomeExpenses,
   playNotificationSound,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
 }) => {
@@ -96,6 +98,7 @@ const HeuresPaieShell: React.FC<HeuresPaieShellProps> = ({
           currentCompany={currentCompany}
           playNotificationSound={playNotificationSound}
           setVista={setVista}
+          goBack={goBack}
           setAutonomeExpenses={setAutonomeExpenses}
         />
       </main>
