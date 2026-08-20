@@ -31,6 +31,7 @@ import {
   where,
   orderBy,
   runTransaction,
+  increment,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject, getDownloadURL } from 'firebase/storage';
@@ -2277,6 +2278,48 @@ export const dataService = {
     } catch (e) {
       console.error('logModuleUsageEvent failed (non-blocking):', e);
     }
+  },
+
+  // ── Work hours tracking — active-time counter for accounts flagged
+  // trackWorkHours (SuperAdmin toggle, users/{uid}.trackWorkHours). Not tied
+  // to any specific person in code — any account can be flagged. One doc per
+  // account per day, incremented in 60s ticks only while the account is
+  // actually interacting (mouse/keyboard), never just "connected" — see the
+  // idle-detection effect in WorkHoursContext.tsx. ─────────────────────────
+
+  /**
+   * Fire-and-forget +60s tick on today's log for this account. Never throws —
+   * a missed tick just under-counts by a minute, never worth blocking the UI.
+   */
+  async tickWorkHours(uid: string, seconds: number): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      await setDoc(doc(db, 'workHoursLog', `${uid}_${today}`), {
+        uid,
+        date: today,
+        activeSeconds: increment(seconds),
+        lastTickAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e) {
+      console.error('tickWorkHours failed (non-blocking):', e);
+    }
+  },
+
+  /** Today's accumulated seconds for the current account — used to seed the
+   *  on-screen counter on load so it doesn't reset to 0 on every refresh. */
+  async fetchWorkHoursToday(uid: string): Promise<number> {
+    const today = new Date().toISOString().slice(0, 10);
+    const snap = await getDoc(doc(db, 'workHoursLog', `${uid}_${today}`));
+    return snap.exists() ? (snap.data().activeSeconds || 0) : 0;
+  },
+
+  /** Every log for one account, newest first — SuperAdmin's "Heures de
+   *  travail" tab sums/breaks these down by whatever range it needs. */
+  async fetchWorkHoursForUser(uid: string): Promise<{ date: string; activeSeconds: number }[]> {
+    const snap = await getDocs(query(collection(db, 'workHoursLog'), where('uid', '==', uid)));
+    return snap.docs
+      .map((d) => ({ date: d.data().date as string, activeSeconds: (d.data().activeSeconds as number) || 0 }))
+      .sort((a, b) => b.date.localeCompare(a.date));
   },
 
   // ── Platform invoices — sequential numbering (SuperAdmin "Facturation") ────

@@ -177,6 +177,7 @@ import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type L
 import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
 import { useToast } from "./lib/ToastContext";
+import { useWorkHours } from "./lib/WorkHoursContext";
 import { usePendingInvites } from "./lib/PendingInvitesContext";
 import { auth, db, storage } from "./lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, RecaptchaVerifier, linkWithPhoneNumber, GoogleAuthProvider, signInWithPopup, updatePassword, sendPasswordResetEmail, type ConfirmationResult } from "firebase/auth";
@@ -2764,6 +2765,9 @@ const App = () => {
   // Lives in ToastContext (mounted above <App /> in main.tsx) so it's visible
   // regardless of which `vista` is active — see GlobalToastHost.
   const { dispatcherSuccessToast, setDispatcherSuccessToast } = useToast();
+  // Lives in WorkHoursContext (mounted above <App /> in main.tsx) — see
+  // GlobalWorkHoursHost for the floating counter this flag turns on.
+  const { setTrackWorkHours } = useWorkHours();
   const [isTransmittingChannel, setIsTransmittingChannel] = useState<
     string | null
   >(null);
@@ -8254,6 +8258,7 @@ const App = () => {
             passwordMigrated = !!userData.passwordMigrated;
             setCanGenerateBetaCodes(!!userData.canGenerateBetaCodes);
             setDriveEnabled(userData.driveEnabled !== false);
+            setTrackWorkHours(!!userData.trackWorkHours);
             hasSelectedProfile = !!userData.selectedProfile;
             setHasSeenDocTemplateGuide(!!userData.hasSeenDocTemplateGuide);
 

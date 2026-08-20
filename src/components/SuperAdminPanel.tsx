@@ -60,6 +60,10 @@ interface AdminUser {
   /** Profile chosen at onboarding (users/{uid}.selectedProfile) — shown so
    *  Fabiola can see what each account actually uses without opening it. */
   selectedProfile?: string;
+  /** Manual per-account switch — turns on the floating active-time counter
+   *  (GlobalWorkHoursHost) for this account. Never tied to a specific person
+   *  in code; any account can be flagged (e.g. a paid contractor). */
+  trackWorkHours?: boolean;
 }
 
 const ALL_PROFILE_IDS = ["prospecteur", "investisseur", "flippeur", "gestionnaire", "syndicat", "comptable"];
@@ -122,6 +126,12 @@ function formatLastActive(lastActive?: string): string {
 /** "En ligne maintenant" — App.tsx pings lastActive every 90s while the tab
  *  stays open and visible; a gap under 3 min tolerates one missed heartbeat
  *  (e.g. a brief network hiccup) without falsely showing offline. */
+function formatWorkHoursTotal(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return `${h} h ${String(m).padStart(2, '0')} min`;
+}
+
 function isOnlineNow(lastActive?: string): boolean {
   if (!lastActive) return false;
   return Date.now() - new Date(lastActive).getTime() < 3 * 60 * 1000;
@@ -163,6 +173,7 @@ function mapFirestoreUserToAdminUser(uid: string, data: any): AdminUser {
     driveEnabled: data?.driveEnabled,
     unlockedProfiles: data?.unlockedProfiles,
     selectedProfile: data?.selectedProfile,
+    trackWorkHours: data?.trackWorkHours,
   };
 }
 
@@ -394,6 +405,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [companiesByOwner, setCompaniesByOwner] = useState<Record<string, OwnedCompany[]>>({});
   const [signedDocsByOwner, setSignedDocsByOwner] = useState<Record<string, { docTitle: string; url: string; createdAt: string }[]>>({});
+  const [workHoursSecondsByOwner, setWorkHoursSecondsByOwner] = useState<Record<string, number>>({});
   const [expandedSignedOwner, setExpandedSignedOwner] = useState<string | null>(null);
 
   const D = darkMode;
@@ -474,6 +486,27 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       }
     };
     loadSignedDocs();
+  }, [refreshTick]);
+
+  // Total active-time (all days summed) per account flagged trackWorkHours —
+  // see WorkHoursContext.tsx for how each doc gets ticked.
+  useEffect(() => {
+    const loadWorkHours = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'workHoursLog'));
+        const totals: Record<string, number> = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const uid = data?.uid;
+          if (!uid) return;
+          totals[uid] = (totals[uid] || 0) + (data?.activeSeconds || 0);
+        });
+        setWorkHoursSecondsByOwner(totals);
+      } catch {
+        // Fails silently for non-superadmin accounts, same as the other panels.
+      }
+    };
+    loadWorkHours();
   }, [refreshTick]);
 
   // Load AI usage events (only once the tab has been opened — `read` is
@@ -597,6 +630,19 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       await updateDoc(doc(db, 'users', u.id), { driveEnabled: next });
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, driveEnabled: next } : x));
       toast(next ? `Accès Drive réactivé pour ${u.email}.` : `Accès Drive désactivé pour ${u.email}.`);
+    } catch (err: any) {
+      toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
+  /** Turns the floating active-time counter on/off for one account (never
+   *  hardcoded to a specific person — any account can be flagged this way). */
+  const handleToggleWorkHoursTracking = async (u: AdminUser) => {
+    const next = !u.trackWorkHours;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { trackWorkHours: next });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, trackWorkHours: next } : x));
+      toast(next ? `Comptage des heures activé pour ${u.email}.` : `Comptage des heures désactivé pour ${u.email}.`);
     } catch (err: any) {
       toast(`Échec : ${err.message}`, 'error');
     }
@@ -1005,6 +1051,13 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                             ? (D ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600')
                             : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
                           {(u.unlockedProfiles?.length ?? 0) >= ALL_PROFILE_IDS.length ? <Unlock size={13} /> : <Lock size={13} />}
+                        </button>
+                        <button onClick={() => handleToggleWorkHoursTracking(u)}
+                          title={u.trackWorkHours ? "Désactiver le comptage des heures actives" : "Activer le comptage des heures actives sur ce compte"}
+                          className={`p-1.5 rounded-lg transition-colors ${u.trackWorkHours
+                            ? (D ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-600')
+                            : (D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400')}`}>
+                          <Clock size={13} />
                         </button>
                         <button
                           title="Envoyer le courriel de prolongation (mois gratuit)"
@@ -1679,6 +1732,10 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                 })(),
               },
               { label: 'Docs signés', value: `${(signedDocsByOwner[selectedUser.id] || []).length}` },
+              ...(selectedUser.trackWorkHours ? [{
+                label: 'Heures de travail (total)',
+                value: formatWorkHoursTotal(workHoursSecondsByOwner[selectedUser.id] || 0),
+              }] : []),
             ].map(r => (
               <div key={r.label} className={`flex justify-between items-center py-2 border-b ${D ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{r.label}</span>

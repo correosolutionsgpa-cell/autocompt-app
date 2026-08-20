@@ -38,7 +38,7 @@ service cloud.firestore {
       // was allowed) whenever used on an account other than the admin's own.
       allow write: if isSignedIn() && (
         request.auth.uid == userId ||
-        (isSuperAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canGenerateBetaCodes', 'driveEnabled', 'unlockedProfiles']))
+        (isSuperAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canGenerateBetaCodes', 'driveEnabled', 'unlockedProfiles', 'trackWorkHours']))
       );
     }
 
@@ -526,6 +526,15 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow read: if isSuperAdmin();
       allow update, delete: if false;
+    }
+
+    // Work hours tracking — one doc per account per day (dataService.tickWorkHours).
+    // An account only ever writes its own log; SuperAdmin reads everyone's for
+    // the "Heures de travail" tab.
+    match /workHoursLog/{logId} {
+      allow read: if isSuperAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
     }
 
     // Platform invoices — AutoCompt's own SaaS billing (sequential numbering),
