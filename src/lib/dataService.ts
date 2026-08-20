@@ -875,6 +875,23 @@ export interface InvoiceDoc {
   createdAt: string;
 }
 
+// ── InvoiceDraftDoc — Firestore `invoiceDrafts` collection ───────────────────
+// One in-progress "Nouvelle Facture" per company — the form (recipient,
+// items, date) used to live only in React state, so it vanished on refresh
+// or reconnecting later. Found 2026-08-20: Natalia lost a half-finished
+// invoice this way. Autosaved while the form has real content, restored
+// automatically when the screen reopens, cleared once the real invoice is
+// actually emitted.
+
+export interface InvoiceDraftDoc {
+  companyId: string;
+  tipoDoc: string;
+  newInvoiceData: any;
+  items: any[];
+  ownerId: string;
+  updatedAt: string;
+}
+
 // ── DocTemplateDoc — Firestore `docTemplates` collection ─────────────────────
 // The .docx file itself lives in Firebase Storage (docTemplates are metadata
 // only — Firestore documents have a 1MB limit, unsuitable for file blobs).
@@ -2320,6 +2337,38 @@ export const dataService = {
     return snap.docs
       .map((d) => ({ date: d.data().date as string, activeSeconds: (d.data().activeSeconds as number) || 0 }))
       .sort((a, b) => b.date.localeCompare(a.date));
+  },
+
+  // ── Invoice drafts — autosave for the "Nouvelle Facture" form ──────────────
+  // One doc per company (doc id `{userId}_invoicedraft_{companyId}`), so
+  // starting a new draft naturally replaces an old abandoned one.
+
+  async saveInvoiceDraft(userId: string, companyId: string, tipoDoc: string, newInvoiceData: any, items: any[]): Promise<void> {
+    try {
+      await setDoc(doc(db, 'invoiceDrafts', `${userId}_invoicedraft_${companyId}`), {
+        companyId,
+        tipoDoc,
+        newInvoiceData,
+        items,
+        ownerId: userId,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('saveInvoiceDraft failed (non-blocking):', e);
+    }
+  },
+
+  async fetchInvoiceDraft(userId: string, companyId: string): Promise<InvoiceDraftDoc | null> {
+    const snap = await getDoc(doc(db, 'invoiceDrafts', `${userId}_invoicedraft_${companyId}`));
+    return snap.exists() ? (snap.data() as InvoiceDraftDoc) : null;
+  },
+
+  async deleteInvoiceDraft(userId: string, companyId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'invoiceDrafts', `${userId}_invoicedraft_${companyId}`));
+    } catch (e) {
+      console.error('deleteInvoiceDraft failed (non-blocking):', e);
+    }
   },
 
   // ── Platform invoices — sequential numbering (SuperAdmin "Facturation") ────

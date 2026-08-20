@@ -537,6 +537,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Invoice drafts — autosave for the "Nouvelle Facture" form (one per
+    // company, see dataService.saveInvoiceDraft). Owner-only, same as most
+    // per-company collections above.
+    match /invoiceDrafts/{draftId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create, update: if isOwnerWrite();
+      allow delete: if isOwnerDoc();
+    }
+
     // Platform invoices — AutoCompt's own SaaS billing (sequential numbering),
     // and the counter doc backing it. SuperAdmin-only in both directions:
     // only Fabiola issues invoices, so no client ever needs to write these.

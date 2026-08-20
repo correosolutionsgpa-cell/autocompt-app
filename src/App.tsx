@@ -6050,6 +6050,43 @@ const App = () => {
   const [items, setItems] = useState([
     { cantidad: 1, descripcion: "", precioUnitario: 0, taxable: true },
   ]);
+
+  // ── Brouillon de facture — l'écran "Nouvelle Facture" ne vivait qu'en state
+  // React, donc tout se perdait au rafraîchissement ou en revenant plus tard.
+  // Trouvé 2026-08-20: Natalia a perdu une facture à moitié faite comme ça.
+  // Restauré automatiquement à l'ouverture, sauvegardé en continu pendant la
+  // saisie, effacé une fois la vraie facture émise.
+  const [draftRestoredNotice, setDraftRestoredNotice] = useState(false);
+  const invoiceDraftLoadedForCompany = useRef<string | null>(null);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    if (invoiceDraftLoadedForCompany.current === activeCompanyId) return;
+    invoiceDraftLoadedForCompany.current = activeCompanyId;
+    dataService.fetchInvoiceDraft(uid, activeCompanyId).then((draft) => {
+      if (!draft) return;
+      if (draft.tipoDoc) setTipoDoc(draft.tipoDoc);
+      if (draft.newInvoiceData) setNewInvoiceData(draft.newInvoiceData);
+      if (draft.items?.length) setItems(draft.items);
+      setDraftRestoredNotice(true);
+      setTimeout(() => setDraftRestoredNotice(false), 6000);
+    });
+  }, [activeCompanyId]);
+
+  // Autosave — seulement quand le formulaire a un contenu réel (un client
+  // choisi, ou une description saisie), pour ne jamais écraser un brouillon
+  // existant avec l'état vide par défaut, et ne pas spammer Firestore d'un
+  // brouillon vide à chaque frappe ailleurs dans l'app.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    const hasContent = !!(newInvoiceData.clientId || newInvoiceData.nouveauClientNom || items.some((it) => it.descripcion?.trim()));
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      dataService.saveInvoiceDraft(uid, activeCompanyId, tipoDoc, newInvoiceData, items);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [newInvoiceData, items, tipoDoc, activeCompanyId]);
   const [bankTransactions, setBankTransactions] = useState<any[]>([
     {
       companyId: "1",
@@ -20793,6 +20830,12 @@ const App = () => {
                         </button>
                       </div>
 
+                      {draftRestoredNotice && (
+                        <div className={`mt-4 p-3 rounded-2xl border flex items-center gap-2 text-[9px] font-bold ${darkMode ? "bg-emerald-900/10 border-emerald-500/20 text-emerald-300" : "bg-emerald-50 border-emerald-100 text-emerald-700"}`}>
+                          <CheckCircle2 size={13} className="shrink-0" />
+                          <span>Brouillon restauré — vous pouvez continuer où vous vous étiez arrêté(e).</span>
+                        </div>
+                      )}
                       <div className="mt-4">
                         <label
                           className={`text-[8px] font-black uppercase italic ml-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
@@ -21135,6 +21178,11 @@ const App = () => {
                                   // "Envoyer maintenant" without the toast vanishing under them.
                                   persistent: true,
                                 });
+
+                                {
+                                  const uid = auth.currentUser?.uid;
+                                  if (uid && activeCompanyId) dataService.deleteInvoiceDraft(uid, activeCompanyId);
+                                }
 
                                 setEditingInvoiceId(null);
                                 setSubVistaFactura("liste");
