@@ -2618,6 +2618,16 @@ const App = () => {
   >({});
   const [showPreview, setShowPreview] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  // "Répartir sur plusieurs édifices" (Gestionnaire) — une facture (ex.
+  // assurance) qui couvre plusieurs bâtiments d'un client géré. Réinitialisé
+  // à chaque ouverture/fermeture du modal via l'effet ci-dessous plutôt que
+  // dans chaque site setEditingExpense(depense) existant.
+  const [showBuildingSplit, setShowBuildingSplit] = useState(false);
+  const [buildingSplitAllocations, setBuildingSplitAllocations] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setShowBuildingSplit(false);
+    setBuildingSplitAllocations({});
+  }, [editingExpense?.id]);
   // Fil de discussion comptable↔client — texte en cours de saisie dans la
   // fenêtre "Validation IA", et indicateur d'envoi pour désactiver le bouton
   // le temps de l'écriture Firestore.
@@ -19033,7 +19043,7 @@ const App = () => {
 
                       {/* ── Immeuble — S.O.F.I. suggère via correspondance d'adresse, ────────
                           toujours corrigible ici (utile dès qu'il y a 2+ immeubles). */}
-                      {visiblePlexManagementProperties.length > 0 && (
+                      {visiblePlexManagementProperties.length > 0 && !showBuildingSplit && (
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 flex items-center gap-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                             Immeuble
@@ -19050,8 +19060,144 @@ const App = () => {
                               ...visiblePlexManagementProperties.map((p: any) => ({ value: p.buildingId || p.id, label: p.adresse })),
                             ]}
                           />
+                          {activeProfile === "gestionnaire" && visiblePlexManagementProperties.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowBuildingSplit(true)}
+                              className="text-[8.5px] font-black uppercase italic tracking-widest text-indigo-500 hover:text-indigo-600 pl-1 pt-1 transition-colors"
+                            >
+                              Cette dépense couvre plusieurs édifices (ex. assurance, contrat d'entretien) →
+                            </button>
+                          )}
                         </div>
                       )}
+
+                      {/* ── Répartir sur plusieurs édifices — Gestionnaire ──────────────────
+                          Facture unique (assurance, entretien, logiciel de gestion) qui couvre
+                          plusieurs bâtiments du même parc immobilier. Toujours déclenché
+                          manuellement (aucun moyen fiable de le deviner depuis l'OCR). Split
+                          égal par défaut, toujours éditable — jamais imposé silencieusement.
+                          Ajouté 2026-08-20. */}
+                      {showBuildingSplit && (() => {
+                        const sortedProps = [...visiblePlexManagementProperties].sort((a: any, b: any) =>
+                          (a.fideicommisClientName || "").localeCompare(b.fideicommisClientName || "")
+                        );
+                        const checkedIds = Object.keys(buildingSplitAllocations);
+                        const allocatedSum = checkedIds.reduce((a, id) => a + (parseFloat(buildingSplitAllocations[id]) || 0), 0);
+                        const originalTotal = editingExpense.total || 0;
+                        const diff = parseFloat((originalTotal - allocatedSum).toFixed(2));
+                        const canConfirm = checkedIds.length >= 2 && Math.abs(diff) <= 0.01;
+
+                        const toggleBuilding = (buildingId: string) => {
+                          setBuildingSplitAllocations((prev) => {
+                            const next = { ...prev };
+                            if (buildingId in next) {
+                              delete next[buildingId];
+                            } else {
+                              next[buildingId] = "0";
+                            }
+                            const ids = Object.keys(next);
+                            const equalShare = ids.length > 0 ? originalTotal / ids.length : 0;
+                            ids.forEach((id) => { next[id] = equalShare.toFixed(2); });
+                            return next;
+                          });
+                        };
+
+                        return (
+                          <div className={`space-y-3 p-4 rounded-2xl border text-left ${darkMode ? "border-indigo-500/25 bg-indigo-500/[0.04]" : "border-indigo-200 bg-indigo-50/50"}`}>
+                            <div className="flex items-center justify-between">
+                              <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-indigo-300" : "text-indigo-700"}`}>
+                                Répartir cette dépense entre plusieurs édifices
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => { setShowBuildingSplit(false); setBuildingSplitAllocations({}); }}
+                                className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                              {sortedProps.map((p: any) => {
+                                const bId = p.buildingId || p.id;
+                                const checked = bId in buildingSplitAllocations;
+                                return (
+                                  <div key={bId} className={`flex items-center gap-2 p-2 rounded-xl ${darkMode ? "bg-zinc-900/50" : "bg-white"}`}>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleBuilding(bId)}
+                                      className={`w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all ${checked ? "bg-indigo-500 border-indigo-500" : (darkMode ? "border-zinc-700" : "border-slate-300")}`}
+                                    >
+                                      {checked && <CheckCircle2 size={12} className="text-white" />}
+                                    </button>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-[10px] font-bold truncate ${darkMode ? "text-zinc-200" : "text-slate-800"}`}>{p.adresse}</p>
+                                      {p.fideicommisClientName && (
+                                        <p className={`text-[8px] font-bold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{p.fideicommisClientName}</p>
+                                      )}
+                                    </div>
+                                    {checked && (
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={buildingSplitAllocations[bId]}
+                                        onChange={(e) => setBuildingSplitAllocations((prev) => ({ ...prev, [bId]: e.target.value }))}
+                                        className={`w-24 p-2 rounded-lg text-[10px] font-mono font-bold text-right border-none outline-none ${darkMode ? "bg-zinc-800 text-zinc-100" : "bg-slate-100 text-slate-900"}`}
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="flex items-center justify-between text-[9px] font-bold pt-1">
+                              <span className={darkMode ? "text-zinc-400" : "text-slate-500"}>
+                                Total facture : {originalTotal.toFixed(2)} $ — réparti : {allocatedSum.toFixed(2)} $
+                              </span>
+                              {Math.abs(diff) > 0.01 && (
+                                <span className="text-rose-500">Écart de {diff.toFixed(2)} $</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!canConfirm}
+                              onClick={() => {
+                                const now = Date.now();
+                                const newParts = checkedIds.map((buildingId, i) => {
+                                  const amt = parseFloat(buildingSplitAllocations[buildingId]) || 0;
+                                  const ratio = originalTotal ? amt / originalTotal : 0;
+                                  return {
+                                    ...editingExpense,
+                                    id: `SPLIT-${now}-${i}`,
+                                    buildingId,
+                                    aiSuggestedBuilding: false,
+                                    total: parseFloat(amt.toFixed(2)),
+                                    subtotal: parseFloat(((editingExpense.subtotal || 0) * ratio).toFixed(2)),
+                                    tps: parseFloat(((editingExpense.tps || 0) * ratio).toFixed(2)),
+                                    tvq: parseFloat(((editingExpense.tvq || 0) * ratio).toFixed(2)),
+                                    splitFromExpenseId: editingExpense.id,
+                                    status: "Vérifiée",
+                                    auditLogs: [
+                                      ...(editingExpense.auditLogs || []),
+                                      { originalCat: editingExpense.cat, newCat: editingExpense.cat, confirmedBy: activeUser || "Système", timestamp: new Date().toISOString() },
+                                    ],
+                                  };
+                                });
+                                setDepenses((prev) => [
+                                  ...prev.filter((d) => d.id !== editingExpense.id),
+                                  ...newParts,
+                                ]);
+                                setEditingExpense(null);
+                                setShowBuildingSplit(false);
+                                setBuildingSplitAllocations({});
+                                playNotificationSound();
+                              }}
+                              className={`w-full py-3 rounded-xl text-[9.5px] font-black uppercase italic tracking-widest transition-all ${canConfirm ? "bg-indigo-500 hover:bg-indigo-600 text-white" : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 cursor-not-allowed"}`}
+                            >
+                              Répartir sur {checkedIds.length || 0} édifice{checkedIds.length > 1 ? "s" : ""}
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* ── Source d'activité — permet de reclassifier a posteriori
                           n'importe quelle dépense (scan reçu, kilométrage, etc.) sans
@@ -19307,7 +19453,11 @@ const App = () => {
                     </div>
 
                     <div className="mt-8">
-                      {(() => {
+                      {showBuildingSplit ? (
+                        <p className={`text-center text-[9px] font-bold uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Utilisez le bouton "Répartir" ci-dessus pour confirmer — ceci remplace l'enregistrement normal.
+                        </p>
+                      ) : (() => {
                         const addressBlocked = !!editingExpense.addressMismatchWarning && !editingExpense.addressMismatchConfirmed;
                         return (
                           <button

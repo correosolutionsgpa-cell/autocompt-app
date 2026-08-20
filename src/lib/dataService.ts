@@ -313,6 +313,12 @@ export interface ExpenseDoc {
    *  d'une catégorie — la même réparation peut être courante ou capitale selon
    *  le contexte (ex: remplacer un robinet vs refaire toute la plomberie). */
   natureDepense?: 'courante' | 'capitale';
+  /** Set when this expense is one of N parts created by "Répartir sur
+   *  plusieurs édifices" (une facture — ex. assurance — qui couvre plusieurs
+   *  bâtiments d'un client géré). Pointe vers l'id de la dépense "À classer"
+   *  d'origine (déjà supprimée) — purement informatif pour l'affichage
+   *  ("Répartie depuis facture X"), aucun total ne s'appuie dessus. */
+  splitFromExpenseId?: string;
   ownerId: string;
   createdAt: string;
 }
