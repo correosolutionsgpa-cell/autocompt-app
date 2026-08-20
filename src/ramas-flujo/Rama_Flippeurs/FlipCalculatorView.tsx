@@ -283,8 +283,13 @@ export interface FlipCalculatorViewProps {
 
 /** Estimation de Fabiola pour le coût d'acquisition (notaire, taxe de
  *  mutation, inspection, arpenteur, évaluation, frais de dossier) — calculé
- *  automatiquement, plus de saisie manuelle poste par poste. */
-const TAUX_COUT_ACQUISITION = 0.05;
+ *  automatiquement, plus de saisie manuelle poste par poste. Ajusté de 5%
+ *  à 6% le 2026-08-20 (Fabiola : "5% + 1% pour les frais qui ne s'appliquent
+ *  pas à chaque opération, ex. arpenteur/évaluation à 0$") après avoir
+ *  comparé avec un exemple réel où le détail ligne par ligne totalisait
+ *  plus que 5% du prix d'achat — reste une estimation, pas un calcul exact
+ *  (la vraie taxe de mutation du Québec est par paliers, pas un % plat). */
+const TAUX_COUT_ACQUISITION = 0.06;
 
 const emptyForm = {
   adresse: "", dateAchat: new Date().toISOString().slice(0, 10), prixAchat: "",
