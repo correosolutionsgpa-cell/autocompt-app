@@ -46,7 +46,7 @@ import jsPDF from "jspdf";
 import {
   ArrowLeft, Menu, Hammer, Plus, X, Loader2, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, Trash2, Edit3, Receipt, Home,
-  ChevronDown, ChevronUp, Calculator, Percent, Users, Save, Download,
+  ChevronDown, ChevronUp, Calculator, Percent, Users, Save, Download, Zap,
 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
@@ -361,6 +361,13 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // ── Offre Rapide — pour un prospecteur debout devant la maison, sans
+  // vouloir remplir un vrai projet ni faire les calculs de tête. Formule de
+  // Fabiola : prix de vente estimé × (1 − % de réduction éclair, tous frais
+  // et profit confondus, 25% par défaut) − réparations estimées à l'œil.
+  // Purement éphémère — rien n'est sauvegardé, juste un calcul instantané.
+  const [showQuickOffer, setShowQuickOffer] = useState(false);
+  const [quickOfferForm, setQuickOfferForm] = useState({ prixVente: "", pctReduction: "25", reparations: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [sellingId, setSellingId] = useState<string | null>(null);
@@ -707,12 +714,59 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
           </p>
         </div>
         <button
+          onClick={() => { setQuickOfferForm({ prixVente: "", pctReduction: "25", reparations: "" }); setShowQuickOffer(true); }}
+          title="Calcul rapide de l'offre maximale à faire, sur place, sans créer de projet"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl text-[9px] font-black uppercase tracking-wider shadow-lg"
+        >
+          <Zap size={13} /> Offre rapide
+        </button>
+        <button
           onClick={() => { resetForm(); setShowForm(true); }}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-wider shadow-lg"
         >
           <Plus size={13} /> Nouveau projet
         </button>
       </header>
+
+      {/* ── Offre Rapide — modal éphémère, rien n'est sauvegardé ────────────── */}
+      {showQuickOffer && (() => {
+        const prixVenteNum = parseFloat(quickOfferForm.prixVente) || 0;
+        const pctNum = parseFloat(quickOfferForm.pctReduction) || 0;
+        const reparationsNum = parseFloat(quickOfferForm.reparations) || 0;
+        const offreMax = prixVenteNum * (1 - pctNum / 100) - reparationsNum;
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className={`w-full max-w-sm rounded-[28px] shadow-2xl p-6 space-y-4 ${darkMode ? "bg-zinc-950 border border-zinc-800" : "bg-white"}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap size={18} className="text-amber-500" />
+                  <p className="text-[11px] font-black uppercase tracking-widest">Offre Rapide</p>
+                </div>
+                <button onClick={() => setShowQuickOffer(false)} className="text-slate-400 hover:text-rose-500"><X size={16} /></button>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prix de vente estimé ($)</label>
+                <input type="number" inputMode="decimal" autoFocus value={quickOfferForm.prixVente} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, prixVente: e.target.value })} placeholder="0.00" className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">% de réduction éclair <span className="normal-case font-medium">— tous frais et profit confondus</span></label>
+                <input type="number" inputMode="decimal" value={quickOfferForm.pctReduction} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, pctReduction: e.target.value })} className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Réparations potentielles à faire ($)</label>
+                <input type="number" inputMode="decimal" value={quickOfferForm.reparations} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, reparations: e.target.value })} placeholder="0.00" className={inputCls} />
+              </div>
+
+              <div className={`p-4 rounded-2xl text-center ${darkMode ? "bg-amber-500/10 border border-amber-500/20" : "bg-amber-50 border border-amber-100"}`}>
+                <p className="text-[8px] font-black uppercase tracking-widest text-amber-600">Offre maximale suggérée</p>
+                <p className={`text-2xl font-black mt-1 ${darkMode ? "text-white" : "text-slate-900"}`}>{fmtCAD(Math.max(0, offreMax))}</p>
+              </div>
+              <p className="text-[8px] text-slate-400 text-center leading-relaxed">Estimation rapide — pas un projet sauvegardé. Créez un "Nouveau projet" pour un suivi détaillé.</p>
+            </div>
+          </div>
+        );
+      })()}
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-3xl w-full mx-auto">
         {projects.length === 0 && !showForm && (
