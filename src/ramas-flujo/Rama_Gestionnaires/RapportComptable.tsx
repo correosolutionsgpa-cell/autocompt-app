@@ -27,6 +27,7 @@
  */
 
 import React from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { AnimatePresence, motion } from "framer-motion";
 import type { UnitDoc } from "../../lib/dataService";
 import { applyFiscalRate, VEHICLE_EXPENSE_CATS, type CategoryFiscalRuleEntry } from "../../lib/fiscalRules";
@@ -1029,13 +1030,14 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                       Unité locative
                     </label>
                     {visibleUnits.length > 0 ? (
-                      <select
+                      <StyledSelect
+                        darkMode={darkMode}
                         value={loyerForm.unitId || ""}
-                        onChange={(e) => {
-                          const selectedUnit = visibleUnits.find(u => u.id === e.target.value);
+                        onChange={(v) => {
+                          const selectedUnit = visibleUnits.find(u => u.id === v);
                           setLoyerForm({
                             ...loyerForm,
-                            unitId:     e.target.value,
+                            unitId:     v,
                             buildingId: selectedUnit?.buildingId || "",
                             locataire:  selectedUnit?.tenantName || loyerForm.locataire,
                             typeBail:   selectedUnit ? (selectedUnit.unitName.toLowerCase().includes("chambre") || selectedUnit.unitName.toLowerCase().includes("habitation") ? "Habitation" : "Logement complet") : loyerForm.typeBail,
@@ -1044,15 +1046,11 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                             unite:      selectedUnit?.unitName    || loyerForm.unite,
                           });
                         }}
-                        className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-orange-500/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}
-                      >
-                        <option value="">-- Sélectionner une unité --</option>
-                        {visibleUnits.map(u => (
-                          <option key={u.id} value={u.id}>
-                            {u.unitName}{u.tenantName ? ` — ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: "", label: "-- Sélectionner une unité --" },
+                          ...visibleUnits.map(u => ({ value: u.id, label: `${u.unitName}${u.tenantName ? ` — ${u.tenantName}` : ""} (${u.isActive ? "Actif" : "Vacant"})` })),
+                        ]}
+                      />
                     ) : (
                       // Fallback: manual text entry when no units exist yet
                       <div className="space-y-3">
@@ -1368,17 +1366,12 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
                 <div className="p-6 space-y-4">
                   <div>
                     <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Catégorie de dépense</label>
-                    <select value={autonomeExpenseForm.categorie} onChange={(e) => setAutonomeExpenseForm({ ...autonomeExpenseForm, categorie: e.target.value })} className={`w-full px-4 py-3 rounded-2xl text-sm font-bold border focus:ring-2 focus:ring-[#ff823a]/50 transition-all ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-slate-50 border-slate-200 text-slate-900"}`}>
-                      <option value="Réparations et entretien">Réparations et entretien</option>
-                      <option value="Assurances">Assurances</option>
-                      <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
-                      <option value="Électricité / Chauffage">Électricité / Chauffage</option>
-                      <option value="Taxes foncières et scolaires">Taxes foncières et scolaires</option>
-                      <option value="Honoraires professionnels">Honoraires professionnels</option>
-                      <option value="Frais de gestion / Marketing">Frais de gestion / Marketing</option>
-                      <option value="Fournitures de bureau">Fournitures de bureau</option>
-                      <option value="Autre">Autre</option>
-                    </select>
+                    <StyledSelect darkMode={darkMode} value={autonomeExpenseForm.categorie} onChange={(v) => setAutonomeExpenseForm({ ...autonomeExpenseForm, categorie: v })}
+                      options={[
+                        "Réparations et entretien", "Assurances", "Intérêts hypothécaires", "Électricité / Chauffage",
+                        "Taxes foncières et scolaires", "Honoraires professionnels", "Frais de gestion / Marketing",
+                        "Fournitures de bureau", "Autre",
+                      ].map(c => ({ value: c, label: c }))} />
                   </div>
                   {autonomeExpenseForm.categorie === "Honoraires professionnels" && (
                     <div>

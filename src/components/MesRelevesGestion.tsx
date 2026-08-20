@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import StyledSelect from "./ui/StyledSelect";
 import { ArrowLeft, FileDown, Loader2, Mail, CheckCircle2, Menu, Inbox, Send, Clock, XCircle, Plus } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { dataService } from "../lib/dataService";
@@ -211,13 +212,12 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                 {listaEmpresas.length > 0 && (
                   <div className="flex flex-wrap items-center gap-3">
                     <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>Pour quelle entreprise ?</label>
-                    <select
+                    <StyledSelect
+                      darkMode={darkMode}
                       value={chosenCompanyId}
-                      onChange={(e) => setChosenCompanyId(e.target.value)}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-700 text-white" : "bg-white border-slate-200"}`}
-                    >
-                      {listaEmpresas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </select>
+                      onChange={setChosenCompanyId}
+                      options={listaEmpresas.map((c) => ({ value: c.id, label: c.nombre }))}
+                    />
                     <button
                       onClick={() => handleAccept(link)}
                       disabled={acceptingLinkId === link.id || !chosenCompanyId}
@@ -248,13 +248,12 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                 {showSubmitForm && (
                   <div className={`p-4 rounded-2xl border space-y-2.5 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
                     {acceptedLinks.length > 1 && (
-                      <select
+                      <StyledSelect
+                        darkMode={darkMode}
                         value={submitLinkId}
-                        onChange={(e) => setSubmitLinkId(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                      >
-                        {acceptedLinks.map((l) => <option key={l.id} value={l.id}>{l.gestionnaireCompanyId}</option>)}
-                      </select>
+                        onChange={setSubmitLinkId}
+                        options={acceptedLinks.map((l) => ({ value: l.id, label: l.gestionnaireCompanyId }))}
+                      />
                     )}
                     <input
                       type="date"

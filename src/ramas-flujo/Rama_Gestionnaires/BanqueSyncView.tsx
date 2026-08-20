@@ -13,7 +13,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React from "react";
+import React, { useState } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -142,6 +143,13 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   fideicommisClients,
   onCreateFideicommisDepot,
 }) => {
+  // Selected value for the two manual-assignment StyledSelects below (per
+  // transaction row, keyed by `i`) — these used to be uncontrolled native
+  // <select> elements read imperatively via the DOM at click time; StyledSelect
+  // isn't a real form control, so the selection now lives in React state.
+  const [autoLierSelection, setAutoLierSelection] = useState<Record<number, string>>({});
+  const [missingExpenseBuilding, setMissingExpenseBuilding] = useState<Record<number, string>>({});
+
   // Best-guess suggestion for auto-creating a fideicommisDepots doc from a
   // bank deposit — prefers a past dépôt from the same recurring tenant
   // (name in the bank description + same amount); falls back to amount-only
@@ -630,25 +638,23 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                           <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-red-200 dark:border-red-900/50">
                             <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase">{t("Assigner manuellement :")}</p>
-                            <select
-                              id={`auto-lier-select-${i}`}
-                              className={`text-[9px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 focus:outline-none focus:ring-1 focus:ring-red-500`}
-                            >
-                              <option value="">{t("Sélectionner la porte...")}</option>
-                              {plexManagementProperties.map(door => (
-                                <optgroup key={door.id} label={`Puerta: ${door.adresse}`}>
-                                  {door.isContainer && door.chambres ? door.chambres.map((c: any) => (
-                                    <option key={c.id} value={c.id}>{c.identifiantChambre} - {c.locataire}</option>
-                                  )) : (
-                                    <option value={door.id}>{door.adresse} - {door.locataire}</option>
-                                  )}
-                                </optgroup>
-                              ))}
-                            </select>
+                            <StyledSelect
+                              darkMode={darkMode}
+                              value={autoLierSelection[i] || ""}
+                              onChange={(v) => setAutoLierSelection(prev => ({ ...prev, [i]: v }))}
+                              placeholder={t("Sélectionner la porte...")}
+                              options={[
+                                { value: "", label: t("Sélectionner la porte...") },
+                                ...plexManagementProperties.flatMap(door =>
+                                  door.isContainer && door.chambres
+                                    ? door.chambres.map((c: any) => ({ value: c.id, label: `${c.identifiantChambre} - ${c.locataire}`, group: `Puerta: ${door.adresse}` }))
+                                    : [{ value: door.id, label: `${door.adresse} - ${door.locataire}`, group: `Puerta: ${door.adresse}` }]
+                                ),
+                              ]}
+                            />
                             <button
-                              onClick={(e) => {
-                                const select = (e.currentTarget.previousElementSibling as HTMLSelectElement | null);
-                                const selectedId = select?.value;
+                              onClick={() => {
+                                const selectedId = autoLierSelection[i];
                                 if (!selectedId) {
                                   alert(t("Veuillez sélectionner une porte."));
                                   return;
@@ -769,20 +775,20 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                 2026-08-13 via Fabiola confirming each building needs its
                                 own separated bookkeeping (capital gain at resale time). */}
                             {plexManagementProperties.length > 0 && (
-                              <select
-                                id={`missing-expense-building-${i}`}
-                                defaultValue=""
-                                className={`text-[9px] px-2 py-1.5 rounded-lg border ${darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-200" : "bg-white border-slate-200"}`}
-                              >
-                                <option value="">Immeuble (optionnel)...</option>
-                                {plexManagementProperties.map((p: any) => (
-                                  <option key={p.id} value={p.id}>{p.adresse}</option>
-                                ))}
-                              </select>
+                              <StyledSelect
+                                darkMode={darkMode}
+                                value={missingExpenseBuilding[i] || ""}
+                                onChange={(v) => setMissingExpenseBuilding(prev => ({ ...prev, [i]: v }))}
+                                placeholder="Immeuble (optionnel)..."
+                                options={[
+                                  { value: "", label: "Immeuble (optionnel)..." },
+                                  ...plexManagementProperties.map((p: any) => ({ value: p.id, label: p.adresse })),
+                                ]}
+                              />
                             )}
                             <button
                               onClick={() => {
-                                const buildingSelect = document.getElementById(`missing-expense-building-${i}`) as HTMLSelectElement | null;
+                                const selectedBuildingId = missingExpenseBuilding[i];
                                 const newDepense = {
                                   id: Date.now(),
                                   companyId: activeCompanyId,
@@ -796,7 +802,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                   lien: null,
                                   partnerTag: activeUser,
                                   refacturableTriplex: false,
-                                  ...(buildingSelect?.value ? { buildingId: buildingSelect.value } : {}),
+                                  ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
                                 };
                                 setDepenses((prev) => [newDepense, ...prev]);
                                 alert(
@@ -810,7 +816,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                             {activeCompanyId === "1" && (
                               <button
                                 onClick={() => {
-                                  const buildingSelect = document.getElementById(`missing-expense-building-${i}`) as HTMLSelectElement | null;
+                                  const selectedBuildingId = missingExpenseBuilding[i];
                                   const newDepense = {
                                     id: Date.now(),
                                     companyId: "1",
@@ -824,7 +830,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     lien: null,
                                     partnerTag: activeUser,
                                     refacturableTriplex: true,
-                                    ...(buildingSelect?.value ? { buildingId: buildingSelect.value } : {}),
+                                    ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
                                   };
                                   setDepenses((prev) => [newDepense, ...prev]);
                                   alert(
