@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import {
@@ -869,15 +870,11 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                         <div><label className={labelCls}>Code postal</label><input className={inputCls} value={p.codePostal} onChange={e => updatePropriete(idx, "codePostal", e.target.value)} placeholder="H1A 1A1" /></div>
                         <div>
                           <label className={labelCls}>Type de propriété</label>
-                          <select className={inputCls} value={p.typePropriete} onChange={e => updatePropriete(idx, "typePropriete", e.target.value)}>
-                            <option>Immeuble à revenus</option>
-                            <option>Duplex</option>
-                            <option>Triplex</option>
-                            <option>Quadruplex</option>
-                            <option>Maison unifamiliale en location</option>
-                            <option>Condo en location</option>
-                            <option>Immeuble commercial</option>
-                          </select>
+                          <StyledSelect darkMode={darkMode} value={p.typePropriete} onChange={v => updatePropriete(idx, "typePropriete", v)}
+                            options={[
+                              "Immeuble à revenus", "Duplex", "Triplex", "Quadruplex",
+                              "Maison unifamiliale en location", "Condo en location", "Immeuble commercial",
+                            ].map(t => ({ value: t, label: t }))} />
                         </div>
                         <div><label className={labelCls}>Nombre de logements</label><input className={inputCls} value={p.nbLogements} onChange={e => updatePropriete(idx, "nbLogements", e.target.value)} placeholder="4" type="number" /></div>
                       </div>
@@ -912,11 +909,12 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>Base de calcul</label>
-                      <select className={inputCls} value={form.baseCalcul} onChange={e => f("baseCalcul", e.target.value as any)}>
-                        <option value="loyer_brut">% du loyer brut mensuel</option>
-                        <option value="loyer_net">% du loyer net mensuel</option>
-                        <option value="montant_fixe">Montant fixe mensuel ($)</option>
-                      </select>
+                      <StyledSelect darkMode={darkMode} value={form.baseCalcul} onChange={v => f("baseCalcul", v as any)}
+                        options={[
+                          { value: "loyer_brut", label: "% du loyer brut mensuel" },
+                          { value: "loyer_net", label: "% du loyer net mensuel" },
+                          { value: "montant_fixe", label: "Montant fixe mensuel ($)" },
+                        ]} />
                     </div>
                     {form.baseCalcul !== "montant_fixe" ? (
                       <div><label className={labelCls}>Taux d'honoraires (%)</label><input type="number" className={inputCls} value={form.tauxHonoraires} onChange={e => f("tauxHonoraires", e.target.value)} placeholder="8" /></div>
@@ -925,10 +923,11 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
                     )}
                     <div>
                       <label className={labelCls}>Périodicité de facturation</label>
-                      <select className={inputCls} value={form.periodiciteFacturation} onChange={e => f("periodiciteFacturation", e.target.value as any)}>
-                        <option value="mensuelle">Mensuelle</option>
-                        <option value="trimestrielle">Trimestrielle</option>
-                      </select>
+                      <StyledSelect darkMode={darkMode} value={form.periodiciteFacturation} onChange={v => f("periodiciteFacturation", v as any)}
+                        options={[
+                          { value: "mensuelle", label: "Mensuelle" },
+                          { value: "trimestrielle", label: "Trimestrielle" },
+                        ]} />
                     </div>
                   </div>
                 </div>

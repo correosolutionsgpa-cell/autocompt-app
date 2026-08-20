@@ -31,6 +31,7 @@
  */
 
 import React, { useState } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { Briefcase, BookOpen, X, Home, Plus, Link2, Loader2, TrendingUp, TrendingDown, Scale, ShieldCheck, Mail, Check, ChevronDown, Edit3 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
@@ -511,16 +512,17 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                     placeholder="Adresse de la propriété *"
                     className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
                   />
-                  <select
+                  <StyledSelect
+                    darkMode={darkMode}
                     value={propertyForm.typeLocation}
-                    onChange={(e) => setPropertyForm({ ...propertyForm, typeLocation: e.target.value })}
-                    className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                  >
-                    <option value="Logement entier">Logement entier</option>
-                    <option value="Immeuble à revenus">Immeuble à revenus</option>
-                    <option value="Chalet">Chalet</option>
-                    <option value="Commercial">Commercial</option>
-                  </select>
+                    onChange={(v) => setPropertyForm({ ...propertyForm, typeLocation: v })}
+                    options={[
+                      { value: "Logement entier", label: "Logement entier" },
+                      { value: "Immeuble à revenus", label: "Immeuble à revenus" },
+                      { value: "Chalet", label: "Chalet" },
+                      { value: "Commercial", label: "Commercial" },
+                    ]}
+                  />
                   <button
                     disabled={!propertyForm.adresse.trim() || isSaving}
                     onClick={() => handleSaveProperty(a)}
@@ -576,16 +578,17 @@ const PortefeuilleClientsComptableView: React.FC<PortefeuilleClientsComptableVie
                 Aucune entreprise partagée avec vous pour l'instant.
               </p>
             ) : (
-              <select
-                value={selectedLinkDocId}
-                onChange={(e) => setSelectedLinkDocId(e.target.value)}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none mb-4 ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-slate-50 border-slate-200"}`}
-              >
-                <option value="">— Sélectionner l'entreprise du client —</option>
-                {collaboratorCompanies.map((c) => (
-                  <option key={c._companyDocId} value={c._companyDocId}>{c.nombre || c.nom || c._companyDocId}</option>
-                ))}
-              </select>
+              <div className="mb-4">
+                <StyledSelect
+                  darkMode={darkMode}
+                  value={selectedLinkDocId}
+                  onChange={setSelectedLinkDocId}
+                  options={[
+                    { value: "", label: "— Sélectionner l'entreprise du client —" },
+                    ...collaboratorCompanies.map((c) => ({ value: c._companyDocId, label: c.nombre || c.nom || c._companyDocId })),
+                  ]}
+                />
+              </div>
             )}
 
             <button

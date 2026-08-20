@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import StyledSelect from './ui/StyledSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import {
@@ -856,10 +857,8 @@ export default function ComptableExportView({
     <div className="space-y-4">
       <div className={`${card} p-4 flex items-center gap-3 flex-wrap`}>
         <Filter size={14} className={D?'text-zinc-500':'text-slate-400'}/>
-        <select value={facc} onChange={e=>{setFacc(e.target.value);setGlp(1);}} className={`${inp} min-w-[220px]`}>
-          <option value="">— Tous les comptes —</option>
-          {allIds.map(id=><option key={id} value={id}>{aCode(id)} — {aLabel(id)}</option>)}
-        </select>
+        <StyledSelect darkMode={D} value={facc} onChange={v=>{setFacc(v);setGlp(1);}}
+          options={[{ value: '', label: '— Tous les comptes —' }, ...allIds.map(id=>({ value: id, label: `${aCode(id)} — ${aLabel(id)}` }))]} />
         <span className={`text-[10px] ${D?'text-zinc-500':'text-slate-400'}`}>{allLns.length} mouvement(s)</span>
       </div>
       {filtGl.length===0&&<div className={`${card} p-8 text-center`}><p className={`text-[12px] ${D?'text-zinc-500':'text-slate-400'}`}>Aucun mouvement dans cette période.</p></div>}
@@ -1239,12 +1238,11 @@ export default function ComptableExportView({
                 </div>
                 <div>
                   <label className={lbl}>Catégorie DPA</label>
-                  <select value={a.ccaClass} onChange={e=>{
-                    const preset = CCA_PRESETS.find(p=>p.label===e.target.value);
-                    updateCcaRow(a.id,{ccaClass:e.target.value, ratePct: preset ? preset.ratePct : a.ratePct});
-                  }} className={`${inp} w-full`}>
-                    {CCA_PRESETS.map(p=><option key={p.label} value={p.label}>{p.label}</option>)}
-                  </select>
+                  <StyledSelect darkMode={D} value={a.ccaClass} onChange={v=>{
+                    const preset = CCA_PRESETS.find(p=>p.label===v);
+                    updateCcaRow(a.id,{ccaClass:v, ratePct: preset ? preset.ratePct : a.ratePct});
+                  }}
+                    options={CCA_PRESETS.map(p=>({ value: p.label, label: p.label }))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -1662,11 +1660,8 @@ export default function ComptableExportView({
             {properties.length === 0 ? (
               <p className={`text-[11px] italic ${D?'text-zinc-500':'text-slate-400'}`}>Aucun immeuble enregistré pour ce client.</p>
             ) : (
-              <select value={selectedBuildingId} onChange={e=>setSelectedBuildingId(e.target.value)} className={inp}>
-                {properties.map(p=>(
-                  <option key={p.buildingId||p.id} value={p.buildingId||p.id}>{p.adresse}</option>
-                ))}
-              </select>
+              <StyledSelect darkMode={D} value={selectedBuildingId} onChange={setSelectedBuildingId}
+                options={properties.map(p=>({ value: p.buildingId||p.id, label: p.adresse }))} />
             )}
           </div>
           <div>

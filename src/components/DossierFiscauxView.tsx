@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
+import StyledSelect from './ui/StyledSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, PlusCircle, Trash2, X, FileText, Download, Search,
@@ -1108,59 +1109,62 @@ export default function DossierFiscauxView({
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <label className="text-[7.5px] font-black uppercase text-slate-400 italic ml-1">Année</label>
-                    <select 
-                      value={newDocYear} onChange={e => setNewDocYear(parseInt(e.target.value))}
-                      className={`w-full p-4 rounded-2xl text-[11px] font-black uppercase italic border outline-none ${darkMode ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-slate-50 text-slate-900'}`}
-                    >
-                      <option value={2025}>2025</option>
-                      <option value={2026}>2026</option>
-                      <option value={2027}>2027</option>
-                    </select>
+                    <StyledSelect
+                      darkMode={darkMode}
+                      value={String(newDocYear)} onChange={v => setNewDocYear(parseInt(v))}
+                      options={[
+                        { value: '2025', label: '2025' },
+                        { value: '2026', label: '2026' },
+                        { value: '2027', label: '2027' },
+                      ]}
+                    />
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-[7.5px] font-black uppercase text-slate-400 italic ml-1">Profil</label>
-                    <select 
-                      value={newDocProfile} onChange={e => setNewDocProfile(e.target.value as any)}
-                      className={`w-full p-4 rounded-2xl text-[11px] font-black uppercase italic border outline-none ${darkMode ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-slate-50 text-slate-900'}`}
-                    >
-                      <option value="Solutions GPA">GPA</option>
-                      <option value="Triplex">Triplex</option>
-                    </select>
+                    <StyledSelect
+                      darkMode={darkMode}
+                      value={newDocProfile} onChange={v => setNewDocProfile(v as any)}
+                      options={[
+                        { value: 'Solutions GPA', label: 'GPA' },
+                        { value: 'Triplex', label: 'Triplex' },
+                      ]}
+                    />
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-[7.5px] font-black uppercase text-slate-400 italic ml-1">Catégorie</label>
-                    <select 
-                      value={newDocCategory} onChange={e => setNewDocCategory(e.target.value)}
-                      className={`w-full p-4 rounded-2xl text-[11px] font-black uppercase italic border outline-none ${darkMode ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-slate-50 text-slate-900'}`}
-                    >
-                      {categoriesGroup.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <StyledSelect
+                      darkMode={darkMode}
+                      value={newDocCategory} onChange={setNewDocCategory}
+                      options={categoriesGroup.map(c => ({ value: c, label: c }))}
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[7.5px] font-black uppercase text-slate-400 italic ml-1">État de conciliation</label>
-                    <select 
-                      value={newDocStatus} onChange={e => setNewDocStatus(e.target.value as any)}
-                      className={`w-full p-4 rounded-2xl text-[11px] font-black uppercase italic border outline-none ${darkMode ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-slate-50 text-slate-900'}`}
-                    >
-                      <option value="En attente">🟡 En attente de validation</option>
-                      <option value="Concilié">🟢 Concilié (Validé)</option>
-                    </select>
+                    <StyledSelect
+                      darkMode={darkMode}
+                      value={newDocStatus} onChange={v => setNewDocStatus(v as any)}
+                      options={[
+                        { value: 'En attente', label: '🟡 En attente de validation' },
+                        { value: 'Concilié', label: '🟢 Concilié (Validé)' },
+                      ]}
+                    />
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-[7.5px] font-black uppercase text-slate-400 italic ml-1">Type de fichier</label>
-                    <select 
-                      value={newDocType} onChange={e => setNewDocType(e.target.value as any)}
-                      className={`w-full p-4 rounded-2xl text-[11px] font-black uppercase italic border outline-none ${darkMode ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-slate-50 text-slate-900'}`}
-                    >
-                      <option value="pdf">PDF (Document)</option>
-                      <option value="jpg">JPG (Numérisation)</option>
-                    </select>
+                    <StyledSelect
+                      darkMode={darkMode}
+                      value={newDocType} onChange={v => setNewDocType(v as any)}
+                      options={[
+                        { value: 'pdf', label: 'PDF (Document)' },
+                        { value: 'jpg', label: 'JPG (Numérisation)' },
+                      ]}
+                    />
                   </div>
                 </div>
 
