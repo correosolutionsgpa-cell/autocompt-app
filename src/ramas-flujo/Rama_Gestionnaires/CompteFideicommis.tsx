@@ -17,6 +17,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import StyledSelect from "../../components/ui/StyledSelect";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import {
@@ -1000,19 +1001,15 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
                               <input type="date" value={depotForm.date} onChange={e => setDepotForm(p => ({ ...p, date: e.target.value }))} className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Propriétaire-client *</label>
-                              <select value={depotForm.clientId} onChange={e => setDepotForm(p => ({ ...p, clientId: e.target.value, buildingId: "", unitId: "" }))} className={inputCls}>
-                                <option value="">— Sélectionner —</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                              </select></div>
+                              <StyledSelect darkMode={darkMode} value={depotForm.clientId} onChange={v => setDepotForm(p => ({ ...p, clientId: v, buildingId: "", unitId: "" }))}
+                                options={[{ value: "", label: "— Sélectionner —" }, ...clients.map(c => ({ value: c.id, label: c.nom }))]} /></div>
                             {/* Building selector — filtered by client */}
                             {depotForm.clientId && (() => {
                               const clientBuildings = buildings.filter(b => b.fideicommisClientId === depotForm.clientId);
                               return clientBuildings.length > 0 ? (
                                 <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Immeuble</label>
-                                  <select value={depotForm.buildingId} onChange={e => setDepotForm(p => ({ ...p, buildingId: e.target.value, unitId: "", propertyAddress: buildings.find(b => b.id === e.target.value)?.adresse || p.propertyAddress }))} className={inputCls}>
-                                    <option value="">— Sélectionner l’immeuble —</option>
-                                    {clientBuildings.map(b => <option key={b.id} value={b.id}>{b.adresse}</option>)}
-                                  </select></div>
+                                  <StyledSelect darkMode={darkMode} value={depotForm.buildingId} onChange={v => setDepotForm(p => ({ ...p, buildingId: v, unitId: "", propertyAddress: buildings.find(b => b.id === v)?.adresse || p.propertyAddress }))}
+                                    options={[{ value: "", label: "— Sélectionner l’immeuble —" }, ...clientBuildings.map(b => ({ value: b.id, label: b.adresse }))]} /></div>
                               ) : null;
                             })()}
                             {/* Unit selector — filtered by building */}
@@ -1020,13 +1017,11 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                               const buildingUnits = units.filter(u => u.buildingId === depotForm.buildingId);
                               return buildingUnits.length > 0 ? (
                                 <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Porte / Unité</label>
-                                  <select value={depotForm.unitId} onChange={e => {
-                                    const u = units.find(u => u.id === e.target.value);
-                                    setDepotForm(p => ({ ...p, unitId: e.target.value, locataireName: u?.tenantName || p.locataireName }));
-                                  }} className={inputCls}>
-                                    <option value="">— Sélectionner l’unité —</option>
-                                    {buildingUnits.map(u => <option key={u.id} value={u.id}>{u.unitName} {u.tenantName ? `(${u.tenantName})` : ""}</option>)}
-                                  </select></div>
+                                  <StyledSelect darkMode={darkMode} value={depotForm.unitId} onChange={v => {
+                                    const u = units.find(u => u.id === v);
+                                    setDepotForm(p => ({ ...p, unitId: v, locataireName: u?.tenantName || p.locataireName }));
+                                  }}
+                                    options={[{ value: "", label: "— Sélectionner l’unité —" }, ...buildingUnits.map(u => ({ value: u.id, label: `${u.unitName} ${u.tenantName ? `(${u.tenantName})` : ""}` }))]} /></div>
                               ) : null;
                             })()}
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Locataire (payeur) *</label>
@@ -1040,13 +1035,14 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Montant ($) *</label>
                               <input type="number" value={depotForm.montant} onChange={e => setDepotForm(p => ({ ...p, montant: e.target.value }))} placeholder="1200.00" className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Mode de paiement</label>
-                              <select value={depotForm.modePaiement} onChange={e => setDepotForm(p => ({ ...p, modePaiement: e.target.value as any }))} className={inputCls}>
-                                <option value="virement">Virement bancaire</option>
-                                <option value="chèque">Chèque</option>
-                                <option value="espèce">Espèce</option>
-                                <option value="carte">Carte de crédit/débit</option>
-                                <option value="autre">Autre</option>
-                              </select></div>
+                              <StyledSelect darkMode={darkMode} value={depotForm.modePaiement} onChange={v => setDepotForm(p => ({ ...p, modePaiement: v as any }))}
+                                options={[
+                                  { value: "virement", label: "Virement bancaire" },
+                                  { value: "chèque", label: "Chèque" },
+                                  { value: "espèce", label: "Espèce" },
+                                  { value: "carte", label: "Carte de crédit/débit" },
+                                  { value: "autre", label: "Autre" },
+                                ]} /></div>
                           </div>
 
                           <div className="flex gap-3 pt-2">
@@ -1118,18 +1114,17 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Date</label>
                               <input type="date" value={retraitForm.date} onChange={e => setRetraitForm(p => ({ ...p, date: e.target.value }))} className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Propriétaire-client *</label>
-                              <select value={retraitForm.clientId} onChange={e => setRetraitForm(p => ({ ...p, clientId: e.target.value }))} className={inputCls}>
-                                <option value="">— Sélectionner —</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                              </select></div>
+                              <StyledSelect darkMode={darkMode} value={retraitForm.clientId} onChange={v => setRetraitForm(p => ({ ...p, clientId: v }))}
+                                options={[{ value: "", label: "— Sélectionner —" }, ...clients.map(c => ({ value: c.id, label: c.nom }))]} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Bénéficiaire *</label>
                               <input type="text" value={retraitForm.beneficiaire} onChange={e => setRetraitForm(p => ({ ...p, beneficiaire: e.target.value }))} placeholder="Nom du bénéficiaire" className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Type de retrait</label>
-                              <select value={retraitForm.type} onChange={e => setRetraitForm(p => ({ ...p, type: e.target.value as any }))} className={inputCls}>
-                                <option value="dépense">Dépense payée au nom du client</option>
-                                <option value="honoraires">Honoraires de gestion</option>
-                                <option value="remise_nette">Remise nette au propriétaire</option>
-                              </select></div>
+                              <StyledSelect darkMode={darkMode} value={retraitForm.type} onChange={v => setRetraitForm(p => ({ ...p, type: v as any }))}
+                                options={[
+                                  { value: "dépense", label: "Dépense payée au nom du client" },
+                                  { value: "honoraires", label: "Honoraires de gestion" },
+                                  { value: "remise_nette", label: "Remise nette au propriétaire" },
+                                ]} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Description</label>
                               <input type="text" value={retraitForm.description} onChange={e => setRetraitForm(p => ({ ...p, description: e.target.value }))} placeholder="Ex: Plomberie, Honoraires juillet..." className={inputCls} /></div>
                             <div><label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Adresse propriété</label>
@@ -1268,10 +1263,8 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     </p>
                     <div>
                       <label className={`block text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Propriétaire-client</label>
-                      <select value={releveClientId} onChange={e => { setReleveClientId(e.target.value); const c = clients.find(cl => cl.id === e.target.value); setReleveEmail(c?.email || ""); }} className={inputCls}>
-                        <option value="">— Sélectionner un client —</option>
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                      </select>
+                      <StyledSelect darkMode={darkMode} value={releveClientId} onChange={v => { setReleveClientId(v); const c = clients.find(cl => cl.id === v); setReleveEmail(c?.email || ""); }}
+                        options={[{ value: "", label: "— Sélectionner un client —" }, ...clients.map(c => ({ value: c.id, label: c.nom }))]} />
                     </div>
                     {releveClientId && (
                       <>

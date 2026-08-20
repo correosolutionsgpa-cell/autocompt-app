@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import StyledSelect from './ui/StyledSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar, DollarSign, Receipt, BarChart2, Plus, Trash2,
@@ -1160,14 +1161,10 @@ export default function MeubleFinancialModule({
     <div className="space-y-5">
       {/* Period selector */}
       <div className={`${card} p-4 flex items-center gap-4 flex-wrap`}>
-        <select value={reportMonth} onChange={e => setReportMonth(+e.target.value)}
-          className={`px-3 py-2 rounded-xl border text-[11px] font-bold outline-none ${D?'bg-zinc-800 border-zinc-700 text-zinc-200':'bg-white border-slate-200'}`}>
-          {MONTHS_FR.map((m,i) => <option key={i} value={i}>{m}</option>)}
-        </select>
-        <select value={reportYear} onChange={e => setReportYear(+e.target.value)}
-          className={`px-3 py-2 rounded-xl border text-[11px] font-bold outline-none ${D?'bg-zinc-800 border-zinc-700 text-zinc-200':'bg-white border-slate-200'}`}>
-          {[reportYear-1, reportYear, reportYear+1].map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+        <StyledSelect darkMode={D} value={String(reportMonth)} onChange={v => setReportMonth(+v)}
+          options={MONTHS_FR.map((m, i) => ({ value: String(i), label: m }))} />
+        <StyledSelect darkMode={D} value={String(reportYear)} onChange={v => setReportYear(+v)}
+          options={[reportYear - 1, reportYear, reportYear + 1].map(y => ({ value: String(y), label: String(y) }))} />
         <button onClick={exportRapportPDF}
           className="ml-auto flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95">
           <Download size={13}/><span>Exporter PDF</span>
@@ -1356,12 +1353,8 @@ export default function MeubleFinancialModule({
                 {isGestionnaire && fideicommisClients.length > 0 && (
                   <div>
                     <label className={label}>Propriétaire du logement</label>
-                    <select className={input} value={newRes.fideicommisClientId || ''} onChange={e => setNewRes(r => ({ ...r, fideicommisClientId: e.target.value || undefined }))}>
-                      <option value="">Moi-même (compte courant)</option>
-                      {fideicommisClients.map(c => (
-                        <option key={c.id} value={c.id}>{c.nom} — honoraires {c.tauxHonoraires}%</option>
-                      ))}
-                    </select>
+                    <StyledSelect darkMode={D} value={newRes.fideicommisClientId || ''} onChange={v => setNewRes(r => ({ ...r, fideicommisClientId: v || undefined }))}
+                      options={[{ value: '', label: 'Moi-même (compte courant)' }, ...fideicommisClients.map(c => ({ value: c.id, label: `${c.nom} — honoraires ${c.tauxHonoraires}%` }))]} />
                     {newRes.fideicommisClientId && (
                       <p className={`text-[9px] mt-1 ${D ? 'text-indigo-400' : 'text-indigo-600'}`}>
                         <Building2 size={10} className="inline mr-1" />
@@ -1374,24 +1367,16 @@ export default function MeubleFinancialModule({
                 {buildings.length > 0 && (
                   <div>
                     <label className={label}>Immeuble (optionnel)</label>
-                    <select className={input} value={selectedBuildingId}
-                      onChange={e => { setSelectedBuildingId(e.target.value); setSelectedUnitId(''); }}>
-                      <option value="">— Aucun immeuble lié —</option>
-                      {buildings.map(b => (
-                        <option key={b.id} value={b.id}>{b.adresse}</option>
-                      ))}
-                    </select>
+                    <StyledSelect darkMode={D} value={selectedBuildingId}
+                      onChange={v => { setSelectedBuildingId(v); setSelectedUnitId(''); }}
+                      options={[{ value: '', label: '— Aucun immeuble lié —' }, ...buildings.map(b => ({ value: b.id, label: b.adresse }))]} />
                   </div>
                 )}
                 {selectedBuildingId && availableUnits.length > 0 && (
                   <div>
                     <label className={label}>Unité / Porte</label>
-                    <select className={input} value={selectedUnitId} onChange={e => setSelectedUnitId(e.target.value)}>
-                      <option value="">— Toutes les unités —</option>
-                      {availableUnits.map(u => (
-                        <option key={u.id} value={u.id}>{u.unitName}{u.tenantName ? ` · ${u.tenantName}` : ''}</option>
-                      ))}
-                    </select>
+                    <StyledSelect darkMode={D} value={selectedUnitId} onChange={setSelectedUnitId}
+                      options={[{ value: '', label: '— Toutes les unités —' }, ...availableUnits.map(u => ({ value: u.id, label: `${u.unitName}${u.tenantName ? ` · ${u.tenantName}` : ''}` }))]} />
                     {selectedUnitId && (
                       <p className={`text-[9px] mt-1 text-emerald-600`}>🚪 Cette réservation sera enregistrée dans le livre de l'immeuble sélectionné.</p>
                     )}
@@ -1414,12 +1399,11 @@ export default function MeubleFinancialModule({
                   <div><label className={label}>Tarif / nuit ($)</label>
                     <input type="number" className={input} value={newRes.nightlyRate||''} onChange={e => setNewRes(r=>({...r, nightlyRate: +e.target.value}))} /></div>
                   <div><label className={label}>Plateforme</label>
-                    <select className={input} value={newRes.platform||'airbnb'} onChange={e => {
-                      const plat = e.target.value as Platform;
-                      setNewRes(r=>({...r, platform: plat, platformFeePercent: PLATFORMS[plat].feePercent}));
-                    }}>
-                      {(Object.entries(PLATFORMS) as [Platform, any][]).map(([k,v]) => <option key={k} value={k}>{v.logo} {v.label}</option>)}
-                    </select>
+                    <StyledSelect darkMode={D} value={newRes.platform || 'airbnb'} onChange={v => {
+                      const plat = v as Platform;
+                      setNewRes(r => ({ ...r, platform: plat, platformFeePercent: PLATFORMS[plat].feePercent }));
+                    }}
+                      options={(Object.entries(PLATFORMS) as [Platform, any][]).map(([k, v]) => ({ value: k, label: `${v.logo} ${v.label}` }))} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1465,9 +1449,8 @@ export default function MeubleFinancialModule({
               )}
               <div className="space-y-3">
                 <div><label className={label}>Catégorie</label>
-                  <select className={input} value={newExp.category||'menage'} onChange={e => setNewExp(x=>({...x, category: e.target.value as ExpenseCategory, description: EXPENSE_CATS[e.target.value as ExpenseCategory].label}))}>
-                    {(Object.entries(EXPENSE_CATS) as [ExpenseCategory, any][]).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select></div>
+                  <StyledSelect darkMode={D} value={newExp.category || 'menage'} onChange={v => setNewExp(x => ({ ...x, category: v as ExpenseCategory, description: EXPENSE_CATS[v as ExpenseCategory].label }))}
+                    options={(Object.entries(EXPENSE_CATS) as [ExpenseCategory, any][]).map(([k, v]) => ({ value: k, label: v.label }))} /></div>
                 <div><label className={label}>Description</label>
                   <input className={input} value={newExp.description||''} onChange={e => setNewExp(x=>({...x, description: e.target.value}))} /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1507,16 +1490,13 @@ export default function MeubleFinancialModule({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className={label}>Plateforme</label>
-                      <select className={input} value={csvPlatform} onChange={e => setCsvPlatform(e.target.value as Platform)}>
-                        {(Object.entries(PLATFORMS) as [Platform, any][]).filter(([k]) => k !== 'direct').map(([k,v]) => <option key={k} value={k}>{v.logo} {v.label}</option>)}
-                      </select>
+                      <StyledSelect darkMode={D} value={csvPlatform} onChange={v => setCsvPlatform(v as Platform)}
+                        options={(Object.entries(PLATFORMS) as [Platform, any][]).filter(([k]) => k !== 'direct').map(([k, v]) => ({ value: k, label: `${v.logo} ${v.label}` }))} />
                     </div>
                     {isGestionnaire && (
                       <div><label className={label}>Propriétaire du logement</label>
-                        <select className={input} value={csvClientId} onChange={e => setCsvClientId(e.target.value)}>
-                          <option value="">Moi-même (compte courant)</option>
-                          {fideicommisClients.map(c => <option key={c.id} value={c.id}>{c.nom} — honoraires {c.tauxHonoraires}%</option>)}
-                        </select>
+                        <StyledSelect darkMode={D} value={csvClientId} onChange={setCsvClientId}
+                          options={[{ value: '', label: 'Moi-même (compte courant)' }, ...fideicommisClients.map(c => ({ value: c.id, label: `${c.nom} — honoraires ${c.tauxHonoraires}%` }))]} />
                       </div>
                     )}
                   </div>
@@ -1524,19 +1504,15 @@ export default function MeubleFinancialModule({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={label}>Immeuble (optionnel)</label>
-                        <select className={input} value={csvBuildingId}
-                          onChange={e => { setCsvBuildingId(e.target.value); setCsvUnitId(''); }}>
-                          <option value="">— Aucun immeuble —</option>
-                          {buildings.map(b => <option key={b.id} value={b.id}>{b.adresse}</option>)}
-                        </select>
+                        <StyledSelect darkMode={D} value={csvBuildingId}
+                          onChange={v => { setCsvBuildingId(v); setCsvUnitId(''); }}
+                          options={[{ value: '', label: '— Aucun immeuble —' }, ...buildings.map(b => ({ value: b.id, label: b.adresse }))]} />
                       </div>
                       {csvBuildingId && csvAvailableUnits.length > 0 && (
                         <div>
                           <label className={label}>Unité / Porte</label>
-                          <select className={input} value={csvUnitId} onChange={e => setCsvUnitId(e.target.value)}>
-                            <option value="">— Toutes —</option>
-                            {csvAvailableUnits.map(u => <option key={u.id} value={u.id}>{u.unitName}</option>)}
-                          </select>
+                          <StyledSelect darkMode={D} value={csvUnitId} onChange={setCsvUnitId}
+                            options={[{ value: '', label: '— Toutes —' }, ...csvAvailableUnits.map(u => ({ value: u.id, label: u.unitName }))]} />
                         </div>
                       )}
                     </div>
@@ -1554,25 +1530,17 @@ export default function MeubleFinancialModule({
                     <h3 className={`text-[9px] font-black uppercase tracking-widest mb-3 ${D?'text-zinc-400':'text-slate-400'}`}>Correspondance des colonnes — vérifiez avant d'importer</h3>
                     <div className="grid grid-cols-2 gap-3">
                       <div><label className={label}>Nom du voyageur</label>
-                        <select className={input} value={csvMap.guest ?? ''} onChange={e => setCsvMap(m => ({...m, guest: e.target.value === '' ? null : +e.target.value}))}>
-                          <option value="">— Aucune —</option>
-                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
-                        </select></div>
+                        <StyledSelect darkMode={D} value={String(csvMap.guest ?? '')} onChange={v => setCsvMap(m => ({ ...m, guest: v === '' ? null : +v }))}
+                          options={[{ value: '', label: '— Aucune —' }, ...csvHeaders.map((h, i) => ({ value: String(i), label: h }))]} /></div>
                       <div><label className={label}>Montant</label>
-                        <select className={input} value={csvMap.amount ?? ''} onChange={e => setCsvMap(m => ({...m, amount: e.target.value === '' ? null : +e.target.value}))}>
-                          <option value="">— Aucune —</option>
-                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
-                        </select></div>
+                        <StyledSelect darkMode={D} value={String(csvMap.amount ?? '')} onChange={v => setCsvMap(m => ({ ...m, amount: v === '' ? null : +v }))}
+                          options={[{ value: '', label: '— Aucune —' }, ...csvHeaders.map((h, i) => ({ value: String(i), label: h }))]} /></div>
                       <div><label className={label}>Date d'arrivée</label>
-                        <select className={input} value={csvMap.checkIn ?? ''} onChange={e => setCsvMap(m => ({...m, checkIn: e.target.value === '' ? null : +e.target.value}))}>
-                          <option value="">— Aucune —</option>
-                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
-                        </select></div>
+                        <StyledSelect darkMode={D} value={String(csvMap.checkIn ?? '')} onChange={v => setCsvMap(m => ({ ...m, checkIn: v === '' ? null : +v }))}
+                          options={[{ value: '', label: '— Aucune —' }, ...csvHeaders.map((h, i) => ({ value: String(i), label: h }))]} /></div>
                       <div><label className={label}>Date de départ</label>
-                        <select className={input} value={csvMap.checkOut ?? ''} onChange={e => setCsvMap(m => ({...m, checkOut: e.target.value === '' ? null : +e.target.value}))}>
-                          <option value="">— Aucune —</option>
-                          {csvHeaders.map((h,i) => <option key={i} value={i}>{h}</option>)}
-                        </select></div>
+                        <StyledSelect darkMode={D} value={String(csvMap.checkOut ?? '')} onChange={v => setCsvMap(m => ({ ...m, checkOut: v === '' ? null : +v }))}
+                          options={[{ value: '', label: '— Aucune —' }, ...csvHeaders.map((h, i) => ({ value: String(i), label: h }))]} /></div>
                     </div>
                     <label className="flex items-center gap-2 mt-3 cursor-pointer">
                       <input type="checkbox" checked={csvMap.amountIsTotal} onChange={e => setCsvMap(m => ({...m, amountIsTotal: e.target.checked}))} />
