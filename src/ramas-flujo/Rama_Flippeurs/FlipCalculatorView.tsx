@@ -728,12 +728,15 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         </button>
       </header>
 
-      {/* ── Offre Rapide — modal éphémère, rien n'est sauvegardé ────────────── */}
+      {/* ── Offre Rapide — modal éphémère (rien n'est sauvegardé) tant qu'on
+          n'appuie pas sur "Créer le projet avec ces valeurs" ─────────────── */}
       {showQuickOffer && (() => {
         const prixVenteNum = parseFloat(quickOfferForm.prixVente) || 0;
         const pctNum = parseFloat(quickOfferForm.pctReduction) || 0;
         const reparationsNum = parseFloat(quickOfferForm.reparations) || 0;
-        const offreMax = prixVenteNum * (1 - pctNum / 100) - reparationsNum;
+        const fraisApprox = prixVenteNum * (pctNum / 100);
+        const apresFrais = prixVenteNum - fraisApprox;
+        const offreMax = apresFrais - reparationsNum;
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
             <div className={`w-full max-w-sm rounded-[28px] shadow-2xl p-6 space-y-4 ${darkMode ? "bg-zinc-950 border border-zinc-800" : "bg-white"}`}>
@@ -746,23 +749,43 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prix de vente estimé ($)</label>
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prix de vente (marché) ($)</label>
                 <input type="number" inputMode="decimal" autoFocus value={quickOfferForm.prixVente} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, prixVente: e.target.value })} placeholder="0.00" className={inputCls} />
               </div>
               <div className="space-y-1">
                 <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">% de réduction éclair <span className="normal-case font-medium">— tous frais et profit confondus</span></label>
                 <input type="number" inputMode="decimal" value={quickOfferForm.pctReduction} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, pctReduction: e.target.value })} className={inputCls} />
               </div>
+
+              {/* Étape intermédiaire visible — prix de vente moins les frais approximatifs */}
+              <div className={`p-3 rounded-2xl flex items-center justify-between text-[10px] font-bold ${darkMode ? "bg-zinc-900/60 text-zinc-300" : "bg-slate-50 text-slate-600"}`}>
+                <span>Prix de vente − {pctNum || 0}% ({fmtCAD(fraisApprox)} de frais approx.)</span>
+                <span className={darkMode ? "text-white" : "text-slate-900"}>{fmtCAD(Math.max(0, apresFrais))}</span>
+              </div>
+
               <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Réparations potentielles à faire ($)</label>
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Rénovation approximative ($)</label>
                 <input type="number" inputMode="decimal" value={quickOfferForm.reparations} onChange={(e) => setQuickOfferForm({ ...quickOfferForm, reparations: e.target.value })} placeholder="0.00" className={inputCls} />
               </div>
 
               <div className={`p-4 rounded-2xl text-center ${darkMode ? "bg-amber-500/10 border border-amber-500/20" : "bg-amber-50 border border-amber-100"}`}>
-                <p className="text-[8px] font-black uppercase tracking-widest text-amber-600">Offre maximale suggérée</p>
+                <p className="text-[8px] font-black uppercase tracking-widest text-amber-600">Prix d'achat maximum</p>
                 <p className={`text-2xl font-black mt-1 ${darkMode ? "text-white" : "text-slate-900"}`}>{fmtCAD(Math.max(0, offreMax))}</p>
               </div>
-              <p className="text-[8px] text-slate-400 text-center leading-relaxed">Estimation rapide — pas un projet sauvegardé. Créez un "Nouveau projet" pour un suivi détaillé.</p>
+
+              <button
+                disabled={!prixVenteNum}
+                onClick={() => {
+                  setForm({ ...emptyForm, prixAchat: String(Math.max(0, offreMax).toFixed(2)), prixReventeEstime: quickOfferForm.prixVente });
+                  setShowQuickOffer(false);
+                  setEditingId(null);
+                  setShowForm(true);
+                }}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-2xl text-[9px] font-black uppercase tracking-wider"
+              >
+                Créer le projet avec ces valeurs
+              </button>
+              <p className="text-[8px] text-slate-400 text-center leading-relaxed">Rien n'est sauvegardé tant que le projet n'est pas créé.</p>
             </div>
           </div>
         );
