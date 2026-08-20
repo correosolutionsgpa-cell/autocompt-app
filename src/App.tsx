@@ -100,6 +100,7 @@ import {
   HardDrive,
 } from "lucide-react";
 
+import StyledSelect from "./components/ui/StyledSelect";
 import TaxesAssurancesView from "./components/TaxesAssurancesView";
 import DossierFiscauxView, { FileItem } from "./components/DossierFiscauxView";
 import CategoryFiscalRulesModal from "./components/CategoryFiscalRulesModal";
@@ -15477,29 +15478,16 @@ const App = () => {
                               <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
                                 Dossier de Classement
                               </label>
-                              {/* Custom-styled select — appearance-none removes native browser chrome */}
-                              <div className="relative">
-                                <select
-                                  value={docFormFolder}
-                                  onChange={(e) => {
-                                    const nextFld = e.target.value;
-                                    setDocFormFolder(nextFld);
-                                    setDocFormContent(loadDefaultTemplate(nextFld));
-                                  }}
-                                  disabled={selectedDocuEntry?.status === "Signé"}
-                                  className={`w-full p-3.5 pr-10 rounded-2xl outline-none text-[11px] font-bold transition-all border appearance-none ${selectedDocuEntry?.status === 'Signé' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-[#7c3aed]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#7c3aed]'}`}
-                                >
-                                  {folders.map((f) => (
-                                    <option key={f} value={f}>{f}</option>
-                                  ))}
-                                </select>
-                                {/* Custom dropdown arrow */}
-                                <div className={`pointer-events-none absolute inset-y-0 right-3 flex items-center ${darkMode ? 'text-zinc-400' : 'text-[#7c3aed]'}`}>
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </div>
-                              </div>
+                              <StyledSelect
+                                darkMode={darkMode}
+                                value={docFormFolder}
+                                onChange={(v) => {
+                                  setDocFormFolder(v);
+                                  setDocFormContent(loadDefaultTemplate(v));
+                                }}
+                                disabled={selectedDocuEntry?.status === "Signé"}
+                                options={folders.map((f) => ({ value: f, label: f }))}
+                              />
                             </div>
                             <div>
                               <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
@@ -17970,17 +17958,18 @@ const App = () => {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1 text-left col-span-2">
                               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Type de financement</label>
-                              <select
+                              <StyledSelect
+                                darkMode={darkMode}
                                 value={financingScanForm.typeFinancement}
-                                onChange={(e) => setFinancingScanForm({ ...financingScanForm, typeFinancement: e.target.value })}
-                                className={`w-full p-3 rounded-2xl text-[11px] font-bold border outline-none ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
-                              >
-                                <option value="">— Sélectionner —</option>
-                                <option value="Hypothèque">Hypothèque</option>
-                                <option value="Marge de crédit">Marge de crédit</option>
-                                <option value="Prêt de second rang">Prêt de second rang</option>
-                                <option value="Autre">Autre</option>
-                              </select>
+                                onChange={(v) => setFinancingScanForm({ ...financingScanForm, typeFinancement: v })}
+                                options={[
+                                  { value: "", label: "— Sélectionner —" },
+                                  { value: "Hypothèque", label: "Hypothèque" },
+                                  { value: "Marge de crédit", label: "Marge de crédit" },
+                                  { value: "Prêt de second rang", label: "Prêt de second rang" },
+                                  { value: "Autre", label: "Autre" },
+                                ]}
+                              />
                             </div>
                             <div className="space-y-1 text-left col-span-2">
                               <label className={`text-[9px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Prêteur</label>
@@ -18874,31 +18863,31 @@ const App = () => {
                         </div>
                         <div className="space-y-1 text-left">
                           <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Catégorie</label>
-                          <select
+                          <StyledSelect
+                            darkMode={darkMode}
                             value={editingExpense.cat || ""}
-                            onChange={e => setEditingExpense({ ...editingExpense, cat: e.target.value })}
-                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="Réparations et entretien">Réparations et entretien</option>
-                            <option value="Assurances">Assurances</option>
-                            <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
-                            <option value="Intérêts de financement">Intérêts de financement (Hypothèque/Marge/Prêt)</option>
-                            <option value="Capital remboursé (non déductible)">Capital remboursé (non déductible)</option>
-                            <option value="Électricité / Chauffage">Électricité / Chauffage</option>
-                            <option value="Taxes foncières et scolaires">Taxes foncières et scolaires</option>
-                            <option value="Honoraires professionnels">Honoraires professionnels</option>
-                            <option value="Frais de gestion / Marketing">Frais de gestion / Marketing</option>
-                            <option value="Fournitures de bureau">Fournitures de bureau</option>
-                            <optgroup label="🚗 Vehicule (Pro-rata TP-80)">
-                              <option value="Essence / Carburant">Essence / Carburant</option>
-                              <option value="Entretien Vehicule">Entretien Vehicule</option>
-                              <option value="Assurance auto">Assurance auto</option>
-                              <option value="Deplacements / Automobile">Deplacements / Automobile</option>
-                              <option value="Immatriculation / Permis">Immatriculation / Permis</option>
-                            </optgroup>
-                            <option value="Autre">Autre</option>
-                          </select>
+                            onChange={v => setEditingExpense({ ...editingExpense, cat: v })}
+                            placeholder="Sélectionner..."
+                            options={[
+                              { value: "", label: "Sélectionner..." },
+                              { value: "Réparations et entretien", label: "Réparations et entretien" },
+                              { value: "Assurances", label: "Assurances" },
+                              { value: "Intérêts hypothécaires", label: "Intérêts hypothécaires" },
+                              { value: "Intérêts de financement", label: "Intérêts de financement (Hypothèque/Marge/Prêt)" },
+                              { value: "Capital remboursé (non déductible)", label: "Capital remboursé (non déductible)" },
+                              { value: "Électricité / Chauffage", label: "Électricité / Chauffage" },
+                              { value: "Taxes foncières et scolaires", label: "Taxes foncières et scolaires" },
+                              { value: "Honoraires professionnels", label: "Honoraires professionnels" },
+                              { value: "Frais de gestion / Marketing", label: "Frais de gestion / Marketing" },
+                              { value: "Fournitures de bureau", label: "Fournitures de bureau" },
+                              { value: "Essence / Carburant", label: "Essence / Carburant", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Entretien Vehicule", label: "Entretien Vehicule", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Assurance auto", label: "Assurance auto", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Deplacements / Automobile", label: "Deplacements / Automobile", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Immatriculation / Permis", label: "Immatriculation / Permis", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Autre", label: "Autre" },
+                            ]}
+                          />
                           <button
                             type="button"
                             onClick={() => askSofiAbout(
@@ -18926,16 +18915,15 @@ const App = () => {
                               <span className="text-amber-500 normal-case italic">⚡ suggéré par S.O.F.I. — vérifiez</span>
                             )}
                           </label>
-                          <select
+                          <StyledSelect
+                            darkMode={darkMode}
                             value={editingExpense.buildingId || ""}
-                            onChange={e => setEditingExpense({ ...editingExpense, buildingId: e.target.value || undefined, aiSuggestedBuilding: false })}
-                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                          >
-                            <option value="">— Aucun immeuble lié —</option>
-                            {visiblePlexManagementProperties.map((p: any) => (
-                              <option key={p.buildingId || p.id} value={p.buildingId || p.id}>{p.adresse}</option>
-                            ))}
-                          </select>
+                            onChange={v => setEditingExpense({ ...editingExpense, buildingId: v || undefined, aiSuggestedBuilding: false })}
+                            options={[
+                              { value: "", label: "— Aucun immeuble lié —" },
+                              ...visiblePlexManagementProperties.map((p: any) => ({ value: p.buildingId || p.id, label: p.adresse })),
+                            ]}
+                          />
                         </div>
                       )}
 
@@ -18946,21 +18934,20 @@ const App = () => {
                         <label className={`text-[8.5px] font-black uppercase italic tracking-widest pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                           Source d'activité
                         </label>
-                        <select
+                        <StyledSelect
+                          darkMode={darkMode}
                           value={editingExpense.sourceRevenu || "Gestion immobilière"}
-                          onChange={e => setEditingExpense({ ...editingExpense, sourceRevenu: e.target.value })}
-                          className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                        >
-                          <option value="Gestion immobilière">Gestion immobilière</option>
-                          {isSolutionsGPA && (
-                            <>
-                              <option value="Dividendes / Investissements">Dividendes / Investissements</option>
-                              <option value="Revenus AutoCompt (plateforme)">Revenus AutoCompt (plateforme)</option>
-                              <option value="Intérêts de prêts privés">Intérêts de prêts privés</option>
-                            </>
-                          )}
-                          <option value="Autre">Autre</option>
-                        </select>
+                          onChange={v => setEditingExpense({ ...editingExpense, sourceRevenu: v })}
+                          options={[
+                            { value: "Gestion immobilière", label: "Gestion immobilière" },
+                            ...(isSolutionsGPA ? [
+                              { value: "Dividendes / Investissements", label: "Dividendes / Investissements" },
+                              { value: "Revenus AutoCompt (plateforme)", label: "Revenus AutoCompt (plateforme)" },
+                              { value: "Intérêts de prêts privés", label: "Intérêts de prêts privés" },
+                            ] : []),
+                            { value: "Autre", label: "Autre" },
+                          ]}
+                        />
                       </div>
 
                       {/* ── Nature de la dépense — courante (déductible cette
@@ -19429,34 +19416,34 @@ const App = () => {
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 gap-2 mt-2">
-                          <select
+                          <StyledSelect
+                            darkMode={darkMode}
                             value={newTxData.cat || ""}
-                            onChange={(e) => {
-                              setNewTxData({ ...newTxData, cat: e.target.value });
+                            onChange={(v) => {
+                              setNewTxData({ ...newTxData, cat: v });
                               playNotificationSound();
                             }}
-                            className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="Réparations et entretien">Réparations et entretien</option>
-                            <option value="Assurances">Assurances</option>
-                            <option value="Intérêts hypothécaires">Intérêts hypothécaires</option>
-                            <option value="Intérêts de financement">Intérêts de financement (Hypothèque/Marge/Prêt)</option>
-                            <option value="Capital remboursé (non déductible)">Capital remboursé (non déductible)</option>
-                            <option value="Électricité / Chauffage">Électricité / Chauffage</option>
-                            <option value="Taxes foncières et scolaires">Taxes foncières et scolaires</option>
-                            <option value="Honoraires professionnels">Honoraires professionnels</option>
-                            <option value="Frais de gestion / Marketing">Frais de gestion / Marketing</option>
-                            <option value="Fournitures de bureau">Fournitures de bureau</option>
-                            <optgroup label="🚗 Vehicule (Pro-rata TP-80)">
-                              <option value="Essence / Carburant">Essence / Carburant</option>
-                              <option value="Entretien Vehicule">Entretien Vehicule</option>
-                              <option value="Assurance auto">Assurance auto</option>
-                              <option value="Deplacements / Automobile">Deplacements / Automobile</option>
-                              <option value="Immatriculation / Permis">Immatriculation / Permis</option>
-                            </optgroup>
-                            <option value="Autre">Autre</option>
-                          </select>
+                            placeholder="Sélectionner..."
+                            options={[
+                              { value: "", label: "Sélectionner..." },
+                              { value: "Réparations et entretien", label: "Réparations et entretien" },
+                              { value: "Assurances", label: "Assurances" },
+                              { value: "Intérêts hypothécaires", label: "Intérêts hypothécaires" },
+                              { value: "Intérêts de financement", label: "Intérêts de financement (Hypothèque/Marge/Prêt)" },
+                              { value: "Capital remboursé (non déductible)", label: "Capital remboursé (non déductible)" },
+                              { value: "Électricité / Chauffage", label: "Électricité / Chauffage" },
+                              { value: "Taxes foncières et scolaires", label: "Taxes foncières et scolaires" },
+                              { value: "Honoraires professionnels", label: "Honoraires professionnels" },
+                              { value: "Frais de gestion / Marketing", label: "Frais de gestion / Marketing" },
+                              { value: "Fournitures de bureau", label: "Fournitures de bureau" },
+                              { value: "Essence / Carburant", label: "Essence / Carburant", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Entretien Vehicule", label: "Entretien Vehicule", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Assurance auto", label: "Assurance auto", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Deplacements / Automobile", label: "Deplacements / Automobile", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Immatriculation / Permis", label: "Immatriculation / Permis", group: "🚗 Vehicule (Pro-rata TP-80)" },
+                              { value: "Autre", label: "Autre" },
+                            ]}
+                          />
                         </div>
                       )}
                     </div>
@@ -19478,26 +19465,23 @@ const App = () => {
                             Unité locative liée
                           </label>
                           {allUnits.length > 0 ? (
-                            <select
+                            <StyledSelect
+                              darkMode={darkMode}
                               value={newTxData.unitId || ""}
-                              onChange={(e) => {
-                                const unit = allUnits.find(u => u.id === e.target.value);
+                              onChange={(v) => {
+                                const unit = allUnits.find(u => u.id === v);
                                 setNewTxData({
                                   ...newTxData,
-                                  unitId: e.target.value,
+                                  unitId: v,
                                   buildingId: unit?.buildingId ?? "",
                                   tiers: newTxData.tiers || unit?.tenantName || "",
                                 });
                               }}
-                              className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                            >
-                              <option value="">-- Sélectionner une unité --</option>
-                              {allUnits.map(u => (
-                                <option key={u.id} value={u.id}>
-                                  {u.unitName}{u.tenantName ? ` \u2014 ${u.tenantName}` : ""} ({u.isActive ? "Actif" : "Vacant"})
-                                </option>
-                              ))}
-                            </select>
+                              options={[
+                                { value: "", label: "-- Sélectionner une unité --" },
+                                ...allUnits.map(u => ({ value: u.id, label: `${u.unitName}${u.tenantName ? ` — ${u.tenantName}` : ""} (${u.isActive ? "Actif" : "Vacant"})` })),
+                              ]}
+                            />
                           ) : (
                             <p className={`text-[10px] italic px-1 pt-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                               Aucune unité enregistrée — ajoutez-en dans « Gestion Plex ».
@@ -19514,21 +19498,20 @@ const App = () => {
                       <label className={`text-[8.5px] font-black uppercase italic tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                         Source d'activité
                       </label>
-                      <select
+                      <StyledSelect
+                        darkMode={darkMode}
                         value={newTxData.sourceRevenu || "Gestion immobilière"}
-                        onChange={(e) => setNewTxData({ ...newTxData, sourceRevenu: e.target.value })}
-                        className={`w-full p-4 rounded-[20px] text-xs font-bold border-none appearance-none outline-none ${darkMode ? "bg-zinc-900 text-zinc-100" : "bg-slate-50 text-slate-900"}`}
-                      >
-                        <option value="Gestion immobilière">Gestion immobilière</option>
-                        {isSolutionsGPA && (
-                          <>
-                            <option value="Dividendes / Investissements">Dividendes / Investissements</option>
-                            <option value="Revenus AutoCompt (plateforme)">Revenus AutoCompt (plateforme)</option>
-                            <option value="Intérêts de prêts privés">Intérêts de prêts privés</option>
-                          </>
-                        )}
-                        <option value="Autre">Autre</option>
-                      </select>
+                        onChange={(v) => setNewTxData({ ...newTxData, sourceRevenu: v })}
+                        options={[
+                          { value: "Gestion immobilière", label: "Gestion immobilière" },
+                          ...(isSolutionsGPA ? [
+                            { value: "Dividendes / Investissements", label: "Dividendes / Investissements" },
+                            { value: "Revenus AutoCompt (plateforme)", label: "Revenus AutoCompt (plateforme)" },
+                            { value: "Intérêts de prêts privés", label: "Intérêts de prêts privés" },
+                          ] : []),
+                          { value: "Autre", label: "Autre" },
+                        ]}
+                      />
                     </div>
 
                     <div className="space-y-1">
