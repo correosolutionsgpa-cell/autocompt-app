@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { dataService } from "../../lib/dataService";
-import type { ExpenseDoc, InvoiceDoc } from "../../lib/dataService";
+import type { ExpenseDoc, InvoiceDoc, PropertyDoc } from "../../lib/dataService";
 
 // ── Currency formatter — exported so consumers' extraKpis/renderDetailBody
 //    slots use the exact same formatting without redefining it. ───────────────
@@ -163,6 +163,7 @@ function ClientPortfolioShellInner<
   const [clients, setClients] = useState<TClient[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDoc[]>([]);
   const [invoices, setInvoices] = useState<InvoiceDoc[]>([]);
+  const [properties, setProperties] = useState<PropertyDoc[]>([]);
   const [extraByClientId, setExtraByClientId] = useState<Record<string, TExtra>>({});
   const [isLoading, setIsLoading] = useState(true);
 
@@ -178,14 +179,16 @@ function ClientPortfolioShellInner<
     if (!uid || !activeCompanyId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const [clientList, expenseList, invoiceList] = await Promise.all([
+      const [clientList, expenseList, invoiceList, propertyList] = await Promise.all([
         fetchClients(uid, activeCompanyId),
         dataService.fetchExpenses(uid),
         dataService.fetchInvoices(uid),
+        dataService.fetchProperties(uid),
       ]);
       setClients(clientList);
       setExpenses(expenseList.filter((e) => e.companyId === activeCompanyId));
       setInvoices(invoiceList.filter((i) => i.companyId === activeCompanyId));
+      setProperties(propertyList.filter((p) => p.companyId === activeCompanyId));
 
       if (fetchExtra) {
         const extra = await fetchExtra({ uid, activeCompanyId, clients: clientList, period: selectedPeriod });
@@ -211,9 +214,22 @@ function ClientPortfolioShellInner<
     }
   }, [clients, selectedClientId]);
 
+  // Most expenses/invoices never get a direct `clientId` tag — the actual
+  // link a user makes is attaching a receipt/invoice to a property
+  // (`buildingId`), and that property is already tagged to its client
+  // (`bookkeepingClientId`/`fideicommisClientId`, set when the property is
+  // added under a client). Without this fallback, every comptable client's
+  // portfolio showed $0 regardless of how much real bookkeeping existed —
+  // the direct `clientId` tag was a MVP field nothing ever wrote to.
+  const clientIdForBuildingId = (buildingId?: string): string | undefined => {
+    if (!buildingId) return undefined;
+    const property = properties.find((p) => p.id === buildingId || p.buildingId === buildingId);
+    return property?.bookkeepingClientId || property?.fideicommisClientId;
+  };
+
   const aggregates: ClientPortfolioAggregate<TClient, TExtra>[] = clients.map((client) => {
-    const clientExpenses = expenses.filter((e) => e.clientId === client.id);
-    const clientInvoices = invoices.filter((i) => i.clientId === client.id);
+    const clientExpenses = expenses.filter((e) => (e.clientId || clientIdForBuildingId(e.buildingId)) === client.id);
+    const clientInvoices = invoices.filter((i) => (i.clientId || clientIdForBuildingId(i.buildingId)) === client.id);
     const totalRevenue = clientInvoices.reduce((s, i) => s + (i.total || 0), 0);
     const totalExpenses = clientExpenses.reduce((s, e) => s + (e.total || 0), 0);
     return {
