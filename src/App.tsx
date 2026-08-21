@@ -11805,11 +11805,33 @@ const App = () => {
             className={`relative rounded-[28px] border p-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-emerald-500/25 ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md text-white" : "bg-white border-slate-200 text-slate-900"}`}
           >
             <div className="flex items-center space-x-3">
-              <Search size={18} className="text-slate-400 dark:text-zinc-500" />
+              {/* N'importe où dans l'app, aucun manuel/page d'aide séparé n'existait
+                  pour "comment faire X" — plutôt que d'écrire et maintenir des pages
+                  statiques par module × par profil, cette barre (jusqu'ici
+                  décorative — dashboardSearchQuery ne filtrait rien) sert
+                  maintenant de raccourci vers Sofi, déjà capable de répondre en
+                  contexte. Réutilise askSofiAbout(), déjà utilisée ailleurs pour
+                  pré-remplir le chat sans l'envoyer automatiquement — l'utilisateur
+                  garde le contrôle avant d'envoyer. Ajouté 2026-08-21 (idée de
+                  Fabiola). */}
+              <button
+                type="button"
+                onClick={() => { if (dashboardSearchQuery.trim()) { askSofiAbout(dashboardSearchQuery.trim()); setDashboardSearchQuery(""); } }}
+                title="Demander à Sofi"
+                className="shrink-0 text-slate-400 dark:text-zinc-500 hover:text-emerald-500 transition-colors"
+              >
+                <Search size={18} />
+              </button>
               <input
                 type="text"
                 value={dashboardSearchQuery}
                 onChange={(e) => setDashboardSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && dashboardSearchQuery.trim()) {
+                    askSofiAbout(dashboardSearchQuery.trim());
+                    setDashboardSearchQuery("");
+                  }
+                }}
                 placeholder="Rechercher une dépense, facture, outil (ex: GPS, taxes, peintre, bail)..."
                 className={`w-full bg-transparent border-none outline-none text-xs ${darkMode ? "text-white placeholder-zinc-650" : "text-slate-900 placeholder-slate-400"}`}
               />
