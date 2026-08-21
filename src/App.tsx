@@ -4221,6 +4221,12 @@ const App = () => {
   const [loginPassword, setLoginPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  // Bouton "afficher le mot de passe" — permet de vérifier ce qu'on a tapé
+  // avant de soumettre, plutôt que de deviner derrière des points. Trouvé
+  // 2026-08-21 (Fabiola, en testant la création de compte).
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
   const [setPasswordError, setSetPasswordError] = useState("");
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   // --- BETA TRIAL STATUS (computed once per session in onAuthStateChanged) ---
@@ -10510,26 +10516,46 @@ const App = () => {
             <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
               Nouveau mot de passe
             </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Au moins 6 caractères"
-              className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
-            />
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Au moins 6 caractères"
+                className="w-full px-4 py-3.5 pr-11 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                tabIndex={-1}
+              >
+                {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
           <div className="space-y-1 text-left">
             <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
               Confirmez le mot de passe
             </label>
-            <input
-              type="password"
-              value={newPasswordConfirm}
-              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              placeholder="Retapez le mot de passe"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSetPassword(); }}
-              className="w-full px-4 py-3.5 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
-            />
+            <div className="relative">
+              <input
+                type={showNewPasswordConfirm ? "text" : "password"}
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                placeholder="Retapez le mot de passe"
+                onKeyDown={(e) => { if (e.key === "Enter") handleSetPassword(); }}
+                className="w-full px-4 py-3.5 pr-11 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPasswordConfirm((v) => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                tabIndex={-1}
+              >
+                {showNewPasswordConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
           {setPasswordError && (
             <div className="space-y-2">
@@ -11005,19 +11031,27 @@ const App = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type="password"
+                    type={showLoginPassword ? "text" : "password"}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="Laissez vide si première connexion"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword);
                     }}
-                    className="w-full px-4 py-3.5 pl-10 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+                    className="w-full px-4 py-3.5 pl-10 pr-11 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
                   />
                   <Lock
                     size={13}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showLoginPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
                 </div>
                 <button
                   type="button"
