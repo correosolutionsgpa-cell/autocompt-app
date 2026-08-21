@@ -10206,6 +10206,21 @@ const App = () => {
                   // fix a typo'd address/NEQ without creating a duplicate
                   // company (found 2026-08-11 via Daniel's QA report).
                   const newCompanyId = editingCompanyId || ("custom-" + Date.now());
+                  // Bridges the TPS/TVQ onboarding question (SofiOnboarding,
+                  // profil gestionnaire) into the company doc that gets
+                  // created HERE — at signup time, that question runs before
+                  // any company exists yet, so its answer only ever landed in
+                  // localStorage (see App.tsx onComplete). Only applied on a
+                  // brand-new company (never overwrites an existing answer
+                  // when editing), and only for gestionnaire — the only
+                  // profile that needs this field at all (rbacConfig.ts).
+                  let onboardingTpsTvq: "oui" | "non" | "en_cours" | undefined;
+                  if (!editingCompanyId && selectedProfile === "gestionnaire") {
+                    try {
+                      const cached = JSON.parse(localStorage.getItem("autocompt_onboarding_answers") || "{}");
+                      if (cached?.tps_tvq_registered) onboardingTpsTvq = cached.tps_tvq_registered;
+                    } catch { /* ignore malformed/absent cache */ }
+                  }
                   const saved = await dataService.saveWorkspace(uid, {
                     id: newCompanyId,
                     nombre: userProfile.nom || (isCreatingSecondCompany ? "Entreprise 2" : "Nouvelle Entreprise"),
@@ -10217,6 +10232,7 @@ const App = () => {
                     hasPlex: hasPlex,
                     nombrePortes: nombrePortes,
                     gradientFromTo: "from-emerald-500 to-teal-600",
+                    ...(onboardingTpsTvq ? { tpsTvqRegistered: onboardingTpsTvq } : {}),
                   });
                   if (editingCompanyId) {
                     setListaEmpresas((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
