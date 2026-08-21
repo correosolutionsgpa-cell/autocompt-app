@@ -14230,6 +14230,15 @@ const App = () => {
       if (lower.includes("contrat") || lower.includes("gestion")) {
         return `CONTRAT DE SERVICES DE GESTION IMMOBILIÈRE\n\nMandat conféré à:\n${currentCompany?.nombre || "Solutions GPA Inc."}, ci-après le gestionnaire,\nPar:\n[Propriétaire de l'immeuble], ci-après le commettant.\n\nLe gestionnaire administre, loue et perçoit les loyers, gère l'entretien courant et coordonne les sous-traitants pour un taux d'honoraires préétabli de 5% du revenu locatif total.\n\nLiaison BYOS compatible Loi 25 active.`;
       }
+      if (lower.includes("relevé") || lower.includes("releve")) {
+        // Ce dossier ne génère JAMAIS le vrai RL-31 officiel (formulaire du
+        // gouvernement, disponible uniquement sur revenuquebec.ca) — il sert
+        // uniquement à archiver la PREUVE que le Relevé 31 déjà rempli a été
+        // envoyé au locataire. Trouvé 2026-08-21 : ce dossier tombait avant
+        // dans le modèle générique "CONTRAT MULTI-TENANT...", sans aucun
+        // rapport avec le Relevé 31.
+        return `CONFIRMATION D'ENVOI DU RELEVÉ 31 (REVENU QUÉBEC)\n\nCe document ne remplace PAS le Relevé 31 officiel — il sert uniquement de preuve d'envoi, à archiver après coup.\n\nGestionnaire/Propriétaire :\n${currentCompany?.nombre || "[Nom de l'entreprise]"}\n\nLocataire :\n[Nom du locataire]\n\nAdresse du logement concerné :\n[Adresse]\n\nAnnée d'imposition visée : [Année]\n\nLe soussigné confirme avoir transmis au locataire ci-dessus nommé une copie du Relevé 31 officiel émis par Revenu Québec (revenuquebec.ca), tel que requis pour toute location en vigueur au 31 décembre de l'année visée.\n\nDate d'envoi : ${new Date().toISOString().split("T")[0]}\nMode de transmission : [Courriel / Main propre / Poste]`;
+      }
       return `CONTRAT MULTI-TENANT CRYPTÉ AUTOCONPT BYOS\n\nDocument rédigé le: ${new Date().toISOString().split("T")[0]}\n\nLes parties soussignées confirment que le présent document fait foi des accords intervenus pour l'administration de l'immeuble et la tenue budgétaire.\n\n[Détails additionnels des livrables et conformité]`;
     };
 
@@ -15818,6 +15827,34 @@ const App = () => {
                               />
                             </div>
                           </div>
+
+                          {/* ── Aide contextuelle Relevé 31 — même style que le
+                              bloc "Comment utiliser" des modèles TAL. Ce dossier
+                              n'a jamais généré le vrai RL-31 (formulaire officiel,
+                              revenuquebec.ca uniquement) — Fabiola a demandé une
+                              explication visible du vrai processus en 4 étapes,
+                              directement là où la confusion se produisait.
+                              Ajouté 2026-08-21. ── */}
+                          {(docFormFolder.toLowerCase().includes('relevé') || docFormFolder.toLowerCase().includes('releve')) && (
+                            <div className={`px-4 py-3.5 rounded-2xl flex items-start gap-2.5 ${darkMode ? "bg-indigo-950/20 border border-indigo-800/30" : "bg-indigo-50 border border-indigo-200"}`}>
+                              <div className={`mt-0.5 shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${darkMode ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-100 text-indigo-700"}`}>i</div>
+                              <div className={`text-[8.5px] leading-relaxed space-y-1.5 ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
+                                <p>
+                                  <span className={`font-black ${darkMode ? "text-indigo-300" : "text-indigo-700"}`}>Ce document n'est pas le Relevé 31 officiel.</span>{" "}
+                                  Le vrai processus se fait en 4 étapes :
+                                </p>
+                                <p>
+                                  <span className="font-black">1.</span> Préparez les données dans <span className="font-bold">Dossiers Fiscaux → Assistant Relevé 31</span> (détecte automatiquement les unités louées pour l'année choisie).
+                                </p>
+                                <p>
+                                  <span className="font-black">2.</span> Produisez le Relevé 31 officiel sur{" "}
+                                  <a href="https://www.revenuquebec.ca" target="_blank" rel="noopener noreferrer" className={darkMode ? "text-indigo-300 underline" : "text-indigo-700 underline"}>revenuquebec.ca</a>.
+                                </p>
+                                <p><span className="font-black">3.</span> Transmettez-le au locataire concerné.</p>
+                                <p><span className="font-black">4.</span> Revenez ici pour archiver la <span className="font-bold">preuve d'envoi</span> — c'est ce que ce document (déjà pré-rempli ci-dessous) permet de faire.</p>
+                              </div>
+                            </div>
+                          )}
 
                           {/* ── Quick Fill PA V2 — Accordéon 3 sections ── */}
                           {/* Réservé au compte propriétaire (9559-0766 Québec inc. est hardcodé
