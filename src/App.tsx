@@ -10449,6 +10449,7 @@ const App = () => {
         darkMode={darkMode}
         onBack={goBack}
         onLogout={handleLogout}
+        isSuperAdmin={isSuperAdmin}
       />
     );
   }

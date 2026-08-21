@@ -15,7 +15,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft, Ticket, Loader2, LogOut, ShieldAlert,
-  CheckCircle2, Clock, Copy, Check, Mail,
+  CheckCircle2, Clock, Copy, Check, Mail, Trash2,
 } from 'lucide-react';
 import { dataService, type BetaCodeDoc } from '../lib/dataService';
 import { auth } from '../lib/firebase';
@@ -24,9 +24,13 @@ export interface BetaCodeAdminViewProps {
   darkMode: boolean;
   onBack: () => void;
   onLogout: () => void;
+  /** Delete is SuperAdmin-only (firestore.rules `allow delete`) — a delegated
+   *  tester with just canGenerateBetaCodes can generate/send codes but not
+   *  remove them, so the button only renders for the real SuperAdmin. */
+  isSuperAdmin?: boolean;
 }
 
-export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCodeAdminViewProps) {
+export default function BetaCodeAdminView({ darkMode, onBack, onLogout, isSuperAdmin }: BetaCodeAdminViewProps) {
   const D = darkMode;
   const [email, setEmail] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -37,6 +41,7 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
   const [error, setError] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [sentFeedback, setSentFeedback] = useState<string | null>(null);
+  const [deletingCode, setDeletingCode] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -83,6 +88,19 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
     } finally {
       setSendingEmail(null);
       setTimeout(() => setSentFeedback(null), 4000);
+    }
+  };
+
+  const handleDelete = async (c: BetaCodeDoc) => {
+    if (!confirm(`Supprimer le code ${c.code} (${c.email}) ? Cette action est irréversible — n'affecte pas le compte qui l'a déjà utilisé.`)) return;
+    setDeletingCode(c.code);
+    try {
+      await dataService.deleteBetaCode(c.code);
+      setCodes((prev) => prev.filter((x) => x.code !== c.code));
+    } catch (e: any) {
+      setError(e.message ?? 'Échec de la suppression du code.');
+    } finally {
+      setDeletingCode(null);
     }
   };
 
@@ -191,6 +209,18 @@ export default function BetaCodeAdminView({ darkMode, onBack, onLogout }: BetaCo
                   >
                     {sendingEmail === c.code ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />}
                   </button>
+                  {isSuperAdmin && (
+                    <button
+                      onClick={() => handleDelete(c)}
+                      disabled={deletingCode !== null}
+                      title={`Supprimer le code ${c.code}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 border ${
+                        D ? 'border-rose-900/40 text-rose-400 hover:bg-rose-950/40' : 'border-rose-200 text-rose-500 hover:bg-rose-50'
+                      }`}
+                    >
+                      {deletingCode === c.code ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

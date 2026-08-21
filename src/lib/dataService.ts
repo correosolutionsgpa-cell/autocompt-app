@@ -2908,6 +2908,14 @@ export const dataService = {
     return snap.docs.map((d) => d.data() as BetaCodeDoc);
   },
 
+  /** Removes a beta code (used or unused) — cleanup for test codes. SuperAdmin-only
+   *  per firestore.rules' `allow delete`; does NOT touch whatever account already
+   *  redeemed it, only the code record itself. */
+  async deleteBetaCode(code: string): Promise<void> {
+    assertCanWrite();
+    await deleteDoc(doc(db, 'betaCodes', code));
+  },
+
   // ── Heures & Paie (Payroll) ────────────────────────────────────────────────
 
   async fetchPaieRecords(userId: string, companyId: string): Promise<PaieRecordDoc[]> {
