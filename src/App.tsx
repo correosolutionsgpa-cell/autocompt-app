@@ -11843,17 +11843,18 @@ const App = () => {
                   Effacer
                 </button>
               ) : (
-                // Signal visuel qu'on peut taper une question ici, pas
-                // seulement un mot-clé — sans ça le raccourci vers Sofi (ajouté
-                // juste au-dessus) restait invisible tant qu'on n'avait pas
-                // déjà tapé quelque chose. Demandé par Fabiola 2026-08-21.
+                // "Demandez à Sofi" supposait que tout le monde sait déjà ce
+                // qu'est Sofi — reformulé en question directe ("besoin
+                // d'aide ?") avec une icône "?" universelle, pour quelqu'un
+                // qui ne comprend pas un module et ne sait pas où chercher.
+                // Retour de Fabiola 2026-08-21.
                 <span
                   onClick={() => askSofiAbout("")}
-                  title="Posez une question à Sofi"
+                  title="Posez votre question — Sofi vous répond"
                   className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}
                 >
-                  <Sparkles size={10} />
-                  Demandez à Sofi
+                  <HelpCircle size={11} />
+                  Besoin d'aide ?
                 </span>
               )}
             </div>
