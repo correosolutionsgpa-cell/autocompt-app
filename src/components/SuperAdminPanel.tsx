@@ -951,8 +951,12 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
           <table className="w-full">
             <thead>
               <tr className={`border-b ${D ? 'border-zinc-800 bg-zinc-950/50' : 'border-slate-100 bg-slate-50'}`}>
-                {['Utilisateur', 'Entreprises créées', 'Profil actif', 'Forfait', 'Statut', 'Essai', 'Depuis', 'Dernière connexion', 'MRR', 'Actions'].map(h => (
-                  <th key={h} className={`px-5 py-3.5 text-left text-[9px] font-black uppercase tracking-widest ${D ? 'text-zinc-500' : 'text-slate-400'}`}>{h}</th>
+                {/* Colonne "Utilisateur" fixée (sticky) — le tableau est large et
+                    défiler vers la droite pour atteindre les actions (dont le
+                    bouton supprimer) faisait perdre de vue QUI on était en train
+                    de manipuler. Signalé par Fabiola 2026-08-21. */}
+                {['Utilisateur', 'Entreprises créées', 'Profil actif', 'Forfait', 'Statut', 'Essai', 'Depuis', 'Dernière connexion', 'MRR', 'Actions'].map((h, idx) => (
+                  <th key={h} className={`px-5 py-3.5 text-left text-[9px] font-black uppercase tracking-widest ${D ? 'text-zinc-500' : 'text-slate-400'} ${idx === 0 ? `sticky left-0 z-20 ${D ? 'bg-zinc-950' : 'bg-slate-50'} border-r ${D ? 'border-zinc-800' : 'border-slate-150'}` : ''}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -965,7 +969,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
                 return (
                   <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                     className={`border-b last:border-0 ${D ? 'border-zinc-800/50 hover:bg-zinc-900/40' : 'border-slate-50 hover:bg-slate-50/80'} transition-colors`}>
-                    <td className="px-5 py-3.5">
+                    <td className={`px-5 py-3.5 sticky left-0 z-10 border-r ${D ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-100'}`}>
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
                           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
