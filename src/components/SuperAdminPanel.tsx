@@ -387,6 +387,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [newCodeEmail, setNewCodeEmail] = useState('');
   const [generatingCode, setGeneratingCode] = useState<'trial' | 'extension' | null>(null);
   const [sendingCodeEmail, setSendingCodeEmail] = useState<string | null>(null);
+  const [deletingCode, setDeletingCode] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>(SAMPLE_USERS);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1495,6 +1496,20 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
     }
   };
 
+  const handleDeleteCode = async (c: BetaCodeDoc) => {
+    if (!confirm(`Supprimer le code ${c.code} (${c.email}) ? Cette action est irréversible — n'affecte pas le compte qui l'a déjà utilisé.`)) return;
+    setDeletingCode(c.code);
+    try {
+      await dataService.deleteBetaCode(c.code);
+      setBetaCodes((prev) => prev.filter((x) => x.code !== c.code));
+      toast(`Code ${c.code} supprimé.`);
+    } catch (err: any) {
+      toast(`Échec de la suppression : ${err.message}`, 'error');
+    } finally {
+      setDeletingCode(null);
+    }
+  };
+
   const CodesTab = () => (
     <div className="space-y-6">
       <div className={card}>
@@ -1564,6 +1579,16 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                 >
                   {sendingCodeEmail === c.code ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
                   {sendingCodeEmail === c.code ? 'Envoi…' : 'Envoyer'}
+                </button>
+                <button
+                  onClick={() => handleDeleteCode(c)}
+                  disabled={deletingCode !== null}
+                  title={`Supprimer le code ${c.code}`}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 border ${
+                    D ? 'border-rose-900/40 text-rose-400 hover:bg-rose-950/40' : 'border-rose-200 text-rose-500 hover:bg-rose-50'
+                  }`}
+                >
+                  {deletingCode === c.code ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 </button>
               </div>
             ))}
