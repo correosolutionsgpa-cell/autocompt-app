@@ -3,7 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import jsPDF from "jspdf";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
+import { getAdminAuth, getAdminDb, verifyRequestAuth } from "./src/lib/firebaseAdmin.js";
+import { isSuperAdminEmail } from "./src/lib/superAdmin.js";
 import {
   companyDocId,
   driveCredDocId,
@@ -2154,6 +2155,59 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     } catch (err: any) {
       console.error("[verify-superadmin-pin] error:", err);
       return res.status(500).json({ valid: false });
+    }
+  });
+
+  // SuperAdmin-only cleanup for a test account: removes the Firebase Auth
+  // credential, the users/{uid} profile doc, and every company that account
+  // owns. Fabiola asked for this after doing all three by hand (via one-off
+  // Admin SDK scripts) several times while beta-testing — she needs a real
+  // button so test profiles don't pile up. Never touches companies where
+  // this uid is only a collaborator (someone else's real data) — ownership
+  // only. Irreversible; the client must confirm before calling this.
+  app.post("/api/superadmin-delete-user", async (req, res) => {
+    try {
+      const caller = await verifyRequestAuth(req.headers.authorization);
+      if (!caller || !isSuperAdminEmail(caller.email)) {
+        return res.status(403).json({ success: false, error: "Accès refusé" });
+      }
+      const { uid } = req.body;
+      if (!uid || typeof uid !== "string") {
+        return res.status(400).json({ success: false, error: "uid requis" });
+      }
+      if (uid === caller.uid) {
+        return res.status(400).json({ success: false, error: "Impossible de supprimer votre propre compte." });
+      }
+
+      const db = getAdminDb();
+      const companiesSnap = await db.collection("companies").where("ownerId", "==", uid).get();
+      const deletedCompanies: string[] = [];
+      for (const doc of companiesSnap.docs) {
+        deletedCompanies.push(doc.data()?.nombre || doc.id);
+        await doc.ref.delete();
+      }
+
+      await db.collection("users").doc(uid).delete();
+
+      try {
+        await getAdminAuth().deleteUser(uid);
+      } catch (authErr: any) {
+        // Firestore side is already cleaned up — report the partial
+        // success rather than a bare 500, so the caller isn't left
+        // guessing whether anything happened.
+        console.error("[superadmin-delete-user] Auth deletion failed:", authErr?.message || authErr);
+        return res.json({
+          success: true,
+          authDeleted: false,
+          deletedCompanies,
+          warning: "Profil et entreprises supprimés, mais le compte Auth n'a pas pu être retiré : " + (authErr?.message || "erreur inconnue"),
+        });
+      }
+
+      return res.json({ success: true, authDeleted: true, deletedCompanies });
+    } catch (err: any) {
+      console.error("[superadmin-delete-user] error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur inconnue" });
     }
   });
 

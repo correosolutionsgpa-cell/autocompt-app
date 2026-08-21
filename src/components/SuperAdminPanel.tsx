@@ -388,6 +388,7 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
   const [generatingCode, setGeneratingCode] = useState<'trial' | 'extension' | null>(null);
   const [sendingCodeEmail, setSendingCodeEmail] = useState<string | null>(null);
   const [deletingCode, setDeletingCode] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>(SAMPLE_USERS);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -633,6 +634,44 @@ export default function SuperAdminPanel({ darkMode, onBack, adminName = 'Fabiola
       toast(next ? `Accès Drive réactivé pour ${u.email}.` : `Accès Drive désactivé pour ${u.email}.`);
     } catch (err: any) {
       toast(`Échec : ${err.message}`, 'error');
+    }
+  };
+
+  /**
+   * Full cleanup for a test/beta account: Firebase Auth credential, the
+   * users/{uid} profile doc, and every company that account owns — the
+   * same 3 steps Fabiola had been asking Claude to do by hand via Admin SDK
+   * scripts each time she needed to clear out a fake test profile. Added
+   * 2026-08-21 so she can do it herself. Irreversible — confirm() below is
+   * the only safety net.
+   */
+  const handleDeleteUser = async (u: AdminUser) => {
+    if (!confirm(`Supprimer définitivement le compte "${u.email}" et toutes ses entreprises ? Cette action est irréversible.`)) return;
+    setDeletingUser(u.id);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/superadmin-delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ uid: u.id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `Échec (${resp.status})`);
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      setCompaniesByOwner(prev => {
+        const next = { ...prev };
+        delete next[u.id];
+        return next;
+      });
+      if (data.warning) {
+        toast(data.warning, 'error');
+      } else {
+        toast(`Compte "${u.email}" et ${data.deletedCompanies?.length ?? 0} entreprise(s) supprimés.`);
+      }
+    } catch (err: any) {
+      toast(`Échec de la suppression : ${err.message}`, 'error');
+    } finally {
+      setDeletingUser(null);
     }
   };
 
@@ -1079,6 +1118,12 @@ Merci de nous aider à bâtir le meilleur outil pour vous !`;
                           }}
                           className={`p-1.5 rounded-lg transition-colors ${D ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'}`}>
                           <Mail size={13} />
+                        </button>
+                        <button onClick={() => handleDeleteUser(u)}
+                          disabled={deletingUser !== null}
+                          title="Supprimer définitivement ce compte (Auth + profil + entreprises)"
+                          className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${D ? 'hover:bg-rose-950/50 text-rose-400' : 'hover:bg-rose-50 text-rose-500'}`}>
+                          {deletingUser === u.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                         </button>
                       </div>
                     </td>
