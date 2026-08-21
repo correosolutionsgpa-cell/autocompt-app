@@ -2139,6 +2139,24 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // Extra PIN gate in front of the SuperAdmin panel for the shared
+  // correo.solutionsgpa@gmail.com account (Daniel also signs into it for his
+  // own regular work) — checked server-side so the PIN itself never ships in
+  // the client bundle. Fabiola's other SuperAdmin email (info@autocompt.ca,
+  // not shared) never calls this at all. Added 2026-08-21.
+  app.post("/api/verify-superadmin-pin", async (req, res) => {
+    try {
+      const auth = await verifyRequestAuth(req.headers.authorization);
+      if (!auth) return res.status(401).json({ valid: false });
+      const { pin } = req.body;
+      const SUPERADMIN_PIN = "0505";
+      return res.json({ valid: String(pin) === SUPERADMIN_PIN });
+    } catch (err: any) {
+      console.error("[verify-superadmin-pin] error:", err);
+      return res.status(500).json({ valid: false });
+    }
+  });
+
   // Sends a freshly generated beta access code directly to the invitee —
   // used by the "Codes Bêta" admin tab so the code doesn't have to be
   // copy-pasted manually into a separate email client.

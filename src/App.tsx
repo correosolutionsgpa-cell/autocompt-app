@@ -1335,6 +1335,16 @@ const App = () => {
   // creation without getting any of SuperAdmin's other access (billing,
   // DocuLegal documents, other users' data). Never self-service.
   const [canGenerateBetaCodes, setCanGenerateBetaCodes] = useState(false);
+  // Extra PIN gate in front of the SuperAdmin panel — added 2026-08-21.
+  // correo.solutionsgpa@gmail.com is shared with Daniel for his own regular
+  // AutoCompt work; he must not casually land in the full admin panel just
+  // by having that account signed in. Session-only (resets on reload), and
+  // only applies to that shared email — info@autocompt.ca (Fabiola's other
+  // SuperAdmin email, not shared) skips it entirely.
+  const [superAdminPinVerified, setSuperAdminPinVerified] = useState(false);
+  const [superAdminPinInput, setSuperAdminPinInput] = useState("");
+  const [superAdminPinError, setSuperAdminPinError] = useState("");
+  const [superAdminPinChecking, setSuperAdminPinChecking] = useState(false);
   // Manual per-account SuperAdmin switch (Panneau d'Administration → Users)
   // — false blocks uploadToDrive app-wide for this account (view/read stays
   // untouched). Undefined/true means enabled — only accounts explicitly
@@ -10469,6 +10479,79 @@ const App = () => {
     );
   }
   if (vista === "superadmin_panel") {
+    const needsPinGate =
+      (currentUserEmail ?? "").toLowerCase().trim() === "correo.solutionsgpa@gmail.com" &&
+      !superAdminPinVerified;
+    if (needsPinGate) {
+      const handleVerifyPin = async () => {
+        if (superAdminPinInput.length !== 4) {
+          setSuperAdminPinError("Entrez les 4 chiffres.");
+          return;
+        }
+        setSuperAdminPinChecking(true);
+        setSuperAdminPinError("");
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          const resp = await fetch("/api/verify-superadmin-pin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+            body: JSON.stringify({ pin: superAdminPinInput }),
+          });
+          const data = await resp.json();
+          if (data.valid) {
+            setSuperAdminPinVerified(true);
+            setSuperAdminPinInput("");
+          } else {
+            setSuperAdminPinError("Code incorrect.");
+            setSuperAdminPinInput("");
+          }
+        } catch {
+          setSuperAdminPinError("Erreur de connexion. Réessayez.");
+        } finally {
+          setSuperAdminPinChecking(false);
+        }
+      };
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#FAF9F6]">
+          <div className="w-full max-w-xs p-8 rounded-[32px] border border-slate-200 shadow-xl bg-white/90 backdrop-blur-xl space-y-5 text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+              <Shield size={24} />
+            </div>
+            <div>
+              <h1 className="text-lg font-black italic tracking-tighter text-slate-900">Accès restreint</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Panneau d'administration</p>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={superAdminPinInput}
+              onChange={(e) => setSuperAdminPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onKeyDown={(e) => { if (e.key === "Enter") handleVerifyPin(); }}
+              placeholder="••••"
+              autoFocus
+              className="w-full text-center text-2xl tracking-[0.5em] px-4 py-3.5 rounded-2xl border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200"
+            />
+            {superAdminPinError && (
+              <p className="text-[10px] font-bold text-rose-500">{superAdminPinError}</p>
+            )}
+            <button
+              onClick={handleVerifyPin}
+              disabled={superAdminPinChecking || superAdminPinInput.length !== 4}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl text-[11px] font-black uppercase italic tracking-widest transition-all"
+            >
+              {superAdminPinChecking ? "..." : "Confirmer"}
+            </button>
+            <button
+              onClick={goBack}
+              className="text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600"
+            >
+              Retour
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <SuperAdminPanel
         darkMode={darkMode}
