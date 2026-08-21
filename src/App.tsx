@@ -2889,6 +2889,14 @@ const App = () => {
       setSelectedRapportProfile(empresa.nombre);
       setPropertyType(empresa.propertyType || "Triplex");
       if (empresa.hasPlex !== undefined) setHasPlex(empresa.hasPlex);
+      // hasServices/hasVehicle were asked at company setup but never actually
+      // persisted or restored — the "Dépenses Travailleur Autonome"/"Dépenses
+      // Voiture" folder gates (App.tsx ~17872) silently reset to hidden on
+      // every reload no matter what the user answered. Found 2026-08-21
+      // while investigating Fabiola's question about the Gestionnaire setup
+      // form. Fixed alongside hasPlex here, same restore pattern.
+      if (empresa.hasServices !== undefined) setHasServices(empresa.hasServices);
+      if (empresa.hasVehicle !== undefined) setHasVehicle(empresa.hasVehicle);
       if (empresa.nombrePortes !== undefined) setNombrePortes(empresa.nombrePortes);
       setPartnersPct(
         empresa.partnersPct ||
@@ -3602,6 +3610,8 @@ const App = () => {
                                       setLegalEntity(workspace.legalEntity || "Travailleur Autonome");
                                       setPartners(workspace.partners || ["Pro"]);
                                       setHasPlex(!!workspace.hasPlex);
+                                      setHasServices(!!workspace.hasServices);
+                                      setHasVehicle(!!workspace.hasVehicle);
                                       setNombrePortes(workspace.nombrePortes || 999);
                                       setUserProfile({
                                         logo: workspace.userProfile?.logo ?? null,
@@ -10060,6 +10070,14 @@ const App = () => {
               </div>
               )}
 
+              {/* Retirée pour Gestionnaire : leur activité EST la vente de
+                  services de gestion (honoraires) — toujours vrai, jamais un
+                  vrai choix pour ce profil. hasServices est forcé à true au
+                  moment de l'enregistrement à la place (voir plus bas).
+                  Décision de Fabiola 2026-08-21 : une question d'onboarding
+                  ne devrait exister que si sa réponse filtre vraiment quelque
+                  chose pour l'utilisateur. */}
+              {selectedProfile !== "gestionnaire" && (
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Vendez-vous des services (dépenses liées à cette activité) ?
@@ -10081,6 +10099,7 @@ const App = () => {
                   </button>
                 </div>
               </div>
+              )}
 
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
@@ -10104,6 +10123,13 @@ const App = () => {
                 </div>
               </div>
 
+              {/* Retirée pour Gestionnaire : ce champ ne filtre rien nulle
+                  part dans le code (vérifié 2026-08-21) — jamais relu pour
+                  activer/cacher un module, seulement écrit puis restauré. Et
+                  la question elle-même ne correspond pas à leur modèle
+                  d'affaires (ils gèrent des Plex de CLIENTS, ils n'en
+                  possèdent pas nécessairement un). */}
+              {selectedProfile !== "gestionnaire" && (
               <div className="space-y-2">
                 <label className={darkMode ? "text-[10px] font-black uppercase tracking-widest text-zinc-500 pl-1" : "text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1"}>
                   Possédez-vous un Plex (Immobilier à revenus) ?
@@ -10128,6 +10154,7 @@ const App = () => {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* The "Nombre de portes" input block has been removed as it is redundant and validated in the "Configuration du modèle de location" view. The value is preserved via the existing nombrePortes state. */}
             </div>
@@ -10230,6 +10257,12 @@ const App = () => {
                     partnerData: {},
                     userProfile: userProfile,
                     hasPlex: hasPlex,
+                    // Gestionnaire vit d'honoraires de gestion — "Vendez-vous
+                    // des services" est toujours vrai pour ce profil, donc on
+                    // ne le demande plus (question retirée du formulaire
+                    // ci-dessous) et on force la valeur ici directement.
+                    hasServices: selectedProfile === "gestionnaire" ? true : hasServices,
+                    hasVehicle: hasVehicle,
                     nombrePortes: nombrePortes,
                     gradientFromTo: "from-emerald-500 to-teal-600",
                     ...(onboardingTpsTvq ? { tpsTvqRegistered: onboardingTpsTvq } : {}),
