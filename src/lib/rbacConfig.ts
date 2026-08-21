@@ -126,7 +126,7 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
   heures_paie: {
     id: "heures_paie",
     label: "Heures & Paie",
-    description: "Suivi des heures et paie simplifiée",
+    description: "Registre de paie — saisie manuelle ou import d'un rapport externe déjà calculé",
     dashboard: "Plex",
   },
   conciliation: {

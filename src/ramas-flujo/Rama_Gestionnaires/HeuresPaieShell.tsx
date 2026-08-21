@@ -83,7 +83,7 @@ const HeuresPaieShell: React.FC<HeuresPaieShellProps> = ({
               {activeLang === "FR" ? "Suivi Heures & Paie" : activeLang === "ES" ? "Control de Horas y Nóminas" : "Hours & Payroll"}
             </h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              {activeLang === "FR" ? "Masse salariale & heures par employé par semaine" : activeLang === "ES" ? "Nómina y horas de trabajo semanales" : "Payroll & weekly hours by employee"}
+              {activeLang === "FR" ? "Registre de paie — saisie manuelle ou import d'un rapport déjà calculé" : activeLang === "ES" ? "Registro de nómina — entrada manual o importación de un reporte ya calculado" : "Payroll logbook — manual entry or import of an already-calculated report"}
             </p>
           </div>
         </div>

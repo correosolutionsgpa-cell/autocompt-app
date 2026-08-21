@@ -426,7 +426,7 @@ export async function buildApp() {
         "Dossiers Fiscaux — clôture annuelle et assistant de préparation du Relevé 31 (préparation seulement — le vrai formulaire officiel se produit sur revenuquebec.ca). " +
         "Taxes & Assurances — suivi des taxes municipales/scolaires et assurances par propriété. " +
         "Conciliation — rapprochement bancaire. " +
-        "Heures & Paie — suivi des heures et de la paie des employés/concierges. " +
+        "Heures & Paie — registre de paie des employés/concierges : saisie manuelle du salaire (brut/déductions/net), OU import d'un rapport de paie déjà calculé par un tiers (Nethris, etc.) via extraction IA — AutoCompt ne calcule PAS les heures travaillées ni les salaires elle-même, ce module ne fait que consigner/organiser des montants déjà déterminés ailleurs. " +
         "Portefeuille Clients — vue consolidée des clients (Gestionnaire/Comptable). " +
         "Si une question porte sur une fonctionnalité qui n'est PAS dans cette liste et que tu n'es pas sûre qu'elle existe, dis que tu n'es pas certaine plutôt que d'inventer une réponse ferme (oui ou non).";
 
