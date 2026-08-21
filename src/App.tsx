@@ -3544,6 +3544,26 @@ const App = () => {
                               <button
                                 onClick={() => {
                                   setActiveCompanyId(workspace.id);
+                                  // dashboardMode (Plex vs Syndic) était seulement
+                                  // recalculé à la connexion, jamais en changeant
+                                  // d'entreprise — un compte qui gère à la fois un
+                                  // syndicat ET une entreprise Plex (ex: Fabiola,
+                                  // Solutions GPA + son syndicat) restait bloqué en
+                                  // vue Syndic pour toutes ses entreprises dès que
+                                  // selectedProfile (compte) valait "syndicat",
+                                  // peu importe le companyProfile réel de celle
+                                  // qu'on vient de sélectionner. Même règle qu'au
+                                  // login (ligne ~8397) et que activeProfile plus
+                                  // bas : le companyProfile de CETTE entreprise
+                                  // prime sur le profil de compte. Trouvé
+                                  // 2026-08-21 (Fabiola, Paramètres de Solutions
+                                  // GPA affichant le panneau Copropriété).
+                                  const modeForProfile =
+                                    ((workspace as any).companyProfile || selectedProfile) === "syndicat"
+                                      ? "Syndic"
+                                      : "Plex";
+                                  setDashboardMode(modeForProfile);
+                                  localStorage.setItem("autocompt_dashboard_mode", modeForProfile);
                                   setShowWorkspaceDropdown(false);
                                   playNotificationSound();
                                   setVista("dashboard");
