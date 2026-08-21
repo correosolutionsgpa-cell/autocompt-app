@@ -1110,6 +1110,28 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
 
+            {/* ── Courriel de facturation ──────────────────────────────── */}
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
+                <Mail size={11} className="text-violet-500" />
+                Courriel de l&apos;entreprise
+              </label>
+              <input
+                id="settings-company-email"
+                type="email"
+                value={userProfile.email || ""}
+                onChange={(e) => {
+                  setUserProfile((prev: any) => ({ ...prev, email: e.target.value }));
+                }}
+                placeholder="Ex: facturation@monentreprise.com"
+                className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold transition-all focus:ring-2 focus:ring-violet-500/30 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300"
+                  }`}
+              />
+              <p className="text-[8px] font-medium text-slate-400 dark:text-zinc-600 pl-2">
+                Utilisé comme adresse de réponse sur les factures envoyées par tous les membres de l&apos;entreprise — évite qu&apos;un client réponde au courriel personnel d&apos;un collaborateur.
+              </p>
+            </div>
+
             {/* ── Instructions de paiement ─────────────────────────────── */}
             <div className="md:col-span-2 space-y-1 text-left">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2 flex items-center gap-1.5">
@@ -1117,7 +1139,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 Instructions de paiement (Virement Interac, coordonnées bancaires...)
               </label>
               <textarea
-                id="settings-email"
+                id="settings-payment-instructions"
                 value={userProfile.pago || ""}
                 onChange={(e) => {
                   setUserProfile((prev: any) => ({ ...prev, pago: e.target.value }));

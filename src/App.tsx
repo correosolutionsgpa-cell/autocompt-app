@@ -3027,6 +3027,7 @@ const App = () => {
     nom: "",
     adresse: "",
     tel: "",
+    email: "",
     neq: "",
     tps: "",
     tvq: "",
@@ -3441,6 +3442,7 @@ const App = () => {
                       nom: "",
                       adresse: "",
                       tel: "",
+                      email: "",
                       neq: "",
                       tps: "",
                       tvq: "",
@@ -3621,6 +3623,7 @@ const App = () => {
                                         nom: workspace.userProfile?.nom || workspace.nombre || "",
                                         adresse: workspace.userProfile?.adresse || "",
                                         tel: workspace.userProfile?.tel || "",
+                                        email: workspace.userProfile?.email || "",
                                         neq: workspace.userProfile?.neq || "",
                                         tps: workspace.userProfile?.tps || "",
                                         tvq: workspace.userProfile?.tvq || "",
@@ -3702,6 +3705,7 @@ const App = () => {
                                 nom: "",
                                 adresse: "",
                                 tel: "",
+                                email: "",
                                 neq: "",
                                 tps: "",
                                 tvq: "",
@@ -5530,7 +5534,15 @@ const App = () => {
           invoiceId: fac.id,
           invoiceTotal: fac.total,
           invoiceDate: fac.fecha,
-          replyToEmail: adminEmail || auth.currentUser?.email || "",
+          // Priorite au courriel officiel de l'ENTREPRISE (userProfile.email,
+          // partage via Firestore entre le proprietaire et ses collaborateurs)
+          // plutot qu'au courriel personnel de la personne qui clique sur
+          // "Envoyer". Avant ce correctif, un collaborateur (ex: Natalia sur
+          // AchatDirect) sans adminEmail configure sur SON navigateur faisait
+          // retomber le Reply-To sur son propre courriel Firebase Auth
+          // personnel — le client recevait alors la facture comme si elle
+          // venait d'elle et non de l'entreprise.
+          replyToEmail: userProfile.email || adminEmail || auth.currentUser?.email || "",
           docType: fac.tipoDoc || "Facture",
         }),
       });
@@ -10406,6 +10418,7 @@ const App = () => {
                         nom: "",
                         adresse: "",
                         tel: "",
+                        email: "",
                         neq: "",
                         tps: "",
                         tvq: "",
