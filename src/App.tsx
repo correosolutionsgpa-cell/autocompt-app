@@ -3811,6 +3811,40 @@ const App = () => {
                 </div>
               )}
 
+              {/* COLLABORATEURS — liste en lecture seule, distincte du switch
+                  "Co-Opération Active" ci-dessus (qui est pour les "partners"
+                  nommés à l'onboarding, un simple changement d'étiquette sans
+                  changer qui est réellement connecté). Un collaborateur invité
+                  a son propre compte/login — lui donner un bouton pour
+                  "devenir" le propriétaire mélangerait qui a réellement créé
+                  chaque écriture, un problème pour la piste d'audit. Donc
+                  lecture seule : juste savoir qui a accès. Réutilise
+                  teamMembers (déjà chargé pour "Notre Équipe", filtré côté
+                  serveur aux invitations envoyées par CE compte — ne montre
+                  donc cette liste qu'au propriétaire, pas encore à un
+                  collaborateur consultant son propre accès). Demandé par
+                  Fabiola 2026-08-21, suite au rapport de Daniel du 18-08 sur
+                  "Co-Opération Active" absent. */}
+              {teamMembers.filter((m) => m.status === "accepted").length > 0 && (
+                <div className="p-4 border-b border-slate-100 dark:border-zinc-900/60">
+                  <div className="flex flex-col space-y-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                      👥 Collaborateurs sur cette entreprise
+                    </span>
+                    <div className="space-y-1">
+                      {teamMembers.filter((m) => m.status === "accepted").map((m) => (
+                        <div
+                          key={m.invitedEmail}
+                          className="px-3 py-1.5 rounded-xl text-[9px] font-bold truncate bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-zinc-400"
+                        >
+                          {m.invitedEmail}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* QUICK LINKS LIST */}
               {/* `min-h-0` is required here — a flex child with overflow-y-auto
                   otherwise defaults to min-height:auto and sizes to fit ALL its
