@@ -9,17 +9,18 @@
  * tool, worth keeping to exactly one place in the codebase instead of
  * scattered through business logic. Consolidated 2026-08-11.
  *
+ * Tightened 2026-08-21: the previous version also matched ANY email
+ * starting with "fabiola", containing "solutionsgpa", or ending in
+ * "@autocompt.ca" — meaning a brand-new signup with an email like
+ * "fabiola.anything@gmail.com" would have gotten full SuperAdmin (every
+ * account, unlimited access, full admin panel). Fabiola confirmed only her
+ * real account should have this — exact match only, no patterns.
+ *
  * Mirrors isSuperAdmin() in firestore.rules — update both if this list
  * ever changes (Firestore rules can't import from here).
  */
 export function isSuperAdminEmail(email?: string | null): boolean {
   const e = (email ?? "").toLowerCase().trim();
   if (!e) return false;
-  return (
-    e === "correo.solutionsgpa@gmail.com" ||
-    e === "solutionsgpa@gmail.com" ||
-    e.startsWith("fabiola") ||
-    e.includes("solutionsgpa") ||
-    e.endsWith("@autocompt.ca")
-  );
+  return e === "correo.solutionsgpa@gmail.com" || e === "info@autocompt.ca";
 }

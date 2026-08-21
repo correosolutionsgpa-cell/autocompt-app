@@ -9,13 +9,17 @@ service cloud.firestore {
 
     // Founder/superadmin allowlist — mirrors the client-side check in
     // App.tsx's getEffectiveTier().
+    // Correspondance exacte uniquement — l'ancienne version acceptait aussi
+    // n'importe quel courriel commençant par "fabiola", contenant
+    // "solutionsgpa", ou se terminant par "@autocompt.ca", ce qui donnait un
+    // accès SuperAdmin complet (toutes les données, tous les comptes) à
+    // n'importe quelle nouvelle inscription correspondant à ces motifs.
+    // Resserré 2026-08-21, confirmé par Fabiola : seul son vrai compte doit
+    // avoir cet accès.
     function isSuperAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'correo.solutionsgpa@gmail.com' ||
-        request.auth.token.email == 'solutionsgpa@gmail.com' ||
-        request.auth.token.email.matches('.*solutionsgpa.*') ||
-        request.auth.token.email.matches('^fabiola.*') ||
-        request.auth.token.email.matches('.*@autocompt[.]ca$')
+        request.auth.token.email == 'info@autocompt.ca'
       );
     }
 
