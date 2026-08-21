@@ -14531,7 +14531,7 @@ const App = () => {
                                   <FileText size={12} className={darkMode ? "text-emerald-500/60" : "text-emerald-600/70"} />
                                   <div>
                                     <p className={`text-[9px] font-black ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>{name}</p>
-                                    <span className={`text-[7px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>{ref} \u00b7 {desc}</span>
+                                    <span className={`text-[7px] font-bold ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>{ref} · {desc}</span>
                                   </div>
                                 </div>
                                 <a href={pdf} target="_blank" rel="noopener noreferrer"
@@ -14546,8 +14546,8 @@ const App = () => {
                               <div className="flex items-center gap-2">
                                 <AlertCircle size={12} className={darkMode ? "text-amber-400" : "text-amber-600"} />
                                 <div>
-                                  <p className={`text-[9px] font-black ${darkMode ? "text-amber-300" : "text-amber-800"}`}>Non-paiement / retards fr\u00e9quents</p>
-                                  <span className={`text-[7px] font-bold ${darkMode ? "text-amber-600" : "text-amber-500"}`}>Demande au tribunal \u00b7 pas un avis au locataire</span>
+                                  <p className={`text-[9px] font-black ${darkMode ? "text-amber-300" : "text-amber-800"}`}>Non-paiement / retards fréquents</p>
+                                  <span className={`text-[7px] font-bold ${darkMode ? "text-amber-600" : "text-amber-500"}`}>Demande au tribunal · pas un avis au locataire</span>
                                 </div>
                               </div>
                               <a href="https://www.tal.gouv.qc.ca/fr/formulaires-de-demande-au-tribunal" target="_blank" rel="noopener noreferrer"
