@@ -11851,7 +11851,7 @@ const App = () => {
                 <span
                   onClick={() => askSofiAbout("")}
                   title="Posez votre question — Sofi vous répond"
-                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}
+                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "bg-violet-500/15 text-violet-400 hover:bg-violet-500/25" : "bg-violet-50 text-[#7c3aed] hover:bg-violet-100"}`}
                 >
                   <HelpCircle size={11} />
                   Besoin d'aide ?
