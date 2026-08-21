@@ -11835,13 +11835,26 @@ const App = () => {
                 placeholder="Rechercher une dépense, facture, outil (ex: GPS, taxes, peintre, bail)..."
                 className={`w-full bg-transparent border-none outline-none text-xs ${darkMode ? "text-white placeholder-zinc-650" : "text-slate-900 placeholder-slate-400"}`}
               />
-              {dashboardSearchQuery && (
+              {dashboardSearchQuery ? (
                 <button
                   onClick={() => setDashboardSearchQuery("")}
-                  className="text-[9px] font-black uppercase tracking-wider text-rose-500 hover:text-rose-600 transition-all cursor-pointer"
+                  className="shrink-0 text-[9px] font-black uppercase tracking-wider text-rose-500 hover:text-rose-600 transition-all cursor-pointer"
                 >
                   Effacer
                 </button>
+              ) : (
+                // Signal visuel qu'on peut taper une question ici, pas
+                // seulement un mot-clé — sans ça le raccourci vers Sofi (ajouté
+                // juste au-dessus) restait invisible tant qu'on n'avait pas
+                // déjà tapé quelque chose. Demandé par Fabiola 2026-08-21.
+                <span
+                  onClick={() => askSofiAbout("")}
+                  title="Posez une question à Sofi"
+                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest cursor-pointer transition-colors ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}
+                >
+                  <Sparkles size={10} />
+                  Demandez à Sofi
+                </span>
               )}
             </div>
 
