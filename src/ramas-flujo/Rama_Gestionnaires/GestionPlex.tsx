@@ -436,8 +436,15 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
               {[
                 { id: "Logement entier", label: "Logement entier" },
                 {
+                  // Étiquette élargie 2026-08-21 : "Chambres individuelles"
+                  // laissait croire que ce mode ne servait qu'à la colocation,
+                  // alors qu'il sert aussi à un immeuble à logements multiples
+                  // (ex: un sixplex) — mécanisme identique (plusieurs unités
+                  // sous une même adresse), seul le nom de chaque unité change.
+                  // L'id interne reste inchangé pour ne pas casser les données
+                  // déjà enregistrées.
                   id: "Chambres individuelles (Colocation)",
-                  label: "Chambres individuelles",
+                  label: "Plusieurs unités",
                 },
               ].map((model) => {
                 const normalizedType =
@@ -477,6 +484,12 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                 );
               })}
             </div>
+            {(plexManagementForm.typeLocation === "Chambres individuelles (Colocation)" ||
+              plexManagementForm.typeLocation === "Habitation/Chambre") && (
+              <p className={`text-[9px] font-medium mt-1.5 pl-1 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                Pour un édifice à logements séparés (ex: sixplex) ou une maison louée chambre par chambre — le nom de chaque unité (ci-dessous) est à vous de choisir : "Appartement 1", "Chambre 1", peu importe.
+              </p>
+            )}
           </div>
 
           {/* Adresse */}
@@ -738,12 +751,24 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                         key={unit.id}
                         className={`p-4 rounded-2xl space-y-3 border ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
                       >
-                        <div className="flex justify-between items-center">
-                          <p
-                            className={`text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300" : "text-slate-700"}`}
-                          >
-                            {unit.unitName}
-                          </p>
+                        <div className="flex justify-between items-center gap-2">
+                          <input
+                            type="text"
+                            value={unit.unitName}
+                            onChange={(e) => {
+                              const updated = (
+                                plexManagementForm.units || []
+                              ).map((u: any) =>
+                                u.id === unit.id ? { ...u, unitName: e.target.value } : u
+                              );
+                              setPlexManagementForm({
+                                ...plexManagementForm,
+                                units: updated,
+                              });
+                            }}
+                            placeholder="Nom de l'unité"
+                            className={`min-w-0 flex-1 bg-transparent border-none outline-none text-[11px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-300 placeholder:text-zinc-600" : "text-slate-700 placeholder:text-slate-300"}`}
+                          />
                           <div
                             className={`flex p-0.5 rounded-full gap-0.5 border text-[9px] ${darkMode ? "border-zinc-700 bg-zinc-800" : "border-slate-200 bg-slate-100"}`}
                           >
