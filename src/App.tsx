@@ -21644,6 +21644,7 @@ const App = () => {
       <MesRelevesGestion
         darkMode={darkMode}
         setVista={setVista}
+        goBack={goBack}
         playNotificationSound={playNotificationSound}
         WorkspaceSidebar={WorkspaceSidebar}
         adminName={adminName}
@@ -21923,6 +21924,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
           <TaxesAssurancesView
             darkMode={darkMode}
             setVista={setVista}
+            goBack={goBack}
             setDepenses={setDepenses}
             companyId={activeCompanyId}
             companyName={currentCompany?.nombre}
@@ -22273,6 +22275,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminName={adminName}
         adminEmail={adminEmail}
         setVista={setVista}
+        goBack={goBack}
         setIsSidebarOpen={setIsSidebarOpen}
         WorkspaceSidebar={WorkspaceSidebar}
         playNotificationSound={playNotificationSound}

@@ -25,6 +25,7 @@ const fmtCAD = (n: number) => new Intl.NumberFormat("fr-CA", { style: "currency"
 export interface MesRelevesGestionProps {
   darkMode: boolean;
   setVista: (v: string) => void;
+  goBack: () => void;
   playNotificationSound?: () => void;
   sidebarToggle?: React.ReactNode;
   WorkspaceSidebar: React.ComponentType;
@@ -34,7 +35,7 @@ export interface MesRelevesGestionProps {
 }
 
 const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
-  darkMode, setVista, playNotificationSound, sidebarToggle, WorkspaceSidebar, adminName, listaEmpresas,
+  darkMode, setVista, goBack, playNotificationSound, sidebarToggle, WorkspaceSidebar, adminName, listaEmpresas,
 }) => {
   const [pendingLinks, setPendingLinks] = useState<StatementLinkDoc[]>([]);
   const [statements, setStatements] = useState<SealedStatementDoc[]>([]);
@@ -180,7 +181,7 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
             <Menu size={18} />
           </button>
         )}
-        <button onClick={() => setVista("dossiers")} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
+        <button onClick={goBack} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
           <ArrowLeft size={20} />
         </button>
         <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-500">

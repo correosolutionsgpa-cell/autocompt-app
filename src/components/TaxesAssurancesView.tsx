@@ -51,6 +51,7 @@ interface Propriete extends PropertyDoc {
 export const TaxesAssurancesView = ({
   darkMode,
   setVista,
+  goBack,
   setDepenses,
   companyId,
   companyName,
@@ -62,6 +63,7 @@ export const TaxesAssurancesView = ({
 }: {
   darkMode: boolean;
   setVista: (v: string) => void;
+  goBack: () => void;
   setDepenses?: React.Dispatch<React.SetStateAction<any[]>>;
   companyId?: string;
   companyName?: string;
@@ -821,7 +823,7 @@ export const TaxesAssurancesView = ({
             if (selectedPropriete) {
               setSelectedPropriete(null); // Regresar al nivel de carpetas
             } else {
-              setVista("dashboard"); // Regresar al dashboard
+              goBack();
             }
           }}
           className={`p-2 transition-all rounded-full ${

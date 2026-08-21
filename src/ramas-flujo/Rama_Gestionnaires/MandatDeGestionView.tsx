@@ -520,6 +520,7 @@ export interface MandatDeGestionViewProps {
   adminName: string;
   adminEmail: string;
   setVista: (v: string) => void;
+  goBack: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   WorkspaceSidebar: React.ComponentType;
   playNotificationSound?: () => void;
@@ -535,6 +536,7 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
   adminName,
   adminEmail,
   setVista,
+  goBack,
   setIsSidebarOpen,
   WorkspaceSidebar,
   playNotificationSound,
@@ -743,7 +745,7 @@ const MandatDeGestionView: React.FC<MandatDeGestionViewProps> = ({
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white md:hidden">
           <Menu size={18} />
         </button>
-        <button onClick={() => setVista("fideicommis")} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
+        <button onClick={goBack} className={`p-2 transition-colors ${darkMode ? "text-zinc-500 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}>
           <ArrowLeft size={20} />
         </button>
         <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-500">
