@@ -11150,7 +11150,7 @@ const App = () => {
                     type={showLoginPassword ? "text" : "password"}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Laissez vide si première connexion"
+                    placeholder={showLoginBetaCode ? "Minimum 6 caractères (nouveau compte)" : "Laissez vide si première connexion"}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword);
                     }}
