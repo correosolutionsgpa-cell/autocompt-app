@@ -12266,7 +12266,7 @@ const App = () => {
                   e.currentTarget.click();
                 }
               }}
-              className={`w-full p-8 rounded-[40px] shadow-2xl flex flex-col items-center space-y-3 active:scale-95 transition-all duration-300 hover:border-emerald-500/50 group relative overflow-hidden border cursor-pointer ${darkMode ? "bg-zinc-950 border-zinc-805 text-zinc-100 shadow-[0_0_40px_rgba(16,185,129,0.15)]" : "bg-slate-950 border-slate-900 text-white"}`}
+              className={`w-full lg:max-w-md lg:mx-auto p-8 rounded-[40px] shadow-2xl flex flex-col items-center space-y-3 active:scale-95 transition-all duration-300 hover:border-emerald-500/50 group relative overflow-hidden border cursor-pointer ${darkMode ? "bg-zinc-950 border-zinc-805 text-zinc-100 shadow-[0_0_40px_rgba(16,185,129,0.15)]" : "bg-slate-950 border-slate-900 text-white"}`}
             >
               {/* Premium Conversion Tag Badge */}
               {selectedTier === "gratuit" && (
