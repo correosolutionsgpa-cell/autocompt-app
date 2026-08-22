@@ -4307,6 +4307,13 @@ const App = () => {
   // account). Left blank by a returning pre-migration account — see
   // handleLoginSubmit's legacy fallback and the "set-password" vista below.
   const [loginPassword, setLoginPassword] = useState("");
+  // New-account-only confirmation field — until now a typo in the password
+  // when creating an account went uncaught (single field, no repeat), only
+  // surfacing the next time the person tried to log back in. Deliberately a
+  // separate state from newPassword/newPasswordConfirm above, which belong
+  // to the unrelated "set-password" legacy-migration screen.
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   // Bouton "afficher le mot de passe" — permet de vérifier ce qu'on a tapé
@@ -11003,13 +11010,16 @@ const App = () => {
   }
 
   if (vista === "login") {
-    const handleLoginSubmit = async (emailStr: string, codeStr?: string, passwordStr?: string) => {
+    const handleLoginSubmit = async (emailStr: string, codeStr?: string, passwordStr?: string, confirmPasswordStr?: string) => {
       const email = emailStr.trim().toLowerCase();
       if (!email) {
         alert("Veuillez entrer votre adresse courriel.");
         return;
       }
       const typedPassword = (passwordStr ?? loginPassword).trim();
+      // Only meaningful during signup (showLoginBetaCode) — a returning user
+      // leaves this blank and it's correctly ignored below.
+      const typedConfirmPassword = (confirmPasswordStr ?? signupConfirmPassword).trim();
 
       setIsLoadingData(true);
       try {
@@ -11046,6 +11056,9 @@ const App = () => {
             }
             if (!typedPassword || typedPassword.length < 6) {
               throw new Error("Choisissez un mot de passe d'au moins 6 caractères pour votre nouveau compte.");
+            }
+            if (typedPassword !== typedConfirmPassword) {
+              throw new Error("Les deux mots de passe ne correspondent pas.");
             }
             const { valid, reason } = await dataService.validateBetaCode(code, email);
             if (!valid) {
@@ -11260,6 +11273,38 @@ const App = () => {
                   Mot de passe oublié ?
                 </button>
               </div>
+
+              {showLoginBetaCode && (
+                <div className="space-y-1 text-left">
+                  <label className="text-[8px] font-black uppercase italic text-slate-500 pl-1">
+                    Confirmez le mot de passe
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSignupConfirmPassword ? "text" : "password"}
+                      value={signupConfirmPassword}
+                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                      placeholder="Retapez le mot de passe"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleLoginSubmit(loginEmail, loginCode, loginPassword, signupConfirmPassword);
+                      }}
+                      className="w-full px-4 py-3.5 pl-10 pr-11 rounded-2xl text-[10px] font-bold border outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50 text-slate-800 border-slate-200 transition-all focus:bg-white focus:shadow-sm"
+                    />
+                    <Lock
+                      size={13}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupConfirmPassword((v) => !v)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      tabIndex={-1}
+                    >
+                      {showSignupConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {showLoginBetaCode ? (
                 <div className="space-y-1 text-left">
