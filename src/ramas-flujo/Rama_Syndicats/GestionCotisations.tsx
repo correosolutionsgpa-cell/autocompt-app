@@ -23,6 +23,7 @@ export interface GestionCotisationsProps {
   WorkspaceSidebar: React.ComponentType;
   companyId: string;
   companyName: string;
+  companyDocId: string;
 }
 
 const GestionCotisations: React.FC<GestionCotisationsProps> = ({
@@ -35,6 +36,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
   WorkspaceSidebar,
   companyId,
   companyName,
+  companyDocId,
 }) => (
   <div
     className={`min-h-screen ${darkMode ? "bg-transparent text-white" : "bg-slate-50 text-slate-900"} flex flex-col font-sans transition-all duration-300 md:pl-72`}
@@ -100,7 +102,7 @@ const GestionCotisations: React.FC<GestionCotisationsProps> = ({
     </header>
 
     <main className="flex-1 w-full bg-slate-50 dark:bg-transparent p-4 sm:p-6">
-      <SyndicatCotisations setVista={setVista} darkMode={darkMode} companyId={companyId} companyName={companyName} />
+      <SyndicatCotisations setVista={setVista} darkMode={darkMode} companyId={companyId} companyName={companyName} companyDocId={companyDocId} adminName={adminName} />
     </main>
   </div>
 );

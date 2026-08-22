@@ -110,6 +110,51 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerId', 'collaboratorUIDs']);
     }
 
+    // ── Syndicat unit owner ("coproprietaire") — heavily restricted ─────────
+    // Deliberately separate from collaboratorUIDs/isCollaboratorOnCompany,
+    // which grant full read/write on every collection in the company. A unit
+    // owner should only ever see: their own condoUnits doc + cotisationPayments
+    // (via the denormalized linkedUid field, checked directly on the resource
+    // — no lookup needed), and read-only company-wide screens (syndicSettings,
+    // syndicBudgets, communityPosts). Never legalDocuments, expenses, aiReports,
+    // or any other syndicat/board data.
+    function isCondoOwnerOnCompany() {
+      return isSignedIn() && resource.data.companyId != null &&
+        request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.get('condoOwnerUIDs', []);
+    }
+    // syndicBudgets is the one collection that stores a RAW (unprefixed)
+    // companyId alongside a separate ownerId field, instead of the prefixed
+    // `{ownerId}_company_{raw}` id every other Syndic collection uses — so the
+    // companies doc id has to be reconstructed by string concatenation here
+    // rather than read directly off resource.data.companyId.
+    function isCondoOwnerOnSyndicBudget() {
+      return isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.ownerId + '_company_' + resource.data.companyId)).data.get('condoOwnerUIDs', []);
+    }
+    // Lets an invited unit owner add themselves to a company's condoOwnerUIDs
+    // — mirrors isAcceptingOwnInvite() exactly, but requires the matching
+    // invite to be specifically role == 'coproprietaire' (a plain
+    // collaborator invite must never grant this narrower-but-still-real access).
+    function isAcceptingCondoOwnerInvite(companyId) {
+      return isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['condoOwnerUIDs']) &&
+        request.auth.uid in request.resource.data.condoOwnerUIDs &&
+        exists(/databases/$(database)/documents/companyInvites/$(companyId + '_invite_' + request.auth.token.email)) &&
+        get(/databases/$(database)/documents/companyInvites/$(companyId + '_invite_' + request.auth.token.email)).data.status == 'pending' &&
+        get(/databases/$(database)/documents/companyInvites/$(companyId + '_invite_' + request.auth.token.email)).data.role == 'coproprietaire';
+    }
+    // Lets an invited unit owner link their own uid onto the ONE condoUnits
+    // doc named in their pending invite — nothing else about the unit
+    // (amountDue, owner name, etc.) is touchable by them.
+    function isLinkingOwnCondoUnit(unitId) {
+      return isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUid']) &&
+        request.resource.data.linkedUid == request.auth.uid &&
+        exists(/databases/$(database)/documents/companyInvites/$(resource.data.companyId + '_invite_' + request.auth.token.email)) &&
+        get(/databases/$(database)/documents/companyInvites/$(resource.data.companyId + '_invite_' + request.auth.token.email)).data.status == 'pending' &&
+        get(/databases/$(database)/documents/companyInvites/$(resource.data.companyId + '_invite_' + request.auth.token.email)).data.unitId == unitId;
+    }
+
     match /companies/{companyId} {
       // isSuperAdmin() added so SuperAdminPanel can list every company ever
       // created (including ones created from a beta code Fabiola didn't
@@ -117,7 +162,7 @@ service cloud.firestore {
       // silently returned only companies Fabiola owns/collaborates on.
       allow read: if isOwnerDoc() || isCollaboratorDoc() || isSuperAdmin();
       allow create: if isOwnerWrite();
-      allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId) || isCollaboratorUpdate();
+      allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId) || isCollaboratorUpdate() || isAcceptingCondoOwnerInvite(companyId);
       allow delete: if isOwnerDoc();
     }
 
@@ -274,19 +319,29 @@ service cloud.firestore {
     }
 
     match /condoUnits/{unitId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      // linkedUid check lets the unit's own linked coproprietaire read just
+      // this one doc, without needing a company-wide condoOwnerUIDs lookup.
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() ||
+        (isSignedIn() && resource.data.get('linkedUid', null) == request.auth.uid);
       allow create: if isOwnerWrite();
-      allow update, delete: if isOwnerDoc();
+      allow update: if isOwnerDoc() || isLinkingOwnCondoUnit(unitId);
+      allow delete: if isOwnerDoc();
     }
 
     match /cotisationPayments/{paymentId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      // linkedUid is denormalized from the unit at write time (see
+      // dataService.saveCotisationPayment callers) so the payer can read
+      // their own payment history the same direct way.
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() ||
+        (isSignedIn() && resource.data.get('linkedUid', null) == request.auth.uid);
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }
 
     match /communityPosts/{postId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      // Read-only for coproprietaires (board announcements/incidents) — no
+      // write access, unlike collaborators.
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() || isCondoOwnerOnCompany();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }
@@ -309,7 +364,7 @@ service cloud.firestore {
     }
 
     match /syndicSettings/{configId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() || isCondoOwnerOnCompany();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }
@@ -367,7 +422,7 @@ service cloud.firestore {
     // Budget annuel + fonds du Syndicat (voir SyndicBudgetDoc) — remplace des
     // valeurs figées en dur dans SyndicTransparencyDashboard.tsx.
     match /syndicBudgets/{budgetId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() || isCondoOwnerOnSyndicBudget();
       allow create, update: if isOwnerWrite();
       allow delete: if isOwnerDoc();
     }

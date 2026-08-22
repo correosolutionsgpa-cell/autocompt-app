@@ -17,6 +17,7 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  Mail,
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { dataService, type CondoUnitDoc, type CotisationPaymentDoc } from '../lib/dataService';
@@ -26,6 +27,8 @@ export interface SyndicatCotisationsProps {
   darkMode: boolean;
   companyId: string;
   companyName: string;
+  companyDocId: string;
+  adminName: string;
 }
 
 interface PaymentHistory {
@@ -48,7 +51,7 @@ interface CondoUnit {
 
 const CURRENT_MONTH_LABEL = new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
 
-export default function SyndicatCotisations({ setVista, darkMode, companyId, companyName }: SyndicatCotisationsProps) {
+export default function SyndicatCotisations({ setVista, darkMode, companyId, companyName, companyDocId, adminName }: SyndicatCotisationsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'mois_en_cours' | 'tous_les_mois'>('mois_en_cours');
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
@@ -64,6 +67,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
 
   // Reminders loading state
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [invitingUnitId, setInvitingUnitId] = useState<string | null>(null);
 
   // Real Firestore-backed data (condoUnits + cotisationPayments)
   const [rawUnits, setRawUnits] = useState<CondoUnitDoc[]>([]);
@@ -231,10 +235,12 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     const monthStr = CURRENT_MONTH_LABEL;
 
     try {
+      const unitForPayment = rawUnits.find((u) => u.id === selectedUnit.id);
       const savedPayment = await dataService.saveCotisationPayment(uid, {
         id: '',
         companyId,
         unitId: selectedUnit.id,
+        linkedUid: unitForPayment?.linkedUid,
         month: monthStr,
         amount: paymentAmount,
         date: todayStr,
@@ -364,6 +370,55 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     } catch (err) {
       console.error('Failed to save condo unit:', err);
       triggerToast("Erreur lors de l'enregistrement de l'unité.", 'error');
+    }
+  };
+
+  // Invites this unit's owner to a heavily restricted "coproprietaire"
+  // account — read-only access to their own cotisation + Transparence/Loi16/
+  // Mur, never the board's full data. See dataService.acceptCondoOwnerInvite
+  // and the isCondoOwnerOnCompany firestore.rules helpers.
+  const handleInviteOwner = async (unit: CondoUnit) => {
+    if (!unit.email) {
+      triggerToast("Ajoutez d'abord un courriel à cette unité (Modifier) avant d'inviter le copropriétaire.", 'error');
+      return;
+    }
+    const rawUnit = rawUnits.find((u) => u.id === unit.id);
+    const uid = auth.currentUser?.uid;
+    if (!rawUnit || !uid || !companyDocId) return;
+    setInvitingUnitId(unit.id);
+    try {
+      const fullUnitDocId = `${rawUnit.ownerId}_condounit_${rawUnit.id}`;
+      await dataService.createCompanyInvite(
+        uid,
+        adminName,
+        companyDocId,
+        companyName,
+        unit.email,
+        { role: 'coproprietaire', unitId: fullUnitDocId, unitLabel: unit.unit }
+      );
+      try {
+        await fetch('/api/send-company-invite-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientEmail: unit.email,
+            recipientName: unit.owner,
+            inviterName: adminName,
+            inviterEmail: auth.currentUser?.email,
+            companyName,
+            unitLabel: unit.unit,
+            context: 'condo_owner',
+          }),
+        });
+      } catch (emailErr) {
+        console.error('send-company-invite-email (condo_owner) failed (non-blocking):', emailErr);
+      }
+      triggerToast(`Invitation envoyée à ${unit.owner} !`, 'success');
+    } catch (err) {
+      console.error('Failed to invite condo owner:', err);
+      triggerToast("Erreur lors de l'envoi de l'invitation.", 'error');
+    } finally {
+      setInvitingUnitId(null);
     }
   };
 
@@ -689,6 +744,24 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
                                   <>
                                     <Bell size={16} />
                                     <span>Envoyer un rappel</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => handleInviteOwner(unit)}
+                                disabled={invitingUnitId === unit.id}
+                                className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-[20px] font-black uppercase tracking-widest text-xs transition-all active:scale-[0.98] border-2 cursor-pointer disabled:opacity-50 ${darkMode ? "border-indigo-800/60 text-indigo-350 hover:border-indigo-600 bg-transparent" : "border-indigo-200 text-indigo-600 hover:border-indigo-350 bg-transparent"}`}
+                              >
+                                {invitingUnitId === unit.id ? (
+                                  <>
+                                    <Send size={16} className="animate-pulse" />
+                                    <span>Envoi en cours...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail size={16} />
+                                    <span>Inviter le copropriétaire</span>
                                   </>
                                 )}
                               </button>

@@ -155,6 +155,7 @@ const KilometrageGPS = React.lazy(() => import("./ramas-flujo/Rama_Entrepreneurs
 const BureauDomicile = React.lazy(() => import("./ramas-flujo/Rama_Entrepreneurs/BureauDomicile"));
 const MuroTransparencia = React.lazy(() => import("./ramas-flujo/MuroTransparencia"));
 const GestionCotisations = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/GestionCotisations"));
+const CondoOwnerCotisationView = React.lazy(() => import("./components/CondoOwnerCotisationView"));
 const MuroCommunication = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/MuroCommunication"));
 const ConformiteLoi16 = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/ConformiteLoi16"));
 const RapportSyndicAI = React.lazy(() => import("./ramas-flujo/Rama_Syndicats/RapportSyndicAI"));
@@ -2262,6 +2263,15 @@ const App = () => {
     listaEmpresas.find((e) => e.id === activeCompanyId) || visibleEmpresas[0];
   const empresa = currentCompany;
 
+  // Was a single account-wide `userRole` (set once at login from
+  // users/{uid}.role) — but "coproprietaire" is inherently per-company (the
+  // same person could own/administer one Syndicat and merely be a unit
+  // owner of another), so it's recomputed here from the active company's
+  // _isCondoOwner flag (fetchWorkspaces), same pattern as dashboardMode's
+  // per-company recalculation. Falls back to the account-level role for
+  // every other company.
+  const effectiveUserRole = currentCompany?._isCondoOwner ? "coproprietaire" : userRole;
+
   // "Notre Équipe" (ProfilEtEquipe) used to show two hardcoded fake
   // collaborators and a form that only wrote to local state — no real
   // invite was ever sent or access granted. Found 2026-08-13. Real list of
@@ -3311,8 +3321,18 @@ const App = () => {
       return hasAccess(sidebarProfile, moduleId);
     });
 
+    // Was missing Cotisations/Transparence/Mur entirely — a real coproprietaire
+    // account (once accept-invite actually existed, see acceptCondoOwnerInvite)
+    // could only ever reach Dashboard + Loi16, despite rbacConfig's own
+    // "transparence" description promising a "portail de transparence
+    // financière pour les copropriétaires" (found 2026-08-22, audit).
+    // "ma-cotisation" is a dedicated restricted view — never the board's
+    // SyndicatCotisations, which lists every unit's owner name/balance.
     const coproprietaireNavItems = [
       { id: "dashboard", label: t("Espace Copropriétaire"), icon: <Layout size={18} />, bgClass: "bg-indigo-100 dark:bg-indigo-500/20", textClass: "text-indigo-600 dark:text-indigo-400" },
+      { id: "ma-cotisation", label: t("Ma Cotisation"), icon: <Wallet size={18} />, bgClass: "bg-amber-100 dark:bg-amber-500/20", textClass: "text-amber-600 dark:text-amber-400" },
+      { id: "transparence", label: t("Tableau de Transparence"), icon: <TableProperties size={18} />, bgClass: "bg-blue-100 dark:bg-blue-500/20", textClass: "text-blue-600 dark:text-blue-400" },
+      { id: "muro", label: t("Mur de Communication"), icon: <Bell size={18} />, bgClass: "bg-rose-100 dark:bg-rose-500/20", textClass: "text-rose-600 dark:text-rose-400" },
       { id: "loi16", label: t("Loi 16 & Carnet Entretien"), icon: <Wrench size={18} />, bgClass: "bg-violet-100 dark:bg-violet-500/20", textClass: "text-violet-600 dark:text-violet-400" },
       // ✔ 'Paramètres' removed from scrollable list — pinned at sidebar bottom (Phase 4)
     ];
@@ -3914,7 +3934,7 @@ const App = () => {
 
                     return (
                       <>
-                        {userRole === "coproprietaire" ? (
+                        {effectiveUserRole === "coproprietaire" ? (
                           coproprietaireNavItems.map((item) => {
                             const isActive = vista === item.id;
                             return (
@@ -12827,7 +12847,29 @@ const App = () => {
             )}
           </AnimatePresence>
 
-          {dashboardMode === "Syndic" ? (
+          {dashboardMode === "Syndic" && effectiveUserRole === "coproprietaire" ? (
+            // A coproprietaire never sees SyndicModuleGrid — it's a board
+            // toolbox (Gestion des Cotisations for every unit, DocuLegal,
+            // Rapport IA...) they have no Firestore access to anyway. Same
+            // shortcuts as their restricted sidebar, just as dashboard cards.
+            <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { id: "ma-cotisation", label: "Ma Cotisation", desc: "Votre solde et historique de paiements" },
+                { id: "transparence", label: "Tableau de Transparence", desc: "Finances du syndicat" },
+                { id: "muro", label: "Mur de Communication", desc: "Annonces du conseil" },
+                { id: "loi16", label: "Loi 16 & Carnet Entretien", desc: "Entretien de l'immeuble" },
+              ].map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => setVista(card.id)}
+                  className={`p-5 rounded-[28px] border text-left transition-all active:scale-[0.98] ${darkMode ? "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700 text-white" : "bg-white border-slate-200 hover:border-slate-300 text-slate-900"}`}
+                >
+                  <p className="text-xs font-black uppercase italic tracking-tight">{card.label}</p>
+                  <p className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider mt-1.5">{card.desc}</p>
+                </button>
+              ))}
+            </div>
+          ) : dashboardMode === "Syndic" ? (
             <SyndicModuleGrid
               darkMode={darkMode}
               setVista={setVista}
@@ -22710,6 +22752,21 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         WorkspaceSidebar={WorkspaceSidebar}
         companyId={activeCompanyId}
         companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+        companyDocId={currentCompany?._companyDocId || ""}
+      />
+    );
+  }
+
+  // Restricted read-only view for a linked coproprietaire — never the
+  // board's SyndicatCotisations (that lists every unit's owner/balance).
+  if (vista === "ma-cotisation") {
+    return (
+      <CondoOwnerCotisationView
+        darkMode={darkMode}
+        companyDocId={currentCompany?._companyDocId || ""}
+        companyName={currentCompany?.nombre || "Solutions GPA Inc."}
+        goBack={goBack}
+        WorkspaceSidebar={WorkspaceSidebar}
       />
     );
   }
@@ -22738,7 +22795,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         adminName={adminName}
         adminRole={adminRole}
         adminPhoto={adminPhoto}
-        userRole={userRole}
+        userRole={effectiveUserRole}
         activeCompanyId={activeCompanyId}
         setVista={setVista}
         goBack={goBack}

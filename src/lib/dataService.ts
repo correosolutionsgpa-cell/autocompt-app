@@ -737,6 +737,11 @@ export interface CondoUnitDoc {
   status: 'paye' | 'en_retard';
   ownerId: string;
   createdAt: string;
+  /** Set once the unit owner accepts their "coproprietaire" invite — their
+   *  Firebase uid. Lets firestore.rules grant them read access to just this
+   *  one unit (and their own cotisationPayments) without any of the
+   *  syndicat's other financial/legal data. See dataService.acceptCondoOwnerInvite. */
+  linkedUid?: string;
 }
 
 // ── CotisationPaymentDoc — Firestore `cotisationPayments` collection ────────
@@ -746,6 +751,10 @@ export interface CotisationPaymentDoc {
   id: string;
   companyId: string;
   unitId: string;
+  /** Denormalized from CondoUnitDoc.linkedUid at write time — lets the unit
+   *  owner read their own payment history without a cross-collection rule
+   *  lookup. Absent for units with no linked coproprietaire account yet. */
+  linkedUid?: string;
   month: string;             // "Mai 2026"
   amount: number;
   date: string;
@@ -842,6 +851,18 @@ export interface CompanyInviteDoc {
   invitedEmail: string;
   invitedByUid: string;
   invitedByName: string;
+  /** Absent/'collaborator' = full-access team member (existing behaviour).
+   *  'coproprietaire' = a Syndicat unit owner — heavily restricted, see
+   *  acceptCondoOwnerInvite. Both share this same collection/doc-id scheme
+   *  so firestore.rules' isAcceptingOwnInvite-style checks can reuse the
+   *  same deterministic `{companyDocId}_invite_{email}` lookup. */
+  role?: 'collaborator' | 'coproprietaire';
+  /** Only set when role === 'coproprietaire' — the FULL prefixed condoUnits
+   *  Firestore doc id (`{unitOwnerUid}_condounit_{unitId}`), not the short
+   *  app-facing unit id, so firestore.rules can match it against the
+   *  {unitId} path segment directly. */
+  unitId?: string;
+  unitLabel?: string;      // "Unité 101" — display only
   status: 'pending' | 'accepted' | 'declined';
   createdAt: string;
   invitedUid?: string;     // set once accepted — needed to revoke collaboratorUIDs later
@@ -1651,17 +1672,20 @@ export const dataService = {
   async fetchWorkspaces(userId: string): Promise<any[]> {
     try {
       // Companies the user owns, plus companies they've been added to as a
-      // collaborator (e.g. a business partner invited into a shared company).
-      // Firestore has no OR-across-fields query, so this runs as two queries
+      // collaborator (full access), plus companies where they're a linked
+      // Syndicat unit owner (heavily restricted — see acceptCondoOwnerInvite).
+      // Firestore has no OR-across-fields query, so this runs as three queries
       // merged client-side, deduped by doc id (a user can't be both on the
       // same doc, but this guards against it anyway).
       const ownedQ = query(collection(db, 'companies'), where('ownerId', '==', userId));
       const collabQ = query(collection(db, 'companies'), where('collaboratorUIDs', 'array-contains', userId));
-      const [ownedSnap, collabSnap] = await Promise.all([getDocs(ownedQ), getDocs(collabQ)]);
+      const condoOwnerQ = query(collection(db, 'companies'), where('condoOwnerUIDs', 'array-contains', userId));
+      const [ownedSnap, collabSnap, condoOwnerSnap] = await Promise.all([getDocs(ownedQ), getDocs(collabQ), getDocs(condoOwnerQ)]);
 
+      const condoOwnerDocIds = new Set(condoOwnerSnap.docs.map((d) => d.id));
       const seen = new Set<string>();
       const results: any[] = [];
-      for (const d of [...ownedSnap.docs, ...collabSnap.docs]) {
+      for (const d of [...ownedSnap.docs, ...collabSnap.docs, ...condoOwnerSnap.docs]) {
         if (seen.has(d.id)) continue;
         seen.add(d.id);
         const data = d.data();
@@ -1669,8 +1693,10 @@ export const dataService = {
         // `_companyDocId` (the raw prefixed Firestore doc id) lets callers
         // identify which accessible companies are shared (ownerId !== userId)
         // so they can fetch that company's records by companyId instead of
-        // by ownerId — see `fetchOwnedAndShared` below.
-        results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id, _companyDocId: d.id });
+        // by ownerId — see `fetchOwnedAndShared` below. `_isCondoOwner` lets
+        // App.tsx render the restricted unit-owner sidebar instead of the
+        // board's full Syndic dashboard for this company.
+        results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id, _companyDocId: d.id, _isCondoOwner: condoOwnerDocIds.has(d.id) });
       }
       return results;
     } catch (e) {
@@ -1722,13 +1748,16 @@ export const dataService = {
 
   // ── Company invites — real partner-sharing flow ─────────────────────────────
 
-  /** Owner invites a partner by email to collaborate on one of their companies. */
+  /** Owner invites a partner by email to collaborate on one of their companies.
+   *  `extra` optionally tags this as a restricted Syndicat unit-owner invite
+   *  instead of a full-access collaborator invite — see acceptCondoOwnerInvite. */
   async createCompanyInvite(
     invitedByUid: string,
     invitedByName: string,
     companyDocId: string,
     companyName: string,
-    invitedEmail: string
+    invitedEmail: string,
+    extra?: { role: 'coproprietaire'; unitId: string; unitLabel: string }
   ): Promise<CompanyInviteDoc> {
     assertCanWrite();
     const normalizedEmail = invitedEmail.trim().toLowerCase();
@@ -1739,6 +1768,7 @@ export const dataService = {
       companyName,
       invitedEmail: normalizedEmail,
       invitedByUid,
+      ...(extra || {}),
       invitedByName,
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -1797,6 +1827,61 @@ export const dataService = {
    */
   async declineCompanyInvite(invite: CompanyInviteDoc): Promise<void> {
     await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'declined' });
+  },
+
+  /**
+   * Accepts a "coproprietaire" (condo unit owner) invite — deliberately NOT
+   * acceptCompanyInvite/collaboratorUIDs, which grants full read/write access
+   * to every collection in the company. This adds the user to a SEPARATE,
+   * much narrower `condoOwnerUIDs` array (read-only, company-wide docs like
+   * syndicSettings/syndicBudgets/communityPosts only) and links their uid
+   * onto just their own condoUnits doc (read-only there too, and it gates
+   * their own cotisationPayments via the denormalized linkedUid field).
+   * Same arrayUnion-needs-no-prior-read reasoning as acceptCompanyInvite.
+   */
+  async acceptCondoOwnerInvite(userId: string, invite: CompanyInviteDoc): Promise<void> {
+    if (!invite.unitId) throw new Error('Invite is missing unitId — not a valid coproprietaire invite.');
+    const companyRef = doc(db, 'companies', invite.companyDocId);
+    await updateDoc(companyRef, { condoOwnerUIDs: arrayUnion(userId) });
+    await updateDoc(doc(db, 'condoUnits', invite.unitId), { linkedUid: userId });
+    await updateDoc(doc(db, 'companyInvites', invite.id), { status: 'accepted', invitedUid: userId });
+  },
+
+  /** The signed-in coproprietaire's own unit for this company — never the
+   *  full unit list (that query would return every owner's financial data,
+   *  which firestore.rules correctly rejects for anyone but the board). */
+  async fetchMyCondoUnit(userId: string, companyDocId: string): Promise<CondoUnitDoc | null> {
+    try {
+      const q = query(collection(db, 'condoUnits'), where('companyId', '==', companyDocId), where('linkedUid', '==', userId));
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      const d = snap.docs[0];
+      const data = d.data();
+      const idParts = d.id.split('_condounit_');
+      return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as CondoUnitDoc;
+    } catch (e) {
+      console.error('fetchMyCondoUnit failed:', e);
+      return null;
+    }
+  },
+
+  /** The signed-in coproprietaire's own payment history — filtered by the
+   *  denormalized linkedUid field, never by unitId alone (that would also
+   *  need companyId scoping and still returns only this user's own docs
+   *  under firestore.rules, but this is the intended, narrow query shape). */
+  async fetchMyCotisationPayments(userId: string, unitId: string): Promise<CotisationPaymentDoc[]> {
+    try {
+      const q = query(collection(db, 'cotisationPayments'), where('unitId', '==', unitId), where('linkedUid', '==', userId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const idParts = d.id.split('_cotisationpay_');
+        return { ...data, id: idParts.length > 1 ? idParts[1] : d.id } as CotisationPaymentDoc;
+      });
+    } catch (e) {
+      console.error('fetchMyCotisationPayments failed:', e);
+      return [];
+    }
   },
 
   // ── Échéances fiscales — `fiscalDeadlines` collection ─────────────────────

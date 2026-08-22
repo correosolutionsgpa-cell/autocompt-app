@@ -34,7 +34,11 @@ export function PendingInvitesProvider({ children }: { children: React.ReactNode
     if (!uid) return;
     setActioningIds((prev) => new Set(prev).add(invite.id));
     try {
-      await dataService.acceptCompanyInvite(uid, invite);
+      if (invite.role === 'coproprietaire') {
+        await dataService.acceptCondoOwnerInvite(uid, invite);
+      } else {
+        await dataService.acceptCompanyInvite(uid, invite);
+      }
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       setLastAcceptedAt(Date.now());
     } catch (err) {

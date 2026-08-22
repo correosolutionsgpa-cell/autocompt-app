@@ -45,8 +45,18 @@ export function GlobalPendingInvitesHost() {
                   className="p-4 rounded-2xl border bg-slate-50 border-slate-200 dark:bg-zinc-950/50 dark:border-zinc-800"
                 >
                   <p className="text-xs mb-3">
-                    <strong>{invite.invitedByName || invite.invitedEmail}</strong> vous invite à rejoindre{" "}
-                    <strong>{invite.companyName}</strong> en tant que collaborateur·rice.
+                    {invite.role === 'coproprietaire' ? (
+                      <>
+                        <strong>{invite.invitedByName || invite.invitedEmail}</strong> vous invite à consulter votre
+                        cotisation{invite.unitLabel ? ` (${invite.unitLabel})` : ""} sur <strong>{invite.companyName}</strong> — accès en
+                        lecture seule à votre propre compte, jamais aux données des autres copropriétaires.
+                      </>
+                    ) : (
+                      <>
+                        <strong>{invite.invitedByName || invite.invitedEmail}</strong> vous invite à rejoindre{" "}
+                        <strong>{invite.companyName}</strong> en tant que collaborateur·rice.
+                      </>
+                    )}
                   </p>
                   <div className="flex gap-2">
                     <button
