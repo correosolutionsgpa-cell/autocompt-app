@@ -1127,6 +1127,86 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     }
   });
 
+  // ── Syndicat: send a real cotisation-payment reminder to a condo unit owner ─
+  // Was previously a fake setTimeout that always claimed success without
+  // sending anything (found 2026-08-22, Fabiola/audit). Email only — there is
+  // no SMS-sending infrastructure anywhere in this backend, so the reminder
+  // no longer claims to also send by SMS.
+  app.post("/api/send-cotisation-reminder", async (req, res) => {
+    try {
+      const { to, ownerName, unitLabel, amountDue, companyName, adminEmail } = req.body;
+      if (!to || !unitLabel || amountDue == null) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const amountStr = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(Number(amountDue) || 0);
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">Rappel de cotisation de copropriété</h1><p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:13px;">${unitLabel}</p></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour <strong>${ownerName || "copropriétaire"}</strong>,</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">Le Conseil d'administration de <strong>${companyName || "votre syndicat"}</strong> vous rappelle que votre cotisation de copropriété demeure impayée à ce jour.</p><div style="background:#fffbeb;border-radius:12px;padding:20px;margin:20px 0;border-left:4px solid #f59e0b;"><p style="margin:0;color:#92400e;font-size:12px;font-weight:700;text-transform:uppercase;">Montant dû</p><p style="margin:4px 0 0;color:#b45309;font-size:24px;font-weight:900;">${amountStr}</p></div><p style="color:#9ca3af;font-size:11px;">Merci de régulariser votre situation dans les meilleurs délais. Pour toute question, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">${companyName || "Syndicat de copropriété"} · Propulsé par AutoCompt</p></div></div></body></html>`;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to: [to],
+          subject: `Rappel de cotisation — ${unitLabel}`,
+          html,
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[send-cotisation-reminder]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Syndicat: broadcast an AI-drafted document (convocation, mise en
+  // demeure, rapport financier...) to every condo unit owner with a
+  // registered email. Was previously a fake setTimeout with no real send
+  // (found 2026-08-22, Fabiola/audit) — dangerous for legally-significant
+  // documents like an AGM convocation or a mise en demeure. Resend supports
+  // multiple `to` recipients in one call; recipients don't see each other
+  // since `to` on a single Resend call is treated as one thread — for real
+  // per-owner privacy at scale this should move to individual sends later,
+  // but this already fixes "nothing was sent at all".
+  app.post("/api/send-syndic-broadcast", async (req, res) => {
+    try {
+      const { to, docLabel, companyName, adminName, adminRole, adminEmail, period, pdfBase64, filename } = req.body;
+      if (!Array.isArray(to) || to.length === 0 || !pdfBase64) return res.status(400).json({ error: "Missing required fields" });
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) return res.status(500).json({ error: "RESEND_API_KEY not configured" });
+
+      const html = `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;"><div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);"><div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:32px 36px;"><h1 style="color:#fff;margin:0;font-size:20px;font-weight:900;">${docLabel || "Document du syndicat"}</h1><p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:13px;">${companyName || ""} ${period ? "· " + period : ""}</p></div><div style="padding:32px 36px;"><p style="color:#374151;font-size:15px;">Bonjour,</p><p style="color:#6b7280;font-size:14px;line-height:1.6;">Le Conseil d'administration de <strong>${companyName || "votre syndicat"}</strong> vous transmet le document ci-joint : <strong>${docLabel || "un document officiel"}</strong>.</p><p style="color:#9ca3af;font-size:11px;">Document PDF joint à ce courriel. Pour toute question, répondez directement à cet email.</p></div><div style="padding:16px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f0;"><p style="color:#9ca3af;font-size:11px;margin:0;">${adminName || ""}${adminRole ? " — " + adminRole : ""} · ${companyName || "Syndicat de copropriété"} · Propulsé par AutoCompt</p></div></div></body></html>`;
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "AutoCompt <info@autocompt.ca>",
+          reply_to: adminEmail || "info@autocompt.ca",
+          to,
+          subject: `${docLabel || "Document du syndicat"} — ${companyName || ""}`,
+          html,
+          attachments: [{ filename: filename || "Document.pdf", content: pdfBase64 }],
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        return res.status(502).json({ error: "Email delivery failed", details: errBody });
+      }
+      res.json({ ok: true, sentTo: to.length });
+    } catch (err: any) {
+      console.error("[send-syndic-broadcast]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Relevé de Gestion: notify the owner that something is waiting for them ──
   // Deliberately NOT the document itself — the pull model (statementLinks/
   // sealedStatements) means the owner always fetches the real data from their

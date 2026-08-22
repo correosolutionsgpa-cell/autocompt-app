@@ -14,7 +14,9 @@ import {
   TrendingUp,
   Clock,
   Plus,
-  Loader2
+  Loader2,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { dataService, type CondoUnitDoc, type CotisationPaymentDoc } from '../lib/dataService';
@@ -23,6 +25,7 @@ export interface SyndicatCotisationsProps {
   setVista: (v: string) => void;
   darkMode: boolean;
   companyId: string;
+  companyName: string;
 }
 
 interface PaymentHistory {
@@ -37,6 +40,7 @@ interface CondoUnit {
   id: string;
   unit: string;
   owner: string;
+  email?: string;
   amountDue: number;
   status: 'paye' | 'en_retard';
   history: PaymentHistory[];
@@ -44,7 +48,7 @@ interface CondoUnit {
 
 const CURRENT_MONTH_LABEL = new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
 
-export default function SyndicatCotisations({ setVista, darkMode, companyId }: SyndicatCotisationsProps) {
+export default function SyndicatCotisations({ setVista, darkMode, companyId, companyName }: SyndicatCotisationsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'mois_en_cours' | 'tous_les_mois'>('mois_en_cours');
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
@@ -66,10 +70,13 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
   const [rawPayments, setRawPayments] = useState<CotisationPaymentDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Add-unit modal
+  // Add/Edit-unit modal — same modal handles both; editingUnitId set means
+  // "Modifier" (reuses saveCondoUnit's upsert-by-id), null means "Ajouter".
   const [isAddUnitModalOpen, setIsAddUnitModalOpen] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [newUnitLabel, setNewUnitLabel] = useState('');
   const [newUnitOwner, setNewUnitOwner] = useState('');
+  const [newUnitEmail, setNewUnitEmail] = useState('');
   const [newUnitAmount, setNewUnitAmount] = useState('');
 
   useEffect(() => {
@@ -91,6 +98,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
     id: u.id,
     unit: u.unit,
     owner: u.owner,
+    email: u.email,
     amountDue: u.amountDue,
     status: u.status,
     history: rawPayments
@@ -246,14 +254,54 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
     }
   };
 
-  // Send interactive reminder
-  const handleSendReminder = (unit: CondoUnit) => {
+  // Send a real cotisation reminder by email. Was previously a fake
+  // setTimeout claiming both email AND SMS delivery with no actual send —
+  // there is no SMS infrastructure in this app, so the reminder is email-only.
+  const handleSendReminder = async (unit: CondoUnit) => {
+    if (!unit.email) {
+      triggerToast("Aucun courriel enregistré pour ce copropriétaire — modifiez l'unité pour en ajouter un.", 'error');
+      return;
+    }
     setSendingReminderId(unit.id);
     playSound('swoop');
-    setTimeout(() => {
+    try {
+      const resp = await fetch('/api/send-cotisation-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: unit.email,
+          ownerName: unit.owner,
+          unitLabel: unit.unit,
+          amountDue: unit.amountDue,
+          companyName,
+          adminEmail: auth.currentUser?.email,
+        }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      triggerToast(`Rappel de cotisation envoyé par courriel à ${unit.owner} !`, 'success');
+    } catch (err) {
+      console.error('Failed to send cotisation reminder:', err);
+      triggerToast("Erreur lors de l'envoi du rappel — réessayez plus tard.", 'error');
+    } finally {
       setSendingReminderId(null);
-      triggerToast(`Rappel de cotisation envoyé par courriel & SMS à ${unit.owner} !`, 'success');
-    }, 1500);
+    }
+  };
+
+  const resetUnitForm = () => {
+    setEditingUnitId(null);
+    setNewUnitLabel('');
+    setNewUnitOwner('');
+    setNewUnitEmail('');
+    setNewUnitAmount('');
+  };
+
+  const openEditUnit = (unit: CondoUnit) => {
+    setEditingUnitId(unit.id);
+    setNewUnitLabel(unit.unit);
+    setNewUnitOwner(unit.owner);
+    setNewUnitEmail(unit.email || '');
+    setNewUnitAmount(String(unit.amountDue));
+    setIsAddUnitModalOpen(true);
   };
 
   const handleAddUnit = async () => {
@@ -265,23 +313,51 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     try {
-      const saved = await dataService.saveCondoUnit(uid, {
-        id: '',
-        companyId,
-        unit: newUnitLabel.trim(),
-        owner: newUnitOwner.trim(),
-        amountDue: amount,
-        status: 'en_retard',
-      });
-      setRawUnits((prev) => [...prev, saved]);
+      if (editingUnitId) {
+        const existing = rawUnits.find((u) => u.id === editingUnitId);
+        if (!existing) return;
+        const saved = await dataService.saveCondoUnit(uid, {
+          ...existing,
+          id: editingUnitId,
+          companyId,
+          unit: newUnitLabel.trim(),
+          owner: newUnitOwner.trim(),
+          email: newUnitEmail.trim() || undefined,
+          amountDue: amount,
+        });
+        setRawUnits((prev) => prev.map((u) => (u.id === editingUnitId ? saved : u)));
+        triggerToast('Unité modifiée avec succès !', 'success');
+      } else {
+        const saved = await dataService.saveCondoUnit(uid, {
+          id: '',
+          companyId,
+          unit: newUnitLabel.trim(),
+          owner: newUnitOwner.trim(),
+          email: newUnitEmail.trim() || undefined,
+          amountDue: amount,
+          status: 'en_retard',
+        });
+        setRawUnits((prev) => [...prev, saved]);
+        triggerToast('Unité ajoutée avec succès !', 'success');
+      }
       setIsAddUnitModalOpen(false);
-      setNewUnitLabel('');
-      setNewUnitOwner('');
-      setNewUnitAmount('');
-      triggerToast('Unité ajoutée avec succès !', 'success');
+      resetUnitForm();
     } catch (err) {
       console.error('Failed to save condo unit:', err);
-      triggerToast("Erreur lors de l'ajout de l'unité.", 'error');
+      triggerToast("Erreur lors de l'enregistrement de l'unité.", 'error');
+    }
+  };
+
+  const handleDeleteUnit = async (unit: CondoUnit) => {
+    if (!confirm(`Supprimer l'unité "${unit.unit}" (${unit.owner}) ? Cette action est irréversible.`)) return;
+    try {
+      await dataService.deleteCondoUnit(unit.id);
+      setRawUnits((prev) => prev.filter((u) => u.id !== unit.id));
+      if (expandedUnitId === unit.id) setExpandedUnitId(null);
+      triggerToast('Unité supprimée.', 'success');
+    } catch (err) {
+      console.error('Failed to delete condo unit:', err);
+      triggerToast("Erreur lors de la suppression de l'unité.", 'error');
     }
   };
 
@@ -337,7 +413,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
             </p>
           </div>
           <button
-            onClick={() => setIsAddUnitModalOpen(true)}
+            onClick={() => { resetUnitForm(); setIsAddUnitModalOpen(true); }}
             className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border-none cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 shrink-0"
           >
             <Plus size={14} /><span>Ajouter une unité</span>
@@ -596,6 +672,21 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
                                   </>
                                 )}
                               </button>
+
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => openEditUnit(unit)}
+                                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[20px] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] border cursor-pointer ${darkMode ? "border-zinc-850 text-zinc-350 hover:border-zinc-700 bg-transparent" : "border-slate-200 text-slate-600 hover:border-slate-350 bg-transparent"}`}
+                                >
+                                  <Pencil size={14} /> Modifier
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUnit(unit)}
+                                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[20px] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] border cursor-pointer ${darkMode ? "border-rose-900/50 text-rose-400 hover:bg-rose-950/30 bg-transparent" : "border-rose-200 text-rose-600 hover:bg-rose-50 bg-transparent"}`}
+                                >
+                                  <Trash2 size={14} /> Supprimer
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -628,7 +719,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
               className={`w-full max-w-md rounded-[40px] border shadow-2xl p-6 sm:p-8 flex flex-col relative ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
             >
               <button
-                onClick={() => setIsAddUnitModalOpen(false)}
+                onClick={() => { setIsAddUnitModalOpen(false); resetUnitForm(); }}
                 className={`absolute top-6 right-6 p-2 rounded-xl transition-all border-none bg-transparent cursor-pointer ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
               >
                 <X size={20} />
@@ -636,9 +727,11 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
 
               <div className="flex items-center space-x-3 mb-6">
                 <div className="bg-emerald-500/10 text-emerald-500 p-2.5 rounded-2xl">
-                  <Plus size={22} />
+                  {editingUnitId ? <Pencil size={22} /> : <Plus size={22} />}
                 </div>
-                <h3 className="text-sm font-black uppercase tracking-widest leading-none">Ajouter une unité</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest leading-none">
+                  {editingUnitId ? "Modifier l'unité" : 'Ajouter une unité'}
+                </h3>
               </div>
 
               <div className="space-y-4">
@@ -663,6 +756,16 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Courriel (pour les rappels)</label>
+                  <input
+                    type="email"
+                    value={newUnitEmail}
+                    onChange={(e) => setNewUnitEmail(e.target.value)}
+                    placeholder="jean.tremblay@courriel.com"
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Cotisation mensuelle ($)</label>
                   <input
                     type="number"
@@ -676,7 +779,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setIsAddUnitModalOpen(false)}
+                    onClick={() => { setIsAddUnitModalOpen(false); resetUnitForm(); }}
                     className="flex-1 py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border border-slate-200 dark:border-zinc-800 bg-transparent text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/40 cursor-pointer"
                   >
                     Annuler
@@ -686,7 +789,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId }: S
                     onClick={handleAddUnit}
                     className="flex-grow py-4 rounded-full text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-emerald-600 hover:bg-emerald-750 text-white shadow-lg shadow-emerald-500/20 cursor-pointer"
                   >
-                    Ajouter
+                    {editingUnitId ? 'Enregistrer' : 'Ajouter'}
                   </button>
                 </div>
               </div>

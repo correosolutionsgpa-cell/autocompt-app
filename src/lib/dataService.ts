@@ -732,6 +732,7 @@ export interface CondoUnitDoc {
   companyId: string;
   unit: string;             // "Unité 101"
   owner: string;             // "Jean Tremblay"
+  email?: string;            // owner's email — required to actually send reminders/broadcasts
   amountDue: number;         // monthly cotisation amount
   status: 'paye' | 'en_retard';
   ownerId: string;

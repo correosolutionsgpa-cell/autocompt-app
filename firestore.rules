@@ -297,6 +297,17 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Trouvé 2026-08-22 (audit) : cette collection était activement lue/écrite
+    // par SyndicAiReporter.tsx (dataService.saveAiReport/fetchAiReports) mais
+    // n'avait aucune règle — chaque sauvegarde échouait silencieusement
+    // (catch console.error), donc aucun rapport IA (financier, convocations,
+    // mises en demeure...) ne persistait jamais réellement.
+    match /aiReports/{reportId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     match /syndicSettings/{configId} {
       allow read: if isOwnerDoc() || isCollaboratorOnCompany();
       allow create: if isOwnerWrite();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { dataService } from '../lib/dataService';
+import { dataService, type CondoUnitDoc } from '../lib/dataService';
 import { auth } from '../lib/firebase';
 import {
   Sparkles,
@@ -18,6 +18,7 @@ import {
   Clock,
   DollarSign,
   Users,
+  AlertCircle,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -124,6 +125,19 @@ export default function SyndicAiReporter({
   const [history, setHistory] = useState<GeneratedReport[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [sendError, setSendError] = useState('');
+  const [condoUnits, setCondoUnits] = useState<CondoUnitDoc[]>([]);
+
+  // Recipients for "Diffuser aux Copropriétaires" — every unit with a
+  // registered email. Loaded alongside history so it's ready by the time
+  // there's a document to send.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !activeCompanyId) return;
+    dataService.fetchCondoUnits(uid, activeCompanyId)
+      .then(setCondoUnits)
+      .catch((err) => console.error("fetchCondoUnits failed:", err));
+  }, [activeCompanyId]);
 
   // Load reports history from Firestore
   useEffect(() => {
@@ -247,6 +261,7 @@ Ton professionnel, chiffré, avec des projections réalistes pour une coproprié
     setIsGenerating(true);
     setGeneratedText('');
     setIsSent(false);
+    setSendError('');
 
     const prompt = buildPrompt();
 
@@ -494,7 +509,9 @@ ${adminRole} — ${companyName}`;
     }
   };
 
-  const handleDownloadPDF = () => {
+  // Shared by handleDownloadPDF (saves locally) and handleSend (attaches to
+  // the broadcast email) so both always produce the exact same document.
+  const buildPdfDoc = (): jsPDF => {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const cfg = currentConfig;
     const pageW = 210;
@@ -631,15 +648,55 @@ ${adminRole} — ${companyName}`;
     );
     doc.text(`${companyName} • AutoCompt • ${new Date().getFullYear()}`, margin + 8, pageH - 5);
 
-    doc.save(`AutoCompt_${cfg.id}_${period.replace(/\s/g, '-')}.pdf`);
+    return doc;
   };
 
+  const pdfFilename = () => `AutoCompt_${currentConfig.id}_${period.replace(/\s/g, '-')}.pdf`;
+
+  const handleDownloadPDF = () => {
+    buildPdfDoc().save(pdfFilename());
+  };
+
+  // Was previously a fake setTimeout that always claimed success without
+  // sending anything — dangerous for legally-significant documents like an
+  // AGM convocation or a mise en demeure (found 2026-08-22, Fabiola/audit).
+  // Now sends the real generated PDF to every condo unit with a registered
+  // email via Resend.
   const handleSend = async () => {
+    setSendError('');
+    const recipients = condoUnits.map((u) => u.email).filter((e): e is string => !!e);
+    if (recipients.length === 0) {
+      setSendError("Aucun copropriétaire n'a de courriel enregistré — ajoutez-en dans Gestion des Cotisations avant de diffuser.");
+      return;
+    }
     setIsSending(true);
-    await new Promise((r) => setTimeout(r, 1800));
-    setIsSending(false);
-    setIsSent(true);
-    setTimeout(() => setIsSent(false), 4000);
+    try {
+      const pdfDataUri = buildPdfDoc().output('datauristring');
+      const pdfBase64 = pdfDataUri.split(',')[1];
+      const resp = await fetch('/api/send-syndic-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipients,
+          docLabel: currentConfig.label,
+          companyName,
+          adminName,
+          adminRole,
+          adminEmail: auth.currentUser?.email,
+          period,
+          pdfBase64,
+          filename: pdfFilename(),
+        }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      setIsSent(true);
+      setTimeout(() => setIsSent(false), 4000);
+    } catch (err) {
+      console.error('Failed to broadcast document:', err);
+      setSendError("Erreur lors de l'envoi — réessayez plus tard.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const dm = darkMode;
@@ -830,7 +887,7 @@ ${adminRole} — ${companyName}`;
                   </button>
 
                   <button
-                    onClick={() => { setGeneratedText(''); }}
+                    onClick={() => { setGeneratedText(''); setSendError(''); setIsSent(false); }}
                     className={`py-3 px-4 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 border-none transition-all ${dm ? 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                   >
                     <RefreshCw size={13} />
@@ -851,8 +908,23 @@ ${adminRole} — ${companyName}`;
                 >
                   <CheckCircle2 size={16} />
                   <span className="text-[10px] font-bold">
-                    Document diffusé avec succès à l'ensemble des copropriétaires de {companyName} !
+                    Document diffusé avec succès à {condoUnits.filter((u) => u.email).length} copropriétaire(s) de {companyName} !
                   </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Error toast */}
+            <AnimatePresence>
+              {sendError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-2xl flex items-center gap-3 text-rose-800 dark:text-rose-400"
+                >
+                  <AlertCircle size={16} />
+                  <span className="text-[10px] font-bold">{sendError}</span>
                 </motion.div>
               )}
             </AnimatePresence>

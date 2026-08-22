@@ -22678,6 +22678,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         goBack={goBack}
         WorkspaceSidebar={WorkspaceSidebar}
         companyId={activeCompanyId}
+        companyName={currentCompany?.nombre || "Solutions GPA Inc."}
       />
     );
   }
