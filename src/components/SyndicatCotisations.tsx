@@ -183,16 +183,23 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     }, 4000);
   };
 
-  // Calculations for KPI Summary
-  const totalDueCurrentMonth = units.reduce((acc, u) => acc + u.amountDue, 0);
-  
-  const totalPaidCurrentMonth = units
-    .filter(u => u.status === 'paye')
-    .reduce((acc, u) => acc + u.amountDue, 0);
+  // Calculations for KPI Summary — computed from the actual amounts paid
+  // this month, not from the unit's binary 'paye'/'en_retard' status. Was
+  // previously summing amountDue for every unit flagged 'paye', which
+  // overstated collections and hid arrears whenever a partial payment had
+  // (incorrectly) flipped a unit to 'paye' (found 2026-08-22, audit).
+  const currentMonthPayments = rawPayments.filter((p) => p.month === CURRENT_MONTH_LABEL);
+  const paidThisMonthByUnit = new Map<string, number>();
+  currentMonthPayments.forEach((p) => paidThisMonthByUnit.set(p.unitId, (paidThisMonthByUnit.get(p.unitId) || 0) + p.amount));
 
-  const totalOutstandingCurrentMonth = units
-    .filter(u => u.status === 'en_retard')
-    .reduce((acc, u) => acc + u.amountDue, 0);
+  const totalDueCurrentMonth = units.reduce((acc, u) => acc + u.amountDue, 0);
+
+  const totalPaidCurrentMonth = currentMonthPayments.reduce((acc, p) => acc + p.amount, 0);
+
+  const totalOutstandingCurrentMonth = units.reduce((acc, u) => {
+    const paid = paidThisMonthByUnit.get(u.id) || 0;
+    return acc + Math.max(0, u.amountDue - paid);
+  }, 0);
 
   const recoveryRate = totalDueCurrentMonth > 0 
     ? Math.round((totalPaidCurrentMonth / totalDueCurrentMonth) * 100) 
@@ -233,21 +240,33 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
         date: todayStr,
         status: 'paye',
       });
-      setRawPayments((prev) => [
-        savedPayment,
-        ...prev.filter((p) => !(p.unitId === selectedUnit.id && p.month === monthStr)),
-      ]);
+      // Append, don't replace — a unit can have several partial payments in
+      // the same month, each is its own real record (was previously
+      // dropping any prior payment for the same unit/month from view).
+      setRawPayments((prev) => [savedPayment, ...prev]);
 
+      // Only flip the unit to "Payé" once the cumulative total received
+      // this month actually covers what's due — was previously marking any
+      // payment, however small, as full payment (found 2026-08-22, audit).
+      const alreadyPaidThisMonth = paidThisMonthByUnit.get(selectedUnit.id) || 0;
+      const totalPaidNow = alreadyPaidThisMonth + paymentAmount;
+      const isFullyPaid = totalPaidNow >= selectedUnit.amountDue;
       const unitDoc = rawUnits.find((u) => u.id === selectedUnit.id);
       if (unitDoc) {
-        await dataService.saveCondoUnit(uid, { ...unitDoc, status: 'paye' });
-        setRawUnits((prev) => prev.map((u) => (u.id === selectedUnit.id ? { ...u, status: 'paye' } : u)));
+        const newStatus = isFullyPaid ? 'paye' : 'en_retard';
+        await dataService.saveCondoUnit(uid, { ...unitDoc, status: newStatus });
+        setRawUnits((prev) => prev.map((u) => (u.id === selectedUnit.id ? { ...u, status: newStatus } : u)));
       }
 
       setIsPaymentModalOpen(false);
       setSelectedUnit(null);
       playSound('cash');
-      triggerToast(`Paiement de ${paymentAmount.toFixed(2)} $ enregistré pour ${selectedUnit.unit} !`, 'success');
+      if (isFullyPaid) {
+        triggerToast(`Paiement de ${paymentAmount.toFixed(2)} $ enregistré pour ${selectedUnit.unit} — cotisation complète !`, 'success');
+      } else {
+        const remaining = selectedUnit.amountDue - totalPaidNow;
+        triggerToast(`Paiement partiel de ${paymentAmount.toFixed(2)} $ enregistré pour ${selectedUnit.unit} — il reste ${remaining.toFixed(2)} $ dû.`, 'success');
+      }
     } catch (err) {
       console.error('Failed to save cotisation payment:', err);
       triggerToast("Erreur lors de l'enregistrement du paiement.", 'error');
@@ -635,7 +654,8 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
                               <button 
                                 onClick={() => {
                                   setSelectedUnit(unit);
-                                  setPaymentAmount(unit.amountDue);
+                                  const alreadyPaid = paidThisMonthByUnit.get(unit.id) || 0;
+                                  setPaymentAmount(Math.max(0, unit.amountDue - alreadyPaid));
                                   setPaymentMethod('interac');
                                   setIsPaymentModalOpen(true);
                                 }}
