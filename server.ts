@@ -456,18 +456,32 @@ export async function buildApp() {
           "Rappelle systématiquement ou indique clairement dans tes explications (via une clause de non-responsabilité) que tu agis en tant qu'assistante d'organisation comptable, que tu ne remplaces pas un véritable CPA et que tu aides simplement à préparer les dossiers.";
       }
 
-      // Format messages history for Gemini API
-      const chatHistory = messages.map((m: any) => ({
+      // Format messages history for Gemini API — everything BEFORE the
+      // current message, since the current one is sent separately below via
+      // sendMessage(). Trouvé 2026-08-21 (Fabiola) : ce tableau était calculé
+      // mais jamais passé à ai.chats.create(), donc chaque message ouvrait
+      // une session Gemini toute neuve sans aucune mémoire des tours
+      // précédents — Sofi "perdait le fil" de la conversation à chaque
+      // réponse (ex : elle propose de l'aide, l'utilisateur répond "oui",
+      // et ce "oui" arrive sans aucun contexte de ce qui a été proposé).
+      // Gemini requires history to start with a 'user' turn — the client's
+      // chat always opens with a canned "Bonjour, je suis Sofi..." assistant
+      // greeting as messages[0], so that (and any other leading assistant
+      // message) must be dropped, not just the current message.
+      const chatHistoryRaw = messages.slice(0, -1).map((m: any) => ({
         role: m.role === "user" ? "user" : "model",
         parts: [{ text: m.content }]
       }));
+      const firstUserIdx = chatHistoryRaw.findIndex((m) => m.role === "user");
+      const chatHistory = firstUserIdx === -1 ? [] : chatHistoryRaw.slice(firstUserIdx);
 
       // Create Chat
       const chat = ai.chats.create({
         model: "gemini-2.5-flash",
         config: {
           systemInstruction: systemInstruction,
-        }
+        },
+        history: chatHistory,
       });
 
       // Send the latest user query
