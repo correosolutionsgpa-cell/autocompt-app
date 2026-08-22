@@ -1328,6 +1328,20 @@ const App = () => {
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState("admin");
+  // "Installer l'application" — the browser only lets a real one-click
+  // install happen in response to this captured event (Chrome/Edge/Android);
+  // Safari/iOS never fires it at all, so that platform always falls back to
+  // the manual "Partager → Sur l'écran d'accueil" instructions in the modal.
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
   // ── Mandatory phone verification (Loi 25 — explicit consent + SMS proof) ──
   // null = not yet known (auth still resolving), true/false = confirmed from Firestore.
   const [isPhoneVerified, setIsPhoneVerified] = useState<boolean | null>(null);
@@ -4160,6 +4174,17 @@ const App = () => {
                 </div>
 
                 <div className="space-y-1.5 w-full">
+                  <button
+                    onClick={() => {
+                      setShowInstallModal(true);
+                      setIsSidebarOpen(false);
+                      if (typeof playNotificationSound === "function") playNotificationSound();
+                    }}
+                    className={`w-full py-2 border border-transparent rounded-xl flex items-center justify-center space-x-2 text-[8px] font-black uppercase tracking-widest transition-all ${darkMode ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
+                  >
+                    <Download size={12} />
+                    <span>{t("Installer l'application")}</span>
+                  </button>
                   {isSuperAdmin && (
                     <button
                       onClick={() => {
@@ -4228,6 +4253,75 @@ const App = () => {
             </>
           )}
         </aside>
+
+        {showInstallModal && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowInstallModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-md rounded-[32px] border shadow-2xl p-6 sm:p-8 space-y-5 ${darkMode ? "bg-zinc-950 border-zinc-800 text-white" : "bg-white border-slate-100 text-slate-900"}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-500/10 text-emerald-500 p-2.5 rounded-2xl">
+                    <Download size={20} />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-widest leading-none">Installer AutoCompt</h3>
+                </div>
+                <button
+                  onClick={() => setShowInstallModal(false)}
+                  className={`p-2 rounded-xl transition-all ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-900" : "text-slate-300 hover:text-slate-900 hover:bg-slate-50"}`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-400">
+                AutoCompt n'est pas dans une boutique d'applications — c'est une application web installable directement depuis votre navigateur, sans rien télécharger. Une fois installée, elle a sa propre icône et s'ouvre en plein écran, comme une vraie application.
+              </p>
+
+              {installPromptEvent ? (
+                <button
+                  onClick={async () => {
+                    try {
+                      installPromptEvent.prompt();
+                      await installPromptEvent.userChoice;
+                    } catch { /* user dismissed the native prompt — ignore */ }
+                    setInstallPromptEvent(null);
+                    setShowInstallModal(false);
+                  }}
+                  className="w-full py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest transition-transform active:scale-95 border-none bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                >
+                  <Download size={16} />
+                  <span>Installer maintenant</span>
+                </button>
+              ) : (
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-1.5">📱 iPhone / iPad (Safari)</p>
+                    <p className="text-[10.5px] font-medium leading-relaxed">
+                      Touchez l'icône « Partager » (le carré avec une flèche vers le haut), puis « Sur l'écran d'accueil ».
+                    </p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-1.5">📱 Android (Chrome)</p>
+                    <p className="text-[10.5px] font-medium leading-relaxed">
+                      Touchez le menu ⋮ en haut à droite, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
+                    </p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${darkMode ? "bg-zinc-900/50 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-1.5">💻 Ordinateur (Chrome / Edge)</p>
+                    <p className="text-[10.5px] font-medium leading-relaxed">
+                      Cliquez sur l'icône d'installation ⊕ dans la barre d'adresse, tout à droite, ou passez par le menu ⋮ → « Installer AutoCompt ».
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </>
     );
   };
