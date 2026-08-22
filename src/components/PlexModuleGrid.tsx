@@ -33,7 +33,6 @@ import {
   Building2,
   ShieldAlert,
   Scale,
-  Sparkles,
   Users,
   Hammer,
 } from "lucide-react";
@@ -464,10 +463,17 @@ export default function PlexModuleGrid({
           >
             {/* Icon — §2: glass badge, NOT solid fill. §6: pulse allowed on AI hero */}
             <div
-              className="bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-2xl text-emerald-600 dark:text-emerald-400 relative animate-living-pulse"
+              className="bg-emerald-500/10 border border-emerald-500/30 p-1.5 rounded-2xl text-emerald-600 dark:text-emerald-400 relative animate-living-pulse"
               style={{ "--pulse-rgb": "16,185,129" } as React.CSSProperties}
             >
-              <Sparkles size={20} />
+              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
+                <img
+                  src="/sofi/sofimediocuerpoblanco.png"
+                  alt="Sofi"
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scale(3.1)", transformOrigin: "49% 3%" }}
+                />
+              </div>
               {tier === "gratuit" && (
                 <div className="absolute -top-1 -right-1 bg-amber-500/90 backdrop-blur-sm text-slate-950 p-0.5 rounded-full shadow border border-white/20">
                   <span className="text-[8px]">🔒</span>

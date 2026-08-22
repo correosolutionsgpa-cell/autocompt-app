@@ -301,7 +301,7 @@ export default function SyndicModuleGrid({
               src="/sofi/La_pose__Sofi_con_exito.jpeg"
               alt="Sofi"
               className="w-full h-full object-cover"
-              style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+              style={{ transform: "scale(2.75)", transformOrigin: "44% 0%" }}
             />
           </div>
         </div>

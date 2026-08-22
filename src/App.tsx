@@ -4448,20 +4448,18 @@ const App = () => {
               className={`p-6 border-b flex items-center justify-between ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-100"}`}
             >
               <div className="flex items-center space-x-3">
-                {dashboardMode === "Syndic" ? (
-                  <div className="w-10 h-10 rounded-full border border-purple-500/20 shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950">
-                    <img
-                      src="/sofi/sofimediocuerpoblanco.png"
-                      alt="Sofi"
-                      className="w-full h-full object-cover"
-                      style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
-                    />
-                  </div>
-                ) : (
-                  <div className="bg-emerald-600 p-2 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
-                    <Sparkles size={20} />
-                  </div>
-                )}
+                <div
+                  className={`w-10 h-10 rounded-full border shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 ${
+                    dashboardMode === "Syndic" ? "border-purple-500/20" : "border-emerald-500/20"
+                  }`}
+                >
+                  <img
+                    src="/sofi/sofimediocuerpoblanco.png"
+                    alt="Sofi"
+                    className="w-full h-full object-cover"
+                    style={{ transform: "scale(3.1)", transformOrigin: "49% 3%" }}
+                  />
+                </div>
                 <div>
                   <h3
                     className={`text-xs font-black uppercase italic tracking-tighter leading-none ${darkMode ? "text-white" : "text-slate-900"}`}
@@ -4503,7 +4501,7 @@ const App = () => {
                                 src="/sofi/sofimediocuerpoblanco.png"
                                 alt="Sofi"
                                 className="w-full h-full object-cover"
-                                style={{ transform: "scale(3.2)", transformOrigin: "50% 15%" }}
+                                style={{ transform: "scale(3.1)", transformOrigin: "49% 3%" }}
                               />
                             </div>
                           ) : (
