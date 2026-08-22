@@ -127,6 +127,13 @@ export default function SyndicAiReporter({
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [sendError, setSendError] = useState('');
   const [condoUnits, setCondoUnits] = useState<CondoUnitDoc[]>([]);
+  // Real configured budget — was previously two numbers hardcoded ($14,500 /
+  // $62,350) baked into every syndicate's financial/legal AI-drafted
+  // documents regardless of their real position (found 2026-08-22, audit).
+  // Same source SyndicTransparencyDashboard.tsx and SyndicLoi16View.tsx
+  // already use, so all three screens now agree.
+  const [fondsOperations, setFondsOperations] = useState(0);
+  const [fondsPrevoyance, setFondsPrevoyance] = useState(0);
 
   // Recipients for "Diffuser aux Copropriétaires" — every unit with a
   // registered email. Loaded alongside history so it's ready by the time
@@ -137,6 +144,15 @@ export default function SyndicAiReporter({
     dataService.fetchCondoUnits(uid, activeCompanyId)
       .then(setCondoUnits)
       .catch((err) => console.error("fetchCondoUnits failed:", err));
+    dataService.fetchSyndicBudget(activeCompanyId, now.getFullYear())
+      .then((budget) => {
+        if (budget) {
+          setFondsOperations(budget.fondsOperationInitial);
+          setFondsPrevoyance(budget.fondsPrevoyance);
+        }
+      })
+      .catch((err) => console.error("fetchSyndicBudget failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
   // Load reports history from Firestore
@@ -161,8 +177,6 @@ export default function SyndicAiReporter({
   // Compute real financial data from depenses
   const condoExpenses = depenses.filter((d) => d.companyId === activeCompanyId);
   const totalDepenses = condoExpenses.reduce((sum, d) => sum + (Number(d.total) || 0), 0);
-  const fondsOperations = 14500;
-  const fondsPrevoyance = 62350;
 
   const currentConfig = DOC_TYPES.find((d) => d.id === docType)!;
 
@@ -705,6 +719,15 @@ ${adminRole} — ${companyName}`;
 
   return (
     <div className="space-y-6 font-sans text-left">
+
+      {fondsOperations === 0 && fondsPrevoyance === 0 && (
+        <div className={`p-4 rounded-2xl flex items-start gap-3 border ${dm ? "bg-amber-950/20 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <p className="text-[10px] font-bold leading-relaxed">
+            Aucun budget configuré pour {now.getFullYear()} — les fonds afficheront 0 $ dans vos documents. Configurez-le d'abord dans « Tableau de Transparence ».
+          </p>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">

@@ -9841,6 +9841,37 @@ const App = () => {
                     setIsForfaitSelected(true);
                     setActiveUser("Président");
 
+                    // Was previously discarded entirely — every field the
+                    // board just filled in (address, unit count, board
+                    // members...) only ever lived in this form's local state
+                    // and vanished the moment the workspace was created
+                    // (found 2026-08-22, audit). Now persisted to the same
+                    // syndicSettings doc SyndicSettingsPanel.tsx reads/writes,
+                    // so Paramètres shows what was just entered instead of a
+                    // blank form. Fields with no home in SyndicSettingsDoc
+                    // (année de construction, étages, stationnements,
+                    // casiers, cadastre, renouvellement) aren't persisted —
+                    // no Firestore field exists for them anywhere in the app.
+                    try {
+                      const boardMembers = [
+                        { name: syndicatSetup.president.trim(), role: "Président(e)" },
+                        { name: syndicatSetup.tresorier.trim(), role: "Trésorier(ère)" },
+                        { name: syndicatSetup.secretaire.trim(), role: "Secrétaire" },
+                        ...syndicatSetup.administrateurs.split(",").map((n) => n.trim()).filter(Boolean).map((name) => ({ name, role: "Administrateur" })),
+                      ].filter((m) => m.name);
+                      await dataService.saveSyndicSettings(uid, {
+                        companyId: newCompanyId,
+                        buildingName: "",
+                        address: syndicatSetup.adresse.trim(),
+                        totalUnits: parseInt(syndicatSetup.unites, 10) || 0,
+                        fiscalYearEnd: "31 décembre",
+                        reserveFundPercent: 5,
+                        boardMembers,
+                      });
+                    } catch (e) {
+                      console.error("Failed to save initial Syndic settings from onboarding:", e);
+                    }
+
                     if (isCreatingSecondCompany) {
                       setIsCreatingSecondCompany(false);
                       localStorage.setItem("MultiEntrepriseActive", "true");
