@@ -4449,7 +4449,7 @@ const App = () => {
             >
               <div className="flex items-center space-x-3">
                 <div
-                  className={`w-10 h-10 rounded-full border shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 ${
+                  className={`w-14 h-14 rounded-full border shadow-sm shrink-0 overflow-hidden flex items-center justify-center bg-zinc-950 ${
                     dashboardMode === "Syndic" ? "border-purple-500/20" : "border-emerald-500/20"
                   }`}
                 >
@@ -12637,16 +12637,17 @@ const App = () => {
                     const hiddenCount = expensesByCategory.length - 2;
                     return (
                       <>
-                        {/* Desktop: full list side-by-side with the donut — unchanged, no length problem there. */}
-                        <div className="hidden lg:block w-full lg:w-1/2 space-y-2 text-left">
-                          {expensesByCategory.map(renderCategoryRow)}
-                        </div>
-
-                        {/* Mobile: donut + top 2 categories, rest tucked behind a
+                        {/* Always: donut + top 2 categories, rest tucked behind a
                             floating teaser card that morphs into a full-screen
                             sheet on tap (shared layoutId — same effect as a Bible
-                            app's verse card expanding to fill the screen). */}
-                        <div className="w-full lg:hidden space-y-2 text-left">
+                            app's verse card expanding to fill the screen).
+                            Was previously desktop (lg:block, full list) vs mobile
+                            (lg:hidden, top-2 teaser) — the lg (1024px) breakpoint
+                            let a resized/tablet-width browser fall into the
+                            "desktop" branch and show the full unbounded list
+                            again, defeating the point. Now unconditional, so the
+                            card never grows past this regardless of window width. */}
+                        <div className="w-full lg:w-1/2 space-y-2 text-left">
                           {expensesByCategory.slice(0, 2).map(renderCategoryRow)}
                           {hiddenCount > 0 && (
                             <motion.button
@@ -12665,7 +12666,7 @@ const App = () => {
                         <AnimatePresence>
                           {showExpenseCategoriesModal && (
                             <motion.div
-                              className="fixed inset-0 z-[200] lg:hidden bg-black/60 backdrop-blur-sm flex items-end"
+                              className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end"
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
