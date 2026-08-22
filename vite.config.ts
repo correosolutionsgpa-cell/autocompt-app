@@ -12,6 +12,7 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: false,
         includeAssets: ['apple-touch-icon.png'],
         workbox: {
           // App.tsx compiles to a single ~4.3MB chunk (see the pending

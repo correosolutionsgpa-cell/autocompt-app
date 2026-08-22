@@ -9,6 +9,31 @@ import { PendingInvitesProvider } from './lib/PendingInvitesContext.tsx'
 import { GlobalPendingInvitesHost } from './components/GlobalPendingInvitesHost.tsx'
 import { WorkHoursProvider } from './lib/WorkHoursContext.tsx'
 import { GlobalWorkHoursHost } from './components/GlobalWorkHoursHost.tsx'
+import { registerSW } from 'virtual:pwa-register'
+
+// Sans ceci, une session déjà ouverte (surtout sur mobile) continue de
+// servir les fichiers de l'ancien déploiement indéfiniment — le nouveau
+// Service Worker s'installe en arrière-plan mais l'onglet ouvert ne
+// recharge jamais tout seul. reloadOnUpdate force le rechargement dès que
+// le nouveau SW prend le contrôle, une seule fois (voir le flag ci-dessous).
+let reloadedForNewVersion = false;
+registerSW({
+  immediate: true,
+  onRegisteredSW(_url, registration) {
+    // Vérifie s'il y a une nouvelle version à chaque retour au premier plan
+    // — un mobile qui revient d'arrière-plan ne recharge pas la page seul.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') registration?.update();
+    });
+  },
+});
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForNewVersion) return;
+    reloadedForNewVersion = true;
+    window.location.reload();
+  });
+}
 
 // Fallback shown while a lazy-loaded screen's chunk is downloading — App.tsx's
 // heaviest, least-frequently-visited views (SuperAdminPanel, per-profile
