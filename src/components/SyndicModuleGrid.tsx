@@ -295,8 +295,11 @@ export default function SyndicModuleGrid({
         }}
       >
         {/* Icon — glass badge containing Sofi Face */}
-        <div className="bg-purple-500/10 border border-purple-500/30 p-1.5 rounded-2xl shrink-0 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-          <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
+        <div
+          className="shrink-0 bg-purple-500/10 border border-purple-500/30 p-1 rounded-full relative animate-living-pulse"
+          style={{ "--pulse-rgb": SYNDICAT_RGB } as React.CSSProperties}
+        >
+          <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
             <img
               src="/sofi/La_pose__Sofi_con_exito.jpeg"
               alt="Sofi"
