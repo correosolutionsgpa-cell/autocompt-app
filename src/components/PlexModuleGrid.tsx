@@ -442,7 +442,7 @@ export default function PlexModuleGrid({
             }}
             className={[
               "p-5 rounded-[32px] border",
-              "flex flex-col items-start space-y-2 text-left",
+              "flex items-center gap-4 text-left",
               "transition-all duration-300 active:scale-[0.99] cursor-pointer relative",
               // Glass with profile-tinted base — translucent, NOT opaque
               "bg-emerald-500/[0.05] dark:bg-emerald-500/[0.05]",
@@ -463,10 +463,10 @@ export default function PlexModuleGrid({
           >
             {/* Icon — §2: glass badge, NOT solid fill. §6: pulse allowed on AI hero */}
             <div
-              className="bg-emerald-500/10 border border-emerald-500/30 p-1.5 rounded-2xl text-emerald-600 dark:text-emerald-400 relative animate-living-pulse"
+              className="shrink-0 bg-emerald-500/10 border border-emerald-500/30 p-1 rounded-full relative animate-living-pulse"
               style={{ "--pulse-rgb": "16,185,129" } as React.CSSProperties}
             >
-              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-zinc-950">
                 <img
                   src="/sofi/sofimediocuerpoblanco.png"
                   alt="Sofi"
@@ -481,12 +481,14 @@ export default function PlexModuleGrid({
               )}
             </div>
 
-            <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none mt-1">
-              ✨ {t("Assistant IA")} {tier === "gratuit" && "🔒"}
-            </span>
-            <p className="text-[7px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
-              {t("Posez vos questions fiscales ou demandez de l'aide en direct !")}
-            </p>
+            <div className="flex flex-col space-y-1 min-w-0">
+              <span className="text-[10px] font-black uppercase italic tracking-tighter leading-none">
+                {t("Assistant IA")} {tier === "gratuit" && "🔒"}
+              </span>
+              <p className="text-[7px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-tight leading-snug">
+                {t("Posez vos questions fiscales ou demandez de l'aide en direct !")}
+              </p>
+            </div>
           </button>
         </div>
       )}
