@@ -8711,9 +8711,20 @@ const App = () => {
           // leases, offers, subcontracts) — was in-memory-only mock data before.
           dataService.fetchDocuLegalDocs(user.uid, collaboratorCompanyDocIds).then(setDocuLegalList).catch((err) => console.error("fetchDocuLegalDocs failed:", err));
 
-          // Fetch properties
+          // Fetch properties — raw setter, same reasoning as depenses/invoices/
+          // dossierFiles above: this data already came FROM Firestore. Using
+          // the reconcile-wrapped setPlexManagementProperties here (as before)
+          // treated every property as "new" on each fresh page load (local
+          // state starts empty before this runs), which re-saved every
+          // property via dataService.saveProperty AND — far worse — computed
+          // savedUnits as [] for each one (fetchProperties never nests a
+          // .units array, that's the separate `units` collection fetched
+          // below) and used it to overwrite allUnits for that building,
+          // wiping real tenant/unit data out of local state on every login
+          // or hard refresh. Found 2026-08-23 after Fabiola reported losing
+          // registered tenants for "1843 rue le royer" following a refresh.
           const props = await dataService.fetchProperties(user.uid, collaboratorCompanyDocIds);
-          setPlexManagementProperties(props);
+          _setPlexManagementProperties(props);
 
           // Fetch all units (independent collection)
           const units = await dataService.fetchAllUnits(user.uid, collaboratorCompanyDocIds);
