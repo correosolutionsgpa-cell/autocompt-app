@@ -1375,18 +1375,32 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                           </span>
                         </p>
                         {buildingUnits[0] && buildingUnits[0].isActive && (
-                          <button
-                            onClick={() => openAvisModal(buildingUnits[0], p.adresse || "")}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors ${
-                              darkMode
-                                ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
-                                : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                            }`}
-                            title="Générer un avis d'augmentation de loyer"
-                          >
-                            <TrendingUp size={12} />
-                            Avis d'augm.
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openAvisModal(buildingUnits[0], p.adresse || "")}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                darkMode
+                                  ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
+                                  : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                              }`}
+                              title="Générer un avis d'augmentation de loyer"
+                            >
+                              <TrendingUp size={12} />
+                              Avis d'augm.
+                            </button>
+                            <button
+                              onClick={() => openMiseEnDemeureModal(buildingUnits[0], p.adresse || "")}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                darkMode
+                                  ? "bg-rose-900/30 border border-rose-700/50 text-rose-400 hover:bg-rose-900/50"
+                                  : "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100"
+                              }`}
+                              title="Générer une mise en demeure pour non-paiement de loyer"
+                            >
+                              <Scale size={12} />
+                              Demeure
+                            </button>
+                          </div>
                         )}
                       </div>
                     </>
