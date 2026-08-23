@@ -31,6 +31,7 @@ import {
   Menu,
   PenLine,
   Save,
+  Scale,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -38,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 import AvisAugmentationModal from "../../components/modals/AvisAugmentationModal";
+import MiseEnDemeureModal from "../../components/modals/MiseEnDemeureModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +147,14 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
   const openAvisModal = (unit: UnitDoc, adresse: string) => {
     setAvisModalUnit({ unit, adresse });
     setAvisModalOpen(true);
+  };
+
+  // ── Mise en demeure (non-paiement de loyer) modal ────────────────────────
+  const [miseEnDemeureModalOpen, setMiseEnDemeureModalOpen] = useState(false);
+  const [miseEnDemeureUnit, setMiseEnDemeureUnit] = useState<{ unit: UnitDoc; adresse: string } | null>(null);
+  const openMiseEnDemeureModal = (unit: UnitDoc, adresse: string) => {
+    setMiseEnDemeureUnit({ unit, adresse });
+    setMiseEnDemeureModalOpen(true);
   };
 
   // Only show this company's properties. Untagged (`companyId` missing) entries
@@ -1429,18 +1439,32 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
                                 {u.monthlyRent} $
                               </p>
                               {u.isActive && (
-                                <button
-                                  onClick={() => openAvisModal(u, p.adresse || "")}
-                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${
-                                    darkMode
-                                      ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
-                                      : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                                  }`}
-                                  title="Générer un avis d'augmentation de loyer"
-                                >
-                                  <TrendingUp size={10} />
-                                  Avis
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => openAvisModal(u, p.adresse || "")}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${
+                                      darkMode
+                                        ? "bg-emerald-900/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/50"
+                                        : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                    }`}
+                                    title="Générer un avis d'augmentation de loyer"
+                                  >
+                                    <TrendingUp size={10} />
+                                    Avis
+                                  </button>
+                                  <button
+                                    onClick={() => openMiseEnDemeureModal(u, p.adresse || "")}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${
+                                      darkMode
+                                        ? "bg-rose-900/30 border border-rose-700/50 text-rose-400 hover:bg-rose-900/50"
+                                        : "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100"
+                                    }`}
+                                    title="Générer une mise en demeure pour non-paiement de loyer"
+                                  >
+                                    <Scale size={10} />
+                                    Demeure
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1534,6 +1558,24 @@ const GestionPlex: React.FC<GestionPlexProps> = ({
         locateurAdresse={currentCompany?.adresse}
         locateurTel={currentCompany?.tel}
         locateurEmail={currentCompany?.email}
+      />
+    )}
+
+    {/* ── Mise en demeure (non-paiement de loyer) modal ───────────────── */}
+    {miseEnDemeureUnit && (
+      <MiseEnDemeureModal
+        darkMode={darkMode}
+        isOpen={miseEnDemeureModalOpen}
+        onClose={() => { setMiseEnDemeureModalOpen(false); setMiseEnDemeureUnit(null); }}
+        unit={miseEnDemeureUnit.unit}
+        adresseLogement={miseEnDemeureUnit.adresse}
+        activeCompanyId={activeCompanyId}
+        companyName={currentCompany?.nombre || "Votre entreprise"}
+        locateurNom={adminName || currentCompany?.nombre || ""}
+        locateurAdresse={currentCompany?.adresse}
+        locateurTel={currentCompany?.tel}
+        locateurEmail={currentCompany?.email}
+        adminName={adminName}
       />
     )}
   </div>
