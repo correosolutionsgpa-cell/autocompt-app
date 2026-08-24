@@ -923,6 +923,18 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
             - coutsFixesPeriodeEstimes
             - interetTotalReference
             - commissionEstimee;
+          const roiPotentiel = investissementCashReel > 0 ? (profitPotentiel / investissementCashReel) * 100 : 0;
+          // ── Santé du flip — feu tricolore, basé sur le ROI potentiel (avant
+          // achat). Seuils indicatifs (référentiel courant du flip
+          // immobilier : ~20%+ = solide, ~8-20% = correct mais serré,
+          // <8% = risqué) — une estimation, pas une règle absolue. Demandé
+          // par Fabiola 2026-08-24 pour voir d'un coup d'œil si un projet
+          // vaut la peine, sans dérouler "Analyse avancée".
+          const flipHealth = roiPotentiel >= 20
+            ? { label: "Bon", badge: "bg-emerald-500 text-white", border: "border-emerald-500/40" }
+            : roiPotentiel >= 8
+            ? { label: "Moyen", badge: "bg-amber-500 text-white", border: "border-amber-500/40" }
+            : { label: "Faible", badge: "bg-rose-500 text-white", border: "border-rose-500/40" };
 
           const isAnalysisOpen = expandedAnalysisId === p.id;
 
@@ -980,6 +992,30 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     </p>
                   </div>
                 </div>
+
+                {/* Résumé — santé du flip (feu tricolore), toujours visible,
+                    à partir des mêmes chiffres qu'"Analyse avancée" plus bas
+                    (détails jamais déplacés, juste le total remonté ici). */}
+                {hasFeasibilityData && (
+                  <div className={`p-3.5 rounded-2xl border-2 ${flipHealth.border} ${glass} flex items-center justify-between gap-3 flex-wrap`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${flipHealth.badge}`}>
+                        Flip {flipHealth.label}
+                      </span>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Estimation avant achat</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Profit potentiel</p>
+                        <p className={`text-[13px] font-black ${profitPotentiel >= 0 ? "text-emerald-500" : "text-rose-500"}`}>{fmtCAD(profitPotentiel)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">ROI potentiel</p>
+                        <p className={`text-[13px] font-black ${roiPotentiel >= 0 ? "text-emerald-500" : "text-rose-500"}`}>{roiPotentiel.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button onClick={() => { setExpenseProjectId(p.id); setExpenseForm(emptyExpenseForm); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all">
