@@ -90,7 +90,16 @@ interface PublicSignaturePageProps {
 
 function useDrawingCanvas(placeholder: string, color: string = '#059669') {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  // isDrawing was React state — on mobile, touchstart followed immediately
+  // by touchmove can fire faster than a re-render commits, so continueDraw
+  // sometimes ran with the PRE-touchstart closure (isDrawing still false)
+  // and silently dropped the very first stroke: hasDrawn still flipped to
+  // true (set synchronously inside startDraw itself), so validation passed
+  // and an empty/near-empty canvas got saved as the initials/signature —
+  // looking like "didn't register the first time" until redrawn. A ref
+  // updates synchronously, no closure staleness possible. Found 2026-08-24
+  // (Fabiola: initials not saving on the first attempt on her phone).
+  const isDrawingRef = useRef(false);
   const [hasDrawn, setHasDrawn] = useState(false);
 
   const resetCanvas = useCallback(() => {
@@ -135,11 +144,11 @@ function useDrawingCanvas(placeholder: string, color: string = '#059669') {
     const p = toCanvasPoint(canvas, clientX, clientY);
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
-    setIsDrawing(true);
+    isDrawingRef.current = true;
   };
 
   const continueDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
+    if (!isDrawingRef.current || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
     const { clientX, clientY } = 'touches' in e ? e.touches[0] : e;
@@ -148,7 +157,7 @@ function useDrawingCanvas(placeholder: string, color: string = '#059669') {
     ctx.stroke();
   };
 
-  const stopDraw = () => setIsDrawing(false);
+  const stopDraw = () => { isDrawingRef.current = false; };
 
   return { canvasRef, hasDrawn, resetCanvas, startDraw, continueDraw, stopDraw };
 }
