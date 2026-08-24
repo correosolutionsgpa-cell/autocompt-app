@@ -16,7 +16,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import StyledSelect from "../../components/ui/StyledSelect";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
@@ -328,6 +328,18 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
   const [editingDepotId, setEditingDepotId] = useState<string | null>(null);
   const [editingRetraitId, setEditingRetraitId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // The dépôt/retrait/client forms render above their respective lists —
+  // clicking "Modifier" on a row further down opened the form off-screen,
+  // making it look like the pencil button did nothing (Fabiola reported
+  // this 2026-08-24 for a dépôt edit). Scroll each form into view when it
+  // opens, whether editing an existing entry or starting a new one.
+  const depotFormRef = useRef<HTMLDivElement>(null);
+  const retraitFormRef = useRef<HTMLDivElement>(null);
+  const clientFormRef = useRef<HTMLDivElement>(null);
+  const scrollToForm = (ref: React.RefObject<HTMLDivElement>) => {
+    setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
   const [emailSending, setEmailSending] = useState(false);
   const { setDispatcherSuccessToast } = useToast();
 
@@ -482,6 +494,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     } as any);
     setEditingDepotId(d.id);
     setShowDepotForm(true);
+    scrollToForm(depotFormRef);
   };
 
   // ── Save Retrait ──────────────────────────────────────────────────────────
@@ -601,6 +614,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
     } as any);
     setEditingRetraitId(r.id);
     setShowRetraitForm(true);
+    scrollToForm(retraitFormRef);
   };
 
   // ── Save Client ───────────────────────────────────────────────────────────
@@ -643,6 +657,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
       tauxHonoraires: String(c.tauxHonoraires ?? 8), proprietes: (c.proprietes || []).join("\n"),
     });
     setShowClientForm(true);
+    scrollToForm(clientFormRef);
   };
 
   const handleDeleteClient = async (c: FideicommisClientDoc) => {
@@ -985,7 +1000,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     <p className={`text-sm font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                       {periodDepots.length} dépôt(s) · {fmtCAD(periodDepotsSum)}
                     </p>
-                    <button onClick={() => { setDepotForm(emptyDepot()); setEditingDepotId(null); setShowDepotForm(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20">
+                    <button onClick={() => { setDepotForm(emptyDepot()); setEditingDepotId(null); setShowDepotForm(true); scrollToForm(depotFormRef); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20">
                       <Plus size={13} />Nouveau dépôt
                     </button>
                   </div>
@@ -994,7 +1009,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                   <AnimatePresence>
                     {showDepotForm && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                        <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
+                        <div ref={depotFormRef} className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
                             <h3 className="text-sm font-black uppercase italic tracking-tighter text-emerald-500">{editingDepotId ? "Modifier le dépôt" : "Enregistrer un dépôt"}</h3>
                             <button onClick={() => { setShowDepotForm(false); setEditingDepotId(null); }}><X size={16} className={darkMode ? "text-zinc-500" : "text-slate-400"} /></button>
@@ -1099,7 +1114,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                     <p className={`text-sm font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>
                       {periodRetraits.length} retrait(s) · {fmtCAD(periodRetraitsSum)}
                     </p>
-                    <button onClick={() => { setRetraitForm(emptyRetrait()); setEditingRetraitId(null); setShowRetraitForm(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-rose-500/20">
+                    <button onClick={() => { setRetraitForm(emptyRetrait()); setEditingRetraitId(null); setShowRetraitForm(true); scrollToForm(retraitFormRef); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-rose-500/20">
                       <Plus size={13} />Nouveau retrait
                     </button>
                   </div>
@@ -1107,7 +1122,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                   <AnimatePresence>
                     {showRetraitForm && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                        <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
+                        <div ref={retraitFormRef} className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
                             <h3 className="text-sm font-black uppercase italic tracking-tighter text-rose-500">{editingRetraitId ? "Modifier le retrait" : "Enregistrer un retrait"}</h3>
                             <button onClick={() => { setShowRetraitForm(false); setEditingRetraitId(null); }}><X size={16} /></button>
@@ -1323,7 +1338,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className={`text-sm font-bold ${darkMode ? "text-zinc-400" : "text-slate-500"}`}>{clients.length} propriétaire(s)-client(s)</p>
-                    <button onClick={() => setShowClientForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-500/20">
+                    <button onClick={() => { setShowClientForm(true); scrollToForm(clientFormRef); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-500/20">
                       <Plus size={13} />Nouveau client
                     </button>
                   </div>
@@ -1331,7 +1346,7 @@ const CompteFideicommis: React.FC<CompteFideicommisProps> = ({
                   <AnimatePresence>
                     {showClientForm && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                        <div className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
+                        <div ref={clientFormRef} className={`p-5 rounded-[28px] border space-y-4 ${glass}`}>
                           <div className="flex items-center justify-between">
                             <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-500">{editingClientId ? "Modifier le propriétaire-client" : "Nouveau propriétaire-client"}</h3>
                             <button onClick={() => { setShowClientForm(false); setEditingClientId(null); setClientForm({ nom: "", email: "", telephone: "", tauxHonoraires: "8", proprietes: "" }); }}><X size={16} /></button>
