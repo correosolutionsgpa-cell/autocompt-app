@@ -8519,6 +8519,29 @@ const App = () => {
           // else writes to this doc during the read anymore.
           let userDoc = await getDocFromServer(userDocRef);
           console.log("[AUTH-DEBUG] #" + invocationId, "getDocFromServer resolved, exists():", userDoc.exists());
+          // Immediately after a fresh sign-in or forced token refresh,
+          // Firestore's backend can briefly serve a stale/incomplete
+          // snapshot of this doc even via getDocFromServer (not just a
+          // client-cache issue) — reproduced 2026-08-24 on Natalia's
+          // account: the read came back exists():true but with ONLY
+          // {lastActive} in it, moments after her real doc (confirmed via
+          // Admin SDK, same instant) had phoneVerified/selectedProfile/
+          // unlockedProfiles all correctly set — sent her back through
+          // phone verification and onboarding on every refresh. A single
+          // short retry is cheap and just as safe for a genuinely
+          // brand-new account (same "empty" result either way, ~700ms
+          // slower once).
+          const looksSuspiciouslyEmpty = userDoc.exists() && (() => {
+            const d = userDoc.data() || {};
+            return d.phoneVerified === undefined && d.selectedProfile === undefined
+              && d.unlockedProfiles === undefined && d.betaCodeRedeemed === undefined;
+          })();
+          if (looksSuspiciouslyEmpty) {
+            console.log("[AUTH-DEBUG] #" + invocationId, "userDoc looks suspiciously empty — retrying once after a short delay");
+            await new Promise((r) => setTimeout(r, 700));
+            userDoc = await getDocFromServer(userDocRef);
+            console.log("[AUTH-DEBUG] #" + invocationId, "retry getDocFromServer resolved, exists():", userDoc.exists());
+          }
           // Firebase can fire onAuthStateChanged more than once for a single
           // login (e.g. an initial state-restore fire followed by a second
           // fire once sign-in fully settles, or a background token refresh —
