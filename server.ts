@@ -1408,7 +1408,7 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
     <div style="padding:36px 40px">
       <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.6">${greeting}</p>
       <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.6">
-        <strong>${adminName || companyName}</strong> vous invite à signer électroniquement le document suivant :
+        <strong>${companyName || adminName || "AutoCompt"}</strong> vous invite à signer électroniquement le document suivant :
       </p>
 
       <!-- Document card -->
