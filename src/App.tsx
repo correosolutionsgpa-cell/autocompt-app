@@ -12476,6 +12476,13 @@ const App = () => {
                 </div>
               )}
 
+              {/* Label above the chip so it's unambiguous this is a camera
+                  scanner, not just a decorative icon — requested by Fabiola
+                  as an alternative to further enlarging the icon itself. */}
+              <span className="text-[10px] lg:text-xs font-black uppercase tracking-[0.25em] italic text-teal-400/90">
+                {t("Caméra")}
+              </span>
+
               {/* The "LIVE IA CORE" Chip Icon Area with concentric waves */}
               <div className="relative flex items-center justify-center w-36 h-36 lg:w-52 lg:h-52">
                 {/* Radial Pulsing Waves (Concentric rings) */}
