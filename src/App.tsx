@@ -14129,8 +14129,15 @@ const App = () => {
                 docTitle: fileName,
                 docSummary: urlPayload.docSummary,
                 companyName: currentCompany?.nombre || "",
-                adminName: currentUserEmail || currentCompany?.nombre || "",
-                adminEmail: currentUserEmail || "",
+                adminName: adminName || currentCompany?.nombre || "",
+                // Was: currentUserEmail (the sender's personal login email)
+                // — ignored the "Courriel de l'entreprise" already
+                // configured in Paramètres specifically to avoid this
+                // (a client replying ends up in a collaborator's personal
+                // inbox instead of the shared business address). Found
+                // 2026-08-24: Fabiola/Natalia both saw signature invites go
+                // out under a personal email instead of Achat Direct's.
+                adminEmail: currentCompany?.userProfile?.email || currentUserEmail || "",
                 token,
               }),
             });
@@ -14269,8 +14276,11 @@ const App = () => {
                 docTitle: docFormName,
                 docSummary: docFormEmailInvite || `Veuillez prendre connaissance et signer électroniquement "${docFormName}".`,
                 companyName: currentCompany?.nombre || "",
-                adminName: currentUserEmail || currentCompany?.nombre || "",
-                adminEmail: currentUserEmail || "",
+                adminName: adminName || currentCompany?.nombre || "",
+                // Same fix as the single-signer flow above — use the
+                // company's configured "Courriel de l'entreprise" as
+                // reply-to, not the sender's personal login email.
+                adminEmail: currentCompany?.userProfile?.email || currentUserEmail || "",
                 token,
               }),
             });
