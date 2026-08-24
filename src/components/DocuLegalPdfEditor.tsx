@@ -12,7 +12,7 @@ declare global {
 export interface SignatureField {
   id: string;
   page: number;       // 1-indexed
-  type: 'signature' | 'initials' | 'date' | 'name';
+  type: 'signature' | 'initials' | 'date' | 'name' | 'lieu';
   xPct: number;       // % of page width
   yPct: number;       // % of page height
   wPct: number;       // % of page width
@@ -57,6 +57,7 @@ const FIELD_DEFS: {
   { type: 'initials',  label: 'Initiales',   emoji: 'AB', color: 'blue',    defaultW: 10, defaultH: 6  },
   { type: 'date',      label: 'Date',         emoji: '📅', color: 'amber',   defaultW: 16, defaultH: 6  },
   { type: 'name',      label: 'Nom complet',  emoji: '👤', color: 'violet',  defaultW: 22, defaultH: 6  },
+  { type: 'lieu',      label: 'Lieu de signature', emoji: '📍', color: 'rose', defaultW: 22, defaultH: 6  },
 ];
 
 const COLORS: Record<string, { border: string; bg: string; text: string; badge: string; ring: string; tool: string }> = {
@@ -75,6 +76,10 @@ const COLORS: Record<string, { border: string; bg: string; text: string; badge: 
   violet: {
     border: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', text: '#5b21b6',
     badge: 'background:#8b5cf6;color:#fff', ring: '#c4b5fd', tool: '#8b5cf6',
+  },
+  rose: {
+    border: '#f43f5e', bg: 'rgba(244,63,94,0.12)', text: '#9f1239',
+    badge: 'background:#f43f5e;color:#fff', ring: '#fda4af', tool: '#f43f5e',
   },
 };
 

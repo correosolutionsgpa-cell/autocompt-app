@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, AlertTriangle, Loader2, PenTool, X,
-  ShieldCheck, FileText, Check, Stamp, Pen, Type,
+  ShieldCheck, FileText, Check, Stamp, Pen, Type, MapPin,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { db } from '../lib/firebase';
@@ -48,7 +48,7 @@ interface SignatureRequestDoc {
   signatureFields?: Array<{    // Placed signature zones
     id: string;
     page: number;
-    type: 'signature' | 'initials' | 'date' | 'name';
+    type: 'signature' | 'initials' | 'date' | 'name' | 'lieu';
     xPct: number;
     yPct: number;
     wPct: number;
@@ -358,13 +358,21 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     activeFieldCanvas.resetCanvas();
   };
 
+  // 'name' and 'lieu' are both plain typed text, saved directly — no
+  // draw/type toggle, no image rendering. Added 'lieu' 2026-08-24 (Fabiola:
+  // a promesse d'achat needs a "signé à [ville]" field alongside the date).
+  const isTextOnlyField = (t: string) => t === 'name' || t === 'lieu';
+
   const confirmActiveField = async () => {
     if (!activeFieldId || !docData?.signatureFields) return;
     const field = docData.signatureFields.find((f) => f.id === activeFieldId);
     if (!field) return;
-    if (field.type === 'name') {
-      if (!activeFieldTypedText.trim()) { alert('Veuillez saisir un nom.'); return; }
-      setFieldValues((p) => ({ ...p, [activeFieldId]: { type: 'name', text: activeFieldTypedText.trim() } }));
+    if (isTextOnlyField(field.type)) {
+      if (!activeFieldTypedText.trim()) {
+        alert(field.type === 'lieu' ? 'Veuillez saisir un lieu.' : 'Veuillez saisir un nom.');
+        return;
+      }
+      setFieldValues((p) => ({ ...p, [activeFieldId]: { type: field.type, text: activeFieldTypedText.trim() } }));
       setActiveFieldId(null);
       return;
     }
@@ -1423,9 +1431,9 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                           {pageFields.map((f) => {
                             const value = fieldValues[f.id];
                             const isDone = !!value;
-                            const typeLabel: Record<string, string> = { signature: 'Signature', initials: 'Initiales', date: 'Date', name: 'Nom complet' };
+                            const typeLabel: Record<string, string> = { signature: 'Signature', initials: 'Initiales', date: 'Date', name: 'Nom complet', lieu: 'Lieu de signature' };
                             const typeIcon: Record<string, React.ReactElement> = {
-                              signature: <PenTool size={12} />, initials: <Type size={12} />, date: <Stamp size={12} />, name: <Type size={12} />,
+                              signature: <PenTool size={12} />, initials: <Type size={12} />, date: <Stamp size={12} />, name: <Type size={12} />, lieu: <MapPin size={12} />,
                             };
                             return (
                               <button
@@ -1482,16 +1490,16 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="font-black uppercase italic text-slate-900 text-sm">
-                      {field.type === 'signature' ? 'Votre signature' : field.type === 'initials' ? 'Vos initiales' : 'Nom complet'}
+                      {field.type === 'signature' ? 'Votre signature' : field.type === 'initials' ? 'Vos initiales' : field.type === 'lieu' ? 'Lieu de signature' : 'Nom complet'}
                     </h3>
                     <button onClick={() => setActiveFieldId(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
                   </div>
 
-                  {field.type === 'name' ? (
+                  {isTextOnlyField(field.type) ? (
                     <input
                       type="text" autoFocus value={activeFieldTypedText}
                       onChange={(e) => setActiveFieldTypedText(e.target.value)}
-                      placeholder="Nom complet"
+                      placeholder={field.type === 'lieu' ? 'Ex: Laval, Québec' : 'Nom complet'}
                       className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                     />
                   ) : (
