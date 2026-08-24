@@ -1679,7 +1679,7 @@ export const dataService = {
 
   // ── Workspaces / Companies ─────────────────────────────────────────────────
 
-  async fetchWorkspaces(userId: string): Promise<any[]> {
+  async fetchWorkspaces(userId: string, _isRetry = false): Promise<any[]> {
     try {
       // Companies the user owns, plus companies they've been added to as a
       // collaborator (full access), plus companies where they're a linked
@@ -1709,15 +1709,24 @@ export const dataService = {
         results.push({ ...data, id: idParts.length > 1 ? idParts[1] : d.id, _companyDocId: d.id, _isCondoOwner: condoOwnerDocIds.has(d.id) });
       }
       return results;
-    } catch (e) {
-      // Used to fall back to `defaultWorkspaces` — Fabiola's own real company
-      // names/NEQ/TPS-TVQ numbers — on ANY error, including the transient
-      // "Missing or insufficient permissions" race a brand-new account can
-      // hit before its Firestore token fully propagates (see getIdToken(true)
-      // above in App.tsx's onAuthStateChanged). That fallback then got
-      // auto-saved back to Firestore by the userProfile hydration effect,
-      // silently creating a company literally named "Solutions GPA Inc." for
-      // real beta testers — found 2026-08-01 testing a real beta signup.
+    } catch (e: any) {
+      // Was: fall back to `defaultWorkspaces` on ANY error, including the
+      // transient "Missing or insufficient permissions" race a fresh
+      // sign-in/token refresh can hit before Firestore's backend fully
+      // accepts the new token (see getIdToken(true) + the matching
+      // getDocFromServer retry above in App.tsx's onAuthStateChanged). That
+      // fallback got auto-saved back to Firestore, silently creating a
+      // company literally named "Solutions GPA Inc." for real beta testers
+      // (found 2026-08-01). Fixed by removing the fallback — but an existing
+      // user hitting this same race still saw a real, empty "Aucune
+      // entreprise configurée" every time (reproduced 2026-08-24 on
+      // Natalia's account, same permission-denied race as the userDoc read).
+      // One short retry before giving up, same pattern as that fix.
+      if (!_isRetry && e?.code === 'permission-denied') {
+        console.warn('fetchWorkspaces hit permission-denied — retrying once after a short delay:', e);
+        await new Promise((r) => setTimeout(r, 700));
+        return this.fetchWorkspaces(userId, true);
+      }
       console.error('fetchWorkspaces failed:', e);
       return [];
     }
