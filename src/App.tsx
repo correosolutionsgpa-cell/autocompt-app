@@ -8537,10 +8537,22 @@ const App = () => {
               && d.unlockedProfiles === undefined && d.betaCodeRedeemed === undefined;
           })();
           if (looksSuspiciouslyEmpty) {
-            console.log("[AUTH-DEBUG] #" + invocationId, "userDoc looks suspiciously empty — retrying once after a short delay");
-            await new Promise((r) => setTimeout(r, 700));
-            userDoc = await getDocFromServer(userDocRef);
-            console.log("[AUTH-DEBUG] #" + invocationId, "retry getDocFromServer resolved, exists():", userDoc.exists());
+            // A single 700ms retry (2026-08-24, first attempt at this fix)
+            // wasn't enough for Natalia's account — still landed empty on a
+            // second try. Up to 3 attempts now, with increasing backoff
+            // (900ms/1500ms/2200ms) — the propagation delay isn't always
+            // the same length.
+            const delays = [900, 1500, 2200];
+            for (const delay of delays) {
+              console.log("[AUTH-DEBUG] #" + invocationId, `userDoc looks suspiciously empty — retrying after ${delay}ms`);
+              await new Promise((r) => setTimeout(r, delay));
+              userDoc = await getDocFromServer(userDocRef);
+              const data = userDoc.data() || {};
+              const stillEmpty = data.phoneVerified === undefined && data.selectedProfile === undefined
+                && data.unlockedProfiles === undefined && data.betaCodeRedeemed === undefined;
+              console.log("[AUTH-DEBUG] #" + invocationId, "retry getDocFromServer resolved, exists():", userDoc.exists(), "stillEmpty:", stillEmpty);
+              if (!stillEmpty) break;
+            }
           }
           // Firebase can fire onAuthStateChanged more than once for a single
           // login (e.g. an initial state-restore fire followed by a second

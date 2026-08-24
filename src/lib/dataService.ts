@@ -1679,7 +1679,7 @@ export const dataService = {
 
   // ── Workspaces / Companies ─────────────────────────────────────────────────
 
-  async fetchWorkspaces(userId: string, _isRetry = false): Promise<any[]> {
+  async fetchWorkspaces(userId: string, _retryCount = 0): Promise<any[]> {
     try {
       // Companies the user owns, plus companies they've been added to as a
       // collaborator (full access), plus companies where they're a linked
@@ -1721,11 +1721,14 @@ export const dataService = {
       // user hitting this same race still saw a real, empty "Aucune
       // entreprise configurée" every time (reproduced 2026-08-24 on
       // Natalia's account, same permission-denied race as the userDoc read).
-      // One short retry before giving up, same pattern as that fix.
-      if (!_isRetry && e?.code === 'permission-denied') {
-        console.warn('fetchWorkspaces hit permission-denied — retrying once after a short delay:', e);
-        await new Promise((r) => setTimeout(r, 700));
-        return this.fetchWorkspaces(userId, true);
+      // Up to 3 retries with increasing backoff before giving up — a single
+      // 700ms retry (first attempt at this fix) still wasn't always enough.
+      const delays = [900, 1500, 2200];
+      if (e?.code === 'permission-denied' && _retryCount < delays.length) {
+        const delay = delays[_retryCount];
+        console.warn(`fetchWorkspaces hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
+        await new Promise((r) => setTimeout(r, delay));
+        return this.fetchWorkspaces(userId, _retryCount + 1);
       }
       console.error('fetchWorkspaces failed:', e);
       return [];
