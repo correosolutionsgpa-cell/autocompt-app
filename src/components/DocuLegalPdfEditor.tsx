@@ -436,6 +436,27 @@ export default function DocuLegalPdfEditor({
                 </button>
               );
             })}
+            {/* Add a signer without leaving Step 1 — was only reachable from
+                "Étape 3", forcing a round trip back and forth on every new
+                signer on a multi-page document already mid-placement.
+                Requested 2026-08-24 (Fabiola: "double travail" placing a
+                promesse d'achat's 3rd signature across pages already done). */}
+            <button
+              onClick={() => {
+                setSigners(p => [...p, { name: '', email: '' }]);
+                setActiveSignerIndex(signers.length);
+              }}
+              title="Ajouter un signataire sans quitter cette page"
+              style={{
+                padding: '6px 10px', borderRadius: 999,
+                border: dm ? '1.5px dashed #3f3f46' : '1.5px dashed #cbd5e1',
+                background: 'transparent',
+                color: dm ? '#71717a' : '#94a3b8',
+                fontSize: 9, fontWeight: 900, cursor: 'pointer',
+              }}
+            >
+              + Signataire
+            </button>
           </div>
         </div>
 
