@@ -1387,7 +1387,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50" />
             </div>
             <div>
-              <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-1">Courriel (optionnel)</label>
+              <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-1">Courriel — pour recevoir votre copie du document signé</label>
               <input type="email" value={signerEmail} onChange={e => setSignerEmail(e.target.value)}
                 placeholder="jean@example.com"
                 className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50" />
