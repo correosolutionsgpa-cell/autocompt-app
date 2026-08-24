@@ -12477,7 +12477,7 @@ const App = () => {
               )}
 
               {/* The "LIVE IA CORE" Chip Icon Area with concentric waves */}
-              <div className="relative flex items-center justify-center w-36 h-36">
+              <div className="relative flex items-center justify-center w-36 h-36 lg:w-52 lg:h-52">
                 {/* Radial Pulsing Waves (Concentric rings) */}
                 <div
                   className="absolute inset-0 rounded-full border border-teal-500/5 animate-pulse scale-125"
@@ -12497,7 +12497,7 @@ const App = () => {
                   className={`absolute inset-9 rounded-full blur-[20px] transition-all duration-300 ${darkMode ? "bg-emerald-500/20 shadow-[0_0_40px_rgba(16,185,129,0.25)]" : "bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.15)]"}`}
                 />
 
-                <div className="relative z-20 bg-zinc-900 dark:bg-zinc-950 p-[1.5px] rounded-2xl border border-emerald-500/35 overflow-visible flex flex-col items-center justify-center w-20 h-20 group-hover:scale-105 transition-transform duration-300 shadow-xl">
+                <div className="relative z-20 bg-zinc-900 dark:bg-zinc-950 p-[1.5px] rounded-2xl border border-emerald-500/35 overflow-visible flex flex-col items-center justify-center w-20 h-20 lg:w-28 lg:h-28 group-hover:scale-105 transition-transform duration-300 shadow-xl">
                   <span className="absolute -top-1 left-4 w-1.5 h-1 bg-emerald-500/70 rounded-t" />
                   <span className="absolute -top-1 left-8 w-1.5 h-1 bg-emerald-500/70 rounded-t" />
                   <span className="absolute -top-1 left-12 w-1.5 h-1 bg-emerald-500/70 rounded-t" />
@@ -12507,13 +12507,12 @@ const App = () => {
 
                   <div className="bg-zinc-950 rounded-[14px] w-full h-full flex flex-col items-center justify-center relative overflow-hidden text-emerald-400 p-2">
                     <Cpu
-                      size={24}
-                      className="text-emerald-400 animate-pulse"
+                      className="text-emerald-400 animate-pulse w-6 h-6 lg:w-9 lg:h-9"
                       style={{ animationDuration: "2.5s" }}
                     />
-                    <div className="absolute bottom-1.5 flex items-center justify-center bg-zinc-905 border border-emerald-500/30 px-1 py-0.5 rounded-full scale-[0.8]">
-                      <Camera size={8} className="text-teal-400 mr-0.5" />
-                      <span className="text-[5px] font-black uppercase text-teal-400 tracking-widest">
+                    <div className="absolute bottom-1.5 flex items-center justify-center bg-zinc-905 border border-emerald-500/30 px-1 py-0.5 rounded-full scale-[0.8] lg:scale-100">
+                      <Camera size={8} className="text-teal-400 mr-0.5 lg:w-3 lg:h-3" />
+                      <span className="text-[5px] lg:text-[7px] font-black uppercase text-teal-400 tracking-widest">
                         LENS
                       </span>
                     </div>
