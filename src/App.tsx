@@ -8755,7 +8755,17 @@ const App = () => {
           // fixes the same week didn't stick — this was the actual redirect
           // doing it, every time, unconditionally.
           setVista((prev) => {
-            const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal"];
+            // "phone-verify" belongs here too: it holds no in-progress local
+            // state worth protecting (unlike "sofi-onboarding" below), so a
+            // background re-check that now correctly sees phoneVerified:true
+            // must be able to move the user forward past it. Without this,
+            // a transient race landing someone on "phone-verify" once
+            // (see the [AUTH-DEBUG] history above) trapped them there
+            // permanently — every later re-check just returned `prev`
+            // unchanged, even after the correct read came back. Found
+            // 2026-08-24: Natalia stuck on "Vérification par SMS" on refresh
+            // despite Firestore already showing phoneVerified: true.
+            const preAuthScreens = ["splash", "login", "welcome", "benefits", "setup", "pricing", "rental_model", "level_selection", "sofi-onboarding", "portal", "phone-verify"];
             // "setup" is deliberately in this list so a brand-new signup's
             // background token refresh mid-onboarding still moves them
             // forward correctly (see the history above). But an ALREADY
