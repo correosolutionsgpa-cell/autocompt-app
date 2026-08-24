@@ -62,6 +62,20 @@ service cloud.firestore {
     function isCollaboratorDoc() {
       return isSignedIn() && request.auth.uid in resource.data.get('collaboratorUIDs', []);
     }
+    // Mirrors isCollaboratorDoc(), for a Syndicat unit owner instead of a
+    // full collaborator. dataService.fetchWorkspaces queries `companies`
+    // filtered by `condoOwnerUIDs array-contains uid` — Firestore requires
+    // every field a list query filters on to be reachable by the read rule,
+    // or it rejects the WHOLE query with permission-denied, regardless of
+    // whether any real document would match. This condition was missing
+    // entirely from the companies read rule below, so that query has always
+    // failed outright for every account (not a timing issue) — normally
+    // masked by the SDK's local cache in an already-warm session, which is
+    // why it went unnoticed until a genuinely fresh session (no prior
+    // cache) hit it point-blank. Found 2026-08-24 on Natalia's account.
+    function isCondoOwnerDoc() {
+      return isSignedIn() && request.auth.uid in resource.data.get('condoOwnerUIDs', []);
+    }
     // Same idea, for records that belong to a shared company rather than the
     // `companies` doc itself: expenses/invoices/properties/etc. store a
     // `companyId` field equal to the `companies` doc's own id, so this looks
@@ -160,7 +174,7 @@ service cloud.firestore {
       // created (including ones created from a beta code Fabiola didn't
       // personally generate) — before this, the panel's own Firestore query
       // silently returned only companies Fabiola owns/collaborates on.
-      allow read: if isOwnerDoc() || isCollaboratorDoc() || isSuperAdmin();
+      allow read: if isOwnerDoc() || isCollaboratorDoc() || isCondoOwnerDoc() || isSuperAdmin();
       allow create: if isOwnerWrite();
       allow update: if isOwnerDoc() || isAcceptingOwnInvite(companyId) || isCollaboratorUpdate() || isAcceptingCondoOwnerInvite(companyId);
       allow delete: if isOwnerDoc();
