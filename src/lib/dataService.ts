@@ -1609,37 +1609,57 @@ function unprefixCompanyId(companyId: string | undefined): string {
 async function fetchOwnedAndShared(
   collectionName: string,
   userId: string,
-  collaboratorCompanyDocIds: string[] = []
+  collaboratorCompanyDocIds: string[] = [],
+  _retryCount = 0
 ): Promise<QueryDocumentSnapshot[]> {
-  const ownedQ = query(collection(db, collectionName), where('ownerId', '==', userId));
-  const queries = [getDocs(ownedQ)];
-  for (const companyDocId of collaboratorCompanyDocIds) {
-    queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
-    // Most collections store companyId prefixed (matches companyDocId
-    // above), but a few call sites (docuLegalDocs, at least) save the raw,
-    // unprefixed id instead — e.g. "custom-123" instead of
-    // "{uid}_company_custom-123". Query both forms so a document tagged
-    // either way is still found. Found 2026-08-24: a collaborator's
-    // DocuLegal document (companyId saved raw) was invisible to the
-    // company's own owner, since neither the ownedQ (ownerId is the
-    // collaborator's, not the owner's) nor the prefixed companyId query
-    // matched it.
-    const raw = unprefixCompanyId(companyDocId);
-    if (raw && raw !== companyDocId) {
-      queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', raw))));
+  try {
+    const ownedQ = query(collection(db, collectionName), where('ownerId', '==', userId));
+    const queries = [getDocs(ownedQ)];
+    for (const companyDocId of collaboratorCompanyDocIds) {
+      queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
+      // Most collections store companyId prefixed (matches companyDocId
+      // above), but a few call sites (docuLegalDocs, at least) save the raw,
+      // unprefixed id instead — e.g. "custom-123" instead of
+      // "{uid}_company_custom-123". Query both forms so a document tagged
+      // either way is still found. Found 2026-08-24: a collaborator's
+      // DocuLegal document (companyId saved raw) was invisible to the
+      // company's own owner, since neither the ownedQ (ownerId is the
+      // collaborator's, not the owner's) nor the prefixed companyId query
+      // matched it.
+      const raw = unprefixCompanyId(companyDocId);
+      if (raw && raw !== companyDocId) {
+        queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', raw))));
+      }
     }
-  }
-  const snaps = await Promise.all(queries);
-  const seen = new Set<string>();
-  const docs: QueryDocumentSnapshot[] = [];
-  for (const snap of snaps) {
-    for (const d of snap.docs) {
-      if (seen.has(d.id)) continue;
-      seen.add(d.id);
-      docs.push(d);
+    const snaps = await Promise.all(queries);
+    const seen = new Set<string>();
+    const docs: QueryDocumentSnapshot[] = [];
+    for (const snap of snaps) {
+      for (const d of snap.docs) {
+        if (seen.has(d.id)) continue;
+        seen.add(d.id);
+        docs.push(d);
+      }
     }
+    return docs;
+  } catch (e: any) {
+    // Same transient "Missing or insufficient permissions" race as
+    // fetchWorkspaces above — right after a fresh sign-in/token refresh,
+    // Firestore's backend can reject a query before it's fully accepted
+    // the new token. Reproduced 2026-08-25: Fabiola's own promesse d'achat
+    // showed "Aucun document" right after reconnecting, even though the
+    // document itself was untouched in Firestore the whole time. Every
+    // caller of fetchOwnedAndShared benefits from this retry, not just
+    // fetchWorkspaces, since they all hit the exact same race.
+    const delays = [900, 1500, 2200];
+    if (e?.code === 'permission-denied' && _retryCount < delays.length) {
+      const delay = delays[_retryCount];
+      console.warn(`fetchOwnedAndShared(${collectionName}) hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
+      await new Promise((r) => setTimeout(r, delay));
+      return fetchOwnedAndShared(collectionName, userId, collaboratorCompanyDocIds, _retryCount + 1);
+    }
+    throw e;
   }
-  return docs;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
