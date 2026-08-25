@@ -8716,11 +8716,18 @@ const App = () => {
             setActiveCompanyId(stillExists ? savedCompanyId! : workspaces[0].id);
           }
 
-          // Companies shared with this user by a partner (not owned by them) —
-          // the fetch* calls below need this so they also pull that company's
-          // records, since those docs' ownerId is the partner's, not ours.
+          // Every company this user can see — shared with them by a partner
+          // (ownerId !== them, so those docs' own ownerId is the partner's,
+          // not ours) AND companies THEY OWN (needed so a document a
+          // collaborator creates under their own uid — e.g. Natalia saving a
+          // DocuLegal doc on Fabiola's "Achat Direct" — is still findable by
+          // the OWNER: the `ownedQ` half of fetchOwnedAndShared only matches
+          // ownerId === me, never a collaborator's ownerId, so without this
+          // companyId-based query the owner's own fetch would never surface
+          // their collaborator's content. Found 2026-08-24: Fabiola couldn't
+          // see the promesse d'achat Natalia filled out on Achat Direct.
           const collaboratorCompanyDocIds: string[] = workspaces
-            .filter((w: any) => w.ownerId && w.ownerId !== user.uid && w._companyDocId)
+            .filter((w: any) => w._companyDocId)
             .map((w: any) => w._companyDocId);
 
           // Fetch user's expenses (depenses) — use the raw setter here, not the
@@ -13915,7 +13922,9 @@ const App = () => {
           cat: archiveTargetFolder || selectedDocuFolder || folders[0] || "Documents",
           status: "Signé",
           date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
-          companyId: activeCompanyId,
+          // Prefixed, not raw activeCompanyId — see the matching note where
+          // handleSendDocForRealSignature builds its own newDoc, below.
+          companyId: currentCompany?._companyDocId || activeCompanyId,
           author: currentUserEmail || "",
           recipient: "",
           fileUrl: driveResult.webViewLink,
@@ -14044,7 +14053,16 @@ const App = () => {
           cat: archiveTargetFolder || selectedDocuFolder || folders[0] || "Documents",
           status: "En attente",
           date: new Date().toLocaleDateString("fr-CA", { day: "2-digit", month: "short", year: "numeric" }),
-          companyId: activeCompanyId,
+          // Prefixed company doc id, not the raw activeCompanyId —
+          // saveDocuLegalDoc stores companyId as-is (unlike saveProperty/
+          // saveUnit, which re-prefix internally). Storing raw meant a
+          // collaborator's document (e.g. Natalia's, on Fabiola's "Achat
+          // Direct") was invisible to the company OWNER: neither
+          // fetchOwnedAndShared's companyId query nor the
+          // isCollaboratorOnCompany() security rule's get() lookup could
+          // resolve a raw id back to the real companies/{docId}. Found
+          // 2026-08-24.
+          companyId: currentCompany?._companyDocId || activeCompanyId,
           author: currentUserEmail || "",
           // Real contracts need 2+ parties — one document now maps to
           // several signers. recipient/recipientEmail stay comma-joined for
@@ -14207,7 +14225,7 @@ const App = () => {
           cat: docFormFolder,
           status: "En attente",
           date: isNew ? new Date().toISOString().split("T")[0] : selectedDocuEntry.date,
-          companyId: activeCompanyId,
+          companyId: currentCompany?._companyDocId || activeCompanyId,
           author: activeUser,
           recipient: validSigners.map((s) => s.name).join(", "),
           recipientEmail: validSigners.map((s) => s.email).join(", "),
@@ -17001,7 +17019,7 @@ const App = () => {
                               date: isNew
                                 ? new Date().toISOString().split("T")[0]
                                 : selectedDocuEntry.date,
-                              companyId: activeCompanyId,
+                              companyId: currentCompany?._companyDocId || activeCompanyId,
                               author: activeUser,
                               recipient: docFormRecipient,
                               recipientEmail: docFormEmail,
@@ -17083,7 +17101,7 @@ const App = () => {
                               date: isNew
                                 ? new Date().toISOString().split("T")[0]
                                 : selectedDocuEntry.date,
-                              companyId: activeCompanyId,
+                              companyId: currentCompany?._companyDocId || activeCompanyId,
                               author: activeUser,
                               recipient: docFormRecipient,
                               recipientEmail: docFormEmail,

@@ -85,6 +85,18 @@ service cloud.firestore {
       return isSignedIn() && resource.data.companyId != null &&
         request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.get('collaboratorUIDs', []);
     }
+    // Mirrors isCollaboratorOnCompany(), for the company OWNER instead —
+    // needed on docuLegalDocs so a document a COLLABORATOR creates (their
+    // own ownerId, not the company owner's) is still readable by the
+    // owner. isOwnerDoc() only matches when the reader IS the document's
+    // own ownerId; isCollaboratorOnCompany() only matches collaborators,
+    // never the owner themself. Found 2026-08-24: Fabiola couldn't see a
+    // promesse d'achat Natalia (a collaborator) filled out on "Achat
+    // Direct", a company Fabiola owns.
+    function isOwnerOnCompany() {
+      return isSignedIn() && resource.data.companyId != null &&
+        get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.ownerId == request.auth.uid;
+    }
     // Narrow write for a collaborator (e.g. an accountant linked to a client's
     // real company) — lets them append to the notes thread on an expense/
     // invoice they don't own, without granting any access to the amount,
@@ -224,7 +236,7 @@ service cloud.firestore {
     // DocuLegal entries — Prospecteur/Investisseur/Flippeur/Gestionnaire
     // (leases, offers, subcontracts). Distinct from Syndicat's `legalDocuments`.
     match /docuLegalDocs/{docId} {
-      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany() || isOwnerOnCompany();
       allow create: if isOwnerWrite();
       allow update, delete: if isOwnerDoc();
     }

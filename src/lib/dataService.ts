@@ -1615,6 +1615,19 @@ async function fetchOwnedAndShared(
   const queries = [getDocs(ownedQ)];
   for (const companyDocId of collaboratorCompanyDocIds) {
     queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
+    // Most collections store companyId prefixed (matches companyDocId
+    // above), but a few call sites (docuLegalDocs, at least) save the raw,
+    // unprefixed id instead — e.g. "custom-123" instead of
+    // "{uid}_company_custom-123". Query both forms so a document tagged
+    // either way is still found. Found 2026-08-24: a collaborator's
+    // DocuLegal document (companyId saved raw) was invisible to the
+    // company's own owner, since neither the ownedQ (ownerId is the
+    // collaborator's, not the owner's) nor the prefixed companyId query
+    // matched it.
+    const raw = unprefixCompanyId(companyDocId);
+    if (raw && raw !== companyDocId) {
+      queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', raw))));
+    }
   }
   const snaps = await Promise.all(queries);
   const seen = new Set<string>();
