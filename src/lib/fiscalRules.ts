@@ -41,6 +41,15 @@ export interface FiscalRateContext {
   porcBureau: number;
   /** Taux [0,1] d'utilisation professionnelle du véhicule. */
   porcVehicule: number;
+  /** false = le véhicule n'appartient PAS à l'entreprise (voiture
+   *  personnelle d'un associé) — confirmé par un fiscaliste réel
+   *  (2026-08-25, Achat Direct) : aucune facture réelle (essence,
+   *  assurance, entretien) n'est alors réclamable, même prorata, seule
+   *  une indemnité au kilomètre l'est (gérée séparément par
+   *  KilometrageGPS, catégorie "Indemnité kilométrique" — hors de
+   *  vehicleExpenseCats, donc jamais affectée par ce taux). Défaut true
+   *  pour ne rien changer aux véhicules existants. */
+  vehiculeReclamable?: boolean;
   /** Pourcentage [0,100] de participation de l'associé actif. */
   activePct: number;
 }
@@ -91,7 +100,15 @@ export function resolveFiscalRate(expense: ExpenseLike, ctx: FiscalRateContext):
       // Déclenché automatiquement par vehicleExpenseCats — aucune config manuelle requise.
       // Utilise le tauxApplique figé si disponible (protège les registres historiques).
       const frozenRate = expense.tauxApplique != null ? expense.tauxApplique / 100 : null;
-      fiscalRate = frozenRate ?? (ctx.porcVehicule > 0 ? ctx.porcVehicule : 1.0);
+      if (frozenRate != null) {
+        fiscalRate = frozenRate;
+      } else if (ctx.vehiculeReclamable === false) {
+        // Véhicule personnel, pas de l'entreprise — aucune facture réelle
+        // n'est réclamable, peu importe le taux d'utilisation professionnelle.
+        fiscalRate = 0;
+      } else {
+        fiscalRate = ctx.porcVehicule > 0 ? ctx.porcVehicule : 1.0;
+      }
     }
     // 'full' reste à 1.0
   }

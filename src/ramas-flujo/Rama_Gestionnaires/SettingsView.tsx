@@ -235,6 +235,15 @@ export interface RegisteredVehicle {
   usageType?: "travail" | "personnel" | "hybride";
   kmBusinessTotal?: number;
   kmPersonalTotal?: number;
+  // Separate axis from usageType: does the COMPANY own this vehicle, or is
+  // it a partner's personal car used for business? Confirmed by a real
+  // fiscaliste (2026-08-25, Achat Direct/Natalia): a vehicle NOT owned by
+  // the company can never have its actual expenses (essence, assurance,
+  // entretien) claimed by the company, even prorated — only a per-km
+  // reimbursement (indemnité kilométrique) is claimable, one entry per
+  // trip. Defaults to true (company-owned) so existing vehicles keep their
+  // current behaviour untouched.
+  ownedByCompany?: boolean;
 }
 
 const VEHICLES_STORAGE_KEY = "autocompt_vehicles";
@@ -370,6 +379,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [vehPlaque, setVehPlaque] = useState("");
   const [vehOdometre, setVehOdometre] = useState("");
   const [vehUsageType, setVehUsageType] = useState<"travail" | "personnel" | "hybride">("hybride");
+  const [vehOwnedByCompany, setVehOwnedByCompany] = useState(true);
 
   const handleAddVehicle = () => {
     const marque = vehMarque.trim();
@@ -385,10 +395,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       usageType: vehUsageType,
       kmBusinessTotal: 0,
       kmPersonalTotal: 0,
+      ownedByCompany: vehOwnedByCompany,
     };
     setPartnerData((prev: any) => ({ ...prev, vehicles: [...(prev?.vehicles ?? vehicles), newV] }));
     playNotificationSound();
-    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre(""); setVehUsageType("hybride");
+    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre(""); setVehUsageType("hybride"); setVehOwnedByCompany(true);
   };
 
   const handleRemoveVehicle = (id: string) => {
@@ -399,6 +410,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setPartnerData((prev: any) => ({
       ...prev,
       vehicles: (prev?.vehicles ?? vehicles).map((v: RegisteredVehicle) => v.id === id ? { ...v, usageType } : v),
+    }));
+  };
+
+  const handleChangeVehicleOwnership = (id: string, ownedByCompany: boolean) => {
+    setPartnerData((prev: any) => ({
+      ...prev,
+      vehicles: (prev?.vehicles ?? vehicles).map((v: RegisteredVehicle) => v.id === id ? { ...v, ownedByCompany } : v),
     }));
   };
 
@@ -1508,6 +1526,37 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   ))}
                 </div>
               </div>
+              {/* Propriété du véhicule — détermine si les factures (essence,
+                  assurance, entretien) sont réclamables à l'entreprise, ou
+                  si seule une indemnité au kilomètre l'est. */}
+              <div className="md:col-span-2 space-y-1 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                  Propriété du véhicule
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { id: true, label: "Véhicule de l'entreprise", desc: "Factures réclamables (prorata km)" },
+                    { id: false, label: "Véhicule personnel", desc: "Seule l'indemnité au km est réclamable" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={String(opt.id)}
+                      type="button"
+                      onClick={() => setVehOwnedByCompany(opt.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${vehOwnedByCompany === opt.id
+                        ? "border-indigo-500 bg-indigo-500/10"
+                        : darkMode ? "border-zinc-800 hover:border-zinc-700" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                    >
+                      <span className={`block text-[9px] font-black uppercase tracking-wider ${vehOwnedByCompany === opt.id ? "text-indigo-600 dark:text-indigo-400" : darkMode ? "text-zinc-300" : "text-slate-700"}`}>
+                        {opt.label}
+                      </span>
+                      <span className={`block text-[8px] mt-0.5 ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                        {opt.desc}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Add CTA */}
@@ -1576,9 +1625,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                           { value: "personnel", label: "Personnel seulement" },
                         ]}
                       />
-                      <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                        {formatVehicleRate(computeVehicleBusinessRate(v))} déductible
-                      </span>
+                      {v.ownedByCompany === false ? (
+                        <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+                          Personnel — indemnité au km seulement
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+                          {formatVehicleRate(computeVehicleBusinessRate(v))} déductible
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleChangeVehicleOwnership(v.id, v.ownedByCompany === false)}
+                        className={`text-[7.5px] font-black uppercase tracking-widest underline decoration-dotted ${darkMode ? "text-zinc-500 hover:text-indigo-400" : "text-slate-400 hover:text-indigo-600"}`}
+                      >
+                        Marquer {v.ownedByCompany === false ? "de l'entreprise" : "personnel"}
+                      </button>
                       {v.usageType === "hybride" && ((v.kmBusinessTotal ?? 0) > 0 || (v.kmPersonalTotal ?? 0) > 0) && (
                         <span className={`text-[8px] font-bold ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
                           {(v.kmBusinessTotal ?? 0).toLocaleString("fr-CA")} km travail · {(v.kmPersonalTotal ?? 0).toLocaleString("fr-CA")} km perso

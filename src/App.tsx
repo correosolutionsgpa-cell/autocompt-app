@@ -6474,6 +6474,11 @@ const App = () => {
   // (kmBusinessTotal + kmPersonalTotal), classifié trajet par trajet dans
   // KilometrageGPS. Tout est persisté sur le véhicule via partnerData (Firestore).
   const porcVehicule = computeVehicleBusinessRate(partnerData?.vehicles?.[0]);
+  // false = véhicule personnel d'un associé, pas de l'entreprise — voir
+  // fiscalRules.ts (vehiculeReclamable) pour pourquoi ça bloque toute
+  // déduction de facture réelle (essence/assurance/entretien), même
+  // prorata. Confirmé par un fiscaliste réel (2026-08-25, Achat Direct).
+  const vehiculeReclamable = partnerData?.vehicles?.[0]?.ownedByCompany !== false;
 
   const currentParadas = partnerData[activeUser]?.paradas || [""];
 
@@ -6537,6 +6542,7 @@ const App = () => {
       propertyType: currentCompany?.propertyType,
       porcBureau,
       porcVehicule,
+      vehiculeReclamable,
       activePct:
         currentCompany?.partnersPct?.[activeUser] ??
         currentCompany?.ownerPercentage ??
@@ -7380,10 +7386,17 @@ const App = () => {
 
         // ── Stamp vehicle pro-rata permanently at scan time (TP-80 / T2125) ────
         // tauxApplique is frozen here so historical dépenses never change if the
-        // global vehicle rate changes in the future.
-        if (VEHICLE_EXPENSE_CATS.has(finalCatMapped) && porcVehicule > 0) {
-          updatedNewItemObj.tauxApplique = Number((porcVehicule * 100).toFixed(1));
-          updatedNewItemObj.vehicleRateApplied = true;
+        // global vehicle rate changes in the future. A personal (non-company)
+        // vehicle freezes 0% instead — its real invoices are never claimable,
+        // only the per-trip indemnité kilométrique from KilometrageGPS is.
+        if (VEHICLE_EXPENSE_CATS.has(finalCatMapped)) {
+          if (!vehiculeReclamable) {
+            updatedNewItemObj.tauxApplique = 0;
+            updatedNewItemObj.vehicleRateApplied = true;
+          } else if (porcVehicule > 0) {
+            updatedNewItemObj.tauxApplique = Number((porcVehicule * 100).toFixed(1));
+            updatedNewItemObj.vehicleRateApplied = true;
+          }
         }
 
         let resultingItem: any = null;
@@ -19612,7 +19625,12 @@ const App = () => {
                   <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-slate-50 border-slate-200 text-slate-600"
                     }`}>
                     {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) ? "🚗" : "📋"}&nbsp;{sofiDraft.cat}
-                    {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) && porcVehicule > 0 && (
+                    {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) && !vehiculeReclamable && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        0% — véhicule personnel
+                      </span>
+                    )}
+                    {VEHICLE_EXPENSE_CATS.has(sofiDraft.cat) && vehiculeReclamable && porcVehicule > 0 && (
                       <span className="ml-1.5 px-1.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                         {Math.round(porcVehicule * 100)}% véhicule
                       </span>
@@ -20211,14 +20229,14 @@ const App = () => {
                             disabled={addressBlocked}
                             onClick={() => {
                               // Freeze vehicle pro-rata at save time if not already stamped by OCR pipeline
-                              const stampedVehicleFields = (
-                                VEHICLE_EXPENSE_CATS.has(editingExpense.cat) &&
-                                editingExpense.tauxApplique == null &&
-                                porcVehicule > 0
-                              ) ? {
-                                tauxApplique: Number((porcVehicule * 100).toFixed(1)),
-                                vehicleRateApplied: true,
-                              } : {};
+                              const isUnstampedVehicleExpense = VEHICLE_EXPENSE_CATS.has(editingExpense.cat) && editingExpense.tauxApplique == null;
+                              const stampedVehicleFields = isUnstampedVehicleExpense
+                                ? (!vehiculeReclamable
+                                  ? { tauxApplique: 0, vehicleRateApplied: true }
+                                  : porcVehicule > 0
+                                    ? { tauxApplique: Number((porcVehicule * 100).toFixed(1)), vehicleRateApplied: true }
+                                    : {})
+                                : {};
                               // Freeze the owner-occupancy split at save time, once — same
                               // math as the Taxes & Assurances import pipeline, but here it's
                               // an explicit opt-in per expense instead of automatic-by-category.
@@ -22735,6 +22753,7 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         activeCompanyId={activeCompanyId}
         porcBureau={porcBureau}
         porcVehicule={porcVehicule}
+        vehiculeReclamable={vehiculeReclamable}
         showPeriodDropdown={showPeriodDropdown}
         setShowPeriodDropdown={setShowPeriodDropdown}
         showProfileDropdown={showProfileDropdown}

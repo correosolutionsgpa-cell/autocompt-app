@@ -31,6 +31,7 @@ interface PersistedTripState {
   isTracking: boolean;
   km: number;
   addresses: string[];
+  visitedClient: string;
   lat: number | null;
   lon: number | null;
   accuracy: number | null;
@@ -89,6 +90,11 @@ interface MileageLog {
   distancia: number;
   id: number;
   classification?: "travail" | "personnel";
+  // Client/adresse visitée pendant ce trajet — jamais persisté avant.
+  // Requis désormais : un registre de kilométrage sans destination ne
+  // suffit pas pour justifier une réclamation (fiscaliste réelle,
+  // 2026-08-25, Achat Direct/Natalia).
+  cliente?: string;
 }
 
 interface VehicleData {
@@ -167,6 +173,10 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   const [kilometrageAddresses, setKilometrageAddresses] = useState<string[]>(
     restored?.addresses ?? ["", ""]
   );
+  // Client/adresse visité — le registre de kilométrage doit maintenant
+  // justifier CHAQUE trajet par une destination, pas seulement un total de
+  // km. Added 2026-08-25.
+  const [visitedClient, setVisitedClient] = useState<string>(restored?.visitedClient ?? "");
   const [kilometrageComputedKm, setKilometrageComputedKm] = useState<number>(
     restored?.km ?? 0
   );
@@ -273,6 +283,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
         isTracking: isTrackingAuto,
         km: kilometrageComputedKm,
         addresses: kilometrageAddresses,
+        visitedClient,
         lat: gpsLatitude,
         lon: gpsLongitude,
         accuracy: gpsAccuracy,
@@ -284,7 +295,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
     persist();
     const interval = setInterval(persist, 5000);
     return () => clearInterval(interval);
-  }, [isTrackingAuto, kilometrageComputedKm, kilometrageAddresses, gpsLatitude, gpsLongitude, gpsAccuracy, activeKilometrageTab]);
+  }, [isTrackingAuto, kilometrageComputedKm, kilometrageAddresses, visitedClient, gpsLatitude, gpsLongitude, gpsAccuracy, activeKilometrageTab]);
 
   // ── Effect 2: Clear persistence when idle ───────────────────────────────────
   useEffect(() => {
@@ -320,8 +331,13 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   // the correct accumulator (kmBusinessTotal or kmPersonalTotal) on the vehicle
   // itself in Firestore — that split is what computeVehicleBusinessRate() uses
   // for "hybride" vehicles to derive the % deductible in Tenue de livres.
+  // Même taux affiché dans l'aperçu "Montant déductible" plus bas — une
+  // seule valeur, jamais dupliquée avec un chiffre différent.
+  const KM_RATE = 0.70;
+
   const finalizeTrip = (kmToSave: number, classification: "travail" | "personnel") => {
     const fecha = new Date().toISOString().split("T")[0];
+    const cliente = visitedClient.trim();
 
     const newData = { ...safePartnerData };
     if (!newData[activeUser]?.vehicle) {
@@ -330,7 +346,7 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
       const userVehicle = newData[activeUser].vehicle;
       const vehicleLabel = primaryVehicleLabel ?? userVehicle.model ?? "Véhicule";
       userVehicle.mileageLogs = [
-        { fecha, modelo: vehicleLabel, distancia: kmToSave, id: Date.now(), classification },
+        { fecha, modelo: vehicleLabel, distancia: kmToSave, id: Date.now(), classification, cliente },
         ...(userVehicle.mileageLogs ?? []),
       ];
       if (primaryVehicle) {
@@ -347,9 +363,38 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
       setPartnerData(newData);
     }
 
+    // ── Réclamation à l'entreprise, trajet par trajet ─────────────────────
+    // Un véhicule personnel (pas de l'entreprise) ne peut jamais faire
+    // réclamer ses factures réelles (essence/assurance/entretien) — voir
+    // fiscalRules.ts (vehiculeReclamable). Seule une indemnité au kilomètre
+    // par trajet est réclamable, et seulement pour les trajets "travail".
+    // Confirmé par un fiscaliste réel, 2026-08-25 (Achat Direct/Natalia).
+    const isPersonalVehicleClaim = classification === "travail" && primaryVehicle?.ownedByCompany === false;
+    if (isPersonalVehicleClaim && typeof setDepenses === "function") {
+      const montant = Number((kmToSave * KM_RATE).toFixed(2));
+      setDepenses((prev) => [
+        {
+          id: Date.now(),
+          companyId: currentCompany?._companyDocId || activeCompanyId,
+          fecha,
+          fournisseur: cliente ? `Visite client — ${cliente}` : "Indemnité kilométrique",
+          cat: "Indemnité kilométrique",
+          subtotal: montant,
+          tps: 0,
+          tvq: 0,
+          total: montant,
+          lien: null,
+          partnerTag: activeUser,
+          noteComptable: `${kmToSave.toFixed(2)} km × ${KM_RATE.toFixed(2)}$/km — remboursement kilométrique à ${activeUser} (véhicule personnel, non réclamable en facture).`,
+        },
+        ...prev,
+      ]);
+    }
+
     if (typeof playNotificationSound === "function") playNotificationSound();
 
     setKilometrageComputedKm(0);
+    setVisitedClient("");
     setShowResumedBanner(false);
     setShowGpsSaveForm(false);
     setGpsSaveKmInput("");
@@ -359,11 +404,15 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
 
     if (typeof setDispatcherSuccessToast === "function") {
       setDispatcherSuccessToast({
-        text: classification === "travail" ? "Km d'affaires enregistrés" : "Trajet personnel enregistré",
+        text: isPersonalVehicleClaim
+          ? "Trajet réclamé à l'entreprise"
+          : classification === "travail" ? "Km d'affaires enregistrés" : "Trajet personnel enregistré",
         channel: "Journal kilométrique",
-        customMessage: classification === "travail"
-          ? `${kmToSave} km ajoutés à votre compteur d'affaires. Le taux pro-rata se met à jour automatiquement dans Tenue de livres.`
-          : `${kmToSave} km enregistrés comme trajet personnel — non déductible, mais comptés dans le total du véhicule.`,
+        customMessage: isPersonalVehicleClaim
+          ? `${kmToSave} km${cliente ? ` vers ${cliente}` : ""} — ${(kmToSave * KM_RATE).toFixed(2)}$ ajoutés comme dépense réclamable dans Tenue de livres.`
+          : classification === "travail"
+            ? `${kmToSave} km ajoutés à votre compteur d'affaires. Le taux pro-rata se met à jour automatiquement dans Tenue de livres.`
+            : `${kmToSave} km enregistrés comme trajet personnel — non déductible, mais comptés dans le total du véhicule.`,
       });
     }
   };
@@ -880,6 +929,27 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
           </div>
         )}
 
+        {/* ── Client visité — obligatoire, un registre de km sans destination
+              ne suffit pas pour justifier une réclamation. Added 2026-08-25. ── */}
+        <div className={`p-5 rounded-3xl border space-y-1.5 ${darkMode ? "bg-slate-900/40 border-white/[0.08]" : "bg-white border-slate-200"}`}>
+          <label className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+            Client / adresse visitée <span className="text-rose-500">*</span>
+          </label>
+          <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+            <MapPin size={14} className="text-[#059669] shrink-0" />
+            <input
+              type="text"
+              value={visitedClient}
+              onChange={(e) => setVisitedClient(e.target.value)}
+              placeholder="Ex : Client Tremblay — 456 av. des Pins"
+              className={`flex-1 bg-transparent outline-none text-xs font-bold ${darkMode ? "text-zinc-100 placeholder:text-zinc-700" : "text-slate-900 placeholder:text-slate-300"}`}
+            />
+          </div>
+          <p className={`text-[7px] font-medium ${darkMode ? "text-zinc-600" : "text-slate-400"}`}>
+            Consigné dans le Journal Unifié pour chaque trajet — nécessaire pour justifier une réclamation.
+          </p>
+        </div>
+
         {/* ── Bouton Enregistrer le trajet ──────────────────────────────────── */}
         {/* In GPS mode this button is embedded inside the save form — only show for calculateur */}
         <div className="pt-2">
@@ -893,6 +963,9 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                 kmToSave = kilometrageComputedKm;
               }
               if (isNaN(kmToSave) || kmToSave <= 0) {
+                return; // silently ignore — UI already prevents this
+              }
+              if (!visitedClient.trim()) {
                 return; // silently ignore — UI already prevents this
               }
 
@@ -911,9 +984,11 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
             }}
             className={`w-full bg-[#059669] text-white font-black py-5 rounded-[32px] flex items-center justify-center space-x-3 text-sm uppercase italic shadow-xl active:scale-95 transition-all shadow-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed`}
             disabled={
-              activeKilometrageTab === "gps"
-                ? isNaN(parseFloat(gpsSaveKmInput)) || parseFloat(gpsSaveKmInput) <= 0
-                : kilometrageComputedKm <= 0
+              !visitedClient.trim() || (
+                activeKilometrageTab === "gps"
+                  ? isNaN(parseFloat(gpsSaveKmInput)) || parseFloat(gpsSaveKmInput) <= 0
+                  : kilometrageComputedKm <= 0
+              )
             }
           >
             <CheckCircle2 size={24} />
@@ -1010,6 +1085,12 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
                       >
                         {log.fecha}
                       </p>
+                      {log.cliente && (
+                        <p className={`text-[9px] font-bold flex items-center gap-1 ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>
+                          <MapPin size={9} className="text-[#059669] shrink-0" />
+                          {log.cliente}
+                        </p>
+                      )}
                       <p
                         className={`text-[7px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}
                       >

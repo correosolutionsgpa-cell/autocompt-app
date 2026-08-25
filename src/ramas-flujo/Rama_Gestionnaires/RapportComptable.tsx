@@ -112,6 +112,7 @@ export interface RapportComptableProps {
   activeCompanyId: string;
   porcBureau: number;
   porcVehicule: number;
+  vehiculeReclamable?: boolean;
 
   // UI dropdowns (états globaux)
   showPeriodDropdown: boolean;
@@ -242,6 +243,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
   activeCompanyId,
   porcBureau,
   porcVehicule,
+  vehiculeReclamable,
   showPeriodDropdown,
   setShowPeriodDropdown,
   showProfileDropdown,
@@ -397,6 +399,7 @@ const RapportComptable: React.FC<RapportComptableProps> = ({
       propertyType: profileSelected?.propertyType,
       porcBureau,
       porcVehicule,
+      vehiculeReclamable,
       activePct:
         profileSelected?.partnersPct?.[activeUser] ??
         profileSelected?.ownerPercentage ??
