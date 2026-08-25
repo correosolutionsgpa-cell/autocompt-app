@@ -371,17 +371,28 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     render();
     // Re-render on actual width changes only (rotation, real resize) — NOT
     // on every 'resize' event. A mobile on-screen keyboard opening/closing
-    // fires 'resize' too (it changes innerHeight, rarely innerWidth), which
-    // used to re-trigger a full re-render for no visual reason every time
-    // someone focused a text field, racing with the guard above.
+    // fires 'resize' too, sometimes repeatedly during its slide animation
+    // (and on some devices/browsers it can nudge innerWidth by a few px
+    // too, not just innerHeight) — debounce so a burst of events during
+    // that animation settles into a single re-render instead of several
+    // overlapping ones, and re-check the width only once things are still.
     let lastWidth = window.innerWidth;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const onResize = () => {
-      if (window.innerWidth === lastWidth) return;
-      lastWidth = window.innerWidth;
-      render();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        if (window.innerWidth === lastWidth) return;
+        lastWidth = window.innerWidth;
+        render();
+      }, 400);
     };
     window.addEventListener('resize', onResize);
-    return () => { cancelled = true; window.removeEventListener('resize', onResize); };
+    return () => {
+      cancelled = true;
+      window.removeEventListener('resize', onResize);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [pdfDoc, numPdfPages]);
 
   const openField = (fieldId: string, fieldType: string) => {
