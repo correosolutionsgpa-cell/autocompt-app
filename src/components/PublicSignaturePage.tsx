@@ -321,7 +321,27 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   useEffect(() => {
     if (!pdfDoc) return;
     let cancelled = false;
+    // Guards against two overlapping render() runs writing to the same
+    // canvas at once. The width-only-change check below already prevents
+    // most spurious re-renders (see onResize), but this covers the case
+    // where a render is still mid-flight when another legitimate trigger
+    // fires — setting canvas.width/height while a previous page.render()
+    // is still awaiting resets the bitmap out from under it (per the
+    // Canvas spec), which can leave a garbled/misaligned result on some
+    // mobile browsers. Found 2026-08-24 (Fabiola, Samsung Internet): the
+    // PDF rendered correctly until she tapped the name field — opening the
+    // on-screen keyboard fires a resize event mid-interaction.
+    let renderInProgress = false;
     const render = async () => {
+      if (renderInProgress) return;
+      renderInProgress = true;
+      try {
+        await renderPages();
+      } finally {
+        renderInProgress = false;
+      }
+    };
+    const renderPages = async () => {
       // Fit the page to the actual screen width instead of a fixed scale —
       // on a phone, a fixed 1.5x render is far wider than the viewport, so
       // the document (and every field box positioned relative to it) spills
@@ -349,7 +369,17 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       }
     };
     render();
-    const onResize = () => render();
+    // Re-render on actual width changes only (rotation, real resize) — NOT
+    // on every 'resize' event. A mobile on-screen keyboard opening/closing
+    // fires 'resize' too (it changes innerHeight, rarely innerWidth), which
+    // used to re-trigger a full re-render for no visual reason every time
+    // someone focused a text field, racing with the guard above.
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      render();
+    };
     window.addEventListener('resize', onResize);
     return () => { cancelled = true; window.removeEventListener('resize', onResize); };
   }, [pdfDoc, numPdfPages]);
