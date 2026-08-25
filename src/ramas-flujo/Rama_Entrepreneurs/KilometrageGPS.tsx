@@ -322,7 +322,17 @@ const KilometrageGPS: React.FC<KilometrageGPSProps> = ({
   // Written by SettingsView through the same setPartnerData/saveWorkspace pipeline
   // used for homeOffice settings and mileage logs -- no longer localStorage-only.
   const registeredVehicles: RegisteredVehicle[] = safeCurrentCompanyPartnerData?.vehicles ?? [];
-  const primaryVehicle = registeredVehicles[0] ?? null;
+  // The vehicle registry is shared company-wide — without picking the one
+  // ASSIGNED to activeUser, two partners who each register their own car
+  // would both get the first vehicle's rules applied to their trips.
+  // Falls back to an unassigned vehicle (accounts created before this
+  // field existed), then to vehicles[0], to keep old single-vehicle
+  // setups working unchanged. Added 2026-08-25.
+  const primaryVehicle =
+    registeredVehicles.find((v) => v.assignedTo === activeUser) ??
+    registeredVehicles.find((v) => !v.assignedTo) ??
+    registeredVehicles[0] ??
+    null;
   const primaryVehicleLabel = primaryVehicle
     ? [primaryVehicle.annee, primaryVehicle.marque, primaryVehicle.modele].filter(Boolean).join(" ")
     : null;

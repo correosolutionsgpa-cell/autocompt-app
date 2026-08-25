@@ -74,6 +74,11 @@ export interface SettingsViewProps {
   // Véhicules enregistrés (persisté dans Firestore via partnerData/setPartnerData)
   partnerData: any;
   setPartnerData: (fn: any | ((prev: any) => any)) => void;
+  // Liste des associés de l'entreprise active (ex: ["Fabiola", "Natalia"])
+  // et l'utilisateur courant — utilisés pour assigner chaque véhicule à
+  // son propriétaire dans le registre partagé (voir RegisteredVehicle.assignedTo).
+  partners?: string[];
+  activeUser?: string;
 
   // Profil administrateur
   adminName: string;
@@ -244,6 +249,14 @@ export interface RegisteredVehicle {
   // trip. Defaults to true (company-owned) so existing vehicles keep their
   // current behaviour untouched.
   ownedByCompany?: boolean;
+  // À quel associé ce véhicule appartient (nom, ex: "Natalia"). Le registre
+  // de véhicules est partagé par toute l'entreprise — sans ce champ, deux
+  // associés qui enregistrent chacun leur propre voiture n'avaient aucun
+  // moyen d'être distingués : tout le monde se voyait appliquer les
+  // règles (personnel/entreprise, taux) du PREMIER véhicule de la liste.
+  // Absent = ancien véhicule enregistré avant ce champ (voir la logique de
+  // secours dans KilometrageGPS.tsx / App.tsx). Added 2026-08-25.
+  assignedTo?: string;
 }
 
 const VEHICLES_STORAGE_KEY = "autocompt_vehicles";
@@ -258,6 +271,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onSaveProfileNow,
   partnerData,
   setPartnerData,
+  partners,
+  activeUser,
   adminName,
   setAdminName,
   adminRole,
@@ -380,6 +395,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [vehOdometre, setVehOdometre] = useState("");
   const [vehUsageType, setVehUsageType] = useState<"travail" | "personnel" | "hybride">("hybride");
   const [vehOwnedByCompany, setVehOwnedByCompany] = useState(true);
+  const [vehAssignedTo, setVehAssignedTo] = useState<string>(activeUser || "");
 
   const handleAddVehicle = () => {
     const marque = vehMarque.trim();
@@ -396,14 +412,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       kmBusinessTotal: 0,
       kmPersonalTotal: 0,
       ownedByCompany: vehOwnedByCompany,
+      assignedTo: vehAssignedTo || activeUser || undefined,
     };
     setPartnerData((prev: any) => ({ ...prev, vehicles: [...(prev?.vehicles ?? vehicles), newV] }));
     playNotificationSound();
-    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre(""); setVehUsageType("hybride"); setVehOwnedByCompany(true);
+    setVehMarque(""); setVehModele(""); setVehAnnee(""); setVehPlaque(""); setVehOdometre(""); setVehUsageType("hybride"); setVehOwnedByCompany(true); setVehAssignedTo(activeUser || "");
   };
 
   const handleRemoveVehicle = (id: string) => {
     setPartnerData((prev: any) => ({ ...prev, vehicles: (prev?.vehicles ?? vehicles).filter((v: RegisteredVehicle) => v.id !== id) }));
+  };
+
+  const handleChangeVehicleAssignment = (id: string, assignedTo: string) => {
+    setPartnerData((prev: any) => ({
+      ...prev,
+      vehicles: (prev?.vehicles ?? vehicles).map((v: RegisteredVehicle) => v.id === id ? { ...v, assignedTo } : v),
+    }));
   };
 
   const handleChangeVehicleUsage = (id: string, usageType: "travail" | "personnel" | "hybride") => {
@@ -1557,6 +1581,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   ))}
                 </div>
               </div>
+              {/* Assigné à — le registre de véhicules est partagé par toute
+                  l'entreprise ; sans ça, deux associés qui enregistrent
+                  chacun leur propre voiture verraient les mêmes règles
+                  (personnel/entreprise, taux) appliquées au premier véhicule
+                  de la liste, peu importe qui conduit. */}
+              {partners && partners.length > 1 && (
+                <div className="md:col-span-2 space-y-1 text-left">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">
+                    Assigné à
+                  </label>
+                  <StyledSelect
+                    darkMode={darkMode}
+                    value={vehAssignedTo || activeUser || partners[0]}
+                    onChange={(v) => setVehAssignedTo(v)}
+                    options={partners.map((p) => ({ value: p, label: p }))}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Add CTA */}
@@ -1615,6 +1657,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {partners && partners.length > 1 && (
+                        <StyledSelect
+                          darkMode={darkMode}
+                          value={v.assignedTo || activeUser || partners[0]}
+                          onChange={(v2) => handleChangeVehicleAssignment(v.id, v2)}
+                          options={partners.map((p) => ({ value: p, label: `👤 ${p}` }))}
+                        />
+                      )}
                       <StyledSelect
                         darkMode={darkMode}
                         value={v.usageType || "hybride"}

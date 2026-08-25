@@ -6473,12 +6473,21 @@ const App = () => {
   // "travail" = 100% fixe, "personnel" = 0% fixe, "hybride" = kmBusinessTotal /
   // (kmBusinessTotal + kmPersonalTotal), classifié trajet par trajet dans
   // KilometrageGPS. Tout est persisté sur le véhicule via partnerData (Firestore).
-  const porcVehicule = computeVehicleBusinessRate(partnerData?.vehicles?.[0]);
+  // Le registre de véhicules est partagé par toute l'entreprise — sans
+  // sélectionner le véhicule ASSIGNÉ à l'utilisateur actif, deux associés
+  // qui enregistrent chacun leur propre voiture se verraient appliquer les
+  // règles du même (premier) véhicule. Secours sur le premier véhicule non
+  // assigné (comptes créés avant ce champ), puis sur vehicles[0].
+  const myVehicle =
+    partnerData?.vehicles?.find((v: any) => v.assignedTo === activeUser) ??
+    partnerData?.vehicles?.find((v: any) => !v.assignedTo) ??
+    partnerData?.vehicles?.[0];
+  const porcVehicule = computeVehicleBusinessRate(myVehicle);
   // false = véhicule personnel d'un associé, pas de l'entreprise — voir
   // fiscalRules.ts (vehiculeReclamable) pour pourquoi ça bloque toute
   // déduction de facture réelle (essence/assurance/entretien), même
   // prorata. Confirmé par un fiscaliste réel (2026-08-25, Achat Direct).
-  const vehiculeReclamable = partnerData?.vehicles?.[0]?.ownedByCompany !== false;
+  const vehiculeReclamable = myVehicle?.ownedByCompany !== false;
 
   const currentParadas = partnerData[activeUser]?.paradas || [""];
 
@@ -22948,6 +22957,8 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         onSaveProfileNow={() => flushUserProfileSaveRef.current()}
         partnerData={partnerData}
         setPartnerData={setPartnerData}
+        partners={partners}
+        activeUser={activeUser}
         adminName={adminName}
         setAdminName={(v: string) => updateAdminProfile("adminName", v)}
         adminRole={adminRole}
