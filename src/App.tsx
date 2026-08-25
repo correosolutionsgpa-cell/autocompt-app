@@ -14955,6 +14955,15 @@ const App = () => {
                         </div>
 
                         {/* ── Modèles officiels TAL ──────────────────────────────── */}
+                        {/* Un Flippeur ou un Comptable n'a pas de locataires — ces
+                            formulaires du Tribunal administratif du logement ne le
+                            concernent jamais. Même règle que le module Gestion
+                            Immobilière (gestion_immo), déjà limité à Gestionnaire/
+                            Investisseur dans rbacConfig.ts. Le reste de DocuLegal
+                            (folders, dropdowns) était déjà filtré par profil — ce
+                            bloc "Mes Modèles" était le seul angle mort. Fabiola,
+                            2026-08-25. */}
+                        {hasAccess(activeProfile, "gestion_immo") && (
                         <div className={`rounded-[22px] border overflow-hidden ${darkMode ? "border-emerald-800/40 bg-emerald-950/15" : "border-emerald-200 bg-emerald-50/60"}`}>
                           <div className={`px-4 py-2.5 border-b flex items-center justify-between ${darkMode ? "border-emerald-800/30 bg-emerald-900/20" : "border-emerald-200 bg-emerald-100/50"}`}>
                             <div className="flex items-center gap-2">
@@ -15037,6 +15046,7 @@ const App = () => {
                             </div>
                           </div>
                         </div>
+                        )}
 
                         {/* ── Separator ───────────────────────────────────────── */}
                         <div className={`flex items-center gap-3 ${darkMode ? "text-zinc-700" : "text-slate-300"}`}>
