@@ -395,6 +395,32 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
     };
   }, [pdfDoc, numPdfPages]);
 
+  // The PDF canvases were confirmed to still hold CORRECT pixels after
+  // looking "flipped" on mobile (Fabiola, 2026-08-24: fixes itself on
+  // scroll or device rotation, with no code change and no re-render) — a
+  // GPU compositing artifact some Android browsers hit when the on-screen
+  // keyboard resizes the viewport, not an actual drawing bug. A tiny
+  // forced scroll nudge right after the keyboard's resize event makes the
+  // browser recomposite the layer correctly on its own, instead of
+  // leaving the visual glitch for the signer to notice and have to scroll
+  // to clear themselves.
+  useEffect(() => {
+    const nudge = () => {
+      window.scrollBy(0, 1);
+      requestAnimationFrame(() => window.scrollBy(0, -1));
+    };
+    let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
+    const onResize = () => {
+      if (nudgeTimer) clearTimeout(nudgeTimer);
+      nudgeTimer = setTimeout(nudge, 250);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (nudgeTimer) clearTimeout(nudgeTimer);
+    };
+  }, []);
+
   const openField = (fieldId: string, fieldType: string) => {
     if (fieldType === 'date') {
       // Nothing to draw or type — just confirm today's date.
