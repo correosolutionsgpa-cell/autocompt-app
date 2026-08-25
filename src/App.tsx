@@ -186,6 +186,7 @@ import { doc, getDoc, getDocFromServer, setDoc, collection, query, where, getDoc
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { analyzeTemplate, generateFilledDocumentPdf, blobToRawBase64 } from "./lib/docTemplateService";
 import { getCompanyDriveConfig, uploadDocumentToDrive, connectCompanyDrive } from "./lib/driveService";
+import { generateDocTextPDF } from "./lib/docTextToPdf";
 import { hasAccess, type ProfileId } from "./lib/rbacConfig";
 
 const CHARTS_COLORS = [
@@ -4850,7 +4851,13 @@ const App = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null,
   );
-  const [docLogo, setDocLogo] = useState<string | null>(null);
+  // Was its own useState backed by a blob: URL in localStorage — never
+  // survived reload and couldn't be embedded in a real PDF (blob URLs are
+  // tab-session-scoped). Now a plain read of the same base64 logo already
+  // used for invoice PDFs (App.tsx ~5553) and already persisted to
+  // Firestore per company. Found 2026-08-25 (Fabiola: logo missing from a
+  // sent Promesse d'Achat Dynamique).
+  const docLogo = userProfile?.logo || null;
   const [remindedDocs, setRemindedDocs] = useState<Record<string, boolean>>({});
   const [docuFilterTab, setDocuFilterTab] = useState<string>("all");
   const [smartTemplates, setSmartTemplates] = useState([
@@ -14227,6 +14234,19 @@ const App = () => {
         alert("⚠️ Le nom du document et son contenu sont requis.");
         return;
       }
+      // A field left empty in "Remplissage Rapide" never gets substituted
+      // (the "Appliquer" logic only replaces non-empty values) — without
+      // this check, a raw {{TOKEN}} can reach the signer verbatim. Found
+      // 2026-08-25 (Fabiola sent herself a real Promesse d'Achat Dynamique
+      // and saw unreplaced tokens in her own inbox).
+      const leftoverTokens = Array.from(new Set(docFormContent.match(/\{\{[^{}]+\}\}/g) || []));
+      if (leftoverTokens.length > 0) {
+        alert(
+          `⚠️ Le document contient encore des champs non remplis :\n\n${leftoverTokens.join("\n")}\n\n` +
+          `Remplissez-les (via "Remplissage Rapide" ou directement dans le texte) et cliquez "Appliquer" avant d'envoyer.`
+        );
+        return;
+      }
       const validSigners = docFormSignersList.filter((s) => s.name?.trim() && s.email?.includes("@"));
       if (validSigners.length === 0) {
         alert("⚠️ Ajoutez au moins un signataire avec un courriel valide.");
@@ -14234,6 +14254,26 @@ const App = () => {
       }
       setIsSendingPlexPdf(true);
       try {
+        // Turn the plain contract text into a real paginated PDF (company
+        // logo, initials boxes on every page, dedicated signature page) and
+        // upload it exactly like an admin-uploaded PDF would be — this is
+        // what activates the full click-to-sign experience on the
+        // signer's side (usesRealPdfSigning in PublicSignaturePage.tsx),
+        // instead of the old flat wall-of-text view. Added 2026-08-25.
+        const { pdf: contractPdf, fields: contractFields } = generateDocTextPDF({
+          title: docFormName,
+          companyName: currentCompany?.nombre,
+          bodyText: docFormContent,
+          logoBase64: currentCompany?.userProfile?.logo || userProfile?.logo || null,
+          signers: validSigners.map((s) => ({ name: s.name, email: s.email, role: s.role })),
+        });
+        const pdfBuf = contractPdf.output("arraybuffer");
+        const safePdfName = encodeURIComponent(docFormName.replace(/\s+/g, "_"));
+        const pdfPath = `docuLegalPdfs/${uid}/${Date.now()}_${safePdfName}.pdf`;
+        const pdfStorageRef = ref(storage, pdfPath);
+        await uploadBytes(pdfStorageRef, new Uint8Array(pdfBuf), { contentType: "application/pdf" });
+        const pdfStorageUrl = await getDownloadURL(pdfStorageRef);
+
         const isNew = !selectedDocuEntry;
         const newId = isNew ? `DOC-${Date.now().toString().substring(8)}` : selectedDocuEntry.id;
         const newDocObj = {
@@ -14250,6 +14290,8 @@ const App = () => {
           smsVerify: docFormSmsVerify,
           emailInvite: docFormEmailInvite,
           signers: docFormSignersList,
+          pdfStorageUrl,
+          signatureFields: contractFields,
         };
         if (isNew) {
           setDocuLegalList([newDocObj, ...docuLegalList]);
@@ -14269,10 +14311,17 @@ const App = () => {
         for (let vi = 0; vi < validSigners.length; vi++) {
           const signer = validSigners[vi];
           const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${newId.slice(0, 6)}`;
+          const signerFields = contractFields.filter((f) => f.signerIndex === vi);
+          const otherSigners = validSigners.filter((_, si) => si !== vi).map((s) => s.name).join(", ");
           const urlPayload = {
             docId: newId,
             docTitle: docFormName,
-            docSummary: docFormContent,
+            // A short description, not the full contract — the real
+            // paginated PDF (pdfStorageUrl below) is what the signer
+            // actually reads; duplicating the whole text here as raw
+            // pre-wrap text would just recreate the "mucho texto" problem
+            // right above the PDF viewer.
+            docSummary: `Document à signer électroniquement : "${docFormName}". ${signerFields.length} zone${signerFields.length > 1 ? "s" : ""} de signature définie${signerFields.length > 1 ? "s" : ""} pour vous.${otherSigners ? ` Signe également : ${otherSigners}.` : ""}`,
             companyName: currentCompany?.nombre || "",
             companyId: activeCompanyId,
             ownerId: driveOwnerId,
@@ -14281,7 +14330,9 @@ const App = () => {
             adminSignedDate: new Date().toLocaleDateString("fr-CA"),
             status: "pending",
             createdAt: new Date().toISOString(),
-            customDocUrl: "",
+            customDocUrl: pdfStorageUrl,
+            pdfStorageUrl,
+            signatureFields: signerFields,
             // See handlePlexPdfEditorSend above for why this matters — a
             // real multi-party document needs its final PDF to show every
             // real signer, not a fixed "administrateur" slot.
@@ -15432,7 +15483,6 @@ const App = () => {
                             );
                             setDocFormSmsVerify(true);
                             setSelectedDocuEntry(null);
-                            setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                             setSubVistaDocu("editor");
                             playNotificationSound();
                           }}
@@ -15545,7 +15595,6 @@ const App = () => {
                                           },
                                         ],
                                       );
-                                      setDocLogo(doc.logo || currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                       setDocPlacedFields(
                                         doc.placedFields || [
                                           {
@@ -15779,7 +15828,6 @@ const App = () => {
                                     color: "Purple",
                                   },
                                 ]);
-                                setDocLogo(currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                 setDocPlacedFields([]);
                                 setSelectedDocuEntry(null);
                                 setSubVistaDocu("editor");
@@ -15824,7 +15872,6 @@ const App = () => {
                                       },
                                     ],
                                   );
-                                  setDocLogo(doc.logo || currentCompany?.userProfile?.logo || localStorage.getItem('doculegal_logo_' + activeCompanyId) || null);
                                   setDocPlacedFields(
                                     doc.placedFields || [
                                       {
@@ -16123,7 +16170,7 @@ const App = () => {
                             {/* BRANDING LOGO INTERACTION */}
                             <div>
                               <label className="text-[8px] font-black uppercase text-slate-400 italic block mb-1">
-                                Logo d'entreprise (Smart Branding)
+                                Logo d'entreprise (aussi utilisé sur vos factures)
                               </label>
                               <input
                                 type="file"
@@ -16132,16 +16179,38 @@ const App = () => {
                                 accept="image/*"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
-                                  if (file) {
-                                    const localUrl = URL.createObjectURL(file);
-                                    setDocLogo(localUrl);
-                                    // Persist logo per company — survives page reloads
-                                    localStorage.setItem('doculegal_logo_' + activeCompanyId, localUrl);
-                                    playNotificationSound();
-                                    alert(
-                                      "✨ Logo d'entreprise appliqué !\n\nVotre image de marque s'affichera maintenant dans l'en-tête du document et sur le portail client.",
-                                    );
-                                  }
+                                  if (!file) return;
+                                  // Same resize-then-persist logic as the working
+                                  // "Configuration de facturation" logo uploader
+                                  // (SettingsView.tsx) — reused here so this button
+                                  // writes to the exact field the real PDF generator
+                                  // reads (userProfile.logo), instead of a blob: URL
+                                  // that never survived reload or reached a PDF.
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => {
+                                    const rawDataUrl = ev.target?.result as string;
+                                    const img = new Image();
+                                    img.onload = () => {
+                                      const maxDim = 400;
+                                      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                                      const canvas = document.createElement("canvas");
+                                      canvas.width = Math.round(img.width * scale);
+                                      canvas.height = Math.round(img.height * scale);
+                                      const ctx = canvas.getContext("2d");
+                                      let finalDataUrl = rawDataUrl;
+                                      if (ctx) {
+                                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                        finalDataUrl = canvas.toDataURL("image/png");
+                                      }
+                                      setUserProfile((prev: any) => ({ ...prev, logo: finalDataUrl }));
+                                      playNotificationSound();
+                                      alert(
+                                        "✨ Logo d'entreprise appliqué !\n\nVotre image de marque s'affichera maintenant sur les documents envoyés pour signature.",
+                                      );
+                                    };
+                                    img.src = rawDataUrl;
+                                  };
+                                  reader.readAsDataURL(file);
                                 }}
                               />
                               <div className="flex items-center space-x-2">
@@ -16160,7 +16229,7 @@ const App = () => {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setDocLogo(null);
+                                        setUserProfile((prev: any) => ({ ...prev, logo: null }));
                                         playNotificationSound();
                                       }}
                                       className="text-[7.5px] font-black uppercase text-rose-500 hover:text-rose-600 bg-transparent border-none cursor-pointer pr-1"
