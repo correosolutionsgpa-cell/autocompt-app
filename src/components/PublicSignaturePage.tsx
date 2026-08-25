@@ -470,7 +470,25 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         sigColor,
       );
     }
-    setFieldValues((p) => ({ ...p, [activeFieldId]: { type: field.type, dataUrl } }));
+    // Auto-fill every OTHER not-yet-filled field of the same type (this
+    // signer's own — docData.signatureFields is already scoped to just
+    // them, see the per-signer signerFields split at document creation)
+    // with this same drawing, instead of making them redraw their
+    // initials on every single page. Signing a real 7-page contract meant
+    // drawing the same initials 7 times with no shortcut — the single
+    // biggest complaint after Fabiola's real promesse d'achat (2026-08-24:
+    // her business partner switched to a competing e-signature app over
+    // exactly this). "Save for next time" already existed for the OLDER
+    // single-block signing flow, but never for this multi-field one.
+    setFieldValues((p) => {
+      const next = { ...p, [activeFieldId]: { type: field.type, dataUrl } };
+      for (const f of docData!.signatureFields || []) {
+        if (f.id !== activeFieldId && f.type === field.type && !next[f.id]) {
+          next[f.id] = { type: f.type, dataUrl };
+        }
+      }
+      return next;
+    });
     setActiveFieldId(null);
   };
 
