@@ -1457,7 +1457,14 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
               <h1 className="font-black uppercase italic tracking-tight text-slate-900 text-base">{docData?.docTitle}</h1>
             </div>
           </div>
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 font-medium leading-relaxed">
+          {/* whitespace-pre-wrap: docSummary is a \n-joined contract (numbered
+              clauses, blank lines between sections) — without it the browser
+              collapses every line break into one run-on paragraph, which is
+              what made a "Promesse d'Achat Dynamique" unreadable on this
+              screen. max-h + overflow-y-auto turns a 5-7 page contract into a
+              scrollable document pane instead of a page-length wall of text.
+              Found 2026-08-25 (Fabiola, sent herself a real dynamic PA). */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-y-auto">
             {docData?.docSummary}
           </div>
           {/* When the document renders inline below (usesRealPdfSigning),
