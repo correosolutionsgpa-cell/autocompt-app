@@ -1427,8 +1427,8 @@ Format strict : { "typeFinancement": string|null, "preteur": string|null, "adres
 
       <!-- CTA Button -->
       <div style="text-align:center;margin-bottom:28px">
-        <a href="${signUrl}" style="display:inline-block;background:linear-gradient(135deg,#059669,#10b981);color:#fff;text-decoration:none;font-size:14px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:16px 40px;border-radius:50px;box-shadow:0 4px 20px rgba(5,150,105,0.35)">
-          Réviser et Signer ce Document →
+        <a href="${signUrl}" style="display:inline-block;background-color:#059669;background:linear-gradient(135deg,#059669,#10b981);color:#ffffff !important;text-decoration:none;font-size:14px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:16px 40px;border-radius:50px;box-shadow:0 4px 20px rgba(5,150,105,0.35);mso-padding-alt:0;">
+          <!--[if mso]>&nbsp;<![endif]-->Réviser et Signer ce Document →<!--[if mso]>&nbsp;<![endif]-->
         </a>
       </div>
 
