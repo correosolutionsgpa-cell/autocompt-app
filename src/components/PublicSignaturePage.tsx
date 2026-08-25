@@ -209,7 +209,11 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
   const [signerEmail, setSignerEmail] = useState('');
 
   // Saved signature state
-  const [savedSig, setSavedSig] = useState<{ dataUrl: string; sigType: string; fontFamily?: string } | null>(null);
+  const [savedSig, setSavedSig] = useState<{ dataUrl: string; initialsDataUrl?: string; sigType: string; fontFamily?: string } | null>(null);
+  // Whether the one-click "use my saved signature" banner has already been
+  // applied on the current usesRealPdfSigning document, so it doesn't
+  // silently re-overwrite fields the signer has since edited by hand.
+  const [savedSigAppliedToFields, setSavedSigAppliedToFields] = useState(false);
   const [savedSigLoaded, setSavedSigLoaded] = useState(false);
   const [useSavedSig, setUseSavedSig] = useState(false);
   const [saveSigForNextTime, setSaveSigForNextTime] = useState(true);
@@ -617,7 +621,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       if (cancelled) return;
       if (snap.exists()) {
         const d = snap.data();
-        setSavedSig({ dataUrl: d.sigDataUrl, sigType: d.sigType, fontFamily: d.fontFamily });
+        setSavedSig({ dataUrl: d.sigDataUrl, initialsDataUrl: d.initialsDataUrl, sigType: d.sigType, fontFamily: d.fontFamily });
         setUseSavedSig(true);
       } else {
         setSavedSig(null);
@@ -665,6 +669,27 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
             auditSignIp: auditIp || 'unknown',
             auditSignUA: navigator.userAgent.slice(0, 200),
           });
+        } catch {}
+
+        // Persist this signer's signature/initials for next time — same
+        // savedSignatures collection/keying the older single-block flow
+        // already used, extended here so a repeat signer on the REAL
+        // click-to-sign-on-document flow (what actual contracts use)
+        // benefits too. Added 2026-08-25.
+        try {
+          const firstSig = Object.values(fieldValues).find((v) => v.type === 'signature' && v.dataUrl);
+          const firstInit = Object.values(fieldValues).find((v) => v.type === 'initials' && v.dataUrl);
+          if (signerEmail.includes('@') && (firstSig || firstInit)) {
+            const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+            await setDoc(doc(db, 'savedSignatures', key), {
+              email: signerEmail,
+              sigDataUrl: firstSig?.dataUrl || '',
+              initialsDataUrl: firstInit?.dataUrl || '',
+              sigType: 'draw',
+              savedAt: new Date().toISOString(),
+              usedCount: 1,
+            }, { merge: true });
+          }
         } catch {}
 
         let groupResult: { allSigned: boolean; signedCount: number; totalSigners: number } = {
@@ -770,18 +795,24 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         });
       } catch {}
 
-      // ── Persist signature for next time ──────────────────────────────────
-      if (saveSigForNextTime && signerEmail.includes('@') && finalSigDataUrl) {
+      // ── Persist signature AND initials for next time ────────────────────
+      // Was signature-only — initialsDataUrl was computed above but never
+      // saved here, so a returning signer's initials never pre-filled even
+      // when their full signature did. Fixed 2026-08-25 (Fabiola: this
+      // exact gap made a 7-page contract's initials all have to be
+      // redrawn from scratch every time, even for a repeat signer).
+      if (saveSigForNextTime && signerEmail.includes('@') && (finalSigDataUrl || initialsDataUrl)) {
         const key = `sig_${signerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
         try {
           await setDoc(doc(db, 'savedSignatures', key), {
             email: signerEmail,
-            sigDataUrl: finalSigDataUrl,
+            sigDataUrl: finalSigDataUrl || '',
+            initialsDataUrl: initialsDataUrl || '',
             sigType: sigMode,
             fontFamily: sigMode === 'type' ? FONT_OPTIONS[selectedSigFont].family : undefined,
             savedAt: new Date().toISOString(),
             usedCount: 1,
-          });
+          }, { merge: true });
         } catch {}
       }
 
@@ -1489,6 +1520,41 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
                 Cliquez sur chaque zone du document pour la remplir
               </h2>
             </div>
+            {/* One-click reuse of a signature/initials already saved under
+                this email — same savedSignatures record the "save for next
+                time" checkbox on the older flow writes to, now also read
+                here. Without this, a returning signer redrew everything
+                from scratch on every single document. Added 2026-08-25. */}
+            {savedSigLoaded && savedSig && (savedSig.dataUrl || savedSig.initialsDataUrl) && !savedSigAppliedToFields && (
+              <div className="p-4 rounded-2xl border-2 border-emerald-300 bg-emerald-50 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  {savedSig.dataUrl && (
+                    <img src={savedSig.dataUrl} alt="Signature enregistrée" className="h-8 max-w-[100px] object-contain bg-white rounded-lg border border-emerald-200 px-1" />
+                  )}
+                  <p className="text-[11px] font-bold text-emerald-800">
+                    Signature{savedSig.initialsDataUrl ? ' et initiales' : ''} déjà enregistrées pour {signerEmail}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFieldValues((p) => {
+                      const next = { ...p };
+                      for (const f of docData!.signatureFields || []) {
+                        if (next[f.id]) continue;
+                        if (f.type === 'signature' && savedSig.dataUrl) next[f.id] = { type: 'signature', dataUrl: savedSig.dataUrl };
+                        if (f.type === 'initials' && savedSig.initialsDataUrl) next[f.id] = { type: 'initials', dataUrl: savedSig.initialsDataUrl };
+                      }
+                      return next;
+                    });
+                    setSavedSigAppliedToFields(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shrink-0"
+                >
+                  Utiliser partout sur ce document
+                </button>
+              </div>
+            )}
             {pdfViewerLoading ? (
               <div className="flex items-center justify-center gap-3 py-16">
                 <Loader2 className="animate-spin text-emerald-500" size={24} />

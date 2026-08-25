@@ -4807,6 +4807,23 @@ const App = () => {
   const [typeInitials, setTypeInitials] = useState("");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [savedInitials, setSavedInitials] = useState<string | null>(null);
+  // Load this account's real saved signature profile from Firestore (the
+  // Coffre-fort screen used to only ever hold this in local React state,
+  // gone on every refresh — see the "Enregistrer le Profil" button for the
+  // matching write). Keyed by email, same `savedSignatures` collection the
+  // real DocuLegal signing flow (PublicSignaturePage.tsx) already reads.
+  useEffect(() => {
+    if (!currentUserEmail) return;
+    let cancelled = false;
+    const key = `sig_${currentUserEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+    getDoc(doc(db, "savedSignatures", key)).then((snap) => {
+      if (cancelled || !snap.exists()) return;
+      const d = snap.data();
+      if (d.sigDataUrl) setSavedSignature(d.sigDataUrl);
+      if (d.initialsDataUrl) setSavedInitials(d.initialsDataUrl);
+    }).catch((err) => console.error("Failed to load signature profile:", err));
+    return () => { cancelled = true; };
+  }, [currentUserEmail]);
   const [savedUploadSignature, setSavedUploadSignature] = useState<
     string | null
   >(null);
@@ -17791,12 +17808,65 @@ const App = () => {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowSigProfileModal(false);
-                      playNotificationSound();
-                      alert(
-                        "🟢 Profil de signature électronique BYOS enregistré avec succès ! Il sera automatiquement utilisé pour vos baux.",
-                      );
+                    onClick={async () => {
+                      // Was 100% cosmetic — savedSignature/savedInitials were
+                      // plain useState, never written anywhere, so this
+                      // button's own success message ("enregistré... sera
+                      // automatiquement utilisé") was false: a page refresh
+                      // wiped it, and it was never read by the real signing
+                      // flow (PublicSignaturePage.tsx / DocuLegal) at all.
+                      // Now writes to the SAME `savedSignatures` collection
+                      // that flow already reads from — keyed by this
+                      // account's own email — so opening a real signing
+                      // link with that same email now finds it for real.
+                      // Requested 2026-08-25 (Fabiola: her Coffre-fort
+                      // "Configurer ma signature" felt disconnected from
+                      // actually signing a document).
+                      if (!currentUserEmail) {
+                        setShowSigProfileModal(false);
+                        return;
+                      }
+                      try {
+                        let initialsDataUrl = "";
+                        if (savedInitials) {
+                          if (savedInitials.startsWith("data:image")) {
+                            initialsDataUrl = savedInitials;
+                          } else {
+                            // Plain text (e.g. "FV") from the "type" tab —
+                            // render to an image so it matches the format
+                            // PublicSignaturePage expects for initialsDataUrl.
+                            const canvas = document.createElement("canvas");
+                            canvas.width = 200;
+                            canvas.height = 60;
+                            const ctx = canvas.getContext("2d");
+                            if (ctx) {
+                              ctx.fillStyle = "#1e3a8a";
+                              ctx.font = `italic bold 36px Georgia, cursive`;
+                              ctx.textAlign = "center";
+                              ctx.textBaseline = "middle";
+                              ctx.fillText(savedInitials, canvas.width / 2, canvas.height / 2);
+                              initialsDataUrl = canvas.toDataURL();
+                            }
+                          }
+                        }
+                        const key = `sig_${currentUserEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+                        await setDoc(doc(db, "savedSignatures", key), {
+                          email: currentUserEmail,
+                          sigDataUrl: savedSignature || "",
+                          initialsDataUrl,
+                          sigType: "draw",
+                          savedAt: new Date().toISOString(),
+                          usedCount: 0,
+                        }, { merge: true });
+                        setShowSigProfileModal(false);
+                        playNotificationSound();
+                        alert(
+                          "🟢 Profil de signature électronique enregistré ! Il sera proposé automatiquement quand vous ouvrirez un lien de signature avec ce même courriel.",
+                        );
+                      } catch (err) {
+                        console.error("Failed to save signature profile:", err);
+                        alert("Erreur lors de l'enregistrement du profil de signature. Réessayez.");
+                      }
                     }}
                     className="py-3 bg-[#059669] hover:bg-emerald-600 text-white rounded-2xl text-[9.5px] font-black uppercase italic tracking-widest shadow-lg flex items-center justify-center space-x-1.5 border-none cursor-pointer"
                   >
