@@ -8003,6 +8003,113 @@ const App = () => {
   const normalizeHeader = (h: string): string =>
     h.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
+  // Desjardins (et d'autres) exportent parfois un CSV "brut" SANS AUCUNE
+  // ligne d'en-tête — juste des colonnes positionnelles fixes (Succursale,
+  // No compte, Type, Date, No séquence, Description, "", Débit, Crédit,
+  // (colonnes réservées vides), Solde). Vérifié sur un vrai relevé
+  // Desjardins de Fabiola le 2026-08-26. Reconnaît les colonnes par leur
+  // CONTENU plutôt que par leur nom quand aucun en-tête n'est détecté.
+  const DATE_RE = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/;
+  const detectColumnsPositionally = (
+    rows: string[][]
+  ): { dateIdx: number; descIdx: number; debitIdx: number; creditIdx: number } | null => {
+    if (rows.length === 0) return null;
+    const colCount = Math.max(...rows.map((r) => r.length));
+
+    const dateHits = new Array(colCount).fill(0);
+    const filled = new Array(colCount).fill(0);
+    const isAmountLike = new Array(colCount).fill(false);
+    const textLenSum = new Array(colCount).fill(0);
+    const textCount = new Array(colCount).fill(0);
+    const distinctValues: Set<string>[] = Array.from({ length: colCount }, () => new Set());
+
+    for (let c = 0; c < colCount; c++) {
+      let nonEmpty = 0;
+      let sawDecimal = false;
+      let allNumericOrEmpty = true;
+      for (const row of rows) {
+        const v = (row[c] ?? "").trim();
+        if (!v) continue;
+        nonEmpty++;
+        distinctValues[c].add(v);
+        if (DATE_RE.test(v)) dateHits[c]++;
+        const cleaned = v.replace(/[$\s]/g, "");
+        if (/[.,]\d{2}$/.test(cleaned)) sawDecimal = true;
+        const isNumericLooking = /^\(?-?[$\s0-9.,]+\)?$/.test(v);
+        if (isNumericLooking) {
+          if (parseCsvAmount(v) === null) allNumericOrEmpty = false;
+        } else {
+          allNumericOrEmpty = false;
+          textLenSum[c] += v.length;
+          textCount[c]++;
+        }
+      }
+      filled[c] = nonEmpty;
+      isAmountLike[c] = nonEmpty > 0 && allNumericOrEmpty && sawDecimal;
+    }
+
+    let dateIdx = -1;
+    let bestDateScore = 0.5;
+    for (let c = 0; c < colCount; c++) {
+      const score = filled[c] > 0 ? dateHits[c] / filled[c] : 0;
+      if (score > bestDateScore) { bestDateScore = score; dateIdx = c; }
+    }
+    if (dateIdx === -1) return null;
+
+    const amountCandidates: number[] = [];
+    for (let c = 0; c < colCount; c++) {
+      if (c !== dateIdx && isAmountLike[c]) amountCandidates.push(c);
+    }
+    if (amountCandidates.length < 2) return null;
+
+    // Le solde courant est presque toujours la DERNIÈRE colonne-montant, et
+    // presque toujours remplie (contrairement à débit/crédit, mutuellement
+    // exclusifs) — on l'exclut des candidats débit/crédit.
+    const balanceIdx = amountCandidates[amountCandidates.length - 1];
+    const remaining = amountCandidates.filter((c) => c !== balanceIdx);
+    if (remaining.length < 1) return null;
+
+    let debitIdx = -1;
+    let creditIdx = -1;
+    if (remaining.length === 2) {
+      // Convention bancaire québécoise standard : Débit avant Crédit.
+      [debitIdx, creditIdx] = remaining;
+    } else {
+      outer:
+      for (let i = 0; i < remaining.length; i++) {
+        for (let j = i + 1; j < remaining.length; j++) {
+          const a = remaining[i], b = remaining[j];
+          let bothFilled = 0, eitherFilled = 0;
+          for (const row of rows) {
+            const av = (row[a] ?? "").trim();
+            const bv = (row[b] ?? "").trim();
+            if (av && bv) bothFilled++;
+            if (av || bv) eitherFilled++;
+          }
+          if (eitherFilled > 0 && bothFilled === 0) { debitIdx = a; creditIdx = b; break outer; }
+        }
+      }
+      if (debitIdx === -1) return null;
+    }
+
+    // Description : parmi les colonnes textuelles restantes, celle qui varie
+    // le plus d'une ligne à l'autre (le nom de succursale ou un code de type
+    // se répète identique à chaque ligne — la vraie description, non).
+    let descIdx = -1;
+    let bestRatio = 0.3;
+    for (let c = 0; c < colCount; c++) {
+      if (c === dateIdx || c === debitIdx || c === creditIdx || c === balanceIdx) continue;
+      if (isAmountLike[c] || textCount[c] === 0) continue;
+      const avgLen = textLenSum[c] / textCount[c];
+      if (avgLen < 6) continue;
+      const distinctRatio = distinctValues[c].size / textCount[c];
+      if (distinctRatio > bestRatio) { bestRatio = distinctRatio; descIdx = c; }
+    }
+    if (descIdx === -1) return null;
+
+    return { dateIdx, descIdx, debitIdx, creditIdx };
+  };
+
   const handleCSVUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -8017,28 +8124,45 @@ const App = () => {
       }
 
       const header = parseCsvLine(lines[0]).map(normalizeHeader);
-      const dateIdx = header.findIndex((h) => h.includes("date"));
-      const descIdx = header.findIndex((h) => h.includes("description") || h.includes("libelle") || h.includes("detail") || h.includes("transaction"));
+      let dateIdx = header.findIndex((h) => h.includes("date"));
+      let descIdx = header.findIndex((h) => h.includes("description") || h.includes("libelle") || h.includes("detail") || h.includes("transaction"));
       // Un seul montant signé (rare, mais possible sur certains exports).
-      const amtIdx = header.findIndex((h) => h === "montant" || h === "amount" || h === "amt");
+      let amtIdx = header.findIndex((h) => h === "montant" || h === "amount" || h === "amt");
       // Colonnes séparées — le cas le plus courant chez les banques d'ici.
-      const debitIdx = header.findIndex((h) => h.includes("retrait") || h.includes("debit"));
-      const creditIdx = header.findIndex((h) => h.includes("depot") || h.includes("credit"));
+      let debitIdx = header.findIndex((h) => h.includes("retrait") || h.includes("debit"));
+      let creditIdx = header.findIndex((h) => h.includes("depot") || h.includes("credit"));
+      let dataLines = lines.slice(1);
 
-      if (dateIdx === -1 || descIdx === -1 || (amtIdx === -1 && debitIdx === -1 && creditIdx === -1)) {
-        alert(
-          "Colonnes non reconnues dans ce fichier CSV.\n\n" +
-          `Colonnes trouvées : ${header.join(", ") || "(aucune)"}\n\n` +
-          "AutoCompt cherche une colonne Date, une colonne Description, et soit une colonne Montant, " +
-          "soit deux colonnes Retrait/Débit et Dépôt/Crédit. Envoyez-moi les noms exacts de vos colonnes " +
-          "pour que je les ajoute au reconnaisseur."
-        );
-        return;
+      const hasHeader = dateIdx !== -1 && descIdx !== -1 && (amtIdx !== -1 || debitIdx !== -1 || creditIdx !== -1);
+
+      if (!hasHeader) {
+        // Pas d'en-tête reconnu — probablement un export "brut" sans ligne
+        // de titres (Desjardins, entre autres). Toutes les lignes, y
+        // compris la première, sont alors des données.
+        const allRows = lines.map(parseCsvLine);
+        const positional = detectColumnsPositionally(allRows);
+        if (positional) {
+          dateIdx = positional.dateIdx;
+          descIdx = positional.descIdx;
+          debitIdx = positional.debitIdx;
+          creditIdx = positional.creditIdx;
+          amtIdx = -1;
+          dataLines = lines;
+        } else {
+          alert(
+            "Colonnes non reconnues dans ce fichier CSV.\n\n" +
+            `Colonnes trouvées : ${header.join(", ") || "(aucune)"}\n\n` +
+            "AutoCompt cherche une colonne Date, une colonne Description, et soit une colonne Montant, " +
+            "soit deux colonnes Retrait/Débit et Dépôt/Crédit — avec ou sans ligne d'en-tête. Envoyez-moi " +
+            "ce fichier pour que je l'ajoute au reconnaisseur."
+          );
+          return;
+        }
       }
 
       let skipped = 0;
       const newTransactions: any[] = [];
-      for (const line of lines.slice(1)) {
+      for (const line of dataLines) {
         const cells = parseCsvLine(line);
         const date = cells[dateIdx]?.trim();
         const desc = cells[descIdx]?.trim();
