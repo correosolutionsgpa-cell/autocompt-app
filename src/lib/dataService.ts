@@ -2299,7 +2299,7 @@ export const dataService = {
     }
   },
 
-  async saveBankTransaction(userId: string, txnData: Partial<BankTransactionDoc> & { companyId: string }): Promise<BankTransactionDoc> {
+  async saveBankTransaction(userId: string, txnData: Partial<BankTransactionDoc> & { companyId: string }, _retryCount = 0): Promise<BankTransactionDoc> {
     assertCanWrite();
     const originalCompanyId = txnData.companyId;
     const docCompanyId = `${userId}_company_${originalCompanyId}`;
@@ -2315,7 +2315,26 @@ export const dataService = {
       createdAt: txnData.createdAt || new Date().toISOString(),
     };
     Object.keys(data).forEach((k) => { if (data[k] === undefined) delete data[k]; });
-    await setDoc(doc(db, 'bankTransactions', id), data);
+    try {
+      await setDoc(doc(db, 'bankTransactions', id), data);
+    } catch (e: any) {
+      // Same transient "Missing or insufficient permissions" race as
+      // fetchWorkspaces/fetchOwnedAndShared above — a CSV import right
+      // after a fresh sign-in (exactly what a first-time beta tester does)
+      // can land before Firestore's backend fully accepts the new ID
+      // token. Without a retry, the write silently vanishes: the local
+      // optimistic cache shows it immediately (Fabiola saw all 14 rows),
+      // then the SDK rolls it back once the server rejects it — gone on
+      // the next real reload. Found 2026-08-26.
+      const delays = [900, 1500, 2200];
+      if (e?.code === 'permission-denied' && _retryCount < delays.length) {
+        const delay = delays[_retryCount];
+        console.warn(`saveBankTransaction hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
+        await new Promise((r) => setTimeout(r, delay));
+        return this.saveBankTransaction(userId, txnData, _retryCount + 1);
+      }
+      throw e;
+    }
     return { ...data, id, companyId: originalCompanyId } as BankTransactionDoc;
   },
 
