@@ -6387,13 +6387,31 @@ const App = () => {
   // manual "Réessayer" retry has the same collaborator scope without needing
   // to re-run fetchWorkspaces itself.
   const collaboratorCompanyDocIdsRef = useRef<string[]>([]);
-  const retryFetchBankTransactions = () => {
-    if (!auth.currentUser) return;
+  const retryFetchBankTransactions = async () => {
+    if (!auth.currentUser) {
+      console.warn("[banktxn-retry] no auth.currentUser — cannot retry");
+      return;
+    }
+    console.log("[banktxn-retry] manual retry clicked, uid:", auth.currentUser.uid);
     setBankTransactionsLoading(true);
-    dataService.fetchBankTransactions(auth.currentUser.uid, collaboratorCompanyDocIdsRef.current)
-      .then((txns) => { setBankTransactions(txns); setBankTransactionsLoadError(false); })
-      .catch((err) => { console.error("fetchBankTransactions retry failed:", err); setBankTransactionsLoadError(true); })
-      .finally(() => setBankTransactionsLoading(false));
+    try {
+      // The passive 6-step backoff (~16.6s) already ran once and still
+      // failed by the time this button is visible — waiting longer without
+      // changing anything else is unlikely to help, so force a real token
+      // refresh here instead of just retrying with the same (possibly
+      // actually-stale, not just "not yet propagated") token.
+      await auth.currentUser.getIdToken(true);
+      console.log("[banktxn-retry] getIdToken(true) resolved, fetching...");
+      const txns = await dataService.fetchBankTransactions(auth.currentUser.uid, collaboratorCompanyDocIdsRef.current);
+      console.log("[banktxn-retry] fetch succeeded, count:", txns.length);
+      setBankTransactions(txns);
+      setBankTransactionsLoadError(false);
+    } catch (err) {
+      console.error("[banktxn-retry] retry failed:", err);
+      setBankTransactionsLoadError(true);
+    } finally {
+      setBankTransactionsLoading(false);
+    }
   };
 
   // Was seeded with fake demo partners "Fabiola"/"Natalia" (home office areas,
