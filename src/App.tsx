@@ -6378,6 +6378,23 @@ const App = () => {
   // Trouvé 2026-08-26 (Fabiola, premier test de conciliation manuelle réel).
   // Chargé depuis Firestore juste après la connexion — voir plus bas.
   const [bankTransactions, setBankTransactions] = useState<any[]>([]);
+  // true only when the fetch itself failed (after exhausting retries) — lets
+  // the UI show "erreur de chargement, réessayer" instead of a plain empty
+  // list, which used to look exactly like "your data disappeared".
+  const [bankTransactionsLoadError, setBankTransactionsLoadError] = useState(false);
+  const [bankTransactionsLoading, setBankTransactionsLoading] = useState(false);
+  // Refreshed on every login-time fetch (see onAuthStateChanged below) so the
+  // manual "Réessayer" retry has the same collaborator scope without needing
+  // to re-run fetchWorkspaces itself.
+  const collaboratorCompanyDocIdsRef = useRef<string[]>([]);
+  const retryFetchBankTransactions = () => {
+    if (!auth.currentUser) return;
+    setBankTransactionsLoading(true);
+    dataService.fetchBankTransactions(auth.currentUser.uid, collaboratorCompanyDocIdsRef.current)
+      .then((txns) => { setBankTransactions(txns); setBankTransactionsLoadError(false); })
+      .catch((err) => { console.error("fetchBankTransactions retry failed:", err); setBankTransactionsLoadError(true); })
+      .finally(() => setBankTransactionsLoading(false));
+  };
 
   // Was seeded with fake demo partners "Fabiola"/"Natalia" (home office areas,
   // Tesla Model 3 / Audi Q5) — leaked as literal displayed data for any
@@ -8973,6 +8990,7 @@ const App = () => {
           const collaboratorCompanyDocIds: string[] = workspaces
             .filter((w: any) => w._companyDocId)
             .map((w: any) => w._companyDocId);
+          collaboratorCompanyDocIdsRef.current = collaboratorCompanyDocIds;
 
           // All 7 of these are independent (none consumes another's result) but
           // were awaited one after another — each one that hit the
@@ -9016,7 +9034,9 @@ const App = () => {
 
           // Fire-and-forget, already concurrent with the batch above (and with
           // each other) since none of these are awaited.
-          dataService.fetchBankTransactions(user.uid, collaboratorCompanyDocIds).then(setBankTransactions).catch((err) => console.error("fetchBankTransactions failed:", err));
+          dataService.fetchBankTransactions(user.uid, collaboratorCompanyDocIds)
+            .then((txns) => { setBankTransactions(txns); setBankTransactionsLoadError(false); })
+            .catch((err) => { console.error("fetchBankTransactions failed:", err); setBankTransactionsLoadError(true); });
           dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
           dataService.fetchDocuLegalDocs(user.uid, collaboratorCompanyDocIds).then(setDocuLegalList).catch((err) => console.error("fetchDocuLegalDocs failed:", err));
 
@@ -23089,6 +23109,9 @@ Format strict : { "adresse": string|null, "numeroLot": string|null, "valeurTerra
         fideicommisDepotsForReco={fideicommisDepotsForReco}
         fideicommisClients={fideicommisClients}
         onCreateFideicommisDepot={handleCreateFideicommisDepotFromBank}
+        bankTransactionsLoadError={bankTransactionsLoadError}
+        bankTransactionsLoading={bankTransactionsLoading}
+        onRetryFetchBankTransactions={retryFetchBankTransactions}
       />
     );
 

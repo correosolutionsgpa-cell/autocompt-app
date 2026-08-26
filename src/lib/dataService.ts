@@ -1674,7 +1674,12 @@ async function fetchOwnedAndShared(
     // document itself was untouched in Firestore the whole time. Every
     // caller of fetchOwnedAndShared benefits from this retry, not just
     // fetchWorkspaces, since they all hit the exact same race.
-    const delays = [900, 1500, 2200];
+    // 2026-08-26: 3 retries (~4.6s total) wasn't always enough for Fabiola's
+    // and Daniel's real accounts — writes to the same collection succeeded
+    // instantly every time, but reads kept hitting permission-denied well
+    // past the old budget. Extended to 6 retries (~16.6s total) since the
+    // underlying propagation lag isn't consistently the same length.
+    const delays = [900, 1500, 2200, 3000, 4000, 5000];
     if (e?.code === 'permission-denied' && _retryCount < delays.length) {
       const delay = delays[_retryCount];
       console.warn(`fetchOwnedAndShared(${collectionName}) hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
@@ -1779,7 +1784,7 @@ export const dataService = {
       // Natalia's account, same permission-denied race as the userDoc read).
       // Up to 3 retries with increasing backoff before giving up — a single
       // 700ms retry (first attempt at this fix) still wasn't always enough.
-      const delays = [900, 1500, 2200];
+      const delays = [900, 1500, 2200, 3000, 4000, 5000];
       if (e?.code === 'permission-denied' && _retryCount < delays.length) {
         const delay = delays[_retryCount];
         console.warn(`fetchWorkspaces hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
@@ -2294,8 +2299,14 @@ export const dataService = {
         return { ...data, id: d.id, companyId: originalCompanyId } as BankTransactionDoc;
       });
     } catch (e) {
+      // Rethrown (not swallowed to []) so the caller can tell "genuinely no
+      // transactions yet" apart from "the fetch itself failed after
+      // exhausting retries" — the two looked identical to the UI before,
+      // which is exactly what made a real permission-denied read read as
+      // "my imported transactions vanished" even though they were safely
+      // in Firestore the whole time. Found 2026-08-26.
       console.error('fetchBankTransactions failed:', e);
-      return [];
+      throw e;
     }
   },
 
@@ -2326,7 +2337,7 @@ export const dataService = {
       // optimistic cache shows it immediately (Fabiola saw all 14 rows),
       // then the SDK rolls it back once the server rejects it — gone on
       // the next real reload. Found 2026-08-26.
-      const delays = [900, 1500, 2200];
+      const delays = [900, 1500, 2200, 3000, 4000, 5000];
       if (e?.code === 'permission-denied' && _retryCount < delays.length) {
         const delay = delays[_retryCount];
         console.warn(`saveBankTransaction hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);

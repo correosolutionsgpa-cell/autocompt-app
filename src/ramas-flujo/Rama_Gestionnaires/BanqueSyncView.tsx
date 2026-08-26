@@ -106,6 +106,15 @@ export interface BanqueSyncViewProps {
     clientId: string; clientName: string; locataireName: string;
     propertyAddress: string; montant: number; date: string;
   }) => void;
+
+  // true seulement si le chargement initial a échoué (après épuisement des
+  // tentatives) — distingue "aucune transaction" (liste vide, légitime) de
+  // "le chargement a échoué" (liste vide trompeuse), qui se ressemblaient
+  // avant et donnaient l'impression que les données importées avaient
+  // disparu alors qu'elles étaient toujours dans Firestore. Trouvé 2026-08-26.
+  bankTransactionsLoadError?: boolean;
+  bankTransactionsLoading?: boolean;
+  onRetryFetchBankTransactions?: () => void;
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -145,6 +154,9 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   fideicommisDepotsForReco,
   fideicommisClients,
   onCreateFideicommisDepot,
+  bankTransactionsLoadError,
+  bankTransactionsLoading,
+  onRetryFetchBankTransactions,
 }) => {
   // Selected value for the two manual-assignment StyledSelects below (per
   // transaction row, keyed by `i`) — these used to be uncontrolled native
@@ -405,6 +417,26 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                 accept=".csv"
               />
             </div>
+
+            {bankTransactionsLoadError && (
+              <div
+                className={`flex items-center justify-between gap-3 p-4 rounded-2xl border mb-3 ${darkMode ? "bg-amber-500/10 border-amber-500/30 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} />
+                  <span className="text-[10px] font-bold">
+                    Erreur de chargement — vos transactions ne sont pas perdues, mais la page n'a pas pu les récupérer.
+                  </span>
+                </div>
+                <button
+                  onClick={onRetryFetchBankTransactions}
+                  disabled={bankTransactionsLoading}
+                  className="shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase italic bg-amber-500 text-white active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {bankTransactionsLoading ? "Chargement..." : "Réessayer"}
+                </button>
+              </div>
+            )}
 
             <div className="space-y-3">
               {bankTransactions
