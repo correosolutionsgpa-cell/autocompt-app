@@ -16,6 +16,7 @@
 import React, { useState } from "react";
 import StyledSelect from "../../components/ui/StyledSelect";
 import { motion } from "framer-motion";
+import { dataService } from "../../lib/dataService";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -361,15 +362,27 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                   <Zap size={16} />
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (
                       confirm(
                         t("Voulez-vous effacer toutes les transactions bancaires de test pour ce profil?")
                       )
                     ) {
+                      // Devait aussi supprimer côté Firestore — sinon la
+                      // transaction "effacée" réapparaissait au prochain
+                      // rechargement (les transactions bancaires sont
+                      // persistées depuis le 2026-08-26).
+                      const toDelete = bankTransactions.filter((t) => t.companyId === activeCompanyId && t.id);
                       setBankTransactions((prev) =>
                         prev.filter((t) => t.companyId !== activeCompanyId),
                       );
+                      for (const t of toDelete) {
+                        try {
+                          await dataService.deleteBankTransaction(t.id);
+                        } catch (err) {
+                          console.error("deleteBankTransaction failed:", err);
+                        }
+                      }
                     }
                   }}
                   className={`p-3 rounded-2xl transition-all active:scale-95 border ${darkMode ? "bg-zinc-900 border-zinc-800 text-rose-500 hover:bg-rose-500/10" : "bg-white border-slate-100 text-rose-600 hover:bg-rose-50"}`}

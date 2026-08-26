@@ -323,6 +323,23 @@ export interface ExpenseDoc {
   createdAt: string;
 }
 
+// ── BankTransactionDoc — Firestore `bankTransactions` collection ────────────
+/** Une ligne importée d'un relevé bancaire (CSV), pour la Conciliation
+ *  Bancaire. Existait seulement en mémoire locale avant — jamais lue ni
+ *  écrite dans Firestore, initialisée avec des transactions d'exemple en
+ *  dur (Starbucks, Hydro-Québec...) qui réapparaissaient à chaque
+ *  rechargement, et tout import CSV réel disparaissait au premier refresh.
+ *  Trouvé 2026-08-26 (Fabiola, premier test de conciliation manuelle réel). */
+export interface BankTransactionDoc {
+  id: string;
+  companyId: string;
+  date: string;
+  desc: string;
+  amt: number;
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── MeubleReservationDoc — Firestore `meubleReservations` collection ──────────
 /**
  * Une réservation Airbnb / courte durée persistée en Firestore.
@@ -2262,6 +2279,48 @@ export const dataService = {
     const userId = auth.currentUser?.uid;
     const docId = userId ? `${userId}_loyer_${loyerId}` : loyerId;
     await deleteDoc(doc(db, 'loyers', docId));
+    return true;
+  },
+
+  // ── Bank transactions — Conciliation Bancaire (import CSV manuel) ──────────
+
+  async fetchBankTransactions(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<BankTransactionDoc[]> {
+    try {
+      const docs = await fetchOwnedAndShared('bankTransactions', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => {
+        const data = d.data();
+        const idParts = data.companyId?.split('_company_');
+        const originalCompanyId = idParts && idParts.length > 1 ? idParts[1] : data.companyId;
+        return { ...data, id: d.id, companyId: originalCompanyId } as BankTransactionDoc;
+      });
+    } catch (e) {
+      console.error('fetchBankTransactions failed:', e);
+      return [];
+    }
+  },
+
+  async saveBankTransaction(userId: string, txnData: Partial<BankTransactionDoc> & { companyId: string }): Promise<BankTransactionDoc> {
+    assertCanWrite();
+    const originalCompanyId = txnData.companyId;
+    const docCompanyId = `${userId}_company_${originalCompanyId}`;
+    const rawId = txnData.id != null && String(txnData.id).trim() !== ''
+      ? String(txnData.id)
+      : `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const id = rawId.startsWith(`${userId}_banktxn_`) ? rawId : `${userId}_banktxn_${rawId}`;
+    const data: any = {
+      ...txnData,
+      id,
+      companyId: docCompanyId,
+      ownerId: userId,
+      createdAt: txnData.createdAt || new Date().toISOString(),
+    };
+    Object.keys(data).forEach((k) => { if (data[k] === undefined) delete data[k]; });
+    await setDoc(doc(db, 'bankTransactions', id), data);
+    return { ...data, id, companyId: originalCompanyId } as BankTransactionDoc;
+  },
+
+  async deleteBankTransaction(txnId: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'bankTransactions', String(txnId)));
     return true;
   },
 

@@ -6371,45 +6371,13 @@ const App = () => {
     }, 2000);
     return () => clearTimeout(timer);
   }, [newInvoiceData, items, tipoDoc, activeCompanyId]);
-  const [bankTransactions, setBankTransactions] = useState<any[]>([
-    {
-      companyId: "1",
-      desc: "Virement Bell Canada",
-      amt: 91.98,
-      date: "2026-05-01",
-    },
-    {
-      companyId: "1",
-      desc: "Starbucks Montréal",
-      amt: 12.5,
-      date: "2026-05-02",
-    },
-    {
-      companyId: "1",
-      desc: "Hydro-Québec - Prélèvement",
-      amt: 172.46,
-      date: "2026-05-03",
-    },
-    {
-      companyId: "1",
-      desc: "Paiement Client - Jean T.",
-      amt: 1149.75,
-      date: "2026-05-10",
-    },
-    {
-      companyId: "2",
-      desc: "Dépôt Natalia Capital",
-      amt: 5000.0,
-      date: "2026-05-12",
-    },
-    {
-      companyId: "3",
-      desc: "Prélèvement Hypothèque - Plex",
-      amt: 2450.0,
-      date: "2026-05-01",
-    },
-    { companyId: "3", desc: "Loyer Unité 2", amt: 1100.0, date: "2026-05-01" },
-  ]);
+  // Était initialisé avec des transactions d'exemple en dur (Bell Canada,
+  // Starbucks, Hydro-Québec...) et jamais persisté dans Firestore — un vrai
+  // relevé importé disparaissait au premier rechargement, et ces fausses
+  // transactions réapparaissaient à chaque fois, peu importe l'entreprise.
+  // Trouvé 2026-08-26 (Fabiola, premier test de conciliation manuelle réel).
+  // Chargé depuis Firestore juste après la connexion — voir plus bas.
+  const [bankTransactions, setBankTransactions] = useState<any[]>([]);
 
   // Was seeded with fake demo partners "Fabiola"/"Natalia" (home office areas,
   // Tesla Model 3 / Audi Q5) — leaked as literal displayed data for any
@@ -8187,11 +8155,26 @@ const App = () => {
         });
       }
 
-      setBankTransactions((prev) => [...newTransactions, ...prev]);
-      alert(
-        `${newTransactions.length} transaction${newTransactions.length > 1 ? "s" : ""} importée${newTransactions.length > 1 ? "s" : ""} pour ${currentCompany?.nombre}.` +
-        (skipped > 0 ? `\n${skipped} ligne${skipped > 1 ? "s" : ""} ignorée${skipped > 1 ? "s" : ""} (format non reconnu).` : "")
-      );
+      (async () => {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        // Persisted one by one (même convention que le reste du fichier —
+        // pas de writeBatch ailleurs dans ce projet) — sans ça, l'import
+        // disparaissait au premier rechargement de la page.
+        const saved: any[] = [];
+        for (const txn of newTransactions) {
+          try {
+            saved.push(await dataService.saveBankTransaction(uid, txn));
+          } catch (err) {
+            console.error("saveBankTransaction failed:", err);
+          }
+        }
+        setBankTransactions((prev) => [...saved, ...prev]);
+        alert(
+          `${saved.length} transaction${saved.length > 1 ? "s" : ""} importée${saved.length > 1 ? "s" : ""} pour ${currentCompany?.nombre}.` +
+          (skipped > 0 ? `\n${skipped} ligne${skipped > 1 ? "s" : ""} ignorée${skipped > 1 ? "s" : ""} (format non reconnu).` : "")
+        );
+      })();
       event.target.value = "";
     };
     reader.readAsText(file);
@@ -9001,6 +8984,11 @@ const App = () => {
           // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
           const invoices = await dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds);
           _setHistorique(invoices);
+
+          // Fetch bank transactions (Conciliation Bancaire) — was in-memory-only
+          // hardcoded demo data before, never persisted. Raw setter, same
+          // reasoning as depenses/invoices above.
+          dataService.fetchBankTransactions(user.uid, collaboratorCompanyDocIds).then(setBankTransactions).catch((err) => console.error("fetchBankTransactions failed:", err));
 
           // Fetch Dossiers Fiscaux files — same raw-setter reasoning as
           // depenses/historique above (already came from Firestore).
