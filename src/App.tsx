@@ -8974,61 +8974,51 @@ const App = () => {
             .filter((w: any) => w._companyDocId)
             .map((w: any) => w._companyDocId);
 
-          // Fetch user's expenses (depenses) — use the raw setter here, not the
-          // reconcile-wrapped setDepenses: this data already came FROM Firestore,
-          // so diffing it against the (empty) prior local state and re-saving
-          // every item would just re-write each expense a second time on login.
-          const exp = await dataService.fetchExpenses(user.uid, collaboratorCompanyDocIds);
+          // All 7 of these are independent (none consumes another's result) but
+          // were awaited one after another — each one that hit the
+          // permission-denied race paid its own full 3-retry/4.6s backoff
+          // before the NEXT fetch even started, so a login where several
+          // collections raced could take 20-30+ seconds end to end. Every
+          // fetch* below already catches its own errors and resolves with a
+          // safe empty default (see dataService.ts) instead of rejecting, so
+          // Promise.all can't let one failure hide another's real result.
+          // Found 2026-08-26 (Fabiola: "tarda mucho en cargar").
+          const [exp, invoices, dossierFilesFetched, props, units, loyers, entries] = await Promise.all([
+            // Raw setters below, not reconcile-wrapped: this data already came
+            // FROM Firestore, so diffing it against the (empty) prior local
+            // state and re-saving every item would just re-write it a second
+            // time on login.
+            dataService.fetchExpenses(user.uid, collaboratorCompanyDocIds),
+            dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds),
+            dataService.fetchDossierFiles(user.uid, collaboratorCompanyDocIds),
+            // Using the reconcile-wrapped setPlexManagementProperties here (as
+            // before) treated every property as "new" on each fresh page load
+            // (local state starts empty before this runs), which re-saved
+            // every property via dataService.saveProperty AND — far worse —
+            // computed savedUnits as [] for each one (fetchProperties never
+            // nests a .units array, that's the separate `units` collection
+            // fetched alongside it here) and used it to overwrite allUnits for
+            // that building, wiping real tenant/unit data out of local state
+            // on every login or hard refresh. Found 2026-08-23 after Fabiola
+            // reported losing registered tenants for "1843 rue le royer".
+            dataService.fetchProperties(user.uid, collaboratorCompanyDocIds),
+            dataService.fetchAllUnits(user.uid, collaboratorCompanyDocIds),
+            dataService.fetchLoyers(user.uid, collaboratorCompanyDocIds),
+            dataService.fetchJournalEntries(user.uid),
+          ]);
           _setDepenses(exp);
-
-          // Fetch user's invoices/revenue (historique) — same raw-setter reasoning.
-          const invoices = await dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds);
           _setHistorique(invoices);
-
-          // Fetch bank transactions (Conciliation Bancaire) — was in-memory-only
-          // hardcoded demo data before, never persisted. Raw setter, same
-          // reasoning as depenses/invoices above.
-          dataService.fetchBankTransactions(user.uid, collaboratorCompanyDocIds).then(setBankTransactions).catch((err) => console.error("fetchBankTransactions failed:", err));
-
-          // Fetch Dossiers Fiscaux files — same raw-setter reasoning as
-          // depenses/historique above (already came from Firestore).
-          const dossierFilesFetched = await dataService.fetchDossierFiles(user.uid, collaboratorCompanyDocIds);
           _setDossierFiles(dossierFilesFetched);
-
-          // Fetch user's own DocuLegal document templates (private, per-account).
-          dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
-
-          // Fetch DocuLegal entries (Prospecteur/Investisseur/Flippeur/Gestionnaire
-          // leases, offers, subcontracts) — was in-memory-only mock data before.
-          dataService.fetchDocuLegalDocs(user.uid, collaboratorCompanyDocIds).then(setDocuLegalList).catch((err) => console.error("fetchDocuLegalDocs failed:", err));
-
-          // Fetch properties — raw setter, same reasoning as depenses/invoices/
-          // dossierFiles above: this data already came FROM Firestore. Using
-          // the reconcile-wrapped setPlexManagementProperties here (as before)
-          // treated every property as "new" on each fresh page load (local
-          // state starts empty before this runs), which re-saved every
-          // property via dataService.saveProperty AND — far worse — computed
-          // savedUnits as [] for each one (fetchProperties never nests a
-          // .units array, that's the separate `units` collection fetched
-          // below) and used it to overwrite allUnits for that building,
-          // wiping real tenant/unit data out of local state on every login
-          // or hard refresh. Found 2026-08-23 after Fabiola reported losing
-          // registered tenants for "1843 rue le royer" following a refresh.
-          const props = await dataService.fetchProperties(user.uid, collaboratorCompanyDocIds);
           _setPlexManagementProperties(props);
-
-          // Fetch all units (independent collection)
-          const units = await dataService.fetchAllUnits(user.uid, collaboratorCompanyDocIds);
           setAllUnits(units);
-
-          // Fetch tenants/loyers — raw setter, same reasoning as depenses above:
-          // this already came from Firestore, don't re-save it on every login.
-          const loyers = await dataService.fetchLoyers(user.uid, collaboratorCompanyDocIds);
           _setPlexLoyers(loyers);
-
-          // Fetch double-entry journal (accounting ledger)
-          const entries = await dataService.fetchJournalEntries(user.uid);
           setJournalEntries(entries);
+
+          // Fire-and-forget, already concurrent with the batch above (and with
+          // each other) since none of these are awaited.
+          dataService.fetchBankTransactions(user.uid, collaboratorCompanyDocIds).then(setBankTransactions).catch((err) => console.error("fetchBankTransactions failed:", err));
+          dataService.fetchDocTemplates(user.uid, collaboratorCompanyDocIds).then(setDocTemplates).catch((err) => console.error("fetchDocTemplates failed:", err));
+          dataService.fetchDocuLegalDocs(user.uid, collaboratorCompanyDocIds).then(setDocuLegalList).catch((err) => console.error("fetchDocuLegalDocs failed:", err));
 
           setSetupComplet(true);
           setIsForfaitSelected(true);
