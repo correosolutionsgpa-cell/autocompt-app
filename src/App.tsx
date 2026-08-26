@@ -7952,33 +7952,123 @@ const App = () => {
     playNotificationSound();
   };
 
+  // Un vrai export bancaire québécois n'a presque jamais 3 colonnes propres
+  // "date,description,montant" — Desjardins/RBC/BNC/Scotia exportent
+  // généralement Date/Description/Retrait/Dépôt (2 colonnes séparées, pas
+  // un montant signé), avec des champs entre guillemets, des espaces comme
+  // séparateur de milliers ("1 234,56") et parfois une virgule décimale.
+  // L'ancien parseur (split naïf sur ",") aurait cassé sur toutes ces
+  // variantes réelles. Added 2026-08-26, avant le premier test de
+  // conciliation manuelle avec Fabiola.
+  const parseCsvLine = (line: string): string[] => {
+    const cells: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') { inQuotes = false; }
+        else { cur += ch; }
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ",") { cells.push(cur); cur = ""; }
+        else cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells.map((c) => c.trim());
+  };
+
+  // Accepte "45.00", "1,234.56", "1 234,56", "$45,00", "(45.00)" (parenthèses
+  // = négatif, convention comptable courante pour les retraits).
+  const parseCsvAmount = (raw: string): number | null => {
+    if (!raw) return null;
+    let s = raw.trim().replace(/[$\s]/g, "");
+    if (!s) return null;
+    const negParens = /^\(.*\)$/.test(s);
+    if (negParens) s = s.slice(1, -1);
+    // Virgule décimale (format FR : "1234,56") — seulement si un point n'est
+    // pas déjà utilisé comme décimale ailleurs dans la chaîne.
+    if (/,\d{2}$/.test(s) && !/\.\d{1,2}$/.test(s)) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      s = s.replace(/,/g, "");
+    }
+    const n = parseFloat(s);
+    if (isNaN(n)) return null;
+    return negParens ? -Math.abs(n) : n;
+  };
+
+  const normalizeHeader = (h: string): string =>
+    h.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
   const handleCSVUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split("\n");
-      const newTransactions = lines
-        .slice(1)
-        .map((line) => {
-          const parts = line.split(",");
-          if (parts.length < 3) return null;
-          const [date, desc, amt] = parts;
-          return {
-            companyId: activeCompanyId,
-            date: date.trim(),
-            desc: desc.trim(),
-            amt: parseFloat(amt.trim()),
-          };
-        })
-        .filter((t) => t !== null);
+      const text = (e.target?.result as string) || "";
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        alert("Le fichier semble vide ou ne contient aucune ligne de transaction.");
+        return;
+      }
 
-      setBankTransactions((prev) => [...(newTransactions as any), ...prev]);
+      const header = parseCsvLine(lines[0]).map(normalizeHeader);
+      const dateIdx = header.findIndex((h) => h.includes("date"));
+      const descIdx = header.findIndex((h) => h.includes("description") || h.includes("libelle") || h.includes("detail") || h.includes("transaction"));
+      // Un seul montant signé (rare, mais possible sur certains exports).
+      const amtIdx = header.findIndex((h) => h === "montant" || h === "amount" || h === "amt");
+      // Colonnes séparées — le cas le plus courant chez les banques d'ici.
+      const debitIdx = header.findIndex((h) => h.includes("retrait") || h.includes("debit"));
+      const creditIdx = header.findIndex((h) => h.includes("depot") || h.includes("credit"));
+
+      if (dateIdx === -1 || descIdx === -1 || (amtIdx === -1 && debitIdx === -1 && creditIdx === -1)) {
+        alert(
+          "Colonnes non reconnues dans ce fichier CSV.\n\n" +
+          `Colonnes trouvées : ${header.join(", ") || "(aucune)"}\n\n` +
+          "AutoCompt cherche une colonne Date, une colonne Description, et soit une colonne Montant, " +
+          "soit deux colonnes Retrait/Débit et Dépôt/Crédit. Envoyez-moi les noms exacts de vos colonnes " +
+          "pour que je les ajoute au reconnaisseur."
+        );
+        return;
+      }
+
+      let skipped = 0;
+      const newTransactions: any[] = [];
+      for (const line of lines.slice(1)) {
+        const cells = parseCsvLine(line);
+        const date = cells[dateIdx]?.trim();
+        const desc = cells[descIdx]?.trim();
+        if (!date || !desc) { skipped++; continue; }
+
+        let amt: number | null = null;
+        if (amtIdx !== -1) {
+          amt = parseCsvAmount(cells[amtIdx]);
+        } else {
+          const debit = debitIdx !== -1 ? parseCsvAmount(cells[debitIdx]) : null;
+          const credit = creditIdx !== -1 ? parseCsvAmount(cells[creditIdx]) : null;
+          if (credit) amt = Math.abs(credit);
+          else if (debit) amt = -Math.abs(debit);
+        }
+        if (amt === null || amt === 0 || isNaN(amt)) { skipped++; continue; }
+
+        newTransactions.push({
+          companyId: activeCompanyId,
+          date,
+          desc,
+          amt,
+        });
+      }
+
+      setBankTransactions((prev) => [...newTransactions, ...prev]);
       alert(
-        `${newTransactions.length} transactions importées pour ${currentCompany?.nombre}.`,
+        `${newTransactions.length} transaction${newTransactions.length > 1 ? "s" : ""} importée${newTransactions.length > 1 ? "s" : ""} pour ${currentCompany?.nombre}.` +
+        (skipped > 0 ? `\n${skipped} ligne${skipped > 1 ? "s" : ""} ignorée${skipped > 1 ? "s" : ""} (format non reconnu).` : "")
       );
+      event.target.value = "";
     };
     reader.readAsText(file);
   };
