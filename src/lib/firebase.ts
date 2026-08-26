@@ -1,11 +1,22 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Real accounts (Fabiola, Daniel — different networks/devices/browsers/auth
+// methods) consistently hit permission-denied on EVERY Firestore read, every
+// time, with no retry budget ever resolving it — while a clean Node.js
+// reproduction with the same account/rules/query succeeds instantly every
+// time. Node's client SDK doesn't use the browser's default WebChannel
+// streaming transport; a proxy/AV/firewall on the read path that breaks
+// streamed responses (but not plain request/response) produces exactly this
+// signature. experimentalAutoDetectLongPolling falls back to long-polling
+// only when the browser actually needs it. Found 2026-08-26.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth();
 export const storage = getStorage(app);
 
