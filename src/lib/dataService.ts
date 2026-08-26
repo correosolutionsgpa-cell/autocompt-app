@@ -743,6 +743,7 @@ export interface CondoUnitDoc {
   unit: string;             // "Unité 101"
   owner: string;             // "Jean Tremblay"
   email?: string;            // owner's email — required to actually send reminders/broadcasts
+  telephone?: string;        // owner's phone — display/contact only, no SMS feature reads this yet
   amountDue: number;         // monthly cotisation amount
   status: 'paye' | 'en_retard';
   ownerId: string;
@@ -846,6 +847,11 @@ export interface SyndicSettingsDoc {
   fiscalYearEnd: string;    // "31 décembre", etc.
   reserveFundPercent: number;
   boardMembers: BoardMember[];
+  /** Amenities picked in the "Actifs et Équipements" onboarding step (ex:
+   *  "Piscine / Spa", "Ascenseur(s)") — was rendered as a checkbox grid with
+   *  no `checked`/`onChange` at all, so nothing was ever selectable or saved
+   *  (found 2026-08-25, Daniel/QA). */
+  actifs?: string[];
   ownerId: string;
   updatedAt: string;
 }

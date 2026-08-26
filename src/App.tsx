@@ -3176,7 +3176,8 @@ const App = () => {
     secretaire: "",
     administrateurs: "",
     cadastre: "",
-    renouvellement: ""
+    renouvellement: "",
+    actifs: [] as string[],
   });
   // Beta: start at 999 to prevent paywall from blocking QA flows
   const [nombrePortes, setNombrePortes] = useState(999);
@@ -9959,7 +9960,19 @@ const App = () => {
                     : ["Piscine / Spa", "Salle communautaire", "Ascenseur(s)", "Garage intérieur", "Salle de Gym", "Concierge résident", "Stationnement extérieur"]
                   ).map((actif) => (
                     <label key={actif} className={darkMode ? "flex items-center space-x-2 p-3 border border-zinc-800 rounded-xl bg-zinc-950 cursor-pointer hover:bg-zinc-900 transition-colors" : "flex items-center space-x-2 p-3 border border-slate-200/60 rounded-xl bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors"}>
-                      <input type="checkbox" className={darkMode ? "w-4 h-4 text-amber-600 border-amber-700 rounded focus:ring-amber-500" : "w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"} />
+                      <input
+                        type="checkbox"
+                        checked={syndicatSetup.actifs.includes(actif)}
+                        onChange={(e) => {
+                          setSyndicatSetup({
+                            ...syndicatSetup,
+                            actifs: e.target.checked
+                              ? [...syndicatSetup.actifs, actif]
+                              : syndicatSetup.actifs.filter((a) => a !== actif),
+                          });
+                        }}
+                        className={darkMode ? "w-4 h-4 text-amber-600 border-amber-700 rounded focus:ring-amber-500" : "w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"}
+                      />
                       <span className={darkMode ? "text-[11px] font-bold text-zinc-300" : "text-[11px] font-bold text-slate-700"}>{actif}</span>
                     </label>
                   ))}
@@ -10082,6 +10095,9 @@ const App = () => {
                     // (année de construction, étages, stationnements,
                     // casiers, cadastre, renouvellement) aren't persisted —
                     // no Firestore field exists for them anywhere in the app.
+                    // "actifs" (Actifs et Équipements) added 2026-08-25 —
+                    // was previously a checkbox grid with no checked/onChange
+                    // at all, so nothing was even selectable (found by Daniel/QA).
                     try {
                       const boardMembers = [
                         { name: syndicatSetup.president.trim(), role: "Président(e)" },
@@ -10097,6 +10113,7 @@ const App = () => {
                         fiscalYearEnd: "31 décembre",
                         reserveFundPercent: 5,
                         boardMembers,
+                        actifs: syndicatSetup.actifs,
                       });
                     } catch (e) {
                       console.error("Failed to save initial Syndic settings from onboarding:", e);

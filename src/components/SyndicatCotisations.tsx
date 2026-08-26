@@ -44,6 +44,7 @@ interface CondoUnit {
   unit: string;
   owner: string;
   email?: string;
+  telephone?: string;
   amountDue: number;
   status: 'paye' | 'en_retard';
   history: PaymentHistory[];
@@ -81,6 +82,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
   const [newUnitLabel, setNewUnitLabel] = useState('');
   const [newUnitOwner, setNewUnitOwner] = useState('');
   const [newUnitEmail, setNewUnitEmail] = useState('');
+  const [newUnitTelephone, setNewUnitTelephone] = useState('');
   const [newUnitAmount, setNewUnitAmount] = useState('');
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     unit: u.unit,
     owner: u.owner,
     email: u.email,
+    telephone: u.telephone,
     amountDue: u.amountDue,
     status: u.status,
     history: rawPayments
@@ -317,6 +320,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     setNewUnitLabel('');
     setNewUnitOwner('');
     setNewUnitEmail('');
+    setNewUnitTelephone('');
     setNewUnitAmount('');
   };
 
@@ -325,6 +329,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
     setNewUnitLabel(unit.unit);
     setNewUnitOwner(unit.owner);
     setNewUnitEmail(unit.email || '');
+    setNewUnitTelephone(unit.telephone || '');
     setNewUnitAmount(String(unit.amountDue));
     setIsAddUnitModalOpen(true);
   };
@@ -348,6 +353,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
           unit: newUnitLabel.trim(),
           owner: newUnitOwner.trim(),
           email: newUnitEmail.trim() || undefined,
+          telephone: newUnitTelephone.trim() || undefined,
           amountDue: amount,
         });
         setRawUnits((prev) => prev.map((u) => (u.id === editingUnitId ? saved : u)));
@@ -359,6 +365,7 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
           unit: newUnitLabel.trim(),
           owner: newUnitOwner.trim(),
           email: newUnitEmail.trim() || undefined,
+          telephone: newUnitTelephone.trim() || undefined,
           amountDue: amount,
           status: 'en_retard',
         });
@@ -855,6 +862,16 @@ export default function SyndicatCotisations({ setVista, darkMode, companyId, com
                     value={newUnitEmail}
                     onChange={(e) => setNewUnitEmail(e.target.value)}
                     placeholder="jean.tremblay@courriel.com"
+                    className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 pl-2">Téléphone (optionnel)</label>
+                  <input
+                    type="tel"
+                    value={newUnitTelephone}
+                    onChange={(e) => setNewUnitTelephone(e.target.value)}
+                    placeholder="514-555-1234"
                     className={`w-full p-4 rounded-2xl border outline-none text-xs font-semibold ${darkMode ? "bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"}`}
                   />
                 </div>

@@ -29,6 +29,12 @@ const SyndicSettingsPanel: React.FC<SyndicSettingsPanelProps> = ({ darkMode, com
   const [fiscalYearEnd, setFiscalYearEnd] = useState("31 décembre");
   const [reserveFundPercent, setReserveFundPercent] = useState("5");
   const [boardMembers, setBoardMembers] = useState<BoardMember[]>([]);
+  const [actifs, setActifs] = useState<string[]>([]);
+
+  // Même liste que l'étape "Actifs et Équipements" de l'onboarding — le
+  // filtrage par palier ne s'appliquait qu'au moment du choix initial, pas
+  // à ce qui peut être modifié après coup ici.
+  const ACTIFS_OPTIONS = ["Piscine / Spa", "Salle communautaire", "Ascenseur(s)", "Garage intérieur", "Salle de Gym", "Concierge résident", "Espaces de rangement", "Stationnement extérieur"];
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -46,6 +52,7 @@ const SyndicSettingsPanel: React.FC<SyndicSettingsPanelProps> = ({ darkMode, com
           setFiscalYearEnd(settings.fiscalYearEnd);
           setReserveFundPercent(String(settings.reserveFundPercent));
           setBoardMembers(settings.boardMembers || []);
+          setActifs(settings.actifs || []);
         }
       })
       .catch((err) => console.error("Failed to load syndic settings:", err))
@@ -77,6 +84,7 @@ const SyndicSettingsPanel: React.FC<SyndicSettingsPanelProps> = ({ darkMode, com
         fiscalYearEnd,
         reserveFundPercent: Number(reserveFundPercent) || 0,
         boardMembers: boardMembers.filter((m) => m.name.trim() || m.role.trim()),
+        actifs,
       });
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 2500);
@@ -164,6 +172,30 @@ const SyndicSettingsPanel: React.FC<SyndicSettingsPanelProps> = ({ darkMode, com
                 placeholder="Ex: 5"
                 className={inputClass}
               />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className={labelClass}>Actifs et Équipements</label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {ACTIFS_OPTIONS.map((actif) => (
+                <label
+                  key={actif}
+                  className={`flex items-center space-x-2 p-3 border rounded-xl cursor-pointer transition-colors ${
+                    darkMode ? "border-zinc-800 bg-zinc-950/50 hover:bg-zinc-900" : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={actifs.includes(actif)}
+                    onChange={(e) =>
+                      setActifs((prev) => (e.target.checked ? [...prev, actif] : prev.filter((a) => a !== actif)))
+                    }
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className={`text-[11px] font-bold ${darkMode ? "text-zinc-300" : "text-slate-700"}`}>{actif}</span>
+                </label>
+              ))}
             </div>
           </div>
 
