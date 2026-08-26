@@ -954,8 +954,15 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
 
       // ── Helpers ──────────────────────────────────────────────────────────────
 
-      const sparkle = (cx: number, cy: number, r: number) => {
-        pdf.setFillColor(255, 255, 255);
+      // Reproduces the real mark in public/autocompt-logo.svg — was just the
+      // main star, missing the "+" (top-right) and "○" (bottom-left) accents
+      // that make it recognizably the AutoCompt logo and not a generic
+      // sparkle. Offsets/sizes below are ported directly from that SVG's
+      // path coordinates (star centered in a 24×24 box, "+" at ~(18,6),
+      // "○" at (6,18) r=1.5 — both ≈0.667r from center, ≈0.167r in size).
+      // Found 2026-08-26 (Fabiola, comparing a signed PDF to the real logo).
+      const sparkle = (cx: number, cy: number, r: number, color: [number, number, number]) => {
+        pdf.setFillColor(...color);
         const pts: [number, number][] = [];
         for (let i = 0; i < 8; i++) {
           const a = (Math.PI / 4) * i - Math.PI / 2;
@@ -965,6 +972,14 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
         pdf.moveTo(pts[0][0], pts[0][1]);
         pts.slice(1).forEach(([x, y]) => pdf.lineTo(x, y));
         pdf.fill();
+
+        pdf.setDrawColor(...color);
+        pdf.setLineWidth(Math.max(0.25, r * 0.09));
+        const plusX = cx + r * 0.667, plusY = cy - r * 0.667, arm = r * 0.167;
+        pdf.line(plusX, plusY - arm, plusX, plusY + arm);
+        pdf.line(plusX - arm, plusY, plusX + arm, plusY);
+
+        pdf.circle(cx - r * 0.667, cy + r * 0.667, r * 0.167, 'S');
       };
 
       /**
@@ -1020,7 +1035,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
           // Full decorative header on page 1
           pdf.setFillColor(...green);
           pdf.rect(0, 0, W, 35, 'F');
-          sparkle(M, 17, 7);
+          sparkle(M, 17, 7, [255, 255, 255]);
           pdf.setTextColor(255, 255, 255);
           pdf.setFont('Helvetica', 'bold');
           pdf.setFontSize(13);
@@ -1234,8 +1249,7 @@ export default function PublicSignaturePage({ token }: PublicSignaturePageProps)
       pdf.setFillColor(255, 255, 255);
       pdf.rect(M, y, W - M * 2, sealH, 'FD');
       pdf.setLineDashPattern([], 0);
-      pdf.setFillColor(green[0], green[1], green[2]);
-      sparkle(M + 8, y + 8, 4);
+      sparkle(M + 8, y + 8, 4, green);
       pdf.setTextColor(green[0], green[1], green[2]);
       pdf.setFont('Helvetica', 'bold');
       pdf.setFontSize(7.5);
