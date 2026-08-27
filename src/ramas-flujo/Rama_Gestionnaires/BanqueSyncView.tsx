@@ -15,7 +15,7 @@
 
 import React, { useState } from "react";
 import StyledSelect from "../../components/ui/StyledSelect";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { dataService } from "../../lib/dataService";
 import { auth } from "../../lib/firebase";
 import {
@@ -166,6 +166,23 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   const [autoLierSelection, setAutoLierSelection] = useState<Record<number, string>>({});
   const [missingExpenseBuilding, setMissingExpenseBuilding] = useState<Record<number, string>>({});
 
+  // First-time workflow guide — dismissed permanently once seen, same
+  // localStorage-gated pattern as the Sofi settings tour. Requested by
+  // Fabiola 2026-08-27 after living through the whole reconciliation flow
+  // herself without any explanation of the "upload → confirmer chaque
+  // transaction → ça devient un vrai revenu/dépense" steps.
+  const [showFirstTimeGuide, setShowFirstTimeGuide] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("autocompt_conciliation_guide_shown") !== "true";
+    } catch {
+      return true;
+    }
+  });
+  const dismissFirstTimeGuide = () => {
+    setShowFirstTimeGuide(false);
+    try { localStorage.setItem("autocompt_conciliation_guide_shown", "true"); } catch { /* ignore */ }
+  };
+
   // Best-guess suggestion for auto-creating a fideicommisDepots doc from a
   // bank deposit — prefers a past dépôt from the same recurring tenant
   // (name in the bank description + same amount); falls back to amount-only
@@ -229,6 +246,47 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
         </header>
 
         <main className="p-4 space-y-6 max-w-md mx-auto w-full text-left">
+          {/* First-time workflow guide — explains the 3 steps before the
+              transaction list, since the errors/statuses below (Erreur de
+              Montant/Rejeté, Validation Manuelle Requise...) make no sense
+              without knowing WHY a transaction needs to be confirmed at all. */}
+          <AnimatePresence>
+            {showFirstTimeGuide && (
+              <motion.div
+                initial={{ opacity: 0, y: -12, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                transition={{ type: "spring", damping: 22, stiffness: 200 }}
+                className={`relative rounded-[28px] border p-5 shadow-lg ${darkMode ? "bg-indigo-950/20 border-indigo-500/30" : "bg-indigo-50 border-indigo-200"}`}
+              >
+                <button
+                  onClick={dismissFirstTimeGuide}
+                  aria-label={t("Fermer")}
+                  className={`absolute top-3 right-3 p-1.5 rounded-full transition-colors ${darkMode ? "text-indigo-300/60 hover:text-white hover:bg-white/10" : "text-indigo-400 hover:text-indigo-700 hover:bg-white/60"}`}
+                >
+                  <X size={14} />
+                </button>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${darkMode ? "text-indigo-300" : "text-indigo-600"}`}>
+                  {t("Comment ça marche")}
+                </p>
+                <ol className={`space-y-2 text-[10.5px] font-medium leading-snug ${darkMode ? "text-indigo-100" : "text-indigo-900"}`}>
+                  <li><strong>1.</strong> {t("Téléversez votre relevé bancaire (CSV) avec « Sync Relevé ».")}</li>
+                  <li><strong>2.</strong> {t("Pour chaque transaction, confirmez ce qu'elle représente (loyer d'un locataire, dépense d'une catégorie...) — c'est ça, la « réconciliation ».")}</li>
+                  <li><strong>3.</strong> {t("Une fois confirmée, elle devient un vrai revenu ou une vraie dépense, visible dans Tenue de Livres.")}</li>
+                </ol>
+                <p className={`text-[8.5px] font-bold mt-3 pt-3 border-t ${darkMode ? "text-indigo-300/70 border-indigo-500/20" : "text-indigo-500 border-indigo-200"}`}>
+                  {t("Une transaction non confirmée reste affichée ici comme « à traiter » — elle n'apparaît nulle part ailleurs tant que vous ne l'avez pas confirmée.")}
+                </p>
+                <button
+                  onClick={dismissFirstTimeGuide}
+                  className="mt-4 w-full py-2.5 bg-indigo-600 text-white rounded-2xl text-[9px] font-black uppercase italic shadow active:scale-95 transition-all"
+                >
+                  {t("Compris")}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Zero-Knowledge Privacy Badge */}
           <div className="bg-emerald-600 p-4 rounded-[28px] shadow-lg shadow-emerald-900/10 flex items-center space-x-3 border border-emerald-500">
             <div className="bg-white/20 p-2 rounded-xl text-white backdrop-blur-md">
