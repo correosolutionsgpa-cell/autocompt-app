@@ -292,6 +292,10 @@ export interface ExpenseDoc {
   unitId?: string;
   /** FK → BuildingLedger.id (optional, for property-linked expenses) */
   buildingId?: string;
+  /** Marks an expense created against Solutions GPA (companyId "1") as
+   *  actually belonging to the triplex, to be refacturée — see
+   *  BanqueSyncView's "+ Refacturable au Triplex" reconciliation button. */
+  refacturableTriplex?: boolean;
   /** FK → BookkeepingClientDoc.id — generic multi-client tag (comptable/
    *  gestionnaire profiles), distinct from fideicommisClientId. */
   clientId?: string;

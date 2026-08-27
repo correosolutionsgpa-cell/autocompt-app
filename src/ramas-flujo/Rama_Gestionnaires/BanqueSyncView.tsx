@@ -847,27 +847,33 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                               />
                             )}
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                const uid = auth.currentUser?.uid;
+                                if (!uid) return;
                                 const selectedBuildingId = missingExpenseBuilding[i];
-                                const newDepense = {
-                                  id: Date.now(),
-                                  companyId: activeCompanyId,
-                                  fecha: txn.date,
-                                  fournisseur: txn.desc,
-                                  cat: "À classer",
-                                  subtotal: txn.amt / 1.14975,
-                                  tps: (txn.amt / 1.14975) * 0.05,
-                                  tvq: (txn.amt / 1.14975) * 0.09975,
-                                  total: txn.amt,
-                                  lien: null,
-                                  partnerTag: activeUser,
-                                  refacturableTriplex: false,
-                                  ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
-                                };
-                                setDepenses((prev) => [newDepense, ...prev]);
-                                alert(
-                                  `Dépense créée pour ${txn.desc}. N'oubliez pas d'attacher le reçu !`,
-                                );
+                                try {
+                                  const saved = await dataService.saveExpense(uid, {
+                                    companyId: activeCompanyId,
+                                    fecha: txn.date,
+                                    fournisseur: txn.desc,
+                                    cat: "À classer",
+                                    subtotal: txn.amt / 1.14975,
+                                    tps: (txn.amt / 1.14975) * 0.05,
+                                    tvq: (txn.amt / 1.14975) * 0.09975,
+                                    total: txn.amt,
+                                    lien: null,
+                                    partnerTag: activeUser,
+                                    refacturableTriplex: false,
+                                    ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
+                                  });
+                                  setDepenses((prev) => [saved, ...prev]);
+                                  alert(
+                                    `Dépense créée pour ${txn.desc}. N'oubliez pas d'attacher le reçu !`,
+                                  );
+                                } catch (err) {
+                                  console.error("saveExpense (ajouter justificatif) failed:", err);
+                                  alert("Erreur lors de l'enregistrement. Réessayez.");
+                                }
                               }}
                               className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase italic shadow-xl active:scale-95 transition-all border ${darkMode ? "bg-zinc-100 text-black border-zinc-300" : "bg-slate-900 text-white border-slate-700"}`}
                             >
@@ -875,27 +881,33 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                             </button>
                             {activeCompanyId === "1" && (
                               <button
-                                onClick={() => {
+                                onClick={async () => {
+                                  const uid = auth.currentUser?.uid;
+                                  if (!uid) return;
                                   const selectedBuildingId = missingExpenseBuilding[i];
-                                  const newDepense = {
-                                    id: Date.now(),
-                                    companyId: "1",
-                                    fecha: txn.date,
-                                    fournisseur: txn.desc,
-                                    cat: "Réparations / Entretien",
-                                    subtotal: txn.amt / 1.14975,
-                                    tps: (txn.amt / 1.14975) * 0.05,
-                                    tvq: (txn.amt / 1.14975) * 0.09975,
-                                    total: txn.amt,
-                                    lien: null,
-                                    partnerTag: activeUser,
-                                    refacturableTriplex: true,
-                                    ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
-                                  };
-                                  setDepenses((prev) => [newDepense, ...prev]);
-                                  alert(
-                                    `Dépense REFACTURABLE créée pour ${txn.desc}.`,
-                                  );
+                                  try {
+                                    const saved = await dataService.saveExpense(uid, {
+                                      companyId: "1",
+                                      fecha: txn.date,
+                                      fournisseur: txn.desc,
+                                      cat: "Réparations / Entretien",
+                                      subtotal: txn.amt / 1.14975,
+                                      tps: (txn.amt / 1.14975) * 0.05,
+                                      tvq: (txn.amt / 1.14975) * 0.09975,
+                                      total: txn.amt,
+                                      lien: null,
+                                      partnerTag: activeUser,
+                                      refacturableTriplex: true,
+                                      ...(selectedBuildingId ? { buildingId: selectedBuildingId } : {}),
+                                    });
+                                    setDepenses((prev) => [saved, ...prev]);
+                                    alert(
+                                      `Dépense REFACTURABLE créée pour ${txn.desc}.`,
+                                    );
+                                  } catch (err) {
+                                    console.error("saveExpense (refacturable) failed:", err);
+                                    alert("Erreur lors de l'enregistrement. Réessayez.");
+                                  }
                                 }}
                                 className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase italic shadow-lg active:scale-95 transition-all border border-emerald-500"
                               >
