@@ -17,6 +17,7 @@ import React, { useState } from "react";
 import StyledSelect from "../../components/ui/StyledSelect";
 import { motion } from "framer-motion";
 import { dataService } from "../../lib/dataService";
+import { auth } from "../../lib/firebase";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -619,11 +620,12 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                           {depValidation?.match?.locataire && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                const uid = auth.currentUser?.uid;
+                                if (!uid) return;
                                 const match = depValidation.match;
-                                setHistorique((prev) => [
-                                  {
-                                    id: `rev_${Date.now()}_${i}`,
+                                try {
+                                  const saved = await dataService.saveInvoice(uid, {
                                     companyId: activeCompanyId,
                                     cliente: match.locataire,
                                     fecha: txn.date,
@@ -633,10 +635,13 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     tvq: 0,
                                     total: txn.amt,
                                     status: "Payée",
-                                  },
-                                  ...prev,
-                                ]);
-                                playNotificationSound();
+                                  });
+                                  setHistorique((prev) => [saved, ...prev]);
+                                  playNotificationSound();
+                                } catch (err) {
+                                  console.error("saveInvoice (confirmer loyer) failed:", err);
+                                  alert(t("Erreur lors de l'enregistrement. Réessayez."));
+                                }
                               }}
                               className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
                             >
@@ -645,10 +650,11 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           )}
                           {!depValidation?.match?.locataire && (
                             <button
-                              onClick={() => {
-                                setHistorique((prev) => [
-                                  {
-                                    id: `rev_${Date.now()}_${i}`,
+                              onClick={async () => {
+                                const uid = auth.currentUser?.uid;
+                                if (!uid) return;
+                                try {
+                                  const saved = await dataService.saveInvoice(uid, {
                                     companyId: activeCompanyId,
                                     cliente: txn.desc,
                                     fecha: txn.date,
@@ -658,10 +664,13 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     tvq: 0,
                                     total: txn.amt,
                                     status: "Payée",
-                                  },
-                                  ...prev,
-                                ]);
-                                playNotificationSound();
+                                  });
+                                  setHistorique((prev) => [saved, ...prev]);
+                                  playNotificationSound();
+                                } catch (err) {
+                                  console.error("saveInvoice (valider manuellement) failed:", err);
+                                  alert(t("Erreur lors de l'enregistrement. Réessayez."));
+                                }
                               }}
                               className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
                             >
@@ -700,7 +709,9 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                               ]}
                             />
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                const uid = auth.currentUser?.uid;
+                                if (!uid) return;
                                 const selectedId = autoLierSelection[i];
                                 if (!selectedId) {
                                   alert(t("Veuillez sélectionner une porte."));
@@ -716,9 +727,8 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     break;
                                   }
                                 }
-                                setHistorique((prev) => [
-                                  {
-                                    id: `rev_${Date.now()}_${i}`,
+                                try {
+                                  const saved = await dataService.saveInvoice(uid, {
                                     companyId: activeCompanyId,
                                     cliente: locataire || txn.desc,
                                     fecha: txn.date,
@@ -729,10 +739,13 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                                     total: txn.amt,
                                     status: "Payée",
                                     unitId: selectedId,
-                                  },
-                                  ...prev,
-                                ]);
-                                playNotificationSound();
+                                  });
+                                  setHistorique((prev) => [saved, ...prev]);
+                                  playNotificationSound();
+                                } catch (err) {
+                                  console.error("saveInvoice (auto-lier) failed:", err);
+                                  alert(t("Erreur lors de l'enregistrement. Réessayez."));
+                                }
                               }}
                               className="bg-red-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic shadow active:scale-95 transition-all"
                             >
