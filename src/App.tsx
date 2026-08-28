@@ -4740,6 +4740,16 @@ const App = () => {
   const [docFormContent, setDocFormContent] = useState("");
   // Quick-fill values for PA (Promesse d'Achat) variable fields
   const [paQuickFillValues, setPaQuickFillValues] = useState<Record<string, string>>({});
+  // The RAW template (still full of {{TOKEN}} markers), captured once when
+  // "Appliquer" first runs — every later click re-substitutes from THIS,
+  // never from docFormContent itself. Without this, a second "Appliquer"
+  // (e.g. after fixing a typo in a field) found docFormContent already
+  // token-free from the first pass, silently fell back to a completely
+  // fresh blank template via loadDefaultTemplate(), and wiped out any
+  // manual edits made in the contract textarea in between. Found 2026-08-27
+  // — Fabiola sent a Promesse d'Achat where the buyer/seller names reached
+  // the signer as raw {{...}} tokens.
+  const [paBaseTemplate, setPaBaseTemplate] = useState<string>("");
   const [paPropType, setPaPropType] = useState<string>('Maison unifamiliale');
   const [paConditions, setPaConditions] = useState<Record<string, boolean>>({
     COND_SANS_GARANTIE: false,
@@ -15762,6 +15772,11 @@ const App = () => {
                             );
                             setDocFormSmsVerify(true);
                             setSelectedDocuEntry(null);
+                            // Fresh document — clear the PA quick-fill panel too, otherwise
+                            // a previous promesse d'achat's buyer/seller names and price
+                            // would silently pre-fill this brand-new one.
+                            setPaQuickFillValues({});
+                            setPaBaseTemplate("");
                             setSubVistaDocu("editor");
                             playNotificationSound();
                           }}
@@ -16097,6 +16112,8 @@ const App = () => {
                                   "Bonjour, veuillez prendre connaissance et signer électroniquement le document ci-joint.",
                                 );
                                 setDocFormSmsVerify(true);
+                                setPaQuickFillValues({});
+                                setPaBaseTemplate("");
                                 setDocFormSignersList([
                                   {
                                     id: "1",
@@ -16543,6 +16560,7 @@ const App = () => {
                                 onChange={(v) => {
                                   setDocFormFolder(v);
                                   setDocFormContent(loadDefaultTemplate(v));
+                                  setPaBaseTemplate("");
                                 }}
                                 disabled={selectedDocuEntry?.status === "Signé"}
                                 options={folders.map((f) => ({ value: f, label: f }))}
@@ -16613,9 +16631,18 @@ const App = () => {
                                     };
                                     const allValues: Record<string, string> = { ...defaults, ...paQuickFillValues };
 
-                                    // Start from the loaded template (if PA markers present) or load fresh
-                                    const hasV2Markers = docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}');
-                                    const baseTemplate = hasV2Markers ? docFormContent : loadDefaultTemplate(docFormFolder);
+                                    // The raw template (with {{TOKEN}} markers) is captured ONCE and
+                                    // reused on every click — re-deriving it from docFormContent broke
+                                    // after the first "Appliquer" (its tokens are already gone by then),
+                                    // which silently fell back to a brand-new blank template and wiped
+                                    // any values or manual edits made since. See paBaseTemplate's
+                                    // declaration for the full story.
+                                    let baseTemplate = paBaseTemplate;
+                                    if (!baseTemplate) {
+                                      const hasV2Markers = docFormContent.includes('{{VENDEUR_1_NOM}}') || docFormContent.includes('{{ACHETEUR_1_NOM}}');
+                                      baseTemplate = hasV2Markers ? docFormContent : loadDefaultTemplate(docFormFolder);
+                                      setPaBaseTemplate(baseTemplate);
+                                    }
 
                                     let result = baseTemplate;
 
