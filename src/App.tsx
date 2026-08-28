@@ -4750,6 +4750,11 @@ const App = () => {
   // — Fabiola sent a Promesse d'Achat where the buyer/seller names reached
   // the signer as raw {{...}} tokens.
   const [paBaseTemplate, setPaBaseTemplate] = useState<string>("");
+  // Raw values behind the "Offre valide jusqu'au" date+heure picker — kept
+  // separate from paQuickFillValues (which stores the final French-formatted
+  // string used in the contract) so the two native inputs stay controlled.
+  const [paDateValiditeDate, setPaDateValiditeDate] = useState<string>("");
+  const [paDateValiditeTime, setPaDateValiditeTime] = useState<string>("");
   const [paPropType, setPaPropType] = useState<string>('Maison unifamiliale');
   const [paConditions, setPaConditions] = useState<Record<string, boolean>>({
     COND_SANS_GARANTIE: false,
@@ -15777,6 +15782,8 @@ const App = () => {
                             // would silently pre-fill this brand-new one.
                             setPaQuickFillValues({});
                             setPaBaseTemplate("");
+                            setPaDateValiditeDate("");
+                            setPaDateValiditeTime("");
                             setSubVistaDocu("editor");
                             playNotificationSound();
                           }}
@@ -16114,6 +16121,8 @@ const App = () => {
                                 setDocFormSmsVerify(true);
                                 setPaQuickFillValues({});
                                 setPaBaseTemplate("");
+                                setPaDateValiditeDate("");
+                                setPaDateValiditeTime("");
                                 setDocFormSignersList([
                                   {
                                     id: "1",
@@ -16759,13 +16768,62 @@ const App = () => {
                                     ] as Array<{ key: string; label: string; ph: string; def: string }>).map(({ key, label, ph, def }) => (
                                       <div key={key}>
                                         <label className="text-[7px] font-black uppercase tracking-wider text-slate-400 block mb-1">{label}</label>
-                                        <input
-                                          type="text"
-                                          value={paQuickFillValues[key] !== undefined ? paQuickFillValues[key] : def}
-                                          onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
-                                          placeholder={ph}
-                                          className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
-                                        />
+                                        {key === 'DATE_VALIDITE' ? (
+                                          // Date ET heure — cette clause a une portée légale précise
+                                          // ("l'acceptation devra être reçue avant cette heure ET cette
+                                          // date"), donc un simple champ texte libre laissait l'heure de
+                                          // côté trop facilement. Deux champs natifs séparés (date +
+                                          // heure) plutôt qu'un seul "datetime-local" combiné — celui-ci
+                                          // s'affiche parfois en petits chiffres peu visibles sur mobile;
+                                          // un vrai sélecteur de calendrier (type="date") reste visible et
+                                          // tactile sur chaque plateforme. Puis formaté en français pour
+                                          // le contrat. Trouvé 2026-08-28 (Fabiola).
+                                          <div className="flex gap-2">
+                                            <input
+                                              type="date"
+                                              value={paDateValiditeDate}
+                                              onChange={(e) => {
+                                                const dateVal = e.target.value;
+                                                setPaDateValiditeDate(dateVal);
+                                                if (!dateVal) {
+                                                  setPaQuickFillValues(prev => ({ ...prev, DATE_VALIDITE: '' }));
+                                                  return;
+                                                }
+                                                const d = new Date(`${dateVal}T00:00:00`);
+                                                const dateStr = d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+                                                setPaQuickFillValues(prev => ({
+                                                  ...prev,
+                                                  DATE_VALIDITE: paDateValiditeTime ? `${dateStr} à ${paDateValiditeTime.replace(':', 'h')}` : dateStr,
+                                                }));
+                                              }}
+                                              className={`flex-1 min-w-0 px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400'}`}
+                                            />
+                                            <input
+                                              type="time"
+                                              value={paDateValiditeTime}
+                                              onChange={(e) => {
+                                                const timeVal = e.target.value;
+                                                setPaDateValiditeTime(timeVal);
+                                                if (!paDateValiditeDate) return;
+                                                const d = new Date(`${paDateValiditeDate}T00:00:00`);
+                                                const dateStr = d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+                                                setPaQuickFillValues(prev => ({
+                                                  ...prev,
+                                                  DATE_VALIDITE: timeVal ? `${dateStr} à ${timeVal.replace(':', 'h')}` : dateStr,
+                                                }));
+                                              }}
+                                              className={`w-[92px] flex-shrink-0 px-2 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400'}`}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <input
+                                            type="text"
+                                            value={paQuickFillValues[key] !== undefined ? paQuickFillValues[key] : def}
+                                            onChange={(e) => setPaQuickFillValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                            placeholder={ph}
+                                            className={`w-full px-3 py-2.5 rounded-xl text-[10px] font-medium border outline-none transition-all ${darkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-violet-500 placeholder:text-zinc-600' : 'bg-white border-slate-200 text-slate-900 focus:border-violet-400 placeholder:text-slate-400'}`}
+                                          />
+                                        )}
                                       </div>
                                     ))}
                                     {/* Inclusions — full-width textarea */}
