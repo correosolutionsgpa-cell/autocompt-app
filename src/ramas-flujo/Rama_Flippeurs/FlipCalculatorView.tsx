@@ -540,8 +540,12 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   };
 
   // ── Analyse avancée (ARV, budget détaillé, financement, associés) ─────────
-  const toggleAnalysis = (p: FlipProjectDoc) => {
-    if (expandedAnalysisId === p.id) { setExpandedAnalysisId(null); return; }
+  // Extracted from toggleAnalysis so the compact "Possession (réel)" popup
+  // below can populate the SAME analysisForm state without opening the full
+  // "Analyse avancée" panel — handleSaveAnalysis always saves every field of
+  // analysisForm at once, so a partial init here would silently wipe out any
+  // real arv/rénovation/financement data already saved on this project.
+  const loadAnalysisForm = (p: FlipProjectDoc) => {
     setAnalysisForm({
       arv: p.arv != null ? String(p.arv) : "",
       etatCondition: p.etatCondition || "bon",
@@ -571,7 +575,24 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
       },
       commissionCourtierPctEstime: p.commissionCourtierPctEstime != null ? String(p.commissionCourtierPctEstime) : "4",
     });
+  };
+
+  const toggleAnalysis = (p: FlipProjectDoc) => {
+    if (expandedAnalysisId === p.id) { setExpandedAnalysisId(null); return; }
+    loadAnalysisForm(p);
     setExpandedAnalysisId(p.id);
+  };
+
+  // Compact floating popup for JUST the monthly holding-cost estimate,
+  // opened by clicking the "Possession (réel)" stat card — same underlying
+  // fields/save as "Analyse avancée" below, but without wading through ARV,
+  // rénovation, financement, associés to reach them. Requested 2026-08-28
+  // (Fabiola: her own spreadsheet lists these 8 lines monthly, wanted the
+  // same quick access without leaving the project card's layout).
+  const [possessionModalId, setPossessionModalId] = useState<string | null>(null);
+  const openPossessionModal = (p: FlipProjectDoc) => {
+    loadAnalysisForm(p);
+    setPossessionModalId(p.id);
   };
 
   // ── Budget de rénovation détaillé — un poste préréglé à la fois, jamais
@@ -1019,11 +1040,18 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Acquisition (achat + frais)</p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(p.prixAchat + (p.fraisAchat || 0))}</p>
                   </div>
-                  <div className={`p-3 rounded-2xl border ${glass}`}>
-                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Possession (réel)</p>
+                  <button
+                    type="button"
+                    onClick={() => openPossessionModal(p)}
+                    className={`p-3 rounded-2xl border text-left transition-all hover:border-indigo-400 hover:shadow-sm active:scale-[0.98] ${glass}`}
+                    title="Estimer le coût mensuel de possession"
+                  >
+                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      Possession (réel) <Calculator size={9} className="text-indigo-400" />
+                    </p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(projectExpTotal)}</p>
                     <p className="text-[7px] font-bold text-slate-400 mt-0.5">{projectExp.length} dépense(s) liée(s) — rénov., taxes, assurances, intérêts...</p>
-                  </div>
+                  </button>
                   <div className={`p-3 rounded-2xl border ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">
                       Disposition — {p.statut === "vendu" ? "revente réelle" : "revente estimée"}
@@ -1399,6 +1427,85 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Popup flottant — coût mensuel de possession (estimation).
+                  Mêmes 8 champs que "Coûts fixes de possession" dans Analyse
+                  avancée ci-dessus, réutilise le même analysisForm/save, mais
+                  isolés dans une fenêtre compacte sans avoir à parcourir ARV/
+                  rénovation/financement/associés pour y arriver — la carte
+                  reste exactement où elle était. */}
+              {possessionModalId === p.id && (() => {
+                const moisEstime = parseFloat(analysisForm.possessionMoisEstime) || (joursDetenus > 0 ? joursDetenus / 30.44 : 0);
+                const totalMensuel = (COUTS_FIXES_LABELS as { key: keyof typeof analysisForm.coutsFixesMensuels; label: string }[])
+                  .reduce((sum, { key }) => key === "loyer"
+                    ? sum - (parseFloat(analysisForm.coutsFixesMensuels[key]) || 0)
+                    : sum + (parseFloat(analysisForm.coutsFixesMensuels[key]) || 0), 0);
+                const totalEstime = totalMensuel * moisEstime;
+                return (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setPossessionModalId(null)}>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-full max-w-md rounded-[28px] shadow-2xl border p-5 space-y-3 max-h-[90vh] overflow-y-auto ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-slate-200 text-slate-900"}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Coût mensuel de possession</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimation — n'écrit jamais dans Tenue de Livres</p>
+                        </div>
+                        <button onClick={() => setPossessionModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-widest text-slate-400">Durée de possession (mois)</label>
+                        <input
+                          type="number"
+                          value={analysisForm.possessionMoisEstime}
+                          onChange={(e) => setAnalysisForm({ ...analysisForm, possessionMoisEstime: e.target.value })}
+                          placeholder={joursDetenus > 0 ? `${(joursDetenus / 30.44).toFixed(1)} (réel)` : ""}
+                          className={inputClsSm}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {COUTS_FIXES_LABELS.map(({ key, label }) => (
+                          <div key={key} className="space-y-1">
+                            <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">{label} ($/mois)</label>
+                            <input
+                              type="number"
+                              value={analysisForm.coutsFixesMensuels[key]}
+                              onChange={(e) => setAnalysisForm({ ...analysisForm, coutsFixesMensuels: { ...analysisForm.coutsFixesMensuels, [key]: e.target.value } })}
+                              className={inputClsSm}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
+                        <div>
+                          <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total estimé ({moisEstime > 0 ? moisEstime.toFixed(1) : "—"} mois)</p>
+                          <p className="text-[7px] font-bold text-slate-400">{fmtCAD(totalMensuel)}/mois</p>
+                        </div>
+                        <p className="text-[16px] font-black text-indigo-500">{fmtCAD(totalEstime)}</p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={async () => { await handleSaveAnalysis(p); setPossessionModalId(null); }}
+                          disabled={savingAnalysis}
+                          className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                        >
+                          {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
+                        </button>
+                        <button onClick={() => setPossessionModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
