@@ -17177,6 +17177,42 @@ const App = () => {
                           </div>
                         </div>
 
+                        {/* Rappel des noms saisis dans "Remplissage Rapide" (Acheteur/Vendeur)
+                            qui n'ont pas encore de signataire correspondant ici — les deux
+                            panneaux sont indépendants (l'un écrit du texte dans le contrat,
+                            l'autre détermine qui reçoit un lien pour signer), ce qui prêtait à
+                            confusion : ajouter "Acheteur 2" dans le contrat ne l'ajoute PAS
+                            automatiquement comme signataire. Trouvé 2026-08-28 (Fabiola). */}
+                        {(() => {
+                          const paDefaults: Record<string, string> = {
+                            ACHETEUR_1_NOM: 'Natalia Ortelli',
+                            ACHETEUR_2_NOM: 'Fabiola Villegas',
+                          };
+                          const paRoles: Array<{ key: string; role: string }> = [
+                            { key: 'ACHETEUR_1_NOM', role: 'Acheteur 1' },
+                            { key: 'ACHETEUR_2_NOM', role: 'Acheteur 2' },
+                            { key: 'VENDEUR_1_NOM', role: 'Vendeur 1' },
+                            { key: 'VENDEUR_2_NOM', role: 'Vendeur 2' },
+                          ];
+                          const existingNames = new Set(
+                            docFormSignersList.map((s: any) => s.name?.trim().toLowerCase()).filter(Boolean)
+                          );
+                          const missing = paRoles
+                            .map(({ key, role }) => ({ role, name: (paQuickFillValues[key] ?? paDefaults[key] ?? '').trim() }))
+                            .filter(({ name }) => name && !existingNames.has(name.toLowerCase()));
+                          if (missing.length === 0) return null;
+                          return (
+                            <div className={`rounded-2xl border px-4 py-3 ${darkMode ? "bg-amber-950/20 border-amber-800/30" : "bg-amber-50 border-amber-200"}`}>
+                              <p className={`text-[8px] font-black uppercase tracking-wider ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
+                                À ajouter comme signataire ci-dessous :
+                              </p>
+                              <p className={`text-[9px] font-bold mt-1 ${darkMode ? "text-amber-100" : "text-amber-800"}`}>
+                                {missing.map(({ role, name }) => `${name} (${role})`).join(" · ")}
+                              </p>
+                            </div>
+                          );
+                        })()}
+
                         {/* Prepopulated roles and customizable recipient */}
                         <div className="space-y-2.5">
                           {docFormSignersList.map((signer, index) => {
