@@ -314,6 +314,14 @@ service cloud.firestore {
       allow update, delete: if isOwnerDoc();
     }
 
+    // Livre de Société — résolutions corporatives (nomination des dirigeants,
+    // déclaration de dividendes, etc.), archivées sur le Drive de l'entreprise.
+    match /resolutions/{resolutionId} {
+      allow read: if isOwnerDoc() || isCollaboratorOnCompany();
+      allow create: if isOwnerWrite();
+      allow update, delete: if isOwnerDoc();
+    }
+
     // Compte en Fidéicommis (gestionnaire) — clients, deposits, withdrawals.
     // Same gap as propertyDocuments above: no rule existed for these three
     // collections, so every read/write was silently rejected by the

@@ -1054,6 +1054,24 @@ export interface PropertyDocumentDoc {
   uploadedAt: string;
 }
 
+// ── ResolutionDoc — Firestore `resolutions` collection (Livre de Société) ────
+// The corporate minute book was 100% cosmetic before — an empty hardcoded
+// array with no upload button and no persistence (it used to ship with 3
+// fabricated example resolutions naming real people, removed 2026-08-11).
+// Built 2026-08-28 (Fabiola). Same "upload to the company's own Drive, save
+// only the resulting link" pattern as PropertyDocumentDoc above — no
+// separate storage of the file inside AutoCompt itself.
+export interface ResolutionDoc {
+  id: string;
+  companyId: string; // prefixed `{ownerId}_company_{shortId}`, same convention as every other shared collection
+  title: string;
+  date: string; // "YYYY-MM-DD", the resolution's own date (not the upload date)
+  summary: string;
+  fileUrl: string; // Google Drive "webViewLink"
+  ownerId: string;
+  createdAt: string;
+}
+
 // ── Fidéicommis — 4 Firestore collections (OACIQ compliance) ─────────────────
 // §1 Note: These collections are SEPARATE from the operating account.
 // All funds received on behalf of clients MUST pass through fidéicommis first.
@@ -3310,6 +3328,37 @@ export const dataService = {
         console.error('deletePropertyDocument: Storage file deletion failed:', e);
       }
     }
+    return true;
+  },
+
+  // ── Livre de Société (resolutions corporatives) ──────────────────────────────
+
+  async fetchResolutions(userId: string, collaboratorCompanyDocIds: string[] = []): Promise<ResolutionDoc[]> {
+    try {
+      const docs = await fetchOwnedAndShared('resolutions', userId, collaboratorCompanyDocIds);
+      return docs.map((d) => d.data() as ResolutionDoc);
+    } catch (e) {
+      console.error('fetchResolutions failed:', e);
+      return [];
+    }
+  },
+
+  async saveResolution(userId: string, docData: Omit<ResolutionDoc, 'id' | 'ownerId' | 'createdAt'> & { id?: string }): Promise<ResolutionDoc> {
+    assertCanWrite();
+    const rawId = docData.id?.trim() || `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const id = rawId.startsWith(`${userId}_resolution_`) ? rawId : `${userId}_resolution_${rawId}`;
+    const data: ResolutionDoc = {
+      ...docData,
+      id,
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'resolutions', id), data);
+    return data;
+  },
+
+  async deleteResolution(docId: string): Promise<boolean> {
+    await deleteDoc(doc(db, 'resolutions', docId));
     return true;
   },
 

@@ -15008,7 +15008,14 @@ const App = () => {
           className={`p-6 flex-1 flex flex-col space-y-6 ${subVistaDocu === "editor" ? "max-w-5xl" : "max-w-lg"} mx-auto w-full transition-all duration-300`}
         >
           {docActiveVue === 'resolutions' ? (
-            <LivreDeSociete darkMode={darkMode} onBack={() => setDocActiveVue('contrats')} />
+            <LivreDeSociete
+              darkMode={darkMode}
+              onBack={() => setDocActiveVue('contrats')}
+              companyId={activeCompanyId}
+              ownerId={currentCompany?.ownerId || auth.currentUser?.uid || ''}
+              companyName={currentCompany?.nombre}
+              collaboratorCompanyDocIds={collaboratorCompanyDocIdsRef.current}
+            />
           ) : (
             <>
               <div className="space-y-1">
