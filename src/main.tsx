@@ -35,6 +35,24 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Vite fires this when a lazily-loaded chunk (React.lazy screens, the
+// DocuLegal PDF editor, etc.) 404s — happens whenever a tab has been open
+// since BEFORE a new deploy and then navigates to a screen whose old chunk
+// hash no longer exists on the server (only the latest deploy's files are
+// served). Without this, the failed import throws with no error boundary
+// to catch it, and React unmounts the whole app — a blank page with no
+// obvious way to recover short of already knowing to hard-refresh. A single
+// automatic reload fetches the current main bundle, which points at the
+// chunk hashes that actually exist. Guarded against looping forever if a
+// deploy is genuinely broken. Found 2026-08-28 (Fabiola: blank page opening
+// DocuLegal's PDF editor right after a fresh deploy).
+window.addEventListener('vite:preloadError', () => {
+  const key = 'autocompt_reloaded_for_chunk_error';
+  if (sessionStorage.getItem(key) === '1') return;
+  sessionStorage.setItem(key, '1');
+  window.location.reload();
+});
+
 // Fallback shown while a lazy-loaded screen's chunk is downloading — App.tsx's
 // heaviest, least-frequently-visited views (SuperAdminPanel, per-profile
 // Rama_* screens, etc.) are code-split via React.lazy() to keep the initial
