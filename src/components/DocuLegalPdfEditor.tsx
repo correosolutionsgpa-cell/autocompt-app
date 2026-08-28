@@ -112,14 +112,17 @@ export default function DocuLegalPdfEditor({
   // Which field type the user has "selected" in the toolbar for click-to-place
   const [clickPlaceType, setClickPlaceType] = useState<SignatureField['type'] | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
-  // Step 2 — signers list. A real contract needs at least 2 parties
-  // (landlord + tenant, etc.) — this used to be a single implicit signer.
-  // Starts with 2 empty rows since that's the realistic minimum; either can
-  // be removed down to 1 if truly only one party needs to sign.
-  const [step, setStep] = useState<1 | 2>(1);
+  // Signers list. A real contract needs at least 2 parties (landlord +
+  // tenant, etc.) — this used to be a single implicit signer. Starts with 2
+  // empty rows since that's the realistic minimum; either can be removed
+  // down to 1 if truly only one party needs to sign. Signer info used to be
+  // gated behind a separate "step" reached only after placing fields —
+  // removed 2026-08-28 (Fabiola: too much scrolling/zooming to reach it) in
+  // favour of a single always-visible layout, matching the Promesse d'Achat
+  // Dynamique's "Signataires & Rôles" panel.
   const [signers, setSigners] = useState<DocSigner[]>([{ name: '', email: '' }, { name: '', email: '' }]);
-  // Which signer newly-placed fields get tagged with — set via the chips in
-  // the Step 1 palette, defaults to the first signer.
+  // Which signer newly-placed fields get tagged with — set via the chips
+  // above the field palette, defaults to the first signer.
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
 
   // Refs — page containers & canvases
@@ -361,7 +364,7 @@ export default function DocuLegalPdfEditor({
     >
       {/* ─── Left sidebar / toolbar ────────────────────────────────────────── */}
       <aside
-        className="w-full md:w-60 shrink-0 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none border-b md:border-b-0"
+        className="w-full md:w-[340px] shrink-0 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none border-b md:border-b-0"
         style={{
           background: dm ? '#18181b' : '#ffffff',
           borderRight: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
@@ -374,7 +377,7 @@ export default function DocuLegalPdfEditor({
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: dm ? '#52525b' : '#94a3b8', marginBottom: 2 }}>
                 DocuLegal — Éditeur de signature
               </p>
-              <p style={{ fontSize: 12, fontWeight: 900, color: dm ? '#f4f4f5' : '#0f172a', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 12, fontWeight: 900, color: dm ? '#f4f4f5' : '#0f172a', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {docTitle || pdfFile.name}
               </p>
             </div>
@@ -384,6 +387,93 @@ export default function DocuLegalPdfEditor({
             >
               <X size={16} />
             </button>
+          </div>
+        </div>
+
+        {/* Signataires — remonté tout en haut (juste sous l'en-tête), toujours
+            visible, plus jamais caché derrière une "Étape 3" qu'il fallait
+            faire défiler après le zoom, les puces de signataire actif, la
+            palette de champs ET la liste des champs déjà placés. Panneau
+            élargi (340px, était 240px) pour respirer, même esprit que le
+            panneau "Signataires & Rôles" de la Promesse d'Achat Dynamique.
+            Demandé 2026-08-28 (Fabiola). */}
+        <div style={{ padding: '14px 16px', borderBottom: dm ? '1px solid #27272a' : '1px solid #f1f5f9' }}>
+          <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#10b981', marginBottom: 8 }}>
+            Signataires
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {signers.map((s, i) => {
+              const sc = SIGNER_COLORS[i % SIGNER_COLORS.length];
+              const fieldCount = fields.filter(f => f.signerIndex === i).length;
+              return (
+                <div key={i} style={{ padding: 10, borderRadius: 14, border: `1.5px solid ${sc.border}40`, background: sc.bg }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: sc.text }}>
+                      Signataire {i + 1} — {fieldCount} champ{fieldCount > 1 ? 's' : ''}
+                    </span>
+                    {signers.length > 1 && (
+                      <button
+                        onClick={() => {
+                          setSigners(p => p.filter((_, si) => si !== i));
+                          setFields(p => p
+                            .filter(f => f.signerIndex !== i)
+                            .map(f => ({ ...f, signerIndex: f.signerIndex > i ? f.signerIndex - 1 : f.signerIndex })));
+                          setActiveSignerIndex(prev => Math.min(prev, signers.length - 2));
+                        }}
+                        style={{ padding: 2, border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}
+                        title="Retirer ce signataire (ses champs seront aussi retirés)"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={s.name}
+                    onChange={e => setSigners(p => p.map((sg, si) => si === i ? { ...sg, name: e.target.value } : sg))}
+                    placeholder="Nom complet"
+                    style={{
+                      width: '100%', padding: '8px 10px', borderRadius: 10, marginBottom: 6,
+                      border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
+                      background: dm ? '#18181b' : '#fff',
+                      color: dm ? '#f4f4f5' : '#0f172a',
+                      fontSize: 11, fontWeight: 600, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                  <input
+                    type="email"
+                    value={s.email}
+                    onChange={e => setSigners(p => p.map((sg, si) => si === i ? { ...sg, email: e.target.value } : sg))}
+                    placeholder="courriel@exemple.com"
+                    style={{
+                      width: '100%', padding: '8px 10px', borderRadius: 10,
+                      border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
+                      background: dm ? '#18181b' : '#fff',
+                      color: dm ? '#f4f4f5' : '#0f172a',
+                      fontSize: 11, fontWeight: 600, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              );
+            })}
+            <button
+              onClick={() => {
+                setSigners(p => [...p, { name: '', email: '' }]);
+                setActiveSignerIndex(signers.length);
+              }}
+              style={{
+                width: '100%', padding: '9px 0', borderRadius: 12,
+                border: dm ? '1px dashed #3f3f46' : '1px dashed #cbd5e1',
+                background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
+                fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em',
+                cursor: 'pointer',
+              }}
+            >
+              + Ajouter un signataire
+            </button>
+            <p style={{ fontSize: 8, color: dm ? '#52525b' : '#94a3b8', margin: 0 }}>
+              Chaque signataire recevra son propre courriel avec un lien de signature, et ne verra que ses propres champs.
+            </p>
           </div>
         </div>
 
@@ -468,7 +558,7 @@ export default function DocuLegalPdfEditor({
         {/* Field palette */}
         <div style={{ padding: '12px 16px', borderBottom: dm ? '1px solid #27272a' : '1px solid #f1f5f9' }}>
           <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6366f1', marginBottom: 2 }}>
-            Étape 1 — Choisir un champ
+            Ajouter un champ
           </p>
           <p style={{ fontSize: 9, color: dm ? '#71717a' : '#64748b', marginBottom: 10, lineHeight: 1.4 }}>
             <strong>Cliquez</strong> sur un type ci-dessous, puis <strong>cliquez sur le PDF</strong> pour le placer. Ou glissez-déposez directement.
@@ -541,7 +631,7 @@ export default function DocuLegalPdfEditor({
           ) : (
             <>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: fields.length > 0 ? '#6366f1' : (dm ? '#3f3f46' : '#cbd5e1'), marginBottom: 8 }}>
-            Étape 2 — {fields.length} champ{fields.length > 1 ? 's' : ''} placé{fields.length > 1 ? 's' : ''}
+            {fields.length} champ{fields.length > 1 ? 's' : ''} placé{fields.length > 1 ? 's' : ''}
           </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {fields.map(f => {
@@ -587,177 +677,58 @@ export default function DocuLegalPdfEditor({
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions — un seul bouton d'envoi, toujours visible, plus de système
+            d'étapes à traverser. */}
         <div style={{ padding: '12px 16px', borderTop: dm ? '1px solid #27272a' : '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-          {step === 1 ? (
-            // ─ Step 1: continuer button
-            <>
-              <div title={fields.length === 0 ? 'Placez d\'abord au moins 1 champ de signature sur le document' : ''}>
+          {(() => {
+            const unassigned = signers.some((_, i) => fields.filter(f => f.signerIndex === i).length === 0);
+            const allValid = fields.length > 0 && signers.every(s => s.name.trim() && s.email.includes('@')) && !unassigned;
+            return (
+              <>
+                {fields.length === 0 && (
+                  <p style={{ fontSize: 9, fontWeight: 700, color: dm ? '#71717a' : '#94a3b8', margin: 0 }}>
+                    Placez au moins un champ de signature sur le document ci-contre.
+                  </p>
+                )}
+                {fields.length > 0 && unassigned && (
+                  <p style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', margin: 0 }}>
+                    ⚠️ Un signataire n'a encore aucun champ placé sur le document.
+                  </p>
+                )}
                 <button
-                  onClick={() => { if (fields.length > 0) setStep(2); }}
-                  disabled={fields.length === 0}
+                  onClick={handleSend}
+                  disabled={isUploading || !allValid}
                   style={{
                     width: '100%', padding: '12px 0', borderRadius: 16, border: 'none',
-                    background: fields.length === 0 ? (dm ? '#27272a' : '#e2e8f0') : '#6366f1',
-                    color: fields.length === 0 ? (dm ? '#52525b' : '#94a3b8') : '#fff',
+                    background: (isUploading || !allValid) ? (dm ? '#27272a' : '#e2e8f0') : '#059669',
+                    color: (isUploading || !allValid) ? (dm ? '#52525b' : '#94a3b8') : '#fff',
                     fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-                    letterSpacing: '0.1em', cursor: fields.length === 0 ? 'not-allowed' : 'pointer',
+                    letterSpacing: '0.1em',
+                    cursor: (isUploading || !allValid) ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    boxShadow: fields.length > 0 ? '0 4px 14px rgba(99,102,241,0.3)' : 'none',
+                    boxShadow: allValid ? '0 4px 14px rgba(5,150,105,0.25)' : 'none',
                     transition: 'all 0.2s',
                   }}
                 >
-                  {fields.length === 0
-                    ? '← Placez un champ d\'abord'
-                    : `Continuer — ${fields.length} champ${fields.length > 1 ? 's' : ''} →`}
+                  {isUploading
+                    ? <><Loader2 size={13} className="animate-spin" />Envoi en cours...</>
+                    : <><Send size={13} />Envoyer pour Signature ({signers.length})</>}
                 </button>
-              </div>
-              <button
-                onClick={onClose}
-                style={{
-                  width: '100%', padding: '10px 0', borderRadius: 16,
-                  border: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
-                  background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
-                  fontSize: 9, fontWeight: 900, textTransform: 'uppercase',
-                  letterSpacing: '0.1em', cursor: 'pointer',
-                }}
-              >
-                Annuler
-              </button>
-            </>
-          ) : (
-            // ─ Step 2: signers list (name + email each) + send
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <button
-                  onClick={() => setStep(1)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: dm ? '#71717a' : '#94a3b8', padding: 0, fontSize: 16 }}
+                  onClick={onClose}
+                  style={{
+                    width: '100%', padding: '10px 0', borderRadius: 16,
+                    border: dm ? '1px solid #27272a' : '1px solid #e2e8f0',
+                    background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
+                    fontSize: 9, fontWeight: 900, textTransform: 'uppercase',
+                    letterSpacing: '0.1em', cursor: 'pointer',
+                  }}
                 >
-                  ←
+                  Annuler
                 </button>
-                <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#10b981', margin: 0 }}>
-                  Étape 3 — Infos des signataires
-                </p>
-              </div>
-
-              {(() => {
-                const fieldCountBySigner = signers.map((_, i) => fields.filter(f => f.signerIndex === i).length);
-                const unassigned = signers.some((_, i) => fieldCountBySigner[i] === 0);
-                return (
-                  <>
-                    {signers.map((s, i) => {
-                      const sc = SIGNER_COLORS[i % SIGNER_COLORS.length];
-                      return (
-                        <div key={i} style={{ padding: 10, borderRadius: 14, border: `1.5px solid ${sc.border}40`, background: sc.bg }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: sc.text }}>
-                              Signataire {i + 1} — {fieldCountBySigner[i]} champ{fieldCountBySigner[i] > 1 ? 's' : ''}
-                            </span>
-                            {signers.length > 1 && (
-                              <button
-                                onClick={() => {
-                                  setSigners(p => p.filter((_, si) => si !== i));
-                                  // Re-index remaining fields so signerIndex stays valid.
-                                  setFields(p => p
-                                    .filter(f => f.signerIndex !== i)
-                                    .map(f => ({ ...f, signerIndex: f.signerIndex > i ? f.signerIndex - 1 : f.signerIndex })));
-                                  setActiveSignerIndex(prev => Math.min(prev, signers.length - 2));
-                                }}
-                                style={{ padding: 2, border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}
-                                title="Retirer ce signataire (ses champs seront aussi retirés)"
-                              >
-                                <X size={11} />
-                              </button>
-                            )}
-                          </div>
-                          <input
-                            type="text"
-                            value={s.name}
-                            onChange={e => setSigners(p => p.map((sg, si) => si === i ? { ...sg, name: e.target.value } : sg))}
-                            placeholder="Nom complet"
-                            style={{
-                              width: '100%', padding: '8px 10px', borderRadius: 10, marginBottom: 6,
-                              border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
-                              background: dm ? '#18181b' : '#fff',
-                              color: dm ? '#f4f4f5' : '#0f172a',
-                              fontSize: 11, fontWeight: 600, outline: 'none', boxSizing: 'border-box',
-                            }}
-                          />
-                          <input
-                            type="email"
-                            value={s.email}
-                            onChange={e => setSigners(p => p.map((sg, si) => si === i ? { ...sg, email: e.target.value } : sg))}
-                            placeholder="courriel@exemple.com"
-                            style={{
-                              width: '100%', padding: '8px 10px', borderRadius: 10,
-                              border: dm ? '1px solid #3f3f46' : '1px solid #e2e8f0',
-                              background: dm ? '#18181b' : '#fff',
-                              color: dm ? '#f4f4f5' : '#0f172a',
-                              fontSize: 11, fontWeight: 600, outline: 'none', boxSizing: 'border-box',
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-
-                    <button
-                      onClick={() => {
-                        setSigners(p => [...p, { name: '', email: '' }]);
-                        setActiveSignerIndex(signers.length);
-                        setStep(1); // go place fields for the new signer
-                      }}
-                      style={{
-                        width: '100%', padding: '9px 0', borderRadius: 12,
-                        border: dm ? '1px dashed #3f3f46' : '1px dashed #cbd5e1',
-                        background: 'transparent', color: dm ? '#71717a' : '#94a3b8',
-                        fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      + Ajouter un signataire
-                    </button>
-
-                    <p style={{ fontSize: 8, color: dm ? '#52525b' : '#94a3b8', margin: 0 }}>
-                      Chaque signataire recevra son propre courriel avec un lien de signature, et ne verra que ses propres champs. L’acceptation de signer par email constitue une preuve légale.
-                    </p>
-
-                    {unassigned && (
-                      <p style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', margin: 0 }}>
-                        ⚠️ Un signataire n'a encore aucun champ placé — revenez à l'étape précédente pour lui en ajouter.
-                      </p>
-                    )}
-
-                    {/* Send button */}
-                    {(() => {
-                      const allValid = signers.every(s => s.name.trim() && s.email.includes('@')) && !unassigned;
-                      return (
-                        <button
-                          onClick={handleSend}
-                          disabled={isUploading || !allValid}
-                          style={{
-                            width: '100%', padding: '12px 0', borderRadius: 16, border: 'none',
-                            background: (isUploading || !allValid) ? (dm ? '#27272a' : '#e2e8f0') : '#059669',
-                            color: (isUploading || !allValid) ? (dm ? '#52525b' : '#94a3b8') : '#fff',
-                            fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-                            letterSpacing: '0.1em',
-                            cursor: (isUploading || !allValid) ? 'not-allowed' : 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            boxShadow: allValid ? '0 4px 14px rgba(5,150,105,0.25)' : 'none',
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          {isUploading
-                            ? <><Loader2 size={13} className="animate-spin" />Envoi en cours...</>
-                            : <><Send size={13} />Envoyer pour Signature ({signers.length})</>}
-                        </button>
-                      );
-                    })()}
-                  </>
-                );
-              })()}
-            </div>
-          )}
+              </>
+            );
+          })()}
         </div>
       </aside>
 
