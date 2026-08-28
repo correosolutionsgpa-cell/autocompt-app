@@ -4763,6 +4763,7 @@ const App = () => {
     COND_DOCS_COPROPRIETE: false,
     COND_ANNULATION: true,
     COND_CERT_LOCALISATION: true,
+    COND_SANS_FINANCEMENT: false,
   });
   const [paQfTab, setPaQfTab] = useState<'type' | 'champs' | 'conditions' | null>('type');
   const [docFormSmsVerify, setDocFormSmsVerify] = useState(true);
@@ -14833,20 +14834,20 @@ const App = () => {
           "3. PRIX ET MODALITÉS DE PAIEMENT",
           "Prix d'achat : {{PRIX_TOTAL}}",
           "• Mise de fonds : {{MISE_DE_FONDS}}",
-          "• Financement hypothécaire : {{FINANCEMENT_MONTANT}}",
+          "{{#IF_FINANCEMENT}}• Financement hypothécaire : {{FINANCEMENT_MONTANT}}{{/IF_FINANCEMENT}}",
           "",
           "L'ACHETEUR versera au VENDEUR le prix d'achat mentionné ci-dessus, payable lors de la signature de l'acte de vente devant le notaire de l'ACHETEUR. Le débours sera effectué lorsque l'acte de vente donnant effet à la présente transaction (« Acte de Vente ») sera publié au registre foncier, sans inscription préjudiciable.",
           "",
           "4. INCLUSIONS",
           "{{INCLUSIONS}}",
           "",
-          "5. CONDITION DE FINANCEMENT",
+          "{{#IF_FINANCEMENT}}5. CONDITION DE FINANCEMENT",
           "La présente offre est conditionnelle à ce que l'ACHETEUR obtienne, auprès d'un créancier hypothécaire reconnu, un financement répondant aux conditions minimales suivantes :",
           "Montant du prêt : {{FINANCEMENT_MONTANT}}",
           "Rang hypothécaire : hypothèque de 1er rang",
           "",
           "L'ACHETEUR devra fournir au VENDEUR, dans les 15 jours avant la date de l'acte notarié, une preuve écrite d'approbation de financement conforme aux conditions ci-dessus.",
-          "",
+          "{{/IF_FINANCEMENT}}",
           "6. PÉRIODE DE VÉRIFICATION DE L'ACHETEUR",
           "L'ACHETEUR se réserve le droit de visiter la propriété après l'acceptation de la présente offre d'achat.",
           "",
@@ -16662,6 +16663,7 @@ const App = () => {
                                     const condMap: Record<string, boolean> = {
                                       ...paConditions,
                                       VENDEUR_2: !!(allValues['VENDEUR_2_NOM']?.trim()),
+                                      FINANCEMENT: !paConditions['COND_SANS_FINANCEMENT'],
                                     };
                                     result = result.replace(/\{\{#IF_(\w+)\}\}([\s\S]*?)\{\{\/IF_\1\}\}/g,
                                       (_match: string, condKey: string, blockContent: string) =>
@@ -16871,6 +16873,7 @@ const App = () => {
                                       { key: 'COND_DOCS_COPROPRIETE', label: 'Documentation de copropriété', badge: 'Condo', desc: 'Déclaration, PV assemblées, fonds de prévoyance' },
                                       { key: 'COND_ANNULATION', label: 'Annulation sans pénalité', badge: '', desc: 'Si vérification non satisfaisante' },
                                       { key: 'COND_CERT_LOCALISATION', label: 'Certificat de localisation', badge: '', desc: 'Ou assurance titre aux frais du VENDEUR' },
+                                      { key: 'COND_SANS_FINANCEMENT', label: 'Achat comptant (sans financement)', badge: '', desc: 'Retire la clause 5 — Condition de financement — du contrat' },
                                     ] as Array<{ key: string; label: string; badge: string; desc: string }>).map(({ key, label, badge, desc }) => (
                                       <label
                                         key={key}
