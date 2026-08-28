@@ -1449,8 +1449,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Coût mensuel de possession</p>
-                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimation — n'écrit jamais dans Tenue de Livres</p>
+                          <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Possession réelle par mois</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Coûts calculés par mois — estimation, n'écrit jamais dans Tenue de Livres</p>
                         </div>
                         <button onClick={() => setPossessionModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
                           <X size={16} />
