@@ -179,6 +179,7 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
     + (p.coutsFixesMensuels?.taxesScolaires || 0) + (p.coutsFixesMensuels?.electricite || 0)
     + (p.coutsFixesMensuels?.assurances || 0) + (p.coutsFixesMensuels?.deneigement || 0)
     + (p.coutsFixesMensuels?.fraisCondo || 0) + (p.coutsFixesMensuels?.entretien || 0)
+    + (p.coutsFixesMensuels?.hypotheque || 0) + (p.coutsFixesMensuels?.preteurPrive || 0)
     - (p.coutsFixesMensuels?.loyer || 0);
   const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
   const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;
@@ -334,7 +335,7 @@ const emptyAnalysisForm = {
   possessionMoisEstime: "",
   coutsFixesMensuels: {
     taxesMunicipales: "", taxesScolaires: "", electricite: "", assurances: "",
-    deneigement: "", fraisCondo: "", entretien: "", loyer: "",
+    deneigement: "", fraisCondo: "", entretien: "", hypotheque: "", preteurPrive: "", loyer: "",
   },
   commissionCourtierPctEstime: "4",
 };
@@ -350,6 +351,8 @@ const COUTS_FIXES_LABELS: { key: keyof typeof emptyAnalysisForm.coutsFixesMensue
   { key: "deneigement", label: "Déneigement" },
   { key: "fraisCondo", label: "Frais de condo" },
   { key: "entretien", label: "Entretien" },
+  { key: "hypotheque", label: "Hypothèque" },
+  { key: "preteurPrive", label: "Prêteur privé" },
   { key: "loyer", label: "Loyer perçu (déduit du coût)" },
 ];
 
@@ -571,6 +574,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         deneigement: p.coutsFixesMensuels?.deneigement != null ? String(p.coutsFixesMensuels.deneigement) : "",
         fraisCondo: p.coutsFixesMensuels?.fraisCondo != null ? String(p.coutsFixesMensuels.fraisCondo) : "",
         entretien: p.coutsFixesMensuels?.entretien != null ? String(p.coutsFixesMensuels.entretien) : "",
+        hypotheque: p.coutsFixesMensuels?.hypotheque != null ? String(p.coutsFixesMensuels.hypotheque) : "",
+        preteurPrive: p.coutsFixesMensuels?.preteurPrive != null ? String(p.coutsFixesMensuels.preteurPrive) : "",
         loyer: p.coutsFixesMensuels?.loyer != null ? String(p.coutsFixesMensuels.loyer) : "",
       },
       commissionCourtierPctEstime: p.commissionCourtierPctEstime != null ? String(p.commissionCourtierPctEstime) : "4",
@@ -981,6 +986,8 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
             + (p.coutsFixesMensuels?.deneigement || 0)
             + (p.coutsFixesMensuels?.fraisCondo || 0)
             + (p.coutsFixesMensuels?.entretien || 0)
+            + (p.coutsFixesMensuels?.hypotheque || 0)
+            + (p.coutsFixesMensuels?.preteurPrive || 0)
             - (p.coutsFixesMensuels?.loyer || 0);
           const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
           const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;

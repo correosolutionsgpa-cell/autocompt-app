@@ -539,6 +539,13 @@ export interface FlipProjectDoc {
     deneigement?: number;
     fraisCondo?: number;
     entretien?: number;
+    /** Versement mensuel réel (capital + intérêt, ou intérêt seul selon le
+     *  prêt) — distinct de banqueTauxHypothecaire/preteurPriveTauxAnnuel
+     *  ci-dessus, qui calculent un intérêt de référence à partir d'un taux.
+     *  Ajoutés 2026-08-29 (Fabiola : sa feuille de calcul liste un montant
+     *  fixe, pas un taux, pour ces deux lignes). */
+    hypotheque?: number;
+    preteurPrive?: number;
     /** Revenu de location pendant la possession, s'il y a lieu — vient EN
      *  DÉDUCTION du coût total (réduit le coût de possession estimé). */
     loyer?: number;
