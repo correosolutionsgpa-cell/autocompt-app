@@ -5307,6 +5307,14 @@ const App = () => {
   // default first signer for every account, so every external user's
   // documents showed her identity instead of their own.
   const [docFormSignersList, setDocFormSignersList] = useState<any[]>([]);
+  // Inline edit for an existing signer's name/role — the default first
+  // signer (the account owner) was auto-added with their email as the
+  // "name" and a generic "Propriétaire / Émetteur" role, with no way to
+  // correct either afterward (e.g. to their real name + "Acheteur 1" on a
+  // Promesse d'Achat). Found 2026-08-28 (Fabiola).
+  const [editingSignerId, setEditingSignerId] = useState<string | null>(null);
+  const [editingSignerName, setEditingSignerName] = useState("");
+  const [editingSignerRole, setEditingSignerRole] = useState("");
 
   useEffect(() => {
     if (docFormSignersList.length > 0 || !currentUserEmail) return;
@@ -17212,6 +17220,56 @@ const App = () => {
                         <div className="space-y-2.5">
                           {docFormSignersList.map((signer, index) => {
                             const styleSpec = getSignerColorClasses(signer.color);
+                            if (editingSignerId === signer.id) {
+                              return (
+                                <div
+                                  key={signer.id}
+                                  className={`p-3 rounded-2xl border space-y-2 ${darkMode ? "bg-zinc-900/40 border-violet-700/50" : "bg-violet-50/50 border-violet-300"}`}
+                                >
+                                  <input
+                                    type="text"
+                                    value={editingSignerName}
+                                    onChange={(e) => setEditingSignerName(e.target.value)}
+                                    placeholder="Nom complet"
+                                    className={`w-full p-2 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-slate-200 text-slate-800"} focus:border-[#7c3aed]`}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={editingSignerRole}
+                                    onChange={(e) => setEditingSignerRole(e.target.value)}
+                                    placeholder="Rôle (ex: Acheteur 1)"
+                                    className={`w-full p-2 rounded-xl outline-none text-[9.5px] font-bold border ${darkMode ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-slate-200 text-slate-800"} focus:border-[#7c3aed]`}
+                                  />
+                                  <div className="flex items-center justify-end space-x-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingSignerId(null)}
+                                      className="text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 px-2 py-1"
+                                    >
+                                      Annuler
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!editingSignerName.trim()) return;
+                                        setDocFormSignersList(
+                                          docFormSignersList.map((s) =>
+                                            s.id === signer.id
+                                              ? { ...s, name: editingSignerName.trim(), role: editingSignerRole.trim() || "Signataire" }
+                                              : s,
+                                          ),
+                                        );
+                                        setEditingSignerId(null);
+                                        playNotificationSound();
+                                      }}
+                                      className="text-[8px] font-black uppercase text-white bg-[#7c3aed] hover:bg-violet-700 px-3 py-1.5 rounded-xl"
+                                    >
+                                      ✓ Enregistrer
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
                             return (
                               <div
                                 key={signer.id}
@@ -17239,6 +17297,18 @@ const App = () => {
                                   >
                                     {signer.role}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSignerId(signer.id);
+                                      setEditingSignerName(signer.name || "");
+                                      setEditingSignerRole(signer.role || "");
+                                    }}
+                                    className="text-[10px] font-black text-slate-400 hover:text-[#7c3aed] p-0.5 bg-transparent border-none cursor-pointer"
+                                    title="Modifier le nom/rôle"
+                                  >
+                                    ✎
+                                  </button>
                                   {index > 1 && (
                                     <button
                                       type="button"
