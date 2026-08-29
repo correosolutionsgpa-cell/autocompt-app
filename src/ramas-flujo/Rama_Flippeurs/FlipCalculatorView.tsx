@@ -624,6 +624,36 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
     setDispositionModalId(p.id);
   };
 
+  // Same pattern, for the detailed renovation budget (categories +
+  // up-to-3-quotes + real cost per line), opened by clicking the
+  // "Rénovation" stat card. Requested 2026-08-29.
+  const [renovationModalId, setRenovationModalId] = useState<string | null>(null);
+  const openRenovationModal = (p: FlipProjectDoc) => {
+    loadAnalysisForm(p);
+    setRenovationModalId(p.id);
+  };
+
+  // Quick +/- next to the estimated total on the card itself — a flip that
+  // sells earlier (or later) than first guessed shouldn't require reopening
+  // the whole popup just to nudge the month count. Writes p directly (not
+  // analysisForm), so it's safe even if the popup was never opened for this
+  // project yet. Requested 2026-08-29 (Fabiola).
+  const [adjustingMoisId, setAdjustingMoisId] = useState<string | null>(null);
+  const adjustPossessionMois = async (p: FlipProjectDoc, delta: number) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const endDate = p.statut === "vendu" && p.dateRevente ? p.dateRevente : new Date().toISOString().slice(0, 10);
+    const current = p.possessionMoisEstime ?? (daysBetween(p.dateAchat, endDate) / 30.44 || 1);
+    const next = Math.max(0.5, Math.round((current + delta) * 2) / 2);
+    setAdjustingMoisId(p.id);
+    try {
+      const saved = await dataService.saveFlipProject(uid, { ...p, possessionMoisEstime: next });
+      setProjects((prev) => prev.map((x) => (x.id === p.id ? saved : x)));
+    } finally {
+      setAdjustingMoisId(null);
+    }
+  };
+
   // ── Budget de rénovation détaillé — un poste préréglé à la fois, jamais
   // écrit dans Tenue de Livres (voir note du panneau) ──
   const addRenovationCategory = (categorie: string) => {
@@ -1075,15 +1105,14 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                   <div className={`p-3 rounded-2xl border ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Acquisition (achat + frais)</p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(p.prixAchat + (p.fraisAchat || 0))}</p>
                   </div>
-                  <button
-                    type="button"
+                  <div
                     onClick={() => openPossessionModal(p)}
-                    className={`p-3 rounded-2xl border text-left transition-all hover:border-indigo-400 hover:shadow-sm active:scale-[0.98] ${glass}`}
+                    className={`p-3 rounded-2xl border text-left cursor-pointer transition-all hover:border-indigo-400 hover:shadow-sm ${glass}`}
                     title="Estimer le coût mensuel de possession"
                   >
                     {/* Tant qu'aucune vraie dépense n'existe dans Tenue de
@@ -1098,7 +1127,23 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                           Possession — estimé <Calculator size={9} />
                         </p>
                         <p className="text-[13px] font-black mt-0.5 text-indigo-500">{fmtCAD(coutsFixesPeriodeEstimes)}</p>
-                        <p className="text-[7px] font-bold text-slate-400 mt-0.5">≈ {moisPotentiel.toFixed(1)} mois — 0 $ réel dans Tenue de Livres pour l'instant</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <p className="text-[7px] font-bold text-slate-400">≈</p>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); adjustPossessionMois(p, -0.5); }}
+                            disabled={adjustingMoisId === p.id}
+                            className="w-4 h-4 flex items-center justify-center rounded-full bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white text-[9px] font-black leading-none disabled:opacity-40"
+                          >−</button>
+                          <p className="text-[7px] font-bold text-slate-400">{moisPotentiel.toFixed(1)} mois</p>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); adjustPossessionMois(p, 0.5); }}
+                            disabled={adjustingMoisId === p.id}
+                            className="w-4 h-4 flex items-center justify-center rounded-full bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white text-[9px] font-black leading-none disabled:opacity-40"
+                          >+</button>
+                          <p className="text-[7px] font-bold text-slate-400">— 0 $ réel pour l'instant</p>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -1108,13 +1153,27 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                         <p className="text-[13px] font-black mt-0.5">{fmtCAD(projectExpTotal)}</p>
                         <p className="text-[7px] font-bold text-slate-400 mt-0.5">{projectExp.length} dépense(s) liée(s) — rénov., taxes, assurances, intérêts...</p>
                         {coutsFixesMensuelTotal !== 0 && (
-                          <p className="text-[7.5px] font-black text-indigo-500 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
-                            ≈ {fmtCAD(coutsFixesPeriodeEstimes)} estimé ({moisPotentiel.toFixed(1)} mois)
-                          </p>
+                          <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
+                            <p className="text-[7.5px] font-black text-indigo-500">≈ {fmtCAD(coutsFixesPeriodeEstimes)} estimé (</p>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); adjustPossessionMois(p, -0.5); }}
+                              disabled={adjustingMoisId === p.id}
+                              className="w-4 h-4 flex items-center justify-center rounded-full bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white text-[9px] font-black leading-none disabled:opacity-40"
+                            >−</button>
+                            <p className="text-[7.5px] font-black text-indigo-500">{moisPotentiel.toFixed(1)} mois</p>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); adjustPossessionMois(p, 0.5); }}
+                              disabled={adjustingMoisId === p.id}
+                              className="w-4 h-4 flex items-center justify-center rounded-full bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white text-[9px] font-black leading-none disabled:opacity-40"
+                            >+</button>
+                            <p className="text-[7.5px] font-black text-indigo-500">)</p>
+                          </div>
                         )}
                       </>
                     )}
-                  </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => openDispositionModal(p)}
@@ -1131,6 +1190,20 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                         ≈ {fmtCAD(coutsDispositionFixes)} estimé (coût de vente)
                       </p>
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openRenovationModal(p)}
+                    className={`p-3 rounded-2xl border text-left transition-all hover:border-indigo-400 hover:shadow-sm active:scale-[0.98] ${glass}`}
+                    title="Détailler le budget de rénovation"
+                  >
+                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      Rénovation <Calculator size={9} className="text-indigo-400" />
+                    </p>
+                    <p className="text-[13px] font-black mt-0.5">{fmtCAD(coutRenovationReel)}</p>
+                    <p className="text-[7px] font-bold text-slate-400 mt-0.5">
+                      {(p.renovationLineItems?.length || 0) > 0 ? `${p.renovationLineItems!.length} poste(s) de budget` : "Aucun budget détaillé pour l'instant"}
+                    </p>
                   </button>
                   <div className={`p-3 rounded-2xl border ${profitable ? "border-emerald-500/30" : "border-rose-500/30"} ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
@@ -1632,6 +1705,103 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                           {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
                         </button>
                         <button onClick={() => setDispositionModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {renovationModalId === p.id && (() => {
+                const totalReel = analysisForm.renovationLineItems.reduce((s, it) => s + (it.coutReel ?? 0), 0);
+                return (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setRenovationModalId(null)}>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-full max-w-md rounded-[28px] shadow-2xl border p-5 space-y-3 max-h-[90vh] overflow-y-auto ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-slate-200 text-slate-900"}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Budget de rénovation</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Jusqu'à 3 soumissions par poste — n'écrit jamais dans Tenue de Livres</p>
+                        </div>
+                        <button onClick={() => setRenovationModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      {analysisForm.renovationLineItems.length > 0 && (
+                        <div className="space-y-2">
+                          {analysisForm.renovationLineItems.map((it) => (
+                            <div key={it.id} className={`p-2.5 rounded-xl border space-y-1.5 ${glass}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[9px] font-black uppercase tracking-wider truncate">{it.categorie}</span>
+                                <button onClick={() => removeRenovationItem(it.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {(["soumission1", "soumission2", "soumission3"] as const).map((key, i) => (
+                                  <div key={key} className="space-y-0.5">
+                                    <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">Soum. {i + 1}</label>
+                                    <input
+                                      type="number"
+                                      value={it[key] ?? ""}
+                                      onChange={(e) => updateRenovationItem(it.id, { [key]: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
+                                      className={inputClsSm}
+                                    />
+                                  </div>
+                                ))}
+                                <div className="space-y-0.5">
+                                  <label className="text-[6.5px] font-bold uppercase tracking-wider text-amber-500">Coût réel</label>
+                                  <input
+                                    type="number"
+                                    value={it.coutReel ?? ""}
+                                    onChange={(e) => updateRenovationItem(it.id, { coutReel: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
+                                    className={`${inputClsSm} border-amber-400`}
+                                  />
+                                </div>
+                              </div>
+                              {it.coutReel == null && (it.soumission1 != null || it.soumission2 != null || it.soumission3 != null) && (
+                                <div className="flex gap-2 flex-wrap">
+                                  {([["soumission1", it.soumission1], ["soumission2", it.soumission2], ["soumission3", it.soumission3]] as const).map(([key, val]) => val != null && (
+                                    <button key={key} type="button" onClick={() => updateRenovationItem(it.id, { coutReel: val })} className="text-[7px] font-bold uppercase tracking-wider text-amber-500 hover:text-amber-600">
+                                      ↳ Utiliser {fmtCAD(val)}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {RENOVATION_CATEGORIES.filter((c) => !analysisForm.renovationLineItems.some((it) => it.categorie === c)).map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => addRenovationCategory(c)}
+                            className={`px-2 py-1 rounded-lg text-[7px] font-bold uppercase tracking-wider border transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-800" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+                          >
+                            + {c}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
+                        <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total (coûts réels)</p>
+                        <p className="text-[16px] font-black text-indigo-500">{fmtCAD(totalReel)}</p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={async () => { await handleSaveAnalysis(p); setRenovationModalId(null); }}
+                          disabled={savingAnalysis}
+                          className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                        >
+                          {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
+                        </button>
+                        <button onClick={() => setRenovationModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
                           Fermer
                         </button>
                       </div>
