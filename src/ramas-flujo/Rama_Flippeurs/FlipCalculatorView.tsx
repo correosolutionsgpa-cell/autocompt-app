@@ -1717,7 +1717,9 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
               })()}
 
               {renovationModalId === p.id && (() => {
-                const hasDetailReel = (p.renovationLineItems || []).some((it) => (it.coutReel ?? 0) > 0);
+                const detailTotal = analysisForm.renovationLineItems.reduce((s, it) => s + (it.coutReel ?? 0), 0);
+                const hasDetailReel = detailTotal > 0;
+                const openDetailedView = () => { setExpandedAnalysisId(p.id); setRenovationModalId(null); };
                 return (
                   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setRenovationModalId(null)}>
                     <div
@@ -1727,41 +1729,61 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Budget de rénovation</p>
-                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimez le montant total des travaux, ajustez au montant réel une fois le projet terminé — n'écrit jamais dans Tenue de Livres</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">
+                            {hasDetailReel
+                              ? "Calculé à partir du détail poste par poste (Analyse avancée)"
+                              : "Estimez le montant total des travaux, ajustez au montant réel une fois le projet terminé — n'écrit jamais dans Tenue de Livres"}
+                          </p>
                         </div>
                         <button onClick={() => setRenovationModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
                           <X size={16} />
                         </button>
                       </div>
 
-                      {hasDetailReel && (
-                        <p className="text-[7.5px] font-bold text-amber-500 leading-relaxed">
-                          Un détail poste par poste existe déjà dans "Analyse avancée" — il garde la priorité sur ce total tant qu'il contient un montant.
-                        </p>
+                      {hasDetailReel ? (
+                        <>
+                          <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
+                            <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total (détail réel)</p>
+                            <p className="text-[16px] font-black text-indigo-500">{fmtCAD(detailTotal)}</p>
+                          </div>
+                          <p className="text-[7.5px] font-bold text-slate-400 leading-relaxed">
+                            Un détail poste par poste (soumissions, catégories) existe déjà pour ce projet — il garde toujours la priorité sur un total saisi ici. Modifiez-le directement dans "Analyse avancée".
+                          </p>
+                        </>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Montant total estimé ($)</label>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={analysisForm.renovationBudgetTotal}
+                            onChange={(e) => setAnalysisForm({ ...analysisForm, renovationBudgetTotal: e.target.value })}
+                            className={`${inputCls} text-[16px] font-black`}
+                            autoFocus
+                          />
+                          <p className="text-[7px] font-bold text-slate-400 pt-1">
+                            Besoin de détailler chaque poste (plomberie, toiture, soumissions...) ? <button type="button" onClick={openDetailedView} className="text-indigo-500 hover:underline font-black">Ouvrir Analyse avancée</button>
+                          </p>
+                        </div>
                       )}
 
-                      <div className="space-y-1">
-                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Montant total estimé ($)</label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={analysisForm.renovationBudgetTotal}
-                          onChange={(e) => setAnalysisForm({ ...analysisForm, renovationBudgetTotal: e.target.value })}
-                          className={`${inputCls} text-[16px] font-black`}
-                          autoFocus
-                        />
-                      </div>
-
-                      <p className="text-[7px] font-bold text-slate-400">Le détail poste par poste (soumissions, catégories) reste disponible dans "Analyse avancée".</p>
-
                       <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={async () => { await handleSaveAnalysis(p); setRenovationModalId(null); }}
-                          disabled={savingAnalysis}
-                          className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
-                        >
-                          {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
-                        </button>
+                        {hasDetailReel ? (
+                          <button
+                            onClick={openDetailedView}
+                            className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                          >
+                            <Calculator size={12} /> Modifier le détail
+                          </button>
+                        ) : (
+                          <button
+                            onClick={async () => { await handleSaveAnalysis(p); setRenovationModalId(null); }}
+                            disabled={savingAnalysis}
+                            className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                          >
+                            {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
+                          </button>
+                        )}
                         <button onClick={() => setRenovationModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
                           Fermer
                         </button>
