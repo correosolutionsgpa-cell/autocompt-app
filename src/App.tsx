@@ -8262,6 +8262,24 @@ const App = () => {
 
       let skipped = 0;
       const newTransactions: any[] = [];
+      // Stable id derived from the row's own content (date+desc+amt), not a
+      // timestamp/random suffix — re-uploading the SAME relevé (e.g. after
+      // retrying past a permission-denied hiccup, or re-exporting an
+      // overlapping date range) now overwrites the same Firestore docs
+      // instead of creating fresh duplicates every time. `occurrenceCounts`
+      // tracks how many times each exact content combo has been seen so far
+      // IN THIS FILE, appended to the id — two genuinely separate same-day/
+      // same-amount/same-description transactions (real, if rare) still get
+      // distinct ids, while re-running the identical file always produces
+      // the identical sequence of ids. Found 2026-08-29: a single relevé,
+      // re-imported repeatedly while chasing the permission-denied bug,
+      // left 266 duplicate rows behind out of 294 total (only 28 were real).
+      const occurrenceCounts: Record<string, number> = {};
+      const hashContent = (s: string) => {
+        let h = 0;
+        for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; }
+        return Math.abs(h).toString(36);
+      };
       for (const line of dataLines) {
         const cells = parseCsvLine(line);
         const date = cells[dateIdx]?.trim();
@@ -8279,7 +8297,10 @@ const App = () => {
         }
         if (amt === null || amt === 0 || isNaN(amt)) { skipped++; continue; }
 
+        const contentKey = `${activeCompanyId}|${date}|${desc}|${amt}`;
+        const occurrence = (occurrenceCounts[contentKey] = (occurrenceCounts[contentKey] || 0) + 1);
         newTransactions.push({
+          id: `${hashContent(contentKey)}_${occurrence}`,
           companyId: activeCompanyId,
           date,
           desc,
