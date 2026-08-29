@@ -2152,10 +2152,9 @@ export const dataService = {
         return { ...data, id: idParts.length > 1 ? idParts[1] : d.id, companyId: unprefixCompanyId(data.companyId) } as PropertyDoc;
       });
     } catch (e) {
-      // See fetchWorkspaces above — a hardcoded demo-data fallback on error
-      // is not safe for a shared production function; return empty instead.
+      // Rethrown — see fetchExpenses above, same reason.
       console.error('fetchProperties failed:', e);
-      return [];
+      throw e;
     }
   },
 
@@ -2747,9 +2746,13 @@ export const dataService = {
         return { ...data, id: d.id, companyId: originalCompanyId } as ExpenseDoc;
       });
     } catch (e) {
-      // See fetchWorkspaces above — no hardcoded demo-data fallback on error.
+      // Rethrown (not swallowed to []) so the caller can tell "genuinely no
+      // expenses yet" apart from "the fetch itself failed" — see
+      // fetchBankTransactions above, same fix, same reason. Found 2026-08-29:
+      // a permission-denied here silently rendered Tenue de Livres as
+      // completely empty, which read as "all my data disappeared."
       console.error('fetchExpenses failed:', e);
-      return [];
+      throw e;
     }
   },
 
@@ -2877,8 +2880,9 @@ export const dataService = {
         return { ...data, id: d.id, companyId: originalCompanyId } as InvoiceDoc;
       });
     } catch (e) {
-      console.error('fetchInvoices failed, returning local default:', e);
-      return [];
+      // Rethrown — see fetchExpenses above, same reason.
+      console.error('fetchInvoices failed:', e);
+      throw e;
     }
   },
 

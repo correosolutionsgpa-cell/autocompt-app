@@ -3423,6 +3423,29 @@ const App = () => {
             <button onClick={() => setMasterAccess(false)} className="shrink-0 px-2 sm:px-3 py-1.5 /20 hover:bg-black/40 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all">X</button>
           </div>
         )}
+        {/* Shown across every screen (not just Tenue de Livres) so a
+            permission-denied read failure never looks like silent, total
+            data loss — visible regardless of which view happens to be
+            active when it hits. Found 2026-08-29 (Fabiola, live on her own
+            main account: dashboard + ledger both looked completely empty). */}
+        {criticalDataLoadError && (
+          <div className={`fixed top-0 left-0 w-full z-[9998] py-2.5 px-4 shadow-xl flex items-center justify-between gap-3 flex-wrap animate-in fade-in slide-in-from-top-4 ${darkMode ? "bg-amber-500/95 text-slate-900" : "bg-amber-400 text-slate-900"}`}>
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span className="text-[10px] sm:text-[11px] font-black">
+                Erreur de chargement — vos données sont en sécurité, mais la page n'a pas pu toutes les récupérer.
+              </span>
+            </div>
+            <button
+              onClick={retryLoadCriticalData}
+              disabled={criticalDataLoading}
+              className="shrink-0 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-slate-900 text-amber-400 hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5"
+            >
+              {criticalDataLoading ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+              Réessayer
+            </button>
+          </div>
+        )}
         {/* MOBILE SIDEBAR SCREEN OVERLAY */}
         <div
           onClick={() => setIsSidebarOpen(false)}
@@ -6402,6 +6425,14 @@ const App = () => {
   // list, which used to look exactly like "your data disappeared".
   const [bankTransactionsLoadError, setBankTransactionsLoadError] = useState(false);
   const [bankTransactionsLoading, setBankTransactionsLoading] = useState(false);
+  // Same idea as bankTransactionsLoadError, for the expenses/invoices/
+  // properties batch below — true only when at least one of those fetches
+  // itself failed (permission-denied after retries), never for a genuinely
+  // empty account. Without this, that failure looked exactly like "Tenue de
+  // Livres is empty, all my data disappeared." Found 2026-08-29 (Fabiola,
+  // live on her own main account).
+  const [criticalDataLoadError, setCriticalDataLoadError] = useState(false);
+  const [criticalDataLoading, setCriticalDataLoading] = useState(false);
   // Refreshed on every login-time fetch (see onAuthStateChanged below) so the
   // manual "Réessayer" retry has the same collaborator scope without needing
   // to re-run fetchWorkspaces itself.
@@ -6430,6 +6461,53 @@ const App = () => {
       setBankTransactionsLoadError(true);
     } finally {
       setBankTransactionsLoading(false);
+    }
+  };
+
+  // Shared by the initial login load and the manual "Réessayer" retry below —
+  // fetches expenses/invoices/dossierFiles/properties/units/loyers/journal
+  // entries together via Promise.allSettled (not Promise.all) so ONE
+  // collection hitting permission-denied never hides the others' real
+  // results. Only expenses/invoices/properties can actually reject (see
+  // dataService.ts — those three were changed to rethrow instead of
+  // swallowing to []); the rest already resolve to a safe empty default on
+  // their own. Found 2026-08-29 (Fabiola, live on her own main account: Tenue
+  // de Livres and the dashboard donut both looked completely empty).
+  const loadCriticalCollections = async (uid: string) => {
+    const collaboratorCompanyDocIds = collaboratorCompanyDocIdsRef.current;
+    const [expRes, invoicesRes, dossierFilesRes, propsRes, unitsRes, loyersRes, entriesRes] = await Promise.allSettled([
+      dataService.fetchExpenses(uid, collaboratorCompanyDocIds),
+      dataService.fetchInvoices(uid, collaboratorCompanyDocIds),
+      dataService.fetchDossierFiles(uid, collaboratorCompanyDocIds),
+      dataService.fetchProperties(uid, collaboratorCompanyDocIds),
+      dataService.fetchAllUnits(uid, collaboratorCompanyDocIds),
+      dataService.fetchLoyers(uid, collaboratorCompanyDocIds),
+      dataService.fetchJournalEntries(uid),
+    ]);
+    let hadCriticalFailure = false;
+    if (expRes.status === "fulfilled") _setDepenses(expRes.value);
+    else { hadCriticalFailure = true; console.error("fetchExpenses failed:", expRes.reason); }
+    if (invoicesRes.status === "fulfilled") _setHistorique(invoicesRes.value);
+    else { hadCriticalFailure = true; console.error("fetchInvoices failed:", invoicesRes.reason); }
+    if (dossierFilesRes.status === "fulfilled") _setDossierFiles(dossierFilesRes.value);
+    if (propsRes.status === "fulfilled") _setPlexManagementProperties(propsRes.value);
+    else { hadCriticalFailure = true; console.error("fetchProperties failed:", propsRes.reason); }
+    if (unitsRes.status === "fulfilled") setAllUnits(unitsRes.value);
+    if (loyersRes.status === "fulfilled") _setPlexLoyers(loyersRes.value);
+    if (entriesRes.status === "fulfilled") setJournalEntries(entriesRes.value);
+    setCriticalDataLoadError(hadCriticalFailure);
+  };
+  const retryLoadCriticalData = async () => {
+    if (!auth.currentUser) return;
+    setCriticalDataLoading(true);
+    try {
+      // Same reasoning as retryFetchBankTransactions above — force a real
+      // token refresh before retrying rather than just repeating the same
+      // (possibly stale) request.
+      await auth.currentUser.getIdToken(true);
+      await loadCriticalCollections(auth.currentUser.uid);
+    } finally {
+      setCriticalDataLoading(false);
     }
   };
 
@@ -9033,41 +9111,17 @@ const App = () => {
           // were awaited one after another — each one that hit the
           // permission-denied race paid its own full 3-retry/4.6s backoff
           // before the NEXT fetch even started, so a login where several
-          // collections raced could take 20-30+ seconds end to end. Every
-          // fetch* below already catches its own errors and resolves with a
-          // safe empty default (see dataService.ts) instead of rejecting, so
-          // Promise.all can't let one failure hide another's real result.
-          // Found 2026-08-26 (Fabiola: "tarda mucho en cargar").
-          const [exp, invoices, dossierFilesFetched, props, units, loyers, entries] = await Promise.all([
-            // Raw setters below, not reconcile-wrapped: this data already came
-            // FROM Firestore, so diffing it against the (empty) prior local
-            // state and re-saving every item would just re-write it a second
-            // time on login.
-            dataService.fetchExpenses(user.uid, collaboratorCompanyDocIds),
-            dataService.fetchInvoices(user.uid, collaboratorCompanyDocIds),
-            dataService.fetchDossierFiles(user.uid, collaboratorCompanyDocIds),
-            // Using the reconcile-wrapped setPlexManagementProperties here (as
-            // before) treated every property as "new" on each fresh page load
-            // (local state starts empty before this runs), which re-saved
-            // every property via dataService.saveProperty AND — far worse —
-            // computed savedUnits as [] for each one (fetchProperties never
-            // nests a .units array, that's the separate `units` collection
-            // fetched alongside it here) and used it to overwrite allUnits for
-            // that building, wiping real tenant/unit data out of local state
-            // on every login or hard refresh. Found 2026-08-23 after Fabiola
-            // reported losing registered tenants for "1843 rue le royer".
-            dataService.fetchProperties(user.uid, collaboratorCompanyDocIds),
-            dataService.fetchAllUnits(user.uid, collaboratorCompanyDocIds),
-            dataService.fetchLoyers(user.uid, collaboratorCompanyDocIds),
-            dataService.fetchJournalEntries(user.uid),
-          ]);
-          _setDepenses(exp);
-          _setHistorique(invoices);
-          _setDossierFiles(dossierFilesFetched);
-          _setPlexManagementProperties(props);
-          setAllUnits(units);
-          _setPlexLoyers(loyers);
-          setJournalEntries(entries);
+          // collections raced could take 20-30+ seconds end to end. Found
+          // 2026-08-26 (Fabiola: "tarda mucho en cargar"). Extracted into
+          // loadCriticalCollections (above) so the manual "Réessayer" retry
+          // can reuse the exact same batch. Raw setters inside it, not
+          // reconcile-wrapped: this data already came FROM Firestore, so
+          // diffing it against the (empty) prior local state and re-saving
+          // every item would just re-write it a second time on login. (The
+          // reconcile-wrapped setPlexManagementProperties was tried here once
+          // and wiped real tenant/unit data on every login — Found
+          // 2026-08-23, "1843 rue le royer".)
+          await loadCriticalCollections(user.uid);
 
           // Fire-and-forget, already concurrent with the batch above (and with
           // each other) since none of these are awaited.
