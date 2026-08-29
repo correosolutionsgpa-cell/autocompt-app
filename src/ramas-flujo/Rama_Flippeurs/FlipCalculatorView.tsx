@@ -184,7 +184,13 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
   const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
   const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;
   const reventeEstimeePourFaisabilite = p.arv || p.prixReventeEstime || 0;
-  const commissionEstimee = reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
+  // Montants fixes (feuille de calcul de Fabiola) prioritaires sur le calcul
+  // par % — celui-ci reste un repli pour un projet qui n'a jamais rempli le
+  // nouveau panneau "Coût de vente".
+  const coutsDispositionFixes = (p.coutsDispositionEstimes?.commission || 0) + (p.coutsDispositionEstimes?.quittance || 0);
+  const commissionEstimee = coutsDispositionFixes > 0
+    ? coutsDispositionFixes
+    : reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
   const profitPotentiel = reventeEstimeePourFaisabilite - (p.prixAchat + (p.fraisAchat || 0)) - coutRenovationReel - coutsFixesPeriodeEstimes - interetTotalReference - commissionEstimee;
 
   sectionHeader("Coût d'Acquisition");
@@ -338,7 +344,13 @@ const emptyAnalysisForm = {
     deneigement: "", fraisCondo: "", entretien: "", hypotheque: "", preteurPrive: "", loyer: "",
   },
   commissionCourtierPctEstime: "4",
+  coutsDispositionEstimes: { commission: "", quittance: "" },
 };
+
+const COUTS_DISPOSITION_LABELS: { key: keyof typeof emptyAnalysisForm.coutsDispositionEstimes; label: string }[] = [
+  { key: "commission", label: "Commission" },
+  { key: "quittance", label: "Quittance" },
+];
 
 // ── Coûts fixes de possession — estimation rapide (montant MENSUEL, calcul
 // automatique de la période complète) pour évaluer la rentabilité AVANT
@@ -579,6 +591,10 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         loyer: p.coutsFixesMensuels?.loyer != null ? String(p.coutsFixesMensuels.loyer) : "",
       },
       commissionCourtierPctEstime: p.commissionCourtierPctEstime != null ? String(p.commissionCourtierPctEstime) : "4",
+      coutsDispositionEstimes: {
+        commission: p.coutsDispositionEstimes?.commission != null ? String(p.coutsDispositionEstimes.commission) : "",
+        quittance: p.coutsDispositionEstimes?.quittance != null ? String(p.coutsDispositionEstimes.quittance) : "",
+      },
     });
   };
 
@@ -598,6 +614,14 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
   const openPossessionModal = (p: FlipProjectDoc) => {
     loadAnalysisForm(p);
     setPossessionModalId(p.id);
+  };
+
+  // Same pattern, for the selling-side costs ("Commission" + "Quittance"),
+  // opened by clicking the "Disposition" stat card. Requested 2026-08-29.
+  const [dispositionModalId, setDispositionModalId] = useState<string | null>(null);
+  const openDispositionModal = (p: FlipProjectDoc) => {
+    loadAnalysisForm(p);
+    setDispositionModalId(p.id);
   };
 
   // ── Budget de rénovation détaillé — un poste préréglé à la fois, jamais
@@ -665,6 +689,11 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         const v = num(analysisForm.coutsFixesMensuels[key]);
         if (v != null) cleanCoutsFixes[key] = v;
       });
+      const cleanCoutsDisposition: any = {};
+      COUTS_DISPOSITION_LABELS.forEach(({ key }) => {
+        const v = num(analysisForm.coutsDispositionEstimes[key]);
+        if (v != null) cleanCoutsDisposition[key] = v;
+      });
       const saved = await dataService.saveFlipProject(uid, {
         ...p,
         arv: num(analysisForm.arv),
@@ -685,6 +714,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         possessionMoisEstime: num(analysisForm.possessionMoisEstime),
         coutsFixesMensuels: Object.keys(cleanCoutsFixes).length > 0 ? cleanCoutsFixes : undefined,
         commissionCourtierPctEstime: num(analysisForm.commissionCourtierPctEstime),
+        coutsDispositionEstimes: Object.keys(cleanCoutsDisposition).length > 0 ? cleanCoutsDisposition : undefined,
       });
       setProjects((prev) => prev.map((x) => (x.id === p.id ? saved : x)));
       playNotificationSound?.();
@@ -992,7 +1022,10 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
           const moisPotentiel = p.possessionMoisEstime || moisDetenus || 1;
           const coutsFixesPeriodeEstimes = coutsFixesMensuelTotal * moisPotentiel;
           const reventeEstimeePourFaisabilite = p.arv || p.prixReventeEstime || 0;
-          const commissionEstimee = reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
+          const coutsDispositionFixes = (p.coutsDispositionEstimes?.commission || 0) + (p.coutsDispositionEstimes?.quittance || 0);
+          const commissionEstimee = coutsDispositionFixes > 0
+            ? coutsDispositionFixes
+            : reventeEstimeePourFaisabilite * (p.commissionCourtierPctEstime || 0) / 100;
           const hasFeasibilityData = reventeEstimeePourFaisabilite > 0;
           const profitPotentiel = reventeEstimeePourFaisabilite
             - (p.prixAchat + (p.fraisAchat || 0))
@@ -1064,13 +1097,23 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       </p>
                     )}
                   </button>
-                  <div className={`p-3 rounded-2xl border ${glass}`}>
-                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">
-                      Disposition — {p.statut === "vendu" ? "revente réelle" : "revente estimée"}
+                  <button
+                    type="button"
+                    onClick={() => openDispositionModal(p)}
+                    className={`p-3 rounded-2xl border text-left transition-all hover:border-indigo-400 hover:shadow-sm active:scale-[0.98] ${glass}`}
+                    title="Estimer le coût de vente"
+                  >
+                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      Disposition — {p.statut === "vendu" ? "revente réelle" : "revente estimée"} <Calculator size={9} className="text-indigo-400" />
                     </p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(prixRevente)}</p>
                     {!!fraisDisposition && <p className="text-[7px] font-bold text-slate-400 mt-0.5">Net de {fmtCAD(fraisDisposition)} de frais (notaire + courtier)</p>}
-                  </div>
+                    {coutsDispositionFixes > 0 && (
+                      <p className="text-[7.5px] font-black text-indigo-500 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
+                        ≈ {fmtCAD(coutsDispositionFixes)} estimé (coût de vente)
+                      </p>
+                    )}
+                  </button>
                   <div className={`p-3 rounded-2xl border ${profitable ? "border-emerald-500/30" : "border-rose-500/30"} ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
                       {profitable ? <TrendingUp size={9} className="text-emerald-500" /> : <TrendingDown size={9} className="text-rose-500" />}
@@ -1511,6 +1554,66 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                           {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
                         </button>
                         <button onClick={() => setPossessionModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Popup flottant — coût de vente (estimation). Mêmes 2 champs
+                  que la feuille de calcul de Fabiola (Commission, Quittance),
+                  réutilise le même analysisForm/save. Remplace le calcul par
+                  % existant dès qu'un montant fixe est saisi (voir
+                  coutsDispositionFixes). */}
+              {dispositionModalId === p.id && (() => {
+                const totalEstime = (parseFloat(analysisForm.coutsDispositionEstimes.commission) || 0)
+                  + (parseFloat(analysisForm.coutsDispositionEstimes.quittance) || 0);
+                return (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setDispositionModalId(null)}>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-full max-w-md rounded-[28px] shadow-2xl border p-5 space-y-3 max-h-[90vh] overflow-y-auto ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-slate-200 text-slate-900"}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Coût de vente</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimation — n'écrit jamais dans Tenue de Livres</p>
+                        </div>
+                        <button onClick={() => setDispositionModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {COUTS_DISPOSITION_LABELS.map(({ key, label }) => (
+                          <div key={key} className="space-y-1">
+                            <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">{label} ($)</label>
+                            <input
+                              type="number"
+                              value={analysisForm.coutsDispositionEstimes[key]}
+                              onChange={(e) => setAnalysisForm({ ...analysisForm, coutsDispositionEstimes: { ...analysisForm.coutsDispositionEstimes, [key]: e.target.value } })}
+                              className={inputClsSm}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
+                        <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total</p>
+                        <p className="text-[16px] font-black text-indigo-500">{fmtCAD(totalEstime)}</p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={async () => { await handleSaveAnalysis(p); setDispositionModalId(null); }}
+                          disabled={savingAnalysis}
+                          className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                        >
+                          {savingAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Enregistrer
+                        </button>
+                        <button onClick={() => setDispositionModalId(null)} className="px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-800">
                           Fermer
                         </button>
                       </div>

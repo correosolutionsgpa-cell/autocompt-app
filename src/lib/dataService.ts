@@ -553,8 +553,21 @@ export interface FlipProjectDoc {
   /** % de commission du courtier appliqué à l'ARV (ou au prix de revente
    *  estimé) pour estimer les frais de vente AVANT d'avoir un vrai acheteur —
    *  distinct de fraisCourtier ci-dessus, qui lui n'est rempli qu'à la vente
-   *  réelle. */
+   *  réelle. Ignoré quand coutsDispositionEstimes ci-dessous a un montant —
+   *  gardé seulement pour ne pas perdre une estimation déjà saisie sur un
+   *  projet existant. */
   commissionCourtierPctEstime?: number;
+  /** Coût de vente ESTIMÉ — montants FIXES en $, même feuille de calcul que
+   *  coutsFixesMensuels ci-dessus mais côté disposition plutôt que
+   *  possession. Purement indicatif : n'écrit jamais dans Tenue de Livres,
+   *  distinct de fraisNotaireVente/fraisCourtier qui eux ne se remplissent
+   *  qu'à la vente réelle. Ajouté 2026-08-29 (Fabiola). */
+  coutsDispositionEstimes?: {
+    commission?: number;
+    /** "Quittance" — frais de mainlevée/radiation de l'hypothèque existante
+     *  à la vente. */
+    quittance?: number;
+  };
   ownerId: string;
   createdAt: string;
 }
