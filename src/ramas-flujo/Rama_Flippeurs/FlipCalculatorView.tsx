@@ -1086,15 +1086,33 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     className={`p-3 rounded-2xl border text-left transition-all hover:border-indigo-400 hover:shadow-sm active:scale-[0.98] ${glass}`}
                     title="Estimer le coût mensuel de possession"
                   >
-                    <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                      Possession (réel) <Calculator size={9} className="text-indigo-400" />
-                    </p>
-                    <p className="text-[13px] font-black mt-0.5">{fmtCAD(projectExpTotal)}</p>
-                    <p className="text-[7px] font-bold text-slate-400 mt-0.5">{projectExp.length} dépense(s) liée(s) — rénov., taxes, assurances, intérêts...</p>
-                    {coutsFixesMensuelTotal !== 0 && (
-                      <p className="text-[7.5px] font-black text-indigo-500 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
-                        ≈ {fmtCAD(coutsFixesPeriodeEstimes)} estimé ({moisPotentiel.toFixed(1)} mois)
-                      </p>
+                    {/* Tant qu'aucune vraie dépense n'existe dans Tenue de
+                        Livres, "0,00 $ réel" n'apprend rien — le chiffre
+                        utile est l'estimation. Le total réel garde toujours
+                        la priorité dès qu'il existe (jamais remplacé par une
+                        estimation une fois de vraies dépenses enregistrées).
+                        Trouvé 2026-08-29 (Fabiola). */}
+                    {projectExpTotal === 0 && coutsFixesMensuelTotal !== 0 ? (
+                      <>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-indigo-500 flex items-center gap-1">
+                          Possession — estimé <Calculator size={9} />
+                        </p>
+                        <p className="text-[13px] font-black mt-0.5 text-indigo-500">{fmtCAD(coutsFixesPeriodeEstimes)}</p>
+                        <p className="text-[7px] font-bold text-slate-400 mt-0.5">≈ {moisPotentiel.toFixed(1)} mois — 0 $ réel dans Tenue de Livres pour l'instant</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                          Possession (réel) <Calculator size={9} className="text-indigo-400" />
+                        </p>
+                        <p className="text-[13px] font-black mt-0.5">{fmtCAD(projectExpTotal)}</p>
+                        <p className="text-[7px] font-bold text-slate-400 mt-0.5">{projectExp.length} dépense(s) liée(s) — rénov., taxes, assurances, intérêts...</p>
+                        {coutsFixesMensuelTotal !== 0 && (
+                          <p className="text-[7.5px] font-black text-indigo-500 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
+                            ≈ {fmtCAD(coutsFixesPeriodeEstimes)} estimé ({moisPotentiel.toFixed(1)} mois)
+                          </p>
+                        )}
+                      </>
                     )}
                   </button>
                   <button
