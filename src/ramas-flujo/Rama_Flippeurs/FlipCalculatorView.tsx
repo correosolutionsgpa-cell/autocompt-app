@@ -1058,6 +1058,11 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                     </p>
                     <p className="text-[13px] font-black mt-0.5">{fmtCAD(projectExpTotal)}</p>
                     <p className="text-[7px] font-bold text-slate-400 mt-0.5">{projectExp.length} dépense(s) liée(s) — rénov., taxes, assurances, intérêts...</p>
+                    {coutsFixesMensuelTotal !== 0 && (
+                      <p className="text-[7.5px] font-black text-indigo-500 mt-1 pt-1 border-t border-dashed border-indigo-500/20">
+                        ≈ {fmtCAD(coutsFixesPeriodeEstimes)} estimé ({moisPotentiel.toFixed(1)} mois)
+                      </p>
+                    )}
                   </button>
                   <div className={`p-3 rounded-2xl border ${glass}`}>
                     <p className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">
