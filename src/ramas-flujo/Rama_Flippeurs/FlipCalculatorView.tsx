@@ -1724,7 +1724,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Budget de rénovation</p>
-                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Jusqu'à 3 soumissions par poste — n'écrit jamais dans Tenue de Livres</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimez les travaux à venir, ajustez au montant réel une fois le projet terminé — n'écrit jamais dans Tenue de Livres</p>
                         </div>
                         <button onClick={() => setRenovationModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
                           <X size={16} />
@@ -1732,44 +1732,18 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       </div>
 
                       {analysisForm.renovationLineItems.length > 0 && (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {analysisForm.renovationLineItems.map((it) => (
-                            <div key={it.id} className={`p-2.5 rounded-xl border space-y-1.5 ${glass}`}>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[9px] font-black uppercase tracking-wider truncate">{it.categorie}</span>
-                                <button onClick={() => removeRenovationItem(it.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
-                              </div>
-                              <div className="grid grid-cols-4 gap-1.5">
-                                {(["soumission1", "soumission2", "soumission3"] as const).map((key, i) => (
-                                  <div key={key} className="space-y-0.5">
-                                    <label className="text-[6.5px] font-bold uppercase tracking-wider text-slate-400">Soum. {i + 1}</label>
-                                    <input
-                                      type="number"
-                                      value={it[key] ?? ""}
-                                      onChange={(e) => updateRenovationItem(it.id, { [key]: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
-                                      className={inputClsSm}
-                                    />
-                                  </div>
-                                ))}
-                                <div className="space-y-0.5">
-                                  <label className="text-[6.5px] font-bold uppercase tracking-wider text-amber-500">Coût réel</label>
-                                  <input
-                                    type="number"
-                                    value={it.coutReel ?? ""}
-                                    onChange={(e) => updateRenovationItem(it.id, { coutReel: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
-                                    className={`${inputClsSm} border-amber-400`}
-                                  />
-                                </div>
-                              </div>
-                              {it.coutReel == null && (it.soumission1 != null || it.soumission2 != null || it.soumission3 != null) && (
-                                <div className="flex gap-2 flex-wrap">
-                                  {([["soumission1", it.soumission1], ["soumission2", it.soumission2], ["soumission3", it.soumission3]] as const).map(([key, val]) => val != null && (
-                                    <button key={key} type="button" onClick={() => updateRenovationItem(it.id, { coutReel: val })} className="text-[7px] font-bold uppercase tracking-wider text-amber-500 hover:text-amber-600">
-                                      ↳ Utiliser {fmtCAD(val)}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
+                            <div key={it.id} className={`flex items-center gap-2 p-2 rounded-xl border ${glass}`}>
+                              <span className="flex-1 text-[9px] font-bold truncate">{it.categorie}</span>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={it.coutReel ?? ""}
+                                onChange={(e) => updateRenovationItem(it.id, { coutReel: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
+                                className={`${inputClsSm} w-24 text-right`}
+                              />
+                              <button onClick={() => removeRenovationItem(it.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
                             </div>
                           ))}
                         </div>
@@ -1789,7 +1763,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       </div>
 
                       <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
-                        <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total (coûts réels)</p>
+                        <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total</p>
                         <p className="text-[16px] font-black text-indigo-500">{fmtCAD(totalReel)}</p>
                       </div>
 
