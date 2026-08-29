@@ -161,7 +161,7 @@ function generateFlipPDF(p: FlipProjectDoc, projectExpenses: ExpenseDoc[], compa
     : p.etatCondition === "gout_du_jour" ? (p.coutPi2GoutDuJour ?? 60)
     : (p.coutPi2Bon ?? 30);
   const quickRenoEstimate = (p.nombreEtages || 0) * (p.pi2ParEtage || 0) * coutPi2ParEtat;
-  const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || quickRenoEstimate;
+  const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || p.renovationBudgetTotal || quickRenoEstimate;
   const moisDetenus = joursDetenus / 30.44;
   const miseDeFondsTotal = p.prixAchat * (1 - (p.banqueFinancementPct || 0) / 100);
   const montantFinanceBanque = p.prixAchat * (p.banqueFinancementPct || 0) / 100;
@@ -331,6 +331,7 @@ const emptyAnalysisForm = {
   coutPi2GoutDuJour: "60",
   coutPi2Mauvais: "120",
   renovationLineItems: [] as FlipRenovationItem[],
+  renovationBudgetTotal: "",
   banqueFinancementPct: "",
   banqueTauxHypothecaire: "",
   banqueAmortissementAns: "25",
@@ -570,6 +571,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
       coutPi2GoutDuJour: p.coutPi2GoutDuJour != null ? String(p.coutPi2GoutDuJour) : "60",
       coutPi2Mauvais: p.coutPi2Mauvais != null ? String(p.coutPi2Mauvais) : "120",
       renovationLineItems: p.renovationLineItems || [],
+      renovationBudgetTotal: p.renovationBudgetTotal != null ? String(p.renovationBudgetTotal) : "",
       banqueFinancementPct: p.banqueFinancementPct != null ? String(p.banqueFinancementPct) : "",
       banqueTauxHypothecaire: p.banqueTauxHypothecaire != null ? String(p.banqueTauxHypothecaire) : "",
       banqueAmortissementAns: p.banqueAmortissementAns != null ? String(p.banqueAmortissementAns) : "25",
@@ -734,6 +736,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
         coutPi2GoutDuJour: num(analysisForm.coutPi2GoutDuJour),
         coutPi2Mauvais: num(analysisForm.coutPi2Mauvais),
         renovationLineItems: cleanLineItems,
+        renovationBudgetTotal: num(analysisForm.renovationBudgetTotal),
         banqueFinancementPct: num(analysisForm.banqueFinancementPct),
         banqueTauxHypothecaire: num(analysisForm.banqueTauxHypothecaire),
         banqueAmortissementAns: num(analysisForm.banqueAmortissementAns),
@@ -1020,7 +1023,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
           // la mise de fonds et pour les rénovations (un flip combine souvent
           // les deux). Intérêt approximé sur la période de possession réelle,
           // sans amortissement (raisonnable pour quelques mois de détention).
-          const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || quickRenoEstimate;
+          const coutRenovationReel = (p.renovationLineItems || []).reduce((s, it) => s + (it.coutReel ?? 0), 0) || p.renovationBudgetTotal || quickRenoEstimate;
           const moisDetenus = joursDetenus / 30.44;
           const miseDeFondsTotal = p.prixAchat * (1 - (p.banqueFinancementPct || 0) / 100);
           const montantFinanceBanque = p.prixAchat * (p.banqueFinancementPct || 0) / 100;
@@ -1714,7 +1717,7 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
               })()}
 
               {renovationModalId === p.id && (() => {
-                const totalReel = analysisForm.renovationLineItems.reduce((s, it) => s + (it.coutReel ?? 0), 0);
+                const hasDetailReel = (p.renovationLineItems || []).some((it) => (it.coutReel ?? 0) > 0);
                 return (
                   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setRenovationModalId(null)}>
                     <div
@@ -1724,48 +1727,32 @@ const FlipCalculatorView: React.FC<FlipCalculatorViewProps> = ({
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-[10px] font-black uppercase italic tracking-tighter text-indigo-500">Budget de rénovation</p>
-                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimez les travaux à venir, ajustez au montant réel une fois le projet terminé — n'écrit jamais dans Tenue de Livres</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-0.5">Estimez le montant total des travaux, ajustez au montant réel une fois le projet terminé — n'écrit jamais dans Tenue de Livres</p>
                         </div>
                         <button onClick={() => setRenovationModalId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white">
                           <X size={16} />
                         </button>
                       </div>
 
-                      {analysisForm.renovationLineItems.length > 0 && (
-                        <div className="space-y-1.5">
-                          {analysisForm.renovationLineItems.map((it) => (
-                            <div key={it.id} className={`flex items-center gap-2 p-2 rounded-xl border ${glass}`}>
-                              <span className="flex-1 text-[9px] font-bold truncate">{it.categorie}</span>
-                              <input
-                                type="number"
-                                placeholder="0"
-                                value={it.coutReel ?? ""}
-                                onChange={(e) => updateRenovationItem(it.id, { coutReel: e.target.value === "" ? undefined : parseFloat(e.target.value) || 0 })}
-                                className={`${inputClsSm} w-24 text-right`}
-                              />
-                              <button onClick={() => removeRenovationItem(it.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><X size={12} /></button>
-                            </div>
-                          ))}
-                        </div>
+                      {hasDetailReel && (
+                        <p className="text-[7.5px] font-bold text-amber-500 leading-relaxed">
+                          Un détail poste par poste existe déjà dans "Analyse avancée" — il garde la priorité sur ce total tant qu'il contient un montant.
+                        </p>
                       )}
 
-                      <div className="flex flex-wrap gap-1.5">
-                        {RENOVATION_CATEGORIES.filter((c) => !analysisForm.renovationLineItems.some((it) => it.categorie === c)).map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => addRenovationCategory(c)}
-                            className={`px-2 py-1 rounded-lg text-[7px] font-bold uppercase tracking-wider border transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:bg-zinc-800" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}
-                          >
-                            + {c}
-                          </button>
-                        ))}
+                      <div className="space-y-1">
+                        <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">Montant total estimé ($)</label>
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={analysisForm.renovationBudgetTotal}
+                          onChange={(e) => setAnalysisForm({ ...analysisForm, renovationBudgetTotal: e.target.value })}
+                          className={`${inputCls} text-[16px] font-black`}
+                          autoFocus
+                        />
                       </div>
 
-                      <div className={`p-3 rounded-2xl border ${darkMode ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-200"} flex items-center justify-between`}>
-                        <p className="text-[7px] font-black uppercase tracking-widest text-indigo-500">Total</p>
-                        <p className="text-[16px] font-black text-indigo-500">{fmtCAD(totalReel)}</p>
-                      </div>
+                      <p className="text-[7px] font-bold text-slate-400">Le détail poste par poste (soumissions, catégories) reste disponible dans "Analyse avancée".</p>
 
                       <div className="flex gap-2 pt-1">
                         <button

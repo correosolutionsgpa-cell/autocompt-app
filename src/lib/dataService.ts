@@ -509,6 +509,13 @@ export interface FlipProjectDoc {
    *  n'écrit jamais dans Tenue de Livres (seul "+ Dépense de possession"
    *  crée de vraies dépenses) — même principe que "CCA maximale" au DpaTab. */
   renovationLineItems?: FlipRenovationItem[];
+  /** Budget de rénovation — montant total ESTIMÉ, saisi en un clic depuis la
+   *  carte "Rénovation" (pas de poste par poste ici, ça reste dans
+   *  renovationLineItems / Analyse avancée). Ignoré dès que renovationLineItems
+   *  contient un coût réel — le détail réel garde toujours la priorité sur
+   *  cette estimation rapide. Ajouté 2026-08-29 (Fabiola : voulait éditer un
+   *  seul total simple sans passer par les postes détaillés). */
+  renovationBudgetTotal?: number;
   /** Structure de financement — banque + prêteur privé, taux distincts pour
    *  la mise de fonds et pour les rénovations (un flip combine souvent les
    *  deux sources). Sert à calculer un intérêt de référence pour la période
