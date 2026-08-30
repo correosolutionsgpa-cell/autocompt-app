@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import jsPDF from "jspdf";
+// Value import removed 2026-08-30 — jsPDF (~300 kB) was shipping in the main
+// bundle even though it's only used by generateInvoicePdfDoc below, which
+// now imports it dynamically at call time instead. Type-only import stays
+// (erased at compile time, adds nothing to the bundle) so the existing
+// `Promise<jsPDF>` return-type annotations still typecheck.
+import type jsPDF from "jspdf";
 import {
   ArrowLeft,
   Save,
@@ -173,7 +178,9 @@ const PortefeuilleClientsComptableView = React.lazy(() => import("./ramas-flujo/
 const TenueLivresImmeubleView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/TenueLivresImmeubleView"));
 const SettingsView = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/SettingsView"));
 const ContratsDLShell = React.lazy(() => import("./ramas-flujo/Rama_Gestionnaires/ContratsDLShell"));
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
+// recharts (only used by the one dashboard donut chart) moved into its own
+// lazy-loaded component 2026-08-30 — same reasoning as the views above.
+const DashboardDonutChart = React.lazy(() => import("./components/DashboardDonutChart"));
 import { dataService, setTrialExpired, type UnitDoc, type DocTemplateDoc, type LoanIssuedDoc, type StatementLinkDoc, type CompanyInviteDoc, type FiscalDeadlineDoc } from "./lib/dataService";
 import { tr } from "./lib/i18n";
 import { isSuperAdminEmail } from "./lib/superAdmin";
@@ -5597,7 +5604,8 @@ const App = () => {
     const [hr, hg, hb] = isBandeau ? [255, 255, 255] : [15, 23, 42]; // header text: white on bandeau, slate-900 on epure
     const [mr, mg, mb] = isBandeau ? [255, 255, 255] : [100, 116, 139]; // muted text: white/80 on bandeau, slate-500 on epure
 
-    const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
+    const { default: JsPDFCtor } = await import("jspdf");
+    const pdf = new JsPDFCtor({ unit: "mm", format: "letter", orientation: "portrait" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const marginX = 18;
     const rightX = pageWidth - marginX;
@@ -13177,58 +13185,7 @@ const App = () => {
                       width: "100%",
                     }}
                   >
-                    <ResponsiveContainer width="100%" height={208}>
-                      <PieChart width={250} height={208}>
-                        <defs>
-                          {donutChartData.map((entry, index) => (
-                            <filter key={`glow-${index}`} id={`glow-${index}`} x="-30%" y="-30%" width="160%" height="160%">
-                              <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                              <feMerge>
-                                <feMergeNode in="coloredBlur" />
-                                <feMergeNode in="SourceGraphic" />
-                              </feMerge>
-                            </filter>
-                          ))}
-                        </defs>
-                        <Pie
-                          data={donutChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius="65%"
-                          outerRadius="85%"
-                          paddingAngle={3}
-                          dataKey="value"
-                          strokeWidth={0}
-                        >
-                          {donutChartData.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={entry.color}
-                              stroke={darkMode ? entry.color : "none"}
-                              strokeWidth={darkMode ? 0.5 : 0}
-                              style={darkMode ? { filter: `drop-shadow(0 0 6px ${entry.color}88)` } : {}}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: any) => [
-                            `${parseFloat(value).toFixed(2)} $`,
-                            "Total",
-                          ]}
-                          contentStyle={{
-                            background: darkMode ? "#18181b" : "#ffffff",
-                            border: darkMode
-                              ? "1px solid #27272a"
-                              : "1px solid #e2e8f0",
-                            borderRadius: "16px",
-                            fontSize: "9px",
-                            fontFamily: "sans-serif",
-                            fontWeight: "bold",
-                            color: darkMode ? "#f4f4f5" : "#0f172a",
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <DashboardDonutChart donutChartData={donutChartData} darkMode={darkMode} />
 
                     {/* Bulle centrale du Donut */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-[-5px]">
