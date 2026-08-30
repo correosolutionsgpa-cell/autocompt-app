@@ -3428,7 +3428,7 @@ const App = () => {
             data loss — visible regardless of which view happens to be
             active when it hits. Found 2026-08-29 (Fabiola, live on her own
             main account: dashboard + ledger both looked completely empty). */}
-        {criticalDataLoadError && (
+        {criticalDataLoadError && !criticalErrorBannerDismissed && (
           <div className={`fixed top-0 left-0 w-full z-[9998] py-2.5 px-4 shadow-xl flex items-center justify-between gap-3 flex-wrap animate-in fade-in slide-in-from-top-4 ${darkMode ? "bg-amber-500/95 text-slate-900" : "bg-amber-400 text-slate-900"}`}>
             <div className="flex items-center gap-2">
               <AlertTriangle size={14} className="shrink-0" />
@@ -3436,14 +3436,23 @@ const App = () => {
                 Erreur de chargement — vos données sont en sécurité, mais la page n'a pas pu toutes les récupérer.
               </span>
             </div>
-            <button
-              onClick={retryLoadCriticalData}
-              disabled={criticalDataLoading}
-              className="shrink-0 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-slate-900 text-amber-400 hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5"
-            >
-              {criticalDataLoading ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
-              Réessayer
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={retryLoadCriticalData}
+                disabled={criticalDataLoading}
+                className="shrink-0 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-slate-900 text-amber-400 hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {criticalDataLoading ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                Réessayer
+              </button>
+              <button
+                onClick={() => setCriticalErrorBannerDismissed(true)}
+                className="p-1.5 rounded-md text-slate-900/70 hover:text-slate-900 hover:bg-black/10"
+                title="Fermer"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
         )}
         {/* MOBILE SIDEBAR SCREEN OVERLAY */}
@@ -6433,6 +6442,13 @@ const App = () => {
   // live on her own main account).
   const [criticalDataLoadError, setCriticalDataLoadError] = useState(false);
   const [criticalDataLoading, setCriticalDataLoading] = useState(false);
+  // Dismissible — the banner is `fixed top-0`, same as every screen's own
+  // sticky mobile header, so on a narrow viewport it sat on top of (and
+  // blocked) the hamburger button needed to reach the sidebar/profile
+  // switcher/SuperAdmin. Found 2026-08-30 (Fabiola, on her phone). Reset to
+  // false on every NEW failure (see loadCriticalCollections) so dismissing
+  // it once doesn't silently hide a later, different failure.
+  const [criticalErrorBannerDismissed, setCriticalErrorBannerDismissed] = useState(false);
   // Refreshed on every login-time fetch (see onAuthStateChanged below) so the
   // manual "Réessayer" retry has the same collaborator scope without needing
   // to re-run fetchWorkspaces itself.
@@ -6496,6 +6512,7 @@ const App = () => {
     if (loyersRes.status === "fulfilled") _setPlexLoyers(loyersRes.value);
     if (entriesRes.status === "fulfilled") setJournalEntries(entriesRes.value);
     setCriticalDataLoadError(hadCriticalFailure);
+    if (hadCriticalFailure) setCriticalErrorBannerDismissed(false);
   };
   const retryLoadCriticalData = async () => {
     if (!auth.currentUser) return;
