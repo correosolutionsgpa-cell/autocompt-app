@@ -15,6 +15,7 @@
 
 import React, { useState } from "react";
 import StyledSelect from "../../components/ui/StyledSelect";
+import ExpandableCard from "../../components/ui/ExpandableCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { dataService } from "../../lib/dataService";
 import { auth } from "../../lib/firebase";
@@ -165,6 +166,11 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
   // isn't a real form control, so the selection now lives in React state.
   const [autoLierSelection, setAutoLierSelection] = useState<Record<number, string>>({});
   const [missingExpenseBuilding, setMissingExpenseBuilding] = useState<Record<number, string>>({});
+  // Which transaction card is currently expanded to fullscreen (container
+  // transform effect, see components/ui/ExpandableCard) — at most one at a
+  // time, index-keyed same as the two Records above. Requested 2026-08-31
+  // (Fabiola: cards here felt like a long "sausage" on mobile).
+  const [expandedTxnIndex, setExpandedTxnIndex] = useState<number | null>(null);
 
   // First-time workflow guide — dismissed permanently once seen, same
   // localStorage-gated pattern as the Sofi settings tour. Requested by
@@ -573,64 +579,74 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                       erreur_rejet: "bg-red-50/30 border-red-300 shadow-2xl shadow-red-200/40 ring-1 ring-red-300",
                     };
 
-                  return (
-                    <div
-                      key={i}
-                      className={`p-6 rounded-[36px] border ${cardStyles[recoState]} flex flex-col space-y-4 transition-all hover:scale-[1.01]`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-1 text-left">
-                          <p
-                            className={`text-[11px] font-black italic tracking-tight leading-tight uppercase ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                          >
-                            {txn.desc}
-                          </p>
-                          <p
-                            className={`text-[8px] font-bold uppercase tracking-[0.2em] ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
-                          >
-                            {txn.date}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p
-                            className={`text-sm font-black italic leading-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
-                          >
-                            {txn.amt.toFixed(2)}$
-                          </p>
-                          <div className="mt-2 flex justify-end">
-                            {recoState === "conciliated" ? (
-                              <div className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-emerald-200 shadow-sm">
-                                <CheckCircle2 size={10} /> <span>{depValidation ? t("Payé") : t("Concilié")}</span>
-                              </div>
-                            ) : recoState === "potencial_match" ? (
-                              <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-indigo-200 shadow-sm">
-                                <AlertTriangle size={10} /> <span>{t("À Confirmer")}</span>
-                              </div>
-                            ) : recoState === "erreur_rejet" ? (
-                              <div className="bg-red-100 text-red-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-red-200 shadow-sm">
-                                <X size={10} /> <span>{t("Erreur/Rejet")}</span>
-                              </div>
-                            ) : recoState === "need_receipt" ? (
-                              <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-amber-200 shadow-sm">
-                                <FileSearch size={10} />{" "}
-                                <span>{t("Reçu manquant")}</span>
-                              </div>
-                            ) : (
-                              <motion.div
-                                animate={{
-                                  scale: [1, 1.05, 1],
-                                  opacity: [0.8, 1, 0.8],
-                                }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                                className="bg-rose-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 shadow-lg shadow-rose-900/10 border border-rose-500"
-                              >
-                                <AlertTriangle size={10} />{" "}
-                                <span>{t("Manquant")}</span>
-                              </motion.div>
-                            )}
-                          </div>
+                  const txnCardId = `banktxn-${i}`;
+                  const txnCompact = (
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1 text-left">
+                        <p
+                          className={`text-[11px] font-black italic tracking-tight leading-tight uppercase ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                        >
+                          {txn.desc}
+                        </p>
+                        <p
+                          className={`text-[8px] font-bold uppercase tracking-[0.2em] ${darkMode ? "text-zinc-600" : "text-slate-400"}`}
+                        >
+                          {txn.date}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`text-sm font-black italic leading-none ${darkMode ? "text-zinc-100" : "text-slate-900"}`}
+                        >
+                          {txn.amt.toFixed(2)}$
+                        </p>
+                        <div className="mt-2 flex justify-end">
+                          {recoState === "conciliated" ? (
+                            <div className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-emerald-200 shadow-sm">
+                              <CheckCircle2 size={10} /> <span>{depValidation ? t("Payé") : t("Concilié")}</span>
+                            </div>
+                          ) : recoState === "potencial_match" ? (
+                            <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-indigo-200 shadow-sm">
+                              <AlertTriangle size={10} /> <span>{t("À Confirmer")}</span>
+                            </div>
+                          ) : recoState === "erreur_rejet" ? (
+                            <div className="bg-red-100 text-red-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-red-200 shadow-sm">
+                              <X size={10} /> <span>{t("Erreur/Rejet")}</span>
+                            </div>
+                          ) : recoState === "need_receipt" ? (
+                            <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 border border-amber-200 shadow-sm">
+                              <FileSearch size={10} />{" "}
+                              <span>{t("Reçu manquant")}</span>
+                            </div>
+                          ) : (
+                            <motion.div
+                              animate={{
+                                scale: [1, 1.05, 1],
+                                opacity: [0.8, 1, 0.8],
+                              }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="bg-rose-600 text-white px-3 py-1 rounded-xl text-[8px] font-black uppercase italic flex items-center space-x-1.5 shadow-lg shadow-rose-900/10 border border-rose-500"
+                            >
+                              <AlertTriangle size={10} />{" "}
+                              <span>{t("Manquant")}</span>
+                            </motion.div>
+                          )}
                         </div>
                       </div>
+                    </div>
+                  );
+
+                  return (
+                    <ExpandableCard
+                      key={i}
+                      cardId={txnCardId}
+                      isExpanded={expandedTxnIndex === i}
+                      onExpand={() => setExpandedTxnIndex(i)}
+                      onCollapse={() => setExpandedTxnIndex(null)}
+                      darkMode={darkMode}
+                      cardClassName={cardStyles[recoState]}
+                      compact={txnCompact}
+                    >
 
                       {recoState === "conciliated" ? (
                         <div
@@ -1004,7 +1020,7 @@ const BanqueSyncView: React.FC<BanqueSyncViewProps> = ({
                           </div>
                         );
                       })()}
-                    </div>
+                    </ExpandableCard>
                   );
                 })}
             </div>
