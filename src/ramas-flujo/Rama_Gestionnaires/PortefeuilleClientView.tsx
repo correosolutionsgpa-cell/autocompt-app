@@ -233,6 +233,7 @@ const SharedLedgerReviewPanel: React.FC<SharedLedgerReviewPanelProps> = ({ darkM
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reviewingItem, setReviewingItem] = useState<SharedLedgerPendingItemDoc | null>(null);
   const [reviewForm, setReviewForm] = useState({ category: "", amount: "" });
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,7 +339,17 @@ const SharedLedgerReviewPanel: React.FC<SharedLedgerReviewPanelProps> = ({ darkM
           </p>
           {pending.map((item) => (
             <div key={item.id} className={`p-3 rounded-2xl border flex items-center gap-3 ${darkMode ? "bg-amber-900/10 border-amber-500/20" : "bg-amber-50/50 border-amber-200"}`}>
-              <Receipt size={14} className="text-amber-500 shrink-0" />
+              {item.receiptUrl ? (
+                <img
+                  src={item.receiptUrl}
+                  alt="Reçu joint"
+                  onClick={() => setPreviewImage(item.receiptUrl!)}
+                  title="Voir la pièce jointe"
+                  className="w-9 h-9 rounded-lg object-cover shrink-0 border border-amber-500/30 cursor-zoom-in"
+                />
+              ) : (
+                <Receipt size={14} className="text-amber-500 shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold truncate">{item.description}</p>
                 <p className={`text-[9px] ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>{item.date} · {fmtCAD(item.amount)}</p>
@@ -382,6 +393,15 @@ const SharedLedgerReviewPanel: React.FC<SharedLedgerReviewPanelProps> = ({ darkM
           <div onClick={(ev) => ev.stopPropagation()} className={`w-full max-w-sm p-6 rounded-[28px] border shadow-2xl ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200"}`}>
             <h4 className="text-sm font-black uppercase tracking-widest mb-3">Confirmer avant d'enregistrer</h4>
             <div className="space-y-3">
+              {reviewingItem.receiptUrl && (
+                <img
+                  src={reviewingItem.receiptUrl}
+                  alt="Reçu joint par le propriétaire"
+                  onClick={() => setPreviewImage(reviewingItem.receiptUrl!)}
+                  className="w-full max-h-48 object-contain rounded-xl border border-black/10 cursor-zoom-in bg-white"
+                  title="Agrandir"
+                />
+              )}
               <input
                 type="text"
                 value={reviewForm.category}
@@ -405,6 +425,19 @@ const SharedLedgerReviewPanel: React.FC<SharedLedgerReviewPanelProps> = ({ darkM
               {busyItemId === reviewingItem.id ? "Enregistrement..." : "Approuver et enregistrer"}
             </button>
           </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-black/80" onClick={() => setPreviewImage(null)}>
+          <img src={previewImage} alt="Pièce jointe agrandie" className="max-w-full max-h-full rounded-xl shadow-2xl" onClick={(ev) => ev.stopPropagation()} />
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
+            title="Fermer"
+          >
+            <X size={18} />
+          </button>
         </div>
       )}
     </div>

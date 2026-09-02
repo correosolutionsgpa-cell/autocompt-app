@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import StyledSelect from "./ui/StyledSelect";
-import { ArrowLeft, FileDown, Loader2, Mail, CheckCircle2, Menu, Inbox, Send, Clock, XCircle, Plus } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2, Mail, CheckCircle2, Menu, Inbox, Send, Clock, XCircle, Plus, Paperclip, X } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { dataService } from "../lib/dataService";
 import type { StatementLinkDoc, SealedStatementDoc, SharedLedgerEntryDoc, SharedLedgerPendingItemDoc } from "../lib/dataService";
@@ -53,6 +53,9 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
   const [submitLinkId, setSubmitLinkId] = useState("");
   const [submitForm, setSubmitForm] = useState({ date: new Date().toISOString().slice(0, 10), description: "", amount: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [receiptDataUrl, setReceiptDataUrl] = useState<string | null>(null);
+  const [receiptFileName, setReceiptFileName] = useState<string | null>(null);
+  const [compressingReceipt, setCompressingReceipt] = useState(false);
   const [mirroredEntryIds, setMirroredEntryIds] = useState<Set<string>>(new Set());
   const [acceptingEntryId, setAcceptingEntryId] = useState<string | null>(null);
   const [acceptEntryError, setAcceptEntryError] = useState<string | null>(null);
@@ -110,6 +113,42 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
     }
   };
 
+  const handleReceiptFile = (file: File) => {
+    setCompressingReceipt(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rawDataUrl = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        // Stocké directement sur le document Firestore (limite 1 Mo) — on
+        // redimensionne côté client pour rester bien en dessous tout en
+        // gardant le texte du reçu lisible (voir même motif pour le logo
+        // dans SettingsView.tsx, avec une dimension max plus grande ici).
+        const maxDim = 1600;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setReceiptDataUrl(rawDataUrl);
+          setCompressingReceipt(false);
+          return;
+        }
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setReceiptDataUrl(canvas.toDataURL("image/jpeg", 0.72));
+        setCompressingReceipt(false);
+      };
+      img.onerror = () => setCompressingReceipt(false);
+      img.src = rawDataUrl;
+    };
+    reader.onerror = () => setCompressingReceipt(false);
+    reader.readAsDataURL(file);
+    setReceiptFileName(file.name);
+  };
+
   const handleSubmitDocument = async () => {
     const uid = auth.currentUser?.uid;
     const link = acceptedLinks.find((l) => l.id === submitLinkId);
@@ -125,9 +164,12 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
         date: submitForm.date,
         description: submitForm.description.trim(),
         amount: parseFloat(submitForm.amount),
+        ...(receiptDataUrl ? { receiptUrl: receiptDataUrl } : {}),
       });
       setShowSubmitForm(false);
       setSubmitForm({ date: new Date().toISOString().slice(0, 10), description: "", amount: "" });
+      setReceiptDataUrl(null);
+      setReceiptFileName(null);
       playNotificationSound?.();
       await load();
     } catch (e) {
@@ -276,8 +318,39 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                       placeholder="Montant ($) *"
                       className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none ${darkMode ? "bg-zinc-950/50 border-zinc-800 text-white" : "bg-white border-slate-200"}`}
                     />
+
+                    {receiptDataUrl ? (
+                      <div className={`flex items-center gap-3 p-2.5 rounded-xl border ${darkMode ? "bg-zinc-950/50 border-zinc-800" : "bg-white border-slate-200"}`}>
+                        <img src={receiptDataUrl} alt="Reçu" className="w-11 h-11 rounded-lg object-cover shrink-0 border border-black/10" />
+                        <span className={`flex-1 text-[10px] font-bold truncate ${darkMode ? "text-zinc-300" : "text-slate-600"}`}>{receiptFileName || "Pièce jointe"}</span>
+                        <button
+                          onClick={() => { setReceiptDataUrl(null); setReceiptFileName(null); }}
+                          className={`shrink-0 p-1.5 rounded-lg ${darkMode ? "text-zinc-500 hover:text-white hover:bg-zinc-800" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"}`}
+                          title="Retirer la pièce jointe"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className={`flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all ${darkMode ? "border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200" : "border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700"}`}>
+                        {compressingReceipt ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+                        {compressingReceipt ? "Traitement…" : "Joindre une photo du reçu"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={compressingReceipt}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleReceiptFile(file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
+
                     <button
-                      disabled={!submitForm.description.trim() || !submitForm.amount || submitting}
+                      disabled={!submitForm.description.trim() || !submitForm.amount || submitting || compressingReceipt}
                       onClick={handleSubmitDocument}
                       className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
                     >
@@ -291,7 +364,10 @@ const MesRelevesGestion: React.FC<MesRelevesGestionProps> = ({
                     <p className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>Mes envois</p>
                     {myPendingItems.slice(0, 6).map((item) => (
                       <div key={item.id} className={`flex items-center justify-between gap-2 text-[10px] px-3 py-2 rounded-xl ${darkMode ? "bg-zinc-900/40" : "bg-slate-50"}`}>
-                        <span className="truncate">{item.date} · {item.description} · {fmtCAD(item.amount)}</span>
+                        <span className="truncate flex items-center gap-1.5">
+                          {item.receiptUrl && <Paperclip size={10} className={darkMode ? "text-zinc-500" : "text-slate-400"} />}
+                          {item.date} · {item.description} · {fmtCAD(item.amount)}
+                        </span>
                         {item.status === "pending" && <span className="flex items-center gap-1 text-amber-500 shrink-0"><Clock size={10} />En attente</span>}
                         {item.status === "approved" && <span className="flex items-center gap-1 text-emerald-500 shrink-0"><CheckCircle2 size={10} />Approuvé</span>}
                         {item.status === "rejected" && <span className="flex items-center gap-1 text-rose-500 shrink-0"><XCircle size={10} />Rejeté</span>}
