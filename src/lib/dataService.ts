@@ -1684,59 +1684,72 @@ async function fetchOwnedAndShared(
   collaboratorCompanyDocIds: string[] = [],
   _retryCount = 0
 ): Promise<QueryDocumentSnapshot[]> {
-  try {
-    const ownedQ = query(collection(db, collectionName), where('ownerId', '==', userId));
-    const queries = [getDocs(ownedQ)];
-    for (const companyDocId of collaboratorCompanyDocIds) {
-      queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
-      // Most collections store companyId prefixed (matches companyDocId
-      // above), but a few call sites (docuLegalDocs, at least) save the raw,
-      // unprefixed id instead — e.g. "custom-123" instead of
-      // "{uid}_company_custom-123". Query both forms so a document tagged
-      // either way is still found. Found 2026-08-24: a collaborator's
-      // DocuLegal document (companyId saved raw) was invisible to the
-      // company's own owner, since neither the ownedQ (ownerId is the
-      // collaborator's, not the owner's) nor the prefixed companyId query
-      // matched it.
-      const raw = unprefixCompanyId(companyDocId);
-      if (raw && raw !== companyDocId) {
-        queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', raw))));
-      }
+  const ownedQ = query(collection(db, collectionName), where('ownerId', '==', userId));
+  const queries = [getDocs(ownedQ)];
+  for (const companyDocId of collaboratorCompanyDocIds) {
+    queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', companyDocId))));
+    // Most collections store companyId prefixed (matches companyDocId
+    // above), but a few call sites (docuLegalDocs, at least) save the raw,
+    // unprefixed id instead — e.g. "custom-123" instead of
+    // "{uid}_company_custom-123". Query both forms so a document tagged
+    // either way is still found. Found 2026-08-24: a collaborator's
+    // DocuLegal document (companyId saved raw) was invisible to the
+    // company's own owner, since neither the ownedQ (ownerId is the
+    // collaborator's, not the owner's) nor the prefixed companyId query
+    // matched it.
+    const raw = unprefixCompanyId(companyDocId);
+    if (raw && raw !== companyDocId) {
+      queries.push(getDocs(query(collection(db, collectionName), where('companyId', '==', raw))));
     }
-    const snaps = await Promise.all(queries);
-    const seen = new Set<string>();
-    const docs: QueryDocumentSnapshot[] = [];
-    for (const snap of snaps) {
-      for (const d of snap.docs) {
+  }
+  // Promise.allSettled, NOT Promise.all — root cause of the multi-day
+  // permission-denied mystery, confirmed 2026-09-01 with Firebase support
+  // (case #10422148): Firestore rejects a companyId-scoped list query
+  // outright ("rules aren't filters" — it can't prove every hypothetical
+  // match would satisfy isOwnerDoc() || isCollaboratorOnCompany() from the
+  // query's own constraints alone) for ANY company in
+  // collaboratorCompanyDocIds where the signed-in user isn't literally
+  // listed in that company's collaboratorUIDs — which is exactly true of
+  // every company the user themself OWNS (an owner is never added to their
+  // own collaboratorUIDs list). Confirmed on Fabiola's real account: her
+  // own "AutoCompt" company — zero bankTransactions, she's sole owner —
+  // caused that one query to be denied every time. With Promise.all, that
+  // single denial rejected the ENTIRE batch, discarding the ownedQ result
+  // that had already succeeded — so her real, fully-accessible data
+  // appeared to vanish. This wasn't transient (retrying just re-hit the
+  // same structural denial 6 times, ~16.6s, every single load) — it will
+  // keep happening for every company the user owns but hasn't added
+  // themself to as a collaborator, which is normal for every account.
+  const results = await Promise.allSettled(queries);
+  const seen = new Set<string>();
+  const docs: QueryDocumentSnapshot[] = [];
+  let ownedQueryFailed = false;
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      for (const d of result.value.docs) {
         if (seen.has(d.id)) continue;
         seen.add(d.id);
         docs.push(d);
       }
+    } else {
+      if (i === 0) ownedQueryFailed = true;
+      console.warn(`fetchOwnedAndShared(${collectionName}) query ${i} failed (${i === 0 ? 'owned' : 'company-scoped'}):`, result.reason);
     }
-    return docs;
-  } catch (e: any) {
-    // Same transient "Missing or insufficient permissions" race as
-    // fetchWorkspaces above — right after a fresh sign-in/token refresh,
-    // Firestore's backend can reject a query before it's fully accepted
-    // the new token. Reproduced 2026-08-25: Fabiola's own promesse d'achat
-    // showed "Aucun document" right after reconnecting, even though the
-    // document itself was untouched in Firestore the whole time. Every
-    // caller of fetchOwnedAndShared benefits from this retry, not just
-    // fetchWorkspaces, since they all hit the exact same race.
-    // 2026-08-26: 3 retries (~4.6s total) wasn't always enough for Fabiola's
-    // and Daniel's real accounts — writes to the same collection succeeded
-    // instantly every time, but reads kept hitting permission-denied well
-    // past the old budget. Extended to 6 retries (~16.6s total) since the
-    // underlying propagation lag isn't consistently the same length.
-    const delays = [900, 1500, 2200, 3000, 4000, 5000];
-    if (e?.code === 'permission-denied' && _retryCount < delays.length) {
-      const delay = delays[_retryCount];
-      console.warn(`fetchOwnedAndShared(${collectionName}) hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms:`, e);
-      await new Promise((r) => setTimeout(r, delay));
-      return fetchOwnedAndShared(collectionName, userId, collaboratorCompanyDocIds, _retryCount + 1);
-    }
-    throw e;
+  });
+  // Only retry when the user's OWN query failed — that one should never
+  // structurally fail (it's scoped by ownerId, always allowed by
+  // isOwnerDoc()), so a failure there is the genuine transient token-
+  // propagation race the retry budget below was built for. A company-
+  // scoped query failing is often EXPECTED (see comment above) and
+  // retrying it would just burn ~16.6s hitting the same permanent denial.
+  const delays = [900, 1500, 2200, 3000, 4000, 5000];
+  if (ownedQueryFailed && _retryCount < delays.length) {
+    const delay = delays[_retryCount];
+    console.warn(`fetchOwnedAndShared(${collectionName}) owned query hit permission-denied — retry ${_retryCount + 1}/${delays.length} after ${delay}ms`);
+    await new Promise((r) => setTimeout(r, delay));
+    return fetchOwnedAndShared(collectionName, userId, collaboratorCompanyDocIds, _retryCount + 1);
   }
+  return docs;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
