@@ -1752,6 +1752,29 @@ async function fetchOwnedAndShared(
   return docs;
 }
 
+// Resolves the real Firestore company doc id + its real owner for a write.
+// `rawCompanyId` is either the short per-workspace suffix (e.g.
+// "custom-123") or an already-prefixed full doc id (e.g.
+// "{ownerUid}_company_custom-123", as returned by fetchWorkspaces'
+// `_companyDocId`). Several save* functions used to always mint
+// `${userId}_company_${rawCompanyId}` and stamp `ownerId: userId`,
+// silently assuming the person writing IS the company's owner — true most
+// of the time, but wrong for a collaborator saving into a company owned by
+// someone else: it invents a companyId that matches no real company doc
+// and misattributes ownerId to the collaborator, so the record vanishes
+// from the real owner's view entirely (found 2026-09-03: Natalia issuing an
+// invoice from Fabiola's "Achat Direct" saved it under a phantom companyId
+// prefixed with Natalia's own uid — invisible to Fabiola, only findable via
+// Natalia's own ownerId-scoped query). When the caller already passed the
+// full prefixed id, trust it and derive the real owner from its own prefix
+// instead of from `userId`.
+function resolveCompanyWrite(userId: string, rawCompanyId: string): { docCompanyId: string; ownerId: string } {
+  if (rawCompanyId.includes('_company_')) {
+    return { docCompanyId: rawCompanyId, ownerId: rawCompanyId.split('_company_')[0] };
+  }
+  return { docCompanyId: `${userId}_company_${rawCompanyId}`, ownerId: userId };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // §3 — DATA SERVICE
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2772,11 +2795,11 @@ export const dataService = {
   async saveExpense(userId: string, expenseData: Partial<ExpenseDoc> & { companyId: string }): Promise<ExpenseDoc> {
     assertCanWrite();
     const originalCompanyId = expenseData.companyId;
-    const docCompanyId = `${userId}_company_${originalCompanyId}`;
+    const { docCompanyId, ownerId: resolvedOwnerId } = resolveCompanyWrite(userId, originalCompanyId);
     const data: any = {
       ...expenseData,
       companyId: docCompanyId,
-      ownerId: userId,
+      ownerId: resolvedOwnerId,
       createdAt: expenseData.createdAt || new Date().toISOString(),
     };
     // Optional fields (buildingId, unitId, etc.) are sometimes passed as explicit
@@ -2902,11 +2925,11 @@ export const dataService = {
   async saveInvoice(userId: string, invoiceData: Partial<InvoiceDoc> & { companyId: string }): Promise<InvoiceDoc> {
     assertCanWrite();
     const originalCompanyId = invoiceData.companyId;
-    const docCompanyId = `${userId}_company_${originalCompanyId}`;
+    const { docCompanyId, ownerId: resolvedOwnerId } = resolveCompanyWrite(userId, originalCompanyId);
     const data = {
       ...invoiceData,
       companyId: docCompanyId,
-      ownerId: userId,
+      ownerId: resolvedOwnerId,
       createdAt: invoiceData.createdAt || new Date().toISOString(),
     };
 

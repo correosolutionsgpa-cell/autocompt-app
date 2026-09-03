@@ -5914,6 +5914,26 @@ const App = () => {
     await actuallySendInvoiceEmail(fac);
   };
 
+  // Resolves the short per-workspace companyId (e.g. "custom-123" — what
+  // every new item's companyId is set to at creation, all across the app)
+  // to the real, full Firestore company doc id
+  // ("{realOwnerUid}_company_custom-123"). Critical for a collaborator (not
+  // the company's owner) saving into a shared company: without this,
+  // saveInvoice/saveExpense would mint a companyId prefixed with the
+  // COLLABORATOR's own uid instead of the real owner's, making the record
+  // invisible to the actual owner's account entirely — found 2026-09-03,
+  // Natalia issuing an invoice from Fabiola's "Achat Direct" saved it under
+  // a phantom companyId only findable via Natalia's own ownerId-scoped
+  // query. Falls back to the raw id unresolved if the workspace isn't in
+  // listaEmpresas yet (matches resolveCompanyWrite's own fallback in
+  // dataService.ts, which still assumes userId owns it — correct for the
+  // overwhelmingly common case of someone writing in their own company).
+  const resolveRealCompanyId = (shortOrFullId: string): string => {
+    if (!shortOrFullId || shortOrFullId.includes('_company_')) return shortOrFullId;
+    const ws = listaEmpresas.find((w: any) => w.id === shortOrFullId);
+    return ws?._companyDocId || shortOrFullId;
+  };
+
   // --- TENUE DE LIVRES (BASE DE DATOS) ---
   const [historique, _setHistorique] = useState<any[]>([]);
   const reconcileHistorique = async (prev: any[], next: any[]) => {
@@ -5932,7 +5952,7 @@ const App = () => {
     });
     for (const item of addedOrModified) {
       try {
-        const saved = await dataService.saveInvoice(userId, item);
+        const saved = await dataService.saveInvoice(userId, { ...item, companyId: resolveRealCompanyId(item.companyId) });
         if (saved.id && saved.id !== item.id) {
           _setHistorique(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
         }
@@ -6022,7 +6042,7 @@ const App = () => {
     });
     for (const item of addedOrModified) {
       try {
-        const saved = await dataService.saveExpense(userId, item);
+        const saved = await dataService.saveExpense(userId, { ...item, companyId: resolveRealCompanyId(item.companyId) });
         if (saved.id && saved.id !== item.id) {
           _setDepenses(current => current.map(c => c.id === item.id ? { ...c, id: saved.id } : c));
         }
@@ -21312,7 +21332,16 @@ const App = () => {
               </main>
             ) : subVistaFactura === "liste" ? (
               <main className="p-4 space-y-4 print:p-0 print:m-0 print:space-y-0">
-                {historique.map((fac) => (
+                {/* Scoped to the active company — this used to map the raw,
+                    unfiltered `historique` (every invoice across every
+                    company the account can see), so switching workspaces
+                    never changed what showed here at all. Found 2026-09-03
+                    (Fabiola: same invoices visible under both "Solutions
+                    GPA" and "Achat Direct"). No buildingId exclusion here
+                    (unlike filteredHistorique in Tenue de Livres) — a
+                    building-linked invoice is still a real facture that
+                    belongs in this list. */}
+                {historique.filter((fac) => fac.companyId === activeCompanyId).map((fac) => (
                   <div
                     key={fac.id}
                     className={`print:hidden p-5 rounded-[32px] border shadow-sm flex items-center justify-between text-left ${darkMode ? "bg-slate-900/40 border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md" : "bg-white border-slate-200"}`}
