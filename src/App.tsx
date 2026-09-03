@@ -8953,12 +8953,26 @@ const App = () => {
           // short retry is cheap and just as safe for a genuinely
           // brand-new account (same "empty" result either way, ~700ms
           // slower once).
-          const looksSuspiciouslyEmpty = userDoc.exists() && (() => {
-            const d = userDoc.data() || {};
-            return d.phoneVerified === undefined && d.selectedProfile === undefined
+          // Two shapes of the same staleness bug: either the WHOLE doc reads
+          // back empty (original case above), or only `phoneVerified`
+          // specifically is missing while the rest of the doc (selectedProfile/
+          // unlockedProfiles/betaCodeRedeemed) came back fine — an established
+          // account can never legitimately have those set without also having
+          // gone through phone verification, so that combination on its own
+          // means this read is stale, not that the phone is really unverified.
+          // Reproduced 2026-09-03 (Fabiola, first Google sign-in on a brand-new
+          // Chrome profile): landed on "Vérification par SMS" even though
+          // Firestore's own phoneVerified was already true — the original
+          // all-four-fields check didn't catch it because selectedProfile etc.
+          // came back correctly on that same read, only phoneVerified didn't.
+          const isStaleRead = (d: Record<string, any>) => {
+            const allEmpty = d.phoneVerified === undefined && d.selectedProfile === undefined
               && d.unlockedProfiles === undefined && d.betaCodeRedeemed === undefined;
-          })();
-          if (looksSuspiciouslyEmpty) {
+            const onlyPhoneMissing = !d.phoneVerified
+              && (d.selectedProfile !== undefined || d.unlockedProfiles !== undefined || d.betaCodeRedeemed !== undefined);
+            return allEmpty || onlyPhoneMissing;
+          };
+          if (userDoc.exists() && isStaleRead(userDoc.data() || {})) {
             // A single 700ms retry (2026-08-24, first attempt at this fix)
             // wasn't enough for Natalia's account — still landed empty on a
             // second try. Up to 3 attempts now, with increasing backoff
@@ -8966,14 +8980,12 @@ const App = () => {
             // the same length.
             const delays = [900, 1500, 2200];
             for (const delay of delays) {
-              console.log("[AUTH-DEBUG] #" + invocationId, `userDoc looks suspiciously empty — retrying after ${delay}ms`);
+              console.log("[AUTH-DEBUG] #" + invocationId, `userDoc looks suspiciously empty/stale — retrying after ${delay}ms`);
               await new Promise((r) => setTimeout(r, delay));
               userDoc = await getDocFromServer(userDocRef);
-              const data = userDoc.data() || {};
-              const stillEmpty = data.phoneVerified === undefined && data.selectedProfile === undefined
-                && data.unlockedProfiles === undefined && data.betaCodeRedeemed === undefined;
-              console.log("[AUTH-DEBUG] #" + invocationId, "retry getDocFromServer resolved, exists():", userDoc.exists(), "stillEmpty:", stillEmpty);
-              if (!stillEmpty) break;
+              const stillStale = isStaleRead(userDoc.data() || {});
+              console.log("[AUTH-DEBUG] #" + invocationId, "retry getDocFromServer resolved, exists():", userDoc.exists(), "stillStale:", stillStale);
+              if (!stillStale) break;
             }
           }
           // Firebase can fire onAuthStateChanged more than once for a single
